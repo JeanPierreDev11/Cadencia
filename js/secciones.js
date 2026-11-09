@@ -19,7 +19,29 @@ const ICO = {
   pin: svg('<path d="M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>', 18),
   warn: svg('<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/>', 16),
   spark: svg('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>', 18),
+  bell: svg('<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>', 22),
 };
+
+/* Novedades: cambia NOV_V cada vez que publiques algo nuevo para que salga la nota en Inicio. */
+const NOV_V = '2026-11-09b';
+
+/* Objetivos de entreno: [id, grupo, texto, unidad, periodo (sem | mes | reto), ejemplo] */
+const META_T = [
+  ['bici_km_sem', 'Bici', '{v} km de bici a la semana', 'km', 'sem', 100],
+  ['bici_desn_sem', 'Bici', '{v} m de desnivel a la semana', 'm', 'sem', 1500],
+  ['bici_km_mes', 'Bici', '{v} km de bici al mes', 'km', 'mes', 400],
+  ['bici_salida', 'Bici', 'Una salida de {v} km', 'km', 'reto', 100],
+  ['cardio_min_sem', 'Cardio', '{v} min de cardio a la semana', 'min', 'sem', 120],
+  ['cardio_km_sem', 'Cardio', '{v} km de cardio a la semana', 'km', 'sem', 20],
+  ['cardio_km_mes', 'Cardio', '{v} km de cardio al mes', 'km', 'mes', 80],
+  ['cardio_dist', 'Cardio', 'Una sesión de cardio de {v} km', 'km', 'reto', 10],
+  ['fuerza_kg', 'Pesos', '{v} kg en {ej}', 'kg', 'reto', 100],
+  ['fuerza_ses_sem', 'Pesos', '{v} sesiones de fuerza a la semana', 'sesiones', 'sem', 3],
+  ['sesiones_sem', 'General', '{v} entrenos a la semana', 'entrenos', 'sem', 4],
+  ['min_sem', 'General', '{v} min de entreno a la semana', 'min', 'sem', 240],
+];
+const metaDef = (id) => META_T.find((x) => x[0] === id) || META_T[0];
+const META_G = ['Bici', 'Cardio', 'Pesos', 'General'];
 
 /* Tiempo de muestra si no hay conexión con el servicio meteorológico (de la app original). */
 const PRESETS = [
@@ -218,13 +240,15 @@ export function crearSecciones(ctx) {
   }
 
   /* ----- hoja «Añadir alimento» ----- */
-  const asFood = (id) => FOODS_BY_ID[id] || null;
+  const misAlim = () => (P().misAlimentos || []).map((f) => ({ ...f, s: normFood(f.n), mine: true }));
+  const offCache = {};
+  const asFood = (id) => FOODS_BY_ID[id] || misAlim().find((f) => f.id === id) || offCache[id] || null;
   const tokMatch = (s, tk) => s.includes(tk) || (tk.length > 3 && s.includes(tk.replace(/e?s$/, '')));
   function searchFoods(q) {
     const toks = normFood(q).split(/\s+/).filter(Boolean);
     if (!toks.length) return [];
     const t0 = toks[0].replace(/e?s$/, '');
-    return FOODS.filter((f) => toks.every((tk) => tokMatch(f.s, tk)))
+    return [...misAlim(), ...FOODS].filter((f) => toks.every((tk) => tokMatch(f.s, tk)))
       .map((f) => ({ f, r: f.s.startsWith(t0) ? 0 : f.s.includes(' ' + t0) ? 1 : 2 }))
       .sort((a, b) => a.r - b.r || a.f.n.length - b.f.n.length).map((x) => x.f);
   }
@@ -233,7 +257,7 @@ export function crearSecciones(ctx) {
     Object.values(st.dias || {}).forEach((d) => (d.items || []).forEach((x) => { if (x.fid) cnt[x.fid] = (cnt[x.fid] || 0) + 1; }));
     return Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]).map(asFood).filter(Boolean).slice(0, 10);
   }
-  const foodRow = (f) => `<button type="button" class="frow" data-act="n-pick" data-v="${esc(f.id)}"><span><b>${esc(f.n)}</b><small>${nf(f.k)} kcal · P ${nf(f.p, 1)} · H ${nf(f.c, 1)} · G ${nf(f.f, 1)} <span class="muted">por 100 g</span></small></span>${I.plus}</button>`;
+  const foodRow = (f) => `<button type="button" class="frow" data-act="n-pick" data-v="${esc(f.id)}"><span><b>${esc(f.n)}${f.mine ? ' <span class="tag">Marca</span>' : ''}</b><small>${nf(f.k)} kcal · P ${nf(f.p, 1)} · H ${nf(f.c, 1)} · G ${nf(f.f, 1)} <span class="muted">por 100 g</span></small></span>${I.plus}</button>`;
   function foodResults() {
     const F = st.food, q = F.q.trim();
     if (!q) {
@@ -242,9 +266,15 @@ export function crearSecciones(ctx) {
         <div class="lgroup">Explorar</div><div class="chips">${['pollo', 'arroz', 'pasta', 'huevo', 'yogur', 'plátano', 'pan', 'tortilla', 'bocadillo', 'pizza'].map((c) => `<button type="button" class="chip chipbtn" data-act="n-q" data-v="${c}">${c}</button>`).join('')}</div>
         <button type="button" class="btn ghost small" style="margin-top:8px" data-act="n-quick">Apuntar calorías a mano</button>`;
     }
-    const all = searchFoods(q), res = all.slice(0, 30);
-    return `${res.map(foodRow).join('') || `<p class="muted" style="padding:6px 2px">No encontramos «${esc(q)}».</p>`}
+    const all = searchFoods(q), res = all.slice(0, 30), O = F.off && F.off.q === q ? F.off : null;
+    const off = !O ? `<button type="button" class="btn ${res.length ? 'ghost ' : ''}small" style="margin-top:8px" data-act="n-off">Buscar «${esc(q)}» en productos de marca</button>`
+      : O.loading ? '<p class="muted small" style="padding:8px 2px">Buscando productos de marca…</p>'
+      : O.err ? `<p class="small" style="padding:8px 2px">${esc(O.err)}</p>`
+      : O.list.length ? `<div class="lgroup">Productos de marca</div>${O.list.map(foodRow).join('')}<p class="small muted">Datos de <a href="https://es.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a>, una base abierta: compáralos con la etiqueta.</p>`
+      : '<p class="small muted" style="padding:8px 2px">No hay productos de marca con ese nombre.</p>';
+    return `${res.map(foodRow).join('') || `<p class="muted" style="padding:6px 2px">No está en la tabla de alimentos.</p>`}
       ${all.length > res.length ? `<p class="small muted">Hay ${all.length - res.length} más: afina la búsqueda.</p>` : ''}
+      ${off}
       <button type="button" class="btn ghost small" style="margin-top:8px" data-act="n-quick">¿No está? Apúntalo a mano</button>`;
   }
   function foodChoice(food) {
@@ -293,6 +323,42 @@ export function crearSecciones(ctx) {
         <div class="chiprow">${MEALS.map((m, i) => `<button type="button" class="chip chipbtn ${F.meal === i ? 'on' : ''}" data-act="n-meal" data-v="${i}">${m}</button>`).join('')}</div>
         ${body}
       </div>`;
+  }
+  function offFood(p) {
+    const n = String(p.product_name_es || p.product_name || '').trim(), nu = p.nutriments || {};
+    let k = num(nu['energy-kcal_100g']);
+    if (!(k >= 0)) { const kj = num(nu.energy_100g); if (kj > 0) k = kj / 4.184; }
+    if (!n || !(k >= 0) || k > 950 || !p.code) return null;
+    const brand = String(p.brands || '').split(',')[0].trim();
+    const name = (brand && !normFood(n).includes(normFood(brand)) ? `${n} · ${brand}` : n).slice(0, 70);
+    const sv = num(p.serving_quantity), g = (x) => { const v = num(x); return v >= 0 && v <= 100 ? r1(v) : 0; };
+    return { id: 'o:' + p.code, n: name, k: Math.round(k), p: g(nu.proteins_100g), c: g(nu.carbohydrates_100g), f: g(nu.fat_100g), u: sv > 0 && sv < 1000 ? { n: 'ración', g: Math.round(sv) } : null, s: normFood(name), mine: true };
+  }
+  const refreshRes = () => { const r = document.getElementById('food-res'); if (r) r.innerHTML = foodResults(); };
+  async function buscarOFF() {
+    const F = st.food, q = F.q.trim();
+    if (!q) return;
+    F.off = { q, loading: true, list: [] }; refreshRes();
+    let res;
+    try {
+      const ctrl = new AbortController(), tm = setTimeout(() => ctrl.abort(), 15000);
+      const u = `https://es.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=24&fields=code,product_name,product_name_es,brands,nutriments,serving_quantity`;
+      const r = await fetch(u, { signal: ctrl.signal });
+      clearTimeout(tm);
+      if (!r.ok) throw new Error('off');
+      const list = ((await r.json()).products || []).map(offFood).filter(Boolean);
+      list.forEach((f) => { offCache[f.id] = f; });
+      res = { q, list };
+    } catch (e) {
+      res = { q, list: [], err: 'No se ha podido buscar ahora (sin conexión o servicio ocupado). Prueba en un momento o apúntalo a mano.' };
+    }
+    if (st.food && st.food.off && st.food.off.q === q) { st.food.off = res; refreshRes(); }
+  }
+  // Los productos de marca que usas se guardan en «tus alimentos» para encontrarlos siempre.
+  function recordarAlimento(food) {
+    if (!food.mine || misAlim().some((x) => x.id === food.id)) return;
+    const { id, n, k, p, c, f, u } = food;
+    saveProfile({ misAlimentos: [{ id, n, k, p, c, f, u: u || null }, ...(P().misAlimentos || [])].slice(0, 200) });
   }
   async function guardarDia(d, items) {
     st.dias[d] = { fecha: d, items };
@@ -691,6 +757,8 @@ export function crearSecciones(ctx) {
       <button class="btn small" data-act="n-hoy">${I.plus} Apuntar</button></div>
       ${od ? pbar(tot.k / od.target, tot.k > od.target * 1.05 ? 'over' : '') : ''}
       ${od ? `<p class="small muted">Proteína ${nf(tot.p)} de ${nf(od.macros.p)} g</p>` : ''}</section>`;
+    const ms = metas().slice(0, 3);
+    if (ms.length) h += `<section class="card"><div class="card-head"><h2>Tus objetivos</h2><button class="link" data-act="nov-wk" data-v="objetivos">Ver</button></div>${ms.map((m) => metaCard(m, true)).join('')}</section>`;
     const pm = pmcData();
     if (pm) {
       const fs = T.formState(pm.last.tsb);
@@ -739,6 +807,7 @@ export function crearSecciones(ctx) {
         const c = foodChoice(food); if (!(c.grams > 0)) return true;
         if (c.grams > 3000) { toast('Revisa la cantidad'); return true; }
         const n = food.n + (c.pm && c.gp && c.pm.id !== c.gp[0].id ? ' · ' + c.pm.n.toLowerCase() : '');
+        recordarAlimento(food);
         addItem({ n, g: Math.round(c.grams), k: c.v.k, p: c.v.p, c: c.v.c, f: c.v.f, fid: food.id, ...(c.pm ? { prep: c.pm.id } : {}) });
         return true;
       }
@@ -792,6 +861,23 @@ export function crearSecciones(ctx) {
         } catch (e) { toast(errorText(e)); }
         return true;
       }
+      case 'n-off': buscarOFF(); return true;
+      // Novedades
+      case 'nov-open': st.novOpen = true; render(); { const n = document.getElementById('novedades'); if (n) n.scrollIntoView({ block: 'start' }); } return true;
+      case 'nov-ok': st.novOpen = false; if (novNueva()) await saveProfile({ novVista: NOV_V }); render(); return true;
+      case 'nov-wk': st.tab = 'entreno'; st.wkTab = v; lsSet('cadencia-tab', 'entreno'); lsSet('cadencia-wktab', v); render(); window.scrollTo(0, 0); return true;
+      // Objetivos
+      case 'meta-new': st.meta = { d: { g: 'Bici', tipo: 'bici_km_sem', valor: '', ej: '', hasta: '' } }; if (!tieneBici()) { st.meta.d.g = 'General'; st.meta.d.tipo = 'sesiones_sem'; } render(); return true;
+      case 'meta-edit': { const m = metas().find((x) => x.id === v); if (!m) return true; st.meta = { id: m.id, creado: m.creado, d: { g: metaDef(m.tipo)[1], tipo: m.tipo, valor: nf(m.valor, m.valor % 1 ? 1 : 0), ej: m.ej || '', hasta: m.hasta || '' } }; render(); return true; }
+      case 'meta-close': st.meta = null; render(); return true;
+      case 'meta-g': st.meta.d.g = v; st.meta.d.tipo = META_T.find((x) => x[1] === v)[0]; st.meta.msg = ''; render(); return true;
+      case 'meta-tipo': st.meta.d.tipo = v; st.meta.msg = ''; render(); return true;
+      case 'meta-save': await metaSave(); return true;
+      case 'meta-del': {
+        const S = st.meta;
+        if (!S.confirm) { S.confirm = true; S.msg = 'Pulsa otra vez la papelera para borrar este objetivo.'; render(); return true; }
+        st.meta = null; await saveProfile({ metas: metas().filter((x) => x.id !== S.id) }); render(); toast('Objetivo borrado'); return true;
+      }
       default: return false;
     }
   }
@@ -810,6 +896,7 @@ export function crearSecciones(ctx) {
     }
     if (F && F.quick && t.dataset.fqk) { F.quick[t.dataset.fqk] = t.value; return true; }
     if (st.tl && t.dataset.tf) { st.tl.d[t.dataset.tf] = t.value; return true; }
+    if (st.meta && t.dataset.mf) { st.meta.d[t.dataset.mf] = t.value; return true; }
     if (t.dataset.body) {
       const B = st.body || (st.body = {}); B[t.dataset.body] = t.value;
       // Recalcular sin redibujar toda la pantalla (para no perder el teclado).
@@ -849,7 +936,147 @@ export function crearSecciones(ctx) {
     }
     return false;
   }
-  function sheet() { return st.food ? foodSheet() : st.tl ? tlSheet() : ''; }
+  /* ================================================================ */
+  /* Novedades                                                         */
+  /* ================================================================ */
+  function novItems() {
+    const bici = tieneBici();
+    return [
+      { t: 'Mis rutinas', d: 'Guarda varias rutinas, ponles nombre y cambia entre ellas cuando quieras.', como: 'Entreno → Rutinas.', act: 'nov-wk', v: 'rutina', btn: 'Ver mis rutinas' },
+      { t: 'Objetivos de bici, cardio y pesos', d: 'Ponte metas como km de bici a la semana, minutos de cardio, entrenos por semana o kilos en un ejercicio, y mira cuánto te falta.', como: 'Entreno → Objetivos → Nuevo.', act: 'nov-wk', v: 'objetivos', btn: 'Crear un objetivo' },
+      { t: 'Taller y Rutas para ciclistas', d: 'Guarda tu bici y sus piezas, recibe avisos cuando toque cambiar cadena o cubiertas, pon un presupuesto para mejorarla y elige ruta por Bilbao según el tiempo.', como: bici ? 'Ya los tienes: pestañas Rutas y Taller, abajo.' : 'Aparecen cuando tu rutina incluye bici: Entreno → Rutinas → Cambiar días o tipos → marca Bici.', act: bici ? 'tab' : 'nov-bici', v: 'taller', btn: bici ? 'Ir al Taller' : 'Añadir bici a mi rutina' },
+      { t: 'Nutrición', d: 'Apunta lo que comes con más de 550 alimentos (queso de Burgos incluido), productos de marca y cómo los preparas. Tu objetivo de calorías sube los días que entrenas.', como: 'Pestaña Nutrición → «Añadir» en cada comida.', act: 'tab', v: 'nutricion', btn: 'Apuntar comida' },
+      { t: 'Grasa, músculo, agua y hueso', d: 'Además del peso, apunta tu composición corporal para ver cómo cambias por dentro.', como: 'Inicio → «Añadir grasa, músculo, agua y hueso», o Progreso → Peso.', act: 'peso-sheet', v: '', btn: 'Apuntar ahora' },
+      { t: 'Peso objetivo si tienes músculo', d: 'Ya no te limitamos al IMC. Con tu % de grasa calculamos tu peso ideal según tu músculo.', como: 'Perfil → Peso objetivo.', act: 'tab', v: 'perfil', btn: 'Revisar mi objetivo' },
+      { t: 'Progreso', d: 'Calcula tu % de grasa con cinta métrica o plicómetro, y mira tu forma, fatiga y frescura.', como: 'Pestaña Progreso → Cuerpo o Forma.', act: 'tab', v: 'progreso', btn: 'Ver progreso' },
+    ];
+  }
+  const novNueva = () => P().novVista !== NOV_V;
+  const novBell = () => `<button type="button" class="iconbtn bell" data-act="nov-open" aria-label="Novedades${novNueva() ? ' (hay nuevas)' : ''}">${ICO.bell}${novNueva() ? '<i></i>' : ''}</button>`;
+  function novedadesHTML() {
+    if (!novNueva() && !st.novOpen) return '';
+    return `<section class="card nov" id="novedades">
+      <div class="card-head"><h2>${ICO.spark} Novedades</h2><button class="iconbtn" data-act="nov-ok" aria-label="Cerrar">${ICO.close}</button></div>
+      <p class="small muted">Lo nuevo en Cadencia y dónde encontrarlo.</p>
+      <div class="nov-list">${novItems().map((x, i) => `<details class="nov-i"${i === 0 ? ' open' : ''}><summary>${esc(x.t)}</summary>
+        <p>${esc(x.d)}</p><p class="small"><b>Cómo:</b> ${esc(x.como)}</p>
+        <button class="btn small" data-act="${x.act}" data-v="${x.v}">${esc(x.btn)}</button></details>`).join('')}</div>
+      <button class="btn ghost block" data-act="nov-ok">Entendido</button>
+    </section>`;
+  }
+
+  /* ================================================================ */
+  /* Objetivos de entreno                                              */
+  /* ================================================================ */
+  const metas = () => P().metas || [];
+  const metaTitulo = (m) => metaDef(m.tipo)[2].replace('{v}', nf(m.valor, m.valor % 1 ? 1 : 0)).replace('{ej}', m.ej || 'un ejercicio');
+  const kmOf = (w) => w.km || 0;
+  function metaSuma(tipo, ws) {
+    const bici = ws.filter((w) => w.tipo === 'bici'), cardio = ws.filter((w) => w.tipo === 'cardio');
+    const sum = (arr, f) => arr.reduce((a, w) => a + (f(w) || 0), 0);
+    switch (tipo) {
+      case 'bici_km_sem': case 'bici_km_mes': return sum(bici, kmOf);
+      case 'bici_desn_sem': return sum(bici, (w) => w.elev);
+      case 'cardio_min_sem': return sum(cardio, (w) => w.min);
+      case 'cardio_km_sem': case 'cardio_km_mes': return sum(cardio, kmOf);
+      case 'fuerza_ses_sem': return ws.filter((w) => w.tipo === 'gym').length;
+      case 'sesiones_sem': return ws.length;
+      case 'min_sem': return sum(ws, (w) => w.min);
+      default: return 0;
+    }
+  }
+  function mejorKg(ej) {
+    const key = normFood(ej || ''); let best = 0, fecha = null;
+    if (!key) return { best, fecha };
+    st.workouts.forEach((w) => (w.ejercicios || []).forEach((x) => {
+      if (normFood(x.n) !== key) return;
+      (x.series || []).forEach((sr) => { const kg = num(sr.kg); if (kg > best && num(sr.reps) >= 1) { best = kg; fecha = w.fecha; } });
+    }));
+    return { best, fecha };
+  }
+  function metaProgreso(m) {
+    const d = metaDef(m.tipo), t = todayISO(), ws = st.workouts;
+    if (d[4] === 'sem') {
+      const mon = E.mondayOf(t), en = (a, b) => ws.filter((w) => w.fecha >= a && w.fecha <= b);
+      const cur = metaSuma(m.tipo, en(mon, E.addDays(mon, 6)));
+      const hist = [];
+      for (let i = 7; i >= 1; i--) { const a = E.addDays(mon, -7 * i); hist.push({ a, ok: metaSuma(m.tipo, en(a, E.addDays(a, 6))) >= m.valor }); }
+      const left = 6 - E.weekdayIdx(t);
+      return { cur, sub: cur >= m.valor ? '¡Conseguido esta semana!' : `Esta semana · ${left ? `quedan ${left} ${left === 1 ? 'día' : 'días'}` : 'último día'}`, hist };
+    }
+    if (d[4] === 'mes') {
+      const ym = t.slice(0, 7), cur = metaSuma(m.tipo, ws.filter((w) => w.fecha.startsWith(ym)));
+      const fin = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate(), left = fin - Number(t.slice(8, 10));
+      return { cur, sub: cur >= m.valor ? '¡Conseguido este mes!' : `${fmtDate(t, { month: 'long' })} · ${left ? `quedan ${left} días` : 'último día'}` };
+    }
+    let cur = 0, fecha = null;
+    if (m.tipo === 'fuerza_kg') ({ best: cur, fecha } = mejorKg(m.ej));
+    else ws.filter((w) => w.tipo === (m.tipo === 'bici_salida' ? 'bici' : 'cardio')).forEach((w) => { if ((w.km || 0) > cur) { cur = w.km; fecha = w.fecha; } });
+    let sub = cur ? `Tu mejor marca: ${nf(cur, cur % 1 ? 1 : 0)} ${d[3]} (${fmtDate(fecha)})` : 'Aún sin registros';
+    if (m.hasta) { const dd = Math.round((new Date(m.hasta + 'T12:00') - new Date(t + 'T12:00')) / 864e5); sub += dd >= 0 ? ` · ${dd ? `faltan ${dd} días` : 'el plazo acaba hoy'}` : ' · plazo terminado'; }
+    return { cur, sub: cur >= m.valor ? `¡Conseguido! ${sub}` : sub };
+  }
+  function metaCard(m, mini = false) {
+    const d = metaDef(m.tipo), pr = metaProgreso(m), done = pr.cur >= m.valor;
+    if (mini) return `<div class="meta-mini"><span>${esc(metaTitulo(m))}</span><b class="num">${nf(pr.cur, pr.cur % 1 ? 1 : 0)}/${nf(m.valor)}</b>${pbar(pr.cur / m.valor, done ? 'done' : '')}</div>`;
+    return `<button type="button" class="meta ${done ? 'done' : ''}" data-act="meta-edit" data-v="${esc(m.id)}">
+      <span class="meta-h"><span class="tag">${d[1]}</span>${done ? '<span class="tag ok">Conseguido</span>' : ''}</span>
+      <b class="meta-t">${esc(metaTitulo(m))}</b>
+      <span class="meta-v"><b class="num">${nf(pr.cur, pr.cur % 1 ? 1 : 0)}</b> de ${nf(m.valor)} ${d[3]}</span>
+      ${pbar(pr.cur / m.valor, done ? 'done' : '')}
+      <small class="muted">${esc(pr.sub)}</small>
+      ${pr.hist ? `<span class="wkdots" aria-label="Semanas anteriores">${pr.hist.map((h) => `<i class="${h.ok ? 'ok' : ''}" title="Semana del ${esc(fmtDate(h.a))}"></i>`).join('')}<small class="muted">últimas 7 semanas</small></span>` : ''}
+    </button>`;
+  }
+  function viewObjetivos() {
+    const ms = metas();
+    if (!ms.length) return `<section class="card tl-empty"><button class="addbig" data-act="meta-new"><span class="addbig-c">${I.plusBig}</span><b>Añadir objetivo</b></button>
+      <p class="muted" style="text-align:center">Ponte metas de bici, cardio o pesos: km a la semana, minutos de cardio, entrenos o kilos en un ejercicio. Se van completando solas con lo que registras.</p></section>`;
+    return `<div class="metas">${ms.map((m) => metaCard(m)).join('')}</div>
+      <button class="btn ghost block" data-act="meta-new">${I.plus} Nuevo objetivo</button>`;
+  }
+  function ejerciciosConocidos() {
+    const set = new Set();
+    st.workouts.forEach((w) => (w.ejercicios || []).forEach((x) => set.add(x.n)));
+    const r = rutinaOf(); if (r) Object.values(r.sesiones || {}).forEach((s) => (s.ej || []).forEach((x) => set.add(x.n)));
+    (E.TODOS_EJERCICIOS || []).forEach((n) => set.add(n));
+    return [...set];
+  }
+  function metaSheet() {
+    const S = st.meta, d = S.d, def = metaDef(d.tipo);
+    const tipos = META_T.filter((x) => x[1] === d.g);
+    return `<div class="sheet-back" data-act="meta-close"></div>
+      <div class="sheet" role="dialog" aria-modal="true" aria-label="Objetivo">
+        <div class="sheet-grab"></div>
+        <div class="sheet-head"><button type="button" class="iconbtn" data-act="meta-close" aria-label="Cerrar">${ICO.close}</button><h2>${S.id ? 'Editar objetivo' : 'Nuevo objetivo'}</h2>${S.id ? `<button type="button" class="iconbtn" data-act="meta-del" aria-label="Borrar">${I.trash}</button>` : '<span style="width:36px"></span>'}</div>
+        <div class="sheet-list form-grid">
+          ${seg('meta-g', META_G.map((g) => [g, g]), d.g, 'Tipo de objetivo')}
+          <div class="choices tight">${tipos.map((x) => `<button type="button" class="choice" data-act="meta-tipo" data-v="${x[0]}" aria-pressed="${d.tipo === x[0]}"><span class="t">${esc(x[2].replace('{v}', '…').replace('{ej}', 'un ejercicio'))}</span><span class="tick">${d.tipo === x[0] ? I.check : ''}</span></button>`).join('')}</div>
+          ${d.tipo === 'fuerza_kg' ? `<label class="field"><span>Ejercicio</span><input class="input" data-mf="ej" list="meta-ej" value="${esc(d.ej || '')}" placeholder="Ej. Press de banca con barra" autocomplete="off"><datalist id="meta-ej">${ejerciciosConocidos().map((n) => `<option value="${esc(n)}">`).join('')}</datalist></label>` : ''}
+          <label class="field"><span>Meta (${def[3]})</span><input class="input" data-mf="valor" inputmode="decimal" value="${esc(d.valor)}" placeholder="Ej. ${nf(def[5])}"></label>
+          ${def[4] === 'reto' ? `<label class="field"><span>Fecha límite <span class="muted">(opcional)</span></span><input class="input" type="date" data-mf="hasta" value="${esc(d.hasta || '')}" min="${todayISO()}"></label>` : ''}
+          ${def[4] === 'sem' ? '<p class="small muted">Cuenta de lunes a domingo con lo que registres en Entreno.</p>' : def[4] === 'mes' ? '<p class="small muted">Cuenta desde el día 1 de cada mes.</p>' : d.tipo === 'fuerza_kg' ? '<p class="small muted">Cuenta el mayor peso que levantes en una serie de ese ejercicio.</p>' : '<p class="small muted">Cuenta tu sesión más larga.</p>'}
+          ${S.msg ? `<div class="msg" role="alert">${esc(S.msg)}</div>` : ''}
+        </div>
+        <div class="sheet-foot"><button class="btn block" data-act="meta-save">Guardar objetivo</button></div>
+      </div>`;
+  }
+  async function metaSave() {
+    const S = st.meta, d = S.d, def = metaDef(d.tipo), v = num(d.valor);
+    const fail = (m) => { S.msg = m; render(); };
+    const lim = { km: 20000, m: 100000, min: 10000, kg: 500, sesiones: 14, entrenos: 21 }[def[3]] || 100000;
+    if (!(v > 0 && v <= lim)) return fail(`Escribe la meta en ${def[3]} (un número mayor que 0).`);
+    if (d.tipo === 'fuerza_kg' && !String(d.ej || '').trim()) return fail('Elige el ejercicio.');
+    const o = { id: S.id || nid('m'), tipo: d.tipo, valor: r1(v), creado: S.creado || todayISO() };
+    if (d.tipo === 'fuerza_kg') o.ej = String(d.ej).trim().slice(0, 60);
+    if (def[4] === 'reto' && d.hasta) o.hasta = d.hasta;
+    const list = S.id ? metas().map((x) => (x.id === S.id ? o : x)) : [...metas(), o];
+    st.meta = null;
+    await saveProfile({ metas: list });
+    render(); toast('Objetivo guardado');
+  }
+
+  function sheet() { return st.food ? foodSheet() : st.tl ? tlSheet() : st.meta ? metaSheet() : ''; }
   function view(tab) {
     if (tab === 'nutricion') return viewNutricion();
     if (tab === 'rutas') return viewRutas();
@@ -858,5 +1085,5 @@ export function crearSecciones(ctx) {
     return '';
   }
 
-  return { tabs, tabActual, tieneBici, cargar, view, sheet, homeCards, wkBiciHTML, click, input, change, submit };
+  return { tabs, tabActual, tieneBici, cargar, view, sheet, homeCards, wkBiciHTML, click, input, change, submit, novBell, novedadesHTML, viewObjetivos };
 }

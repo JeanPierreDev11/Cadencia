@@ -93,7 +93,7 @@ function render() {
   else if (st.view === 'main') root.innerHTML = viewMain();
   else if (st.view === 'error') root.innerHTML = viewError();
   document.title = APP_NAME;
-  document.body.classList.toggle('noscroll', !!(st.lib || st.food || st.tl));
+  document.body.classList.toggle('noscroll', !!(st.lib || st.food || st.tl || st.pesoSheet || st.meta));
 }
 
 /* ================================================================== */
@@ -336,7 +336,7 @@ const M = crearSecciones({
 });
 
 function viewMain() {
-  const sheet = st.lib ? libSheetHTML() : M.sheet();
+  const sheet = st.lib ? libSheetHTML() : st.pesoSheet ? pesoSheetHTML() : M.sheet();
   if (st.rw) return viewRutWizard() + sheet;
   if (st.live && !st.liveMin) return viewLive() + sheet;
   if (st.wk) return viewWkForm();
@@ -374,8 +374,9 @@ function viewInicio() {
   return `
     <header class="hello">
       <div><h1>Hola, ${esc(name)}</h1><p>${esc(new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }))}</p></div>
-      <button class="avatar" data-act="tab" data-v="perfil" aria-label="Tu perfil">${esc((name || '?').trim().charAt(0).toUpperCase())}</button>
+      <div class="hello-r">${M.novBell()}<button class="avatar" data-act="tab" data-v="perfil" aria-label="Tu perfil">${esc((name || '?').trim().charAt(0).toUpperCase())}</button></div>
     </header>
+    ${M.novedadesHTML()}
 
     <section class="card weight-hero">
       <h2>Peso actual</h2>
@@ -390,6 +391,7 @@ function viewInicio() {
         <input class="input" name="kg" inputmode="decimal" placeholder="${todayLogged ? 'Corregir: ' + nf(latestWeight().kg, 1) : 'Peso en kg'}" aria-label="Peso de hoy en kg">
         <button class="btn" type="submit">Guardar</button>
       </form>
+      <button type="button" class="link" data-act="peso-sheet">${I.plus} Añadir grasa, músculo, agua y hueso</button>
     </section>
 
     ${homeTraining()}
@@ -446,29 +448,70 @@ function installCard(dismissable) {
 
 /* ---------- pestaña Peso ---------- */
 /* ---------- peso saludable ---------- */
-// Rango saludable por IMC (18,5–25; hasta 27,5 si buscas ganar músculo) y un peso ideal orientativo (IMC 22,5 hombres / 21,5 mujeres).
-function rangoPeso(cm, sexo, objetivos) {
+// El IMC (18,5–25) sirve de guía, pero no distingue músculo de grasa: a alguien musculado le marca «sobrepeso»
+// estando definido. Por eso solo bloqueamos el bajo peso (IMC < 18,5) y lo exagerado (IMC > 32), y si sabemos
+// tu % de grasa calculamos el peso ideal a partir de tu masa magra.
+const grasaActual = () => { const w = st.weights.slice().reverse().find((x) => x.grasa != null); return w ? { pct: w.grasa, kg: w.kg } : null; };
+function rangoPeso(cm, sexo, objetivos, comp) {
   const h = cm / 100;
   if (!(h >= 1.2 && h <= 2.3)) return null;
-  const r = (v) => Math.round(v * 2) / 2;
+  const r = (v) => Math.round(v * 2) / 2, mujer = sexo === 'mujer';
   const imcMax = (objetivos || []).includes('musculo') ? 27.5 : 25;
-  return { min: r(18.5 * h * h), max: r(imcMax * h * h), ideal: r((sexo === 'mujer' ? 21.5 : 22.5) * h * h), imcMax };
+  const out = { min: r(18.5 * h * h), max: r(imcMax * h * h), tope: r(32 * h * h), ideal: r((mujer ? 21.5 : 22.5) * h * h), imcMax, magra: null };
+  if (comp && comp.pct > 2 && comp.pct < 60 && comp.kg) {
+    const lean = comp.kg * (1 - comp.pct / 100), [lo, mid, hi, esencial] = mujer ? [0.2, 0.23, 0.28, 0.14] : [0.1, 0.13, 0.18, 0.06];
+    out.magra = { lo: r(lean / (1 - lo)), ideal: r(lean / (1 - mid)), hi: r(lean / (1 - hi)), minimo: r(lean / (1 - esencial)), pct: comp.pct, mid: mid * 100, rango: [lo * 100, hi * 100] };
+    out.ideal = out.magra.ideal;
+    out.min = Math.max(out.min, out.magra.minimo);
+  }
+  return out;
 }
-function objetivoInvalido(t, cm, sexo, objetivos) {
+function objetivoInvalido(t, cm, sexo, objetivos, comp) {
   if (!isFinite(t)) return 'Escribe el peso objetivo con números, o déjalo vacío.';
-  const r = rangoPeso(cm, sexo, objetivos);
+  const r = rangoPeso(cm, sexo, objetivos, comp);
   if (!r) return t >= 30 && t <= 250 ? '' : 'El peso objetivo tiene que estar entre 30 y 250 kg.';
-  if (t < r.min) return `Con ${nf(cm / 100, 2)} m, por debajo de ${nf(r.min, 1)} kg tendrías bajo peso. Elige un objetivo entre ${nf(r.min, 1)} y ${nf(r.max, 1)} kg.`;
-  if (t > r.max) return `Con ${nf(cm / 100, 2)} m, el objetivo saludable llega hasta ${nf(r.max, 1)} kg. Elige un objetivo entre ${nf(r.min, 1)} y ${nf(r.max, 1)} kg.`;
+  if (r.magra && t < r.magra.minimo) return `Con tu músculo actual, por debajo de ${nf(r.magra.minimo, 1)} kg te quedarías sin la grasa que el cuerpo necesita. Elige ${nf(r.magra.minimo, 1)} kg o más.`;
+  if (t < r.min) return `Con ${nf(cm / 100, 2)} m, por debajo de ${nf(r.min, 1)} kg tendrías bajo peso. Elige ${nf(r.min, 1)} kg o más.`;
+  if (t > r.tope) return `Con ${nf(cm / 100, 2)} m, ${nf(t, 1)} kg está muy por encima de un peso saludable, incluso con mucho músculo. Elige como mucho ${nf(r.tope, 1)} kg.`;
   return '';
 }
-function pesoGuiaHTML(cm, sexo, objetivos, ctx) {
-  const r = rangoPeso(cm, sexo, objetivos);
+function pesoGuiaHTML(cm, sexo, objetivos, ctx, comp) {
+  const r = rangoPeso(cm, sexo, objetivos, comp);
   if (!r) return '';
+  const m = r.magra;
   return `<div class="guia">
-    <p><b>Peso ideal orientativo: ${nf(r.ideal, 1)} kg</b> <button type="button" class="link" data-act="peso-ideal" data-ctx="${ctx}" data-v="${r.ideal}">Usar este</button></p>
-    <p class="small muted">Para ${nf(cm / 100, 2)} m, un objetivo saludable está entre ${nf(r.min, 1)} y ${nf(r.max, 1)} kg${r.imcMax > 25 ? ' (hemos ampliado el máximo porque quieres ganar músculo)' : ''}. Es una guía basada en el IMC: no tiene en cuenta tu musculatura.</p>
+    <p><b>${m ? 'Peso ideal según tu músculo' : 'Peso ideal orientativo'}: ${nf(r.ideal, 1)} kg</b> <button type="button" class="link" data-act="peso-ideal" data-ctx="${ctx}" data-v="${r.ideal}">Usar este</button></p>
+    ${m ? `<p class="small muted">Con tu ${nf(m.pct, 1)} % de grasa actual, a un ${nf(m.mid)} % pesarías unos ${nf(m.ideal, 1)} kg. Definido (${nf(m.rango[0])}–${nf(m.rango[1])} % de grasa) estarías entre ${nf(m.lo, 1)} y ${nf(m.hi, 1)} kg sin perder músculo.</p>`
+      : `<p class="small muted">Por IMC, para ${nf(cm / 100, 2)} m lo habitual es entre ${nf(r.min, 1)} y ${nf(r.max, 1)} kg. <b>Si tienes mucha masa muscular puedes estar sano y definido por encima</b>: puedes poner hasta ${nf(r.tope, 1)} kg. Para calcular tu peso ideal según tu músculo, apunta tu % de grasa al pesarte o en Progreso → Cuerpo.</p>`}
   </div>`;
+}
+
+function pesoFormHTML(open) {
+  return `<form class="form-grid" data-form="addweight" novalidate>
+        <div class="two">
+          <label class="field"><span>Fecha</span><input class="input" type="date" name="fecha" value="${todayISO()}" max="${todayISO()}"></label>
+          <label class="field"><span>Peso (kg)</span><input class="input" name="kg" inputmode="decimal" placeholder="${nf(currentKg(), 1)}"></label>
+        </div>
+        <details class="comp"${open ? ' open' : ''}>
+          <summary>Composición corporal <span class="muted">(opcional)</span></summary>
+          <p class="small muted">Si tu báscula o tu centro deportivo te dan estos datos, apúntalos para ver cómo cambias por dentro.</p>
+          <div class="two">
+            <label class="field"><span>Grasa (%)</span><input class="input" name="grasa" inputmode="decimal" placeholder="Ej. 18,5"></label>
+            <label class="field"><span>Músculo (kg)</span><input class="input" name="musculo" inputmode="decimal" placeholder="Ej. 58"></label>
+            <label class="field"><span>Agua (%)</span><input class="input" name="agua" inputmode="decimal" placeholder="Ej. 55"></label>
+            <label class="field"><span>Hueso (kg)</span><input class="input" name="hueso" inputmode="decimal" placeholder="Ej. 3,1"></label>
+          </div>
+        </details>
+        <button class="btn block" type="submit">Guardar registro</button>
+      </form>`;
+}
+function pesoSheetHTML() {
+  return `<div class="sheet-back" data-act="peso-sheet-close"></div>
+    <div class="sheet short" role="dialog" aria-modal="true" aria-label="Registrar peso y composición">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><button type="button" class="iconbtn" data-act="peso-sheet-close" aria-label="Cerrar">${I.back}</button><h2>Peso y composición</h2><span style="width:36px"></span></div>
+      <div class="sheet-list">${pesoFormHTML(true)}</div>
+    </div>`;
 }
 
 /* ---------- gráfica y composición corporal ---------- */
@@ -531,23 +574,7 @@ function viewPeso(sub = false) {
     ${compCardHTML(ws)}
     <section class="card">
       <h2>Añadir registro</h2>
-      <form class="form-grid" data-form="addweight" novalidate>
-        <div class="two">
-          <label class="field"><span>Fecha</span><input class="input" type="date" name="fecha" value="${todayISO()}" max="${todayISO()}"></label>
-          <label class="field"><span>Peso (kg)</span><input class="input" name="kg" inputmode="decimal" placeholder="${nf(currentKg(), 1)}"></label>
-        </div>
-        <details class="comp">
-          <summary>Composición corporal <span class="muted">(opcional)</span></summary>
-          <p class="small muted">Si tu báscula o tu centro deportivo te dan estos datos, apúntalos para ver cómo cambias por dentro.</p>
-          <div class="two">
-            <label class="field"><span>Grasa (%)</span><input class="input" name="grasa" inputmode="decimal" placeholder="Ej. 18,5"></label>
-            <label class="field"><span>Músculo (kg)</span><input class="input" name="musculo" inputmode="decimal" placeholder="Ej. 58"></label>
-            <label class="field"><span>Agua (%)</span><input class="input" name="agua" inputmode="decimal" placeholder="Ej. 55"></label>
-            <label class="field"><span>Hueso (kg)</span><input class="input" name="hueso" inputmode="decimal" placeholder="Ej. 3,1"></label>
-          </div>
-        </details>
-        <button class="btn block" type="submit">Guardar registro</button>
-      </form>
+      ${pesoFormHTML(true)}
     </section>
     <section class="card">
       <h2>Historial</h2>
@@ -582,7 +609,7 @@ async function saveWeight(fecha, raw, comp = {}) {
     st.weights = await api.listWeights(st.user.uid);
     const last = latestWeight();
     if (last) { await api.saveProfile(st.user.uid, { pesoKg: last.kg }); st.profile.pesoKg = last.kg; }
-    render();
+    st.pesoSheet = false; render();
     toast(Object.keys(extra).length ? 'Peso y composición guardados' : 'Peso guardado');
     return true;
   } catch (e) { toast(errorText(e)); return false; }
@@ -621,7 +648,7 @@ function viewPerfil() {
         <label class="field"><span>Estatura (cm)</span><input class="input" name="alturaCm" inputmode="numeric" value="${esc(p.alturaCm || '')}"></label>
       </div>
       <label class="field"><span>Peso objetivo (kg)</span><input class="input" name="pesoObjetivo" inputmode="decimal" value="${p.pesoObjetivo ? esc(nf(p.pesoObjetivo, 1)) : ''}" placeholder="Opcional"></label>
-      ${pesoGuiaHTML(p.alturaCm, p.sexo, goals, 'perfil')}
+      ${pesoGuiaHTML(p.alturaCm, p.sexo, goals, 'perfil', grasaActual())}
       <div class="field"><span>Objetivos</span>
         <div class="choices">${GOALS.map((g) => `<button type="button" class="choice" data-act="pgoal" data-v="${g.id}" aria-pressed="${goals.includes(g.id)}">
           <span class="ico">${goalIcon(g)}</span><span class="t">${g.t}</span><span class="tick">${goals.includes(g.id) ? I.check : ''}</span></button>`).join('')}</div>
@@ -651,7 +678,7 @@ async function saveProfileForm(form) {
   if (!form.nombre.value.trim()) return toast('Escribe tu nombre');
   if (!(edad >= 14 && edad <= 100)) return toast('La edad tiene que estar entre 14 y 100');
   if (!(alt >= 120 && alt <= 230)) return toast('La estatura tiene que estar entre 120 y 230 cm');
-  if (obj != null) { const err = objetivoInvalido(obj, alt, form.sexo.value, goals); if (err) return toast(err); }
+  if (obj != null) { const err = objetivoInvalido(obj, alt, form.sexo.value, goals, grasaActual()); if (err) return toast(err); }
   if (!goals.length) return toast('Elige al menos un objetivo');
   const data = { nombre: form.nombre.value.trim(), sexo: form.sexo.value, edad: Math.round(edad), alturaCm: Math.round(alt), pesoObjetivo: obj == null ? null : Math.round(obj * 10) / 10, objetivos: goals };
   try {
@@ -670,6 +697,17 @@ const RT = E.RTIPOS;
 const WK_DE = { fuerza: 'gym', bici: 'bici', cardio: 'cardio', otro: 'otro' }; // tipo de rutina → tipo de entreno registrado
 const clone = (o) => JSON.parse(JSON.stringify(o));
 const rutinaOf = () => { const r = st.profile && st.profile.rutina; return r && Array.isArray(r.dias) && r.dias.length && r.sesiones ? r : null; };
+// Todas tus rutinas guardadas; la activa es la que usa la semana, Inicio y el entrenamiento en directo.
+function rutinasList() {
+  const p = st.profile || {}, a = rutinaOf();
+  let list = Array.isArray(p.rutinas) ? p.rutinas.filter((x) => x && x.id && Array.isArray(x.dias)) : [];
+  if (a) {
+    if (!a.id) { a.id = 'r1'; a.nombre = a.nombre || 'Mi rutina'; }
+    list = list.some((x) => x.id === a.id) ? list.map((x) => (x.id === a.id ? a : x)) : [a, ...list];
+  }
+  return list;
+}
+const nidR = () => 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 const dayPlan = (iso) => { const r = rutinaOf(); if (!r) return null; const d = E.weekdayIdx(iso); return r.dias.includes(d) ? r.sesiones[d] || null : null; };
 const tipoIcon = (t) => (t === 'bici' ? I.bike : t === 'cardio' ? I.heart : t === 'otro' ? I.ball : I.dumb);
 const goalsKind = () => E.planKind(st.profile && st.profile.objetivos);
@@ -712,12 +750,12 @@ function viewEntreno() {
     return `<div class="wk-empty"><button type="button" class="addbig" data-act="rw-start"><span class="addbig-c">${I.plusBig}</span><span>Añadir rutina</span></button></div>`;
   }
   const today = todayISO(), mon = E.mondayOf(today), sun = E.addDays(mon, 6);
-  const sub = ['semana', 'historial', 'rutina'].includes(st.wkTab) ? st.wkTab : 'semana';
-  const body = sub === 'historial' ? wkHistorial() : sub === 'rutina' ? wkRutina() : wkSemana();
+  const sub = ['semana', 'historial', 'rutina', 'objetivos'].includes(st.wkTab) ? st.wkTab : 'semana';
+  const body = sub === 'historial' ? wkHistorial() : sub === 'rutina' ? wkRutina() : sub === 'objetivos' ? M.viewObjetivos() : wkSemana();
   return `<header class="hello"><div><h1>Entreno</h1><p>Semana del ${esc(fmtDate(mon))} al ${esc(fmtDate(sun))}</p></div>
       <button class="btn small" data-act="wk-new" data-date="${today}">${I.plus} Registrar</button></header>
     <div class="seg" role="group" aria-label="Secciones de entreno">
-      ${[['semana', 'Semana'], ['historial', 'Historial'], ['rutina', 'Rutina']].map(([v, t]) => `<button type="button" data-act="wktab" data-v="${v}" aria-pressed="${sub === v}">${t}</button>`).join('')}
+      ${[['semana', 'Semana'], ['historial', 'Historial'], ['rutina', 'Rutinas'], ['objetivos', 'Objetivos']].map(([v, t]) => `<button type="button" data-act="wktab" data-v="${v}" aria-pressed="${sub === v}">${t}</button>`).join('')}
     </div>
     ${body}`;
 }
@@ -868,24 +906,48 @@ function normRutina(R) {
   return { rutina: out };
 }
 
-async function saveRutina(R) {
+// rid: la rutina que estás editando; sin rid se crea una nueva (y pasa a ser la activa).
+async function saveRutina(R, rid) {
   const res = normRutina(R);
   if (res.error) return res.error;
-  await api.saveProfile(st.user.uid, { rutina: res.rutina });
-  st.profile = { ...st.profile, rutina: res.rutina };
+  const list = rutinasList(), act = rutinaOf(), id = rid || nidR(), prev = list.find((x) => x.id === id);
+  const rut = { ...res.rutina, id, nombre: (prev && prev.nombre) || (list.length ? `Rutina ${list.length + 1}` : 'Mi rutina') };
+  const data = { rutinas: prev ? list.map((x) => (x.id === id ? rut : x)) : [...list, rut] };
+  if (!act || !rid || act.id === id) data.rutina = rut;
+  await api.saveProfile(st.user.uid, data);
+  st.profile = { ...st.profile, ...data };
   return '';
+}
+async function saveRutinas(list, activa) {
+  const data = { rutinas: list };
+  if (activa) data.rutina = activa;
+  await api.saveProfile(st.user.uid, data);
+  st.profile = { ...st.profile, ...data };
 }
 
 /* ---------- sección Rutina ---------- */
 function wkRutina() {
-  const r = rutinaOf();
-  if (!st.re || st.re.src !== 'tab') st.re = reNew(clone(r), 'tab');
-  const re = st.re;
+  const list = rutinasList(), act = rutinaOf();
+  const r = list.find((x) => x.id === st.rutSel) || act;
+  if (!st.re || st.re.src !== 'tab' || st.re.rid !== r.id) { st.re = reNew(clone(r), 'tab'); st.re.rid = r.id; }
+  const re = st.re, esActiva = r.id === act.id;
+  const resumen = (x) => `${x.dias.map((d) => E.DIAS[d]).join(', ')} · ${x.tipos.map((t) => (t === 'otro' && x.otro ? x.otro : RT[t])).join(', ')}`;
   const split = r.tipos.includes('fuerza') && r.split && E.SPLITS[r.split] ? ` · ${E.SPLITS[r.split].t}` : '';
   return `<section class="card">
-      <div class="card-head"><h2>Tu rutina</h2><button class="link" data-act="rw-start">Cambiar días o tipos</button></div>
+      <div class="card-head"><h2>Mis rutinas</h2><button class="chip chipbtn" data-act="rut-new">${I.plus} Nueva</button></div>
+      <div class="rutlist">${list.map((x) => `<button type="button" class="rutrow ${x.id === r.id ? 'on' : ''}" data-act="rut-sel" data-v="${esc(x.id)}">
+        <span><b>${esc(x.nombre || 'Rutina')}</b><small class="muted">${esc(resumen(x))}</small></span>${x.id === act.id ? '<span class="tag ok">En uso</span>' : ''}</button>`).join('')}</div>
+    </section>
+    <section class="card">
+      <label class="field"><span>Nombre de la rutina</span><input class="input" data-rutname maxlength="30" value="${esc(r.nombre || '')}"></label>
       <p><b>${r.dias.map((d) => E.DIAS[d]).join(', ')}</b> · ${r.tipos.map((t) => (t === 'otro' && r.otro ? r.otro : RT[t])).join(', ')}${esc(split)}</p>
       <p class="small muted">${r.modo === 'propuesta' ? 'Propuesta de la app según tus objetivos.' : 'Rutina creada por ti.'} Toca «Cambiar» en un ejercicio o sesión para ver alternativas.</p>
+      ${esActiva ? '' : `<button class="btn block" data-act="rut-use">Usar esta rutina</button>`}
+      <div class="rut-acts">
+        <button class="btn ghost small" data-act="rw-start" data-rid="${esc(r.id)}">Cambiar días o tipos</button>
+        <button class="btn ghost small" data-act="rut-dup">Duplicar</button>
+        ${esActiva ? '' : `<button class="btn ghost small danger" data-act="rut-del">${st.rutDel === r.id ? 'Pulsa otra vez para borrar' : 'Borrar'}</button>`}
+      </div>
     </section>
     ${editorHTML(re)}
     ${re.msg ? `<div class="msg" role="alert">${esc(re.msg)}</div>` : ''}
@@ -908,11 +970,11 @@ const rwSteps = (o) => ['tipos', ...(o.tipos.includes('fuerza') ? ['split', 'exp
 const rwStep = (o) => rwSteps(o)[o.step];
 const expBars = (k) => `<span class="bars" aria-hidden="true">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= k ? 'on' : ''}" style="height:${6 + i * 3}px"></i>`).join('')}</span>`;
 
-function rwStart() {
-  const r = rutinaOf();
+function rwStart(rid, nueva) {
+  const r = nueva ? null : rutinasList().find((x) => x.id === rid) || rutinaOf();
   st.rw = r
-    ? { step: 0, tipos: [...r.tipos], otro: r.otro || '', n: r.dias.length, dias: [...r.dias], modo: r.modo || '', split: r.split || '', exp: r.exp || '', eq: r.eqSel && r.eqSel.length ? [...r.eqSel] : (r.tipos.includes('fuerza') ? ['gym'] : []), msg: '' }
-    : { step: 0, tipos: [], otro: '', n: 0, dias: [], modo: '', split: '', exp: '', eq: [], msg: '' };
+    ? { rid: r.id, step: 0, tipos: [...r.tipos], otro: r.otro || '', n: r.dias.length, dias: [...r.dias], modo: r.modo || '', split: r.split || '', exp: r.exp || '', eq: r.eqSel && r.eqSel.length ? [...r.eqSel] : (r.tipos.includes('fuerza') ? ['gym'] : []), msg: '' }
+    : { nueva: true, step: 0, tipos: [], otro: '', n: 0, dias: [], modo: '', split: '', exp: '', eq: [], msg: '' };
   st.re = null;
   render(); window.scrollTo(0, 0);
 }
@@ -998,9 +1060,11 @@ async function rwNext() {
   if (s !== 'editor') { o.step++; render(); window.scrollTo(0, 0); return; }
   o.saving = true; st.re.msg = ''; render();
   try {
-    const err = await saveRutina(st.re.draft);
+    const err = await saveRutina(st.re.draft, o.nueva ? null : o.rid);
     if (err) { o.saving = false; st.re.msg = err; return render(); }
-    st.rw = null; st.re = null; st.tab = 'entreno'; st.wkTab = 'semana'; lsSet('cadencia-wktab', 'semana');
+    const otra = !o.nueva && rutinaOf() && o.rid !== rutinaOf().id;
+    st.rutSel = otra ? o.rid : null;
+    st.rw = null; st.re = null; st.tab = 'entreno'; st.wkTab = otra ? 'rutina' : 'semana'; lsSet('cadencia-wktab', st.wkTab);
     render(); window.scrollTo(0, 0); toast('Rutina guardada');
   } catch (e) { o.saving = false; st.re.msg = errorText(e); render(); }
 }
@@ -1450,7 +1514,20 @@ root.addEventListener('click', async (e) => {
   }
 
   // asistente
-  if (act === 'rw-start') return rwStart();
+  if (act === 'rw-start') return rwStart(b.dataset.rid);
+  if (act === 'rut-new') return rwStart(null, true);
+  if (act === 'rut-sel') { st.rutSel = v; st.rutDel = null; return render(); }
+  if (act === 'rut-use' || act === 'rut-dup' || act === 'rut-del') {
+    const list = rutinasList(), r = list.find((x) => x.id === st.rutSel) || rutinaOf();
+    try {
+      if (act === 'rut-use') { await saveRutinas(list, r); st.rutSel = null; toast(`Ahora usas «${r.nombre}»`); }
+      else if (act === 'rut-dup') { const c = { ...clone(r), id: nidR(), nombre: `${r.nombre || 'Rutina'} (copia)`.slice(0, 30) }; await saveRutinas([...list, c]); st.rutSel = c.id; toast('Rutina duplicada'); }
+      else if (st.rutDel !== r.id) { st.rutDel = r.id; }
+      else { await saveRutinas(list.filter((x) => x.id !== r.id)); st.rutSel = null; st.rutDel = null; toast('Rutina borrada'); }
+    } catch (err) { toast(errorText(err)); }
+    st.re = null; return render();
+  }
+  if (act === 'nov-bici') { st.tab = 'entreno'; lsSet('cadencia-tab', 'entreno'); rwStart(); if (st.rw && !st.rw.tipos.includes('bici')) st.rw.tipos.push('bici'); return render(); }
   if (o && act === 'rw-back') { if (o.step === 0) { st.rw = null; st.re = null; } else { o.step--; o.msg = ''; } render(); return window.scrollTo(0, 0); }
   if (o && act === 'rw-tipo') { o.tipos = o.tipos.includes(v) ? o.tipos.filter((x) => x !== v) : [...o.tipos, v]; if (o.tipos.includes('fuerza') && !o.eq.length) o.eq = ['gym']; return render(); }
   if (o && act === 'rw-split') { o.split = v; return render(); }
@@ -1477,7 +1554,7 @@ root.addEventListener('click', async (e) => {
     else if (act === 're-ses-close') re.ses = null;
     else if (act === 're-ses') { const s = R.sesiones[Number(v)], x = E.sesionPorId(b.dataset.id); s.ses = x.id; s.nombre = x.n; s.min = x.min; re.ses = null; touch(); }
     else if (act === 're-save') {
-      try { const err = await saveRutina(R); if (err) { re.msg = err; return render(); } st.re = null; render(); toast('Rutina guardada'); } catch (err) { re.msg = errorText(err); render(); }
+      try { const err = await saveRutina(R, re.rid); if (err) { re.msg = err; return render(); } st.re = null; render(); toast('Rutina guardada'); } catch (err) { re.msg = errorText(err); render(); }
       return;
     }
     return render();
@@ -1554,6 +1631,13 @@ root.addEventListener('focusin', (e) => {
 root.addEventListener('change', async (e) => {
   const t = e.target;
   if (st.view === 'main' && await M.change(t)) return;
+  if (t.dataset.rutname != null) {
+    const list = rutinasList(), r = list.find((x) => x.id === st.rutSel) || rutinaOf(), n = t.value.trim().slice(0, 30);
+    if (!n) { toast('Ponle un nombre a la rutina'); return render(); }
+    const nr = { ...r, nombre: n };
+    try { await saveRutinas(list.map((x) => (x.id === r.id ? nr : x)), r.id === rutinaOf().id ? nr : null); toast('Nombre guardado'); } catch (err) { toast(errorText(err)); }
+    return render();
+  }
   if (st.lib && t.dataset.libm != null) { st.lib.m = t.value; return render(); }
   if (st.lib && t.dataset.libeqf != null) { st.lib.eqF = t.value; return render(); }
   if (st.live && t.dataset.livetitle != null) {
@@ -1623,6 +1707,8 @@ root.addEventListener('click', async (e) => {
   else if (act === 'install') { if (installEvt) { installEvt.prompt(); const r = await installEvt.userChoice; if (r.outcome === 'accepted') installEvt = null; render(); } }
   else if (act === 'install-hide') { lsSet('cadencia-install-hide', '1'); render(); }
   else if (act === 'delweight') delWeight(v);
+  else if (act === 'peso-sheet') { st.pesoSheet = true; render(); }
+  else if (act === 'peso-sheet-close') { st.pesoSheet = false; render(); }
   else if (act === 'pesomet') { st.pesoMet = v; render(); }
   else if (act === 'peso-ideal') {
     const val = nf(Number(v), 1);

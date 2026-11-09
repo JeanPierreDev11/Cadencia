@@ -65,11 +65,21 @@ users/{uid}/entrenos/{id}
   fecha, tipo (gym | bici | cardio | otro), nombre, min, km, elev, pulso, np, bici, esf, kcal, ejercicios[{n, series[{kg, reps}]}]
 users/{uid}/comidas/{AAAA-MM-DD}
   fecha, items[{id, m (0 desayuno … 4 otros), n, g, k, p, c, f, fid, prep}]
-users/{uid}  → campos nutri {neat, rate, eat}, atleta {fcMax, fcRep, ftp}
+users/{uid}  → campos nutri {neat, rate, eat}, atleta {fcMax, fcRep, ftp}, novVista, misAlimentos[{id, n, k, p, c, f, u}]
+users/{uid}  → rutinas[{id, nombre, …misma forma que rutina}] (rutina = la que está en uso)
+users/{uid}  → metas[{id, tipo, valor, ej?, hasta?, creado}]
 users/{uid}  → campo garaje
   bicis[{id, nombre, tipo, marcaModelo, anio, pesoKg, cubiertaMm, tubeless, kmPrevios, comps[{id, cat, nombre, desde, kmIni, cadaKm, precio}]}]
   mejora {presupuesto, metas[], deseos[{id, n, precio}]}
 ```
+
+## Novedades
+
+Cuando publiques algo nuevo, cambia `NOV_V` y la lista de `novItems()` en `js/secciones.js`: a cada persona le saldrá la nota en Inicio hasta que pulse «Entendido».
+
+## Productos de marca
+
+La búsqueda de productos de marca usa [Open Food Facts](https://es.openfoodfacts.org) (base abierta, licencia ODbL: hay que citarla, como hace la app).
 
 ## Tiempo
 
