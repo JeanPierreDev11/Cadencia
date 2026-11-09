@@ -114,72 +114,268 @@ export function lastSets(ws, name) {
 /* ================================================================== */
 export const RTIPOS = { fuerza: 'Fuerza', bici: 'Bici', cardio: 'Cardio', otro: 'Otro' };
 
-/* ---------- biblioteca de ejercicios: cada grupo trabaja lo mismo, así que sus ejercicios son alternativas entre sí ---------- */
-export const GRUPOS = {
-  rodilla: { n: 'Piernas: sentadilla', ej: ['Sentadilla con barra', 'Sentadilla goblet', 'Prensa de piernas', 'Sentadilla en multipower', 'Hack squat', 'Sentadilla frontal'] },
-  bisagra: { n: 'Glúteo y cadera', ej: ['Peso muerto rumano', 'Hip thrust', 'Peso muerto convencional', 'Peso muerto con mancuernas', 'Puente de glúteo', 'Buenos días'] },
-  unilateral: { n: 'Una pierna', ej: ['Zancadas', 'Sentadilla búlgara', 'Step-up al cajón', 'Zancada inversa', 'Peso muerto a una pierna'] },
-  femoral: { n: 'Femoral', ej: ['Curl femoral tumbado', 'Curl femoral sentado', 'Curl nórdico', 'Curl femoral con fitball'] },
-  gemelos: { n: 'Gemelos', ej: ['Elevación de gemelos de pie', 'Elevación de gemelos sentado', 'Gemelos en prensa', 'Gemelos a una pierna'] },
-  empuje_h: { n: 'Pecho', ej: ['Press banca', 'Press con mancuernas', 'Flexiones', 'Press inclinado con mancuernas', 'Press de pecho en máquina', 'Fondos en paralelas'] },
-  empuje_v: { n: 'Hombro', ej: ['Press militar', 'Press con mancuernas sentado', 'Press Arnold', 'Press de hombro en máquina', 'Elevaciones laterales'] },
-  tiron_v: { n: 'Espalda: jalón', ej: ['Dominadas', 'Jalón al pecho', 'Dominadas asistidas', 'Jalón agarre estrecho', 'Pullover en polea'] },
-  tiron_h: { n: 'Espalda: remo', ej: ['Remo con barra', 'Remo con mancuerna', 'Remo en polea baja', 'Remo en máquina', 'Remo invertido'] },
-  brazos: { n: 'Brazos', ej: ['Curl de bíceps con mancuernas', 'Curl martillo', 'Extensión de tríceps en polea', 'Fondos en banco', 'Curl con barra', 'Press francés'] },
-  core: { n: 'Core', ej: ['Plancha', 'Dead bug', 'Plancha lateral', 'Pallof press', 'Rueda abdominal', 'Elevación de piernas colgado'] },
+/* ---------- biblioteca de ejercicios ---------- */
+export const MUSCULOS = {
+  pecho: 'Pecho', espalda: 'Espalda', hombro: 'Hombro', biceps: 'Bíceps', triceps: 'Tríceps', cuadriceps: 'Cuádriceps',
+  femoral: 'Femoral', gluteo: 'Glúteo', gemelos: 'Gemelos', core: 'Core', antebrazo: 'Antebrazo',
 };
-export const TODOS_EJERCICIOS = Object.values(GRUPOS).flatMap((g) => g.ej);
+export const EQUIPOS = {
+  barra: 'Barra', mancuernas: 'Mancuernas', maquina: 'Máquina', polea: 'Polea', multipower: 'Multipower',
+  kettlebell: 'Kettlebell', banda: 'Banda elástica', corporal: 'Peso corporal',
+};
+// nombre | músculo | patrón de movimiento (los del mismo patrón son alternativas entre sí) | equipo
+const TABLA = `
+Press banca|pecho|empuje_h|barra
+Press con mancuernas|pecho|empuje_h|mancuernas
+Press inclinado con barra|pecho|empuje_h|barra
+Press inclinado con mancuernas|pecho|empuje_h|mancuernas
+Press declinado|pecho|empuje_h|barra
+Press de pecho en máquina|pecho|empuje_h|maquina
+Press banca en multipower|pecho|empuje_h|multipower
+Flexiones|pecho|empuje_h|corporal
+Flexiones con pies elevados|pecho|empuje_h|corporal
+Fondos en paralelas|pecho|empuje_h|corporal
+Press de suelo con kettlebell|pecho|empuje_h|kettlebell
+Aperturas con mancuernas|pecho|aperturas|mancuernas
+Aperturas inclinadas con mancuernas|pecho|aperturas|mancuernas
+Cruce de poleas|pecho|aperturas|polea
+Cruce de poleas bajas|pecho|aperturas|polea
+Contractora (pec deck)|pecho|aperturas|maquina
+Aperturas con banda|pecho|aperturas|banda
+Dominadas|espalda|tiron_v|corporal
+Dominadas supinas|espalda|tiron_v|corporal
+Dominadas asistidas|espalda|tiron_v|maquina
+Jalón al pecho|espalda|tiron_v|polea
+Jalón agarre estrecho|espalda|tiron_v|polea
+Jalón con agarre neutro|espalda|tiron_v|polea
+Jalón a una mano|espalda|tiron_v|polea
+Pullover en polea|espalda|tiron_v|polea
+Jalón con banda|espalda|tiron_v|banda
+Remo con barra|espalda|tiron_h|barra
+Remo con mancuerna|espalda|tiron_h|mancuernas
+Remo en polea baja|espalda|tiron_h|polea
+Remo en máquina|espalda|tiron_h|maquina
+Remo T|espalda|tiron_h|barra
+Remo Pendlay|espalda|tiron_h|barra
+Remo con apoyo en el pecho|espalda|tiron_h|mancuernas
+Remo invertido|espalda|tiron_h|corporal
+Remo con kettlebell|espalda|tiron_h|kettlebell
+Remo con banda|espalda|tiron_h|banda
+Press militar|hombro|empuje_v|barra
+Press con mancuernas sentado|hombro|empuje_v|mancuernas
+Press Arnold|hombro|empuje_v|mancuernas
+Press de hombro en máquina|hombro|empuje_v|maquina
+Press de hombro en multipower|hombro|empuje_v|multipower
+Press landmine|hombro|empuje_v|barra
+Press con kettlebell|hombro|empuje_v|kettlebell
+Flexiones en pica|hombro|empuje_v|corporal
+Elevaciones laterales|hombro|elev_lat|mancuernas
+Elevaciones laterales en polea|hombro|elev_lat|polea
+Elevaciones laterales en máquina|hombro|elev_lat|maquina
+Elevaciones laterales con banda|hombro|elev_lat|banda
+Elevaciones frontales|hombro|elev_lat|mancuernas
+Remo al mentón|hombro|elev_lat|barra
+Face pull|hombro|posterior|polea
+Pájaros con mancuernas|hombro|posterior|mancuernas
+Contractora inversa|hombro|posterior|maquina
+Aperturas posteriores con banda|hombro|posterior|banda
+Curl con barra|biceps|biceps|barra
+Curl con barra Z|biceps|biceps|barra
+Curl de bíceps con mancuernas|biceps|biceps|mancuernas
+Curl martillo|biceps|biceps|mancuernas
+Curl inclinado con mancuernas|biceps|biceps|mancuernas
+Curl concentrado|biceps|biceps|mancuernas
+Curl en polea|biceps|biceps|polea
+Curl predicador en máquina|biceps|biceps|maquina
+Curl con banda|biceps|biceps|banda
+Curl con kettlebell|biceps|biceps|kettlebell
+Extensión de tríceps en polea|triceps|triceps|polea
+Extensión con cuerda|triceps|triceps|polea
+Press francés|triceps|triceps|barra
+Extensión sobre la cabeza con mancuerna|triceps|triceps|mancuernas
+Patada de tríceps|triceps|triceps|mancuernas
+Press banca agarre estrecho|triceps|triceps|barra
+Extensión de tríceps en máquina|triceps|triceps|maquina
+Fondos en banco|triceps|triceps|corporal
+Flexiones diamante|triceps|triceps|corporal
+Extensión de tríceps con banda|triceps|triceps|banda
+Sentadilla con barra|cuadriceps|rodilla|barra
+Sentadilla frontal|cuadriceps|rodilla|barra
+Sentadilla goblet|cuadriceps|rodilla|mancuernas
+Sentadilla con kettlebell|cuadriceps|rodilla|kettlebell
+Prensa de piernas|cuadriceps|rodilla|maquina
+Hack squat|cuadriceps|rodilla|maquina
+Sentadilla péndulo|cuadriceps|rodilla|maquina
+Sentadilla en multipower|cuadriceps|rodilla|multipower
+Sentadilla con peso corporal|cuadriceps|rodilla|corporal
+Sentadilla con banda|cuadriceps|rodilla|banda
+Extensión de cuádriceps|cuadriceps|cuad_iso|maquina
+Sissy squat|cuadriceps|cuad_iso|corporal
+Zancadas|cuadriceps|unilateral|mancuernas
+Zancadas caminando|cuadriceps|unilateral|mancuernas
+Zancada inversa|cuadriceps|unilateral|mancuernas
+Sentadilla búlgara|cuadriceps|unilateral|mancuernas
+Step-up al cajón|cuadriceps|unilateral|mancuernas
+Zancadas con barra|cuadriceps|unilateral|barra
+Zancadas con peso corporal|cuadriceps|unilateral|corporal
+Peso muerto rumano|femoral|bisagra|barra
+Peso muerto convencional|femoral|bisagra|barra
+Peso muerto sumo|femoral|bisagra|barra
+Peso muerto con barra hexagonal|femoral|bisagra|barra
+Peso muerto con mancuernas|femoral|bisagra|mancuernas
+Peso muerto a una pierna|femoral|bisagra|mancuernas
+Buenos días|femoral|bisagra|barra
+Swing con kettlebell|femoral|bisagra|kettlebell
+Hiperextensiones|femoral|bisagra|corporal
+Peso muerto con banda|femoral|bisagra|banda
+Curl femoral tumbado|femoral|femoral|maquina
+Curl femoral sentado|femoral|femoral|maquina
+Curl nórdico|femoral|femoral|corporal
+Curl femoral con fitball|femoral|femoral|corporal
+Curl femoral con banda|femoral|femoral|banda
+Hip thrust|gluteo|gluteo|barra
+Hip thrust en máquina|gluteo|gluteo|maquina
+Hip thrust con mancuerna|gluteo|gluteo|mancuernas
+Puente de glúteo|gluteo|gluteo|corporal
+Hip thrust a una pierna|gluteo|gluteo|corporal
+Patada de glúteo en polea|gluteo|gluteo|polea
+Abducción en máquina|gluteo|gluteo|maquina
+Abducción con banda|gluteo|gluteo|banda
+Elevación de gemelos de pie|gemelos|gemelos|maquina
+Elevación de gemelos sentado|gemelos|gemelos|maquina
+Gemelos en prensa|gemelos|gemelos|maquina
+Gemelos con mancuernas|gemelos|gemelos|mancuernas
+Gemelos a una pierna|gemelos|gemelos|corporal
+Plancha|core|core|corporal
+Plancha lateral|core|core|corporal
+Dead bug|core|core|corporal
+Bird dog|core|core|corporal
+Rueda abdominal|core|core|corporal
+Elevación de piernas colgado|core|core|corporal
+Crunch abdominal|core|core|corporal
+Russian twist|core|core|corporal
+Mountain climbers|core|core|corporal
+Crunch en polea|core|core|polea
+Pallof press|core|core|polea
+Leñador en polea|core|core|polea
+Pallof press con banda|core|core|banda
+Curl de muñeca|antebrazo|antebrazo|mancuernas
+Curl inverso|antebrazo|antebrazo|barra
+Paseo del granjero|antebrazo|antebrazo|mancuernas
+`;
+export const BIBLIOTECA = TABLA.trim().split('\n').map((l) => { const [n, m, p, eq] = l.split('|'); return { n, m, p, eq }; });
+let PROPIOS = [];
+export const setPropios = (l) => { PROPIOS = (l || []).filter((x) => x && x.n).map((x) => ({ n: x.n, m: x.m || 'core', p: null, eq: x.eq || 'corporal', propio: true })); };
+export const todosEjercicios = () => [...PROPIOS, ...BIBLIOTECA];
+export const TODOS_EJERCICIOS = BIBLIOTECA.map((x) => x.n);
+export const normTxt = (s) => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+export const ejercicio = (n) => { const k = normTxt(n); return todosEjercicios().find((x) => normTxt(x.n) === k) || null; };
+const tieneEq = (x, eq) => (!eq || x.eq === 'corporal' || eq.includes(x.eq) ? 1 : 0);
+
+// Alternativas: primero las del mismo movimiento, luego las del mismo músculo; antes las que puedes hacer con tu equipo.
+export function alternativas(e, usados = [], equipo = null, todas = false) {
+  const x = ejercicio(e.n);
+  if (!x) return [];
+  const u = new Set(usados.map(normTxt));
+  const libres = todosEjercicios().filter((y) => normTxt(y.n) !== normTxt(e.n) && !u.has(normTxt(y.n)));
+  const mismo = libres.filter((y) => x.p && y.p === x.p);
+  const musculo = todas ? libres.filter((y) => y.m === x.m && !(x.p && y.p === x.p)) : [];
+  const ord = (l) => l.sort((a, b) => tieneEq(b, equipo) - tieneEq(a, equipo));
+  return [...ord(mismo), ...ord(musculo)].map((y) => y.n);
+}
+
 // Ejercicios que se miden en tiempo o por lado.
 const REPS_FIJAS = {
-  'Plancha': '30-45 s', 'Plancha lateral': '30 s por lado', 'Dead bug': '10 por lado', 'Pallof press': '10 por lado',
-  'Zancadas': '10 por pierna', 'Sentadilla búlgara': '8-10 por pierna', 'Step-up al cajón': '10 por pierna',
-  'Zancada inversa': '10 por pierna', 'Peso muerto a una pierna': '8 por pierna', 'Gemelos a una pierna': '12 por pierna',
+  'Plancha': '30-45 s', 'Plancha lateral': '30 s por lado', 'Dead bug': '10 por lado', 'Bird dog': '10 por lado', 'Pallof press': '10 por lado',
+  'Pallof press con banda': '10 por lado', 'Leñador en polea': '10 por lado', 'Mountain climbers': '30 s', 'Russian twist': '20',
+  'Zancadas': '10 por pierna', 'Zancadas caminando': '10 por pierna', 'Zancada inversa': '10 por pierna', 'Zancadas con barra': '8 por pierna',
+  'Zancadas con peso corporal': '12 por pierna', 'Sentadilla búlgara': '8-10 por pierna', 'Step-up al cajón': '10 por pierna',
+  'Peso muerto a una pierna': '8 por pierna', 'Gemelos a una pierna': '12 por pierna', 'Hip thrust a una pierna': '10 por pierna',
+  'Paseo del granjero': '40 m', 'Jalón a una mano': '10 por brazo', 'Remo con mancuerna': '10 por brazo', 'Curl concentrado': '10 por brazo',
 };
-const SERIES = { fuerza: { s: 4, r: '8-12' }, grasa: { s: 3, r: '10-15' }, rend: { s: 3, r: '5-8' }, general: { s: 3, r: '8-12' } };
-
-export function grupoDe(name) {
-  const k = String(name || '').trim().toLowerCase();
-  for (const [g, v] of Object.entries(GRUPOS)) if (v.ej.some((e) => e.toLowerCase() === k)) return g;
-  return null;
-}
-// Alternativas a un ejercicio: los demás del mismo grupo que no estén ya en la sesión.
-export function alternativas(e, usados = []) {
-  const g = e.g || grupoDe(e.n);
-  if (!g || !GRUPOS[g]) return [];
-  const u = new Set(usados.map((x) => x.toLowerCase()));
-  return GRUPOS[g].ej.filter((n) => n.toLowerCase() !== e.n.toLowerCase() && !u.has(n.toLowerCase()));
-}
-export function nuevoEjercicio(n, g, kind) {
-  const sr = SERIES[kind] || SERIES.general;
-  return { n, g: g || grupoDe(n) || '', series: sr.s, reps: REPS_FIJAS[n] || sr.r };
+const REPS_OBJ = { fuerza: '8-12', grasa: '10-15', rend: '5-8', general: '8-12' };
+const SERIES_EXP = { nuevo: 3, meses: 3, anio: 4, anios: 4, compite: 4 };
+export function nuevoEjercicio(n, kind, exp) {
+  const x = ejercicio(n);
+  return { n, m: x ? x.m : '', series: SERIES_EXP[exp] || 3, reps: REPS_FIJAS[n] || (exp === 'nuevo' ? '10-12' : REPS_OBJ[kind] || '8-12') };
 }
 // Al cambiar un ejercicio por otro, ajusta las repeticiones si uno se mide en tiempo o por lado.
 export function repsPara(nuevo, actual, kind) {
   if (REPS_FIJAS[nuevo]) return REPS_FIJAS[nuevo];
-  if (Object.values(REPS_FIJAS).includes(actual)) return (SERIES[kind] || SERIES.general).r;
+  if (Object.values(REPS_FIJAS).includes(actual)) return REPS_OBJ[kind] || '8-12';
   return actual;
 }
 
-/* ---------- sesiones de fuerza ---------- */
-const SES_FUERZA = {
-  full: { n: 'Cuerpo completo', min: 55, g: ['rodilla', 'empuje_h', 'tiron_h', 'bisagra', 'core'] },
-  fullB: { n: 'Cuerpo completo B', min: 55, g: ['bisagra', 'empuje_v', 'tiron_v', 'unilateral', 'core'] },
-  inf: { n: 'Tren inferior', min: 60, g: ['rodilla', 'bisagra', 'unilateral', 'femoral', 'gemelos', 'core'] },
-  sup: { n: 'Tren superior', min: 55, g: ['empuje_h', 'tiron_v', 'empuje_v', 'tiron_h', 'brazos'] },
-  cicl: { n: 'Fuerza para ciclistas', min: 50, g: ['rodilla', 'bisagra', 'unilateral', 'gemelos', 'core', 'core'] },
+/* ---------- divisiones de fuerza ---------- */
+export const SPLITS = {
+  ppl: { t: 'Push · Pull · Legs', s: 'Empuje, tirón y pierna en días distintos' },
+  tp: { t: 'Torso / Pierna', s: 'Alternas tren superior e inferior' },
+  full: { t: 'Cuerpo completo', s: 'Todo el cuerpo en cada sesión' },
+  weider: { t: 'Un músculo por día', s: 'Pecho, espalda, pierna, hombro y brazos (Weider)' },
+  cicl: { t: 'Fuerza para ciclistas', s: 'Pierna, glúteo y core para pedalear con más fuerza' },
+  auto: { t: 'No lo sé, elige tú', s: 'La app decide según tus días y objetivos' },
 };
-const FUERZA_ORDEN = {
-  rend: ['cicl', 'full', 'sup', 'inf'],
-  fuerza: ['sup', 'inf', 'full', 'sup', 'inf', 'full', 'sup'],
-  grasa: ['full', 'fullB', 'full', 'sup', 'inf', 'full', 'fullB'],
-  general: ['full', 'fullB', 'full', 'sup', 'inf', 'full', 'fullB'],
+export const SES_FUERZA = {
+  push: { n: 'Push · Empuje', p: ['empuje_h', 'empuje_v', 'empuje_h', 'elev_lat', 'triceps', 'aperturas', 'triceps'], m: ['pecho', 'hombro', 'triceps'] },
+  pull: { n: 'Pull · Tirón', p: ['tiron_v', 'tiron_h', 'tiron_h', 'posterior', 'biceps', 'biceps', 'antebrazo'], m: ['espalda', 'biceps', 'hombro', 'antebrazo'] },
+  legs: { n: 'Legs · Pierna', p: ['rodilla', 'bisagra', 'unilateral', 'cuad_iso', 'femoral', 'gemelos', 'core'], m: ['cuadriceps', 'femoral', 'gluteo', 'gemelos', 'core'] },
+  torso: { n: 'Torso', p: ['empuje_h', 'tiron_h', 'empuje_v', 'tiron_v', 'biceps', 'triceps', 'elev_lat'], m: ['pecho', 'espalda', 'hombro', 'biceps', 'triceps'] },
+  pierna: { n: 'Pierna', p: ['rodilla', 'bisagra', 'unilateral', 'femoral', 'gluteo', 'gemelos', 'core'], m: ['cuadriceps', 'femoral', 'gluteo', 'gemelos', 'core'] },
+  full: { n: 'Cuerpo completo A', p: ['rodilla', 'empuje_h', 'tiron_h', 'bisagra', 'elev_lat', 'core', 'biceps'], m: ['cuadriceps', 'pecho', 'espalda', 'femoral', 'hombro', 'core'] },
+  fullB: { n: 'Cuerpo completo B', p: ['bisagra', 'empuje_v', 'tiron_v', 'unilateral', 'triceps', 'core', 'gemelos'], m: ['femoral', 'hombro', 'espalda', 'cuadriceps', 'triceps', 'core'] },
+  fullC: { n: 'Cuerpo completo C', p: ['unilateral', 'empuje_h', 'tiron_v', 'gluteo', 'biceps', 'core', 'posterior'], m: ['cuadriceps', 'pecho', 'espalda', 'gluteo', 'biceps', 'core'] },
+  pecho: { n: 'Pecho y tríceps', p: ['empuje_h', 'empuje_h', 'aperturas', 'empuje_h', 'aperturas', 'triceps', 'triceps'], m: ['pecho', 'triceps'] },
+  espalda: { n: 'Espalda y bíceps', p: ['tiron_v', 'tiron_h', 'tiron_h', 'tiron_v', 'biceps', 'biceps', 'posterior'], m: ['espalda', 'biceps'] },
+  hombro: { n: 'Hombro y core', p: ['empuje_v', 'elev_lat', 'elev_lat', 'posterior', 'empuje_v', 'core', 'core'], m: ['hombro', 'core'] },
+  brazos: { n: 'Brazos', p: ['biceps', 'triceps', 'biceps', 'triceps', 'biceps', 'triceps', 'antebrazo'], m: ['biceps', 'triceps', 'antebrazo'] },
+  cicl: { n: 'Fuerza para ciclistas', p: ['rodilla', 'bisagra', 'unilateral', 'gluteo', 'gemelos', 'core', 'core'], m: ['cuadriceps', 'gluteo', 'femoral', 'gemelos', 'core'] },
 };
-function sesionFuerza(key, kind) {
-  const def = SES_FUERZA[key];
-  const used = [];
-  const ej = def.g.map((g) => { const n = GRUPOS[g].ej.find((x) => !used.includes(x)); used.push(n); return nuevoEjercicio(n, g, kind); });
-  return { t: 'fuerza', nombre: def.n, min: def.min, ej };
+export function splitOrden(split, nF, kind) {
+  if (split === 'ppl') return ['push', 'pull', 'legs'];
+  if (split === 'tp') return ['torso', 'pierna'];
+  if (split === 'full') return ['full', 'fullB', 'fullC'];
+  if (split === 'weider') return ['pecho', 'espalda', 'legs', 'hombro', 'brazos'];
+  if (split === 'cicl') return ['cicl', 'fullB'];
+  if (kind === 'rend') return ['cicl', 'fullB', 'torso'];
+  if (nF <= 2) return ['full', 'fullB'];
+  if (nF === 3) return kind === 'fuerza' ? ['push', 'pull', 'legs'] : ['full', 'fullB', 'fullC'];
+  if (nF === 4) return ['torso', 'pierna'];
+  return ['push', 'pull', 'legs'];
 }
+// Equipo que eliges en el asistente → equipo de los ejercicios (null = gimnasio completo).
+export function expandirEquipo(sel) {
+  if (!sel || !sel.length || sel.includes('gym')) return null;
+  const out = new Set();
+  for (const s of sel) {
+    if (s === 'maquina') { out.add('maquina'); out.add('polea'); out.add('multipower'); }
+    else if (s !== 'ninguno') out.add(s);
+  }
+  return [...out];
+}
+function elegir(p, usados, equipo, evitar = [], eqPrevio = null) {
+  const c = BIBLIOTECA.filter((x) => x.p === p && !usados.includes(x.n) && tieneEq(x, equipo));
+  if (!c.length) return null;
+  const sinRepetir = c.filter((x) => !evitar.includes(x.n));
+  const base = sinRepetir.length ? sinRepetir : c;
+  return (eqPrevio && base.find((x) => x.eq !== eqPrevio)) || base[0];
+}
+// cfg: { exp, equipo (ya expandido) }
+// evitar: ejercicios de una sesión anterior con el mismo enfoque, para que los días repetidos tengan variantes.
+export function sesionFuerza(key, kind, cfg = {}, evitar = []) {
+  const def = SES_FUERZA[key];
+  const max = { nuevo: 4, meses: 5 }[cfg.exp] || 6;
+  const usados = [], ej = [], eqPorPatron = {};
+  for (const p of def.p) {
+    if (ej.length >= max) break;
+    const x = elegir(p, usados, cfg.equipo, evitar, eqPorPatron[p]);
+    if (!x) continue;
+    usados.push(x.n); eqPorPatron[p] = x.eq;
+    ej.push(nuevoEjercicio(x.n, kind, cfg.exp));
+  }
+  const rep = evitar.length > 0;
+  return { t: 'fuerza', nombre: rep && !/ [ABC]$/.test(def.n) ? def.n + ' B' : def.n, foco: key, ej };
+}
+export const musculosDe = (foco) => (SES_FUERZA[foco] ? SES_FUERZA[foco].m : []);
 
 /* ---------- sesiones de bici y cardio ---------- */
 export const SES_BICI = [
@@ -274,18 +470,18 @@ export function planKind(goals) {
 export const DIAS_DEF = { 1: [5], 2: [1, 5], 3: [0, 2, 5], 4: [0, 2, 4, 6], 5: [0, 1, 3, 5, 6], 6: [0, 1, 2, 4, 5, 6], 7: [0, 1, 2, 3, 4, 5, 6] };
 
 export function sesionVacia(t, otro) {
-  if (t === 'fuerza') return { t, nombre: 'Fuerza', min: 60, ej: [] };
+  if (t === 'fuerza') return { t, nombre: 'Fuerza', ej: [] };
   if (t === 'bici' || t === 'cardio') return { t, nombre: RTIPOS[t], min: 60, ses: null };
   return { t: 'otro', nombre: otro || 'Otro', min: 60, det: '' };
 }
-export function sesionPorDefecto(t, kind, otro) {
-  if (t === 'fuerza') return sesionFuerza(FUERZA_ORDEN[kind][0], kind);
+export function sesionPorDefecto(t, kind, otro, cfg = {}) {
+  if (t === 'fuerza') return sesionFuerza(splitOrden(cfg.split, 1, kind)[0], kind, cfg);
   if (t === 'bici') return sesionLib('bici', BICI_ORDEN[kind][1]);
   if (t === 'cardio') return sesionLib('cardio', CARDIO_ORDEN[kind][0]);
   return sesionVacia('otro', otro);
 }
 
-// cfg = { tipos: ['fuerza','bici',...], dias: [0,2,4], otro: 'Pádel' }
+// cfg = { tipos: ['fuerza','bici',...], dias: [0,2,4], otro: 'Pádel', split, exp, equipo }
 export function proponerRutina(cfg, goals) {
   const kind = planKind(goals);
   const dias = [...cfg.dias].sort((a, b) => a - b);
@@ -293,21 +489,29 @@ export function proponerRutina(cfg, goals) {
   const nB = seq.filter((t) => t === 'bici').length;
   const bici = BICI_ORDEN[kind].slice(0, nB).sort((a, b) => (sesionPorId(a).cat === 'fondo') - (sesionPorId(b).cat === 'fondo'));
   const cardio = CARDIO_ORDEN[kind];
+  const nF = seq.filter((t) => t === 'fuerza').length;
+  const fOrd = splitOrden(cfg.split, nF, kind);
   let fi = 0, bi = 0, ci = 0;
+  const previas = {};
   const sesiones = {};
   dias.forEach((d, i) => {
     const t = seq[i];
-    if (t === 'fuerza') sesiones[d] = sesionFuerza(FUERZA_ORDEN[kind][fi++ % FUERZA_ORDEN[kind].length], kind);
+    if (t === 'fuerza') {
+      const key = fOrd[fi++ % fOrd.length];
+      const ses = sesionFuerza(key, kind, cfg, previas[key] || []);
+      previas[key] = [...(previas[key] || []), ...ses.ej.map((e) => e.n)];
+      sesiones[d] = ses;
+    }
     else if (t === 'bici') sesiones[d] = sesionLib('bici', bici[bi++ % bici.length]);
     else if (t === 'cardio') sesiones[d] = sesionLib('cardio', cardio[ci++ % cardio.length]);
     else sesiones[d] = sesionVacia('otro', cfg.otro);
   });
-  return { tipos: cfg.tipos, otro: cfg.otro || '', dias, modo: 'propuesta', sesiones };
+  return { tipos: cfg.tipos, otro: cfg.otro || '', dias, modo: 'propuesta', split: cfg.split || 'auto', exp: cfg.exp || '', equipo: cfg.equipo || null, sesiones };
 }
 export function rutinaVacia(cfg, goals) {
   const dias = [...cfg.dias].sort((a, b) => a - b);
   const seq = repartir(cfg.tipos, dias.length, planKind(goals));
   const sesiones = {};
   dias.forEach((d, i) => { sesiones[d] = sesionVacia(seq[i], cfg.otro); });
-  return { tipos: cfg.tipos, otro: cfg.otro || '', dias, modo: 'propia', sesiones };
+  return { tipos: cfg.tipos, otro: cfg.otro || '', dias, modo: 'propia', split: cfg.split || 'auto', exp: cfg.exp || '', equipo: cfg.equipo || null, sesiones };
 }
