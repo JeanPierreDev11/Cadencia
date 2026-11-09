@@ -53,4 +53,8 @@ users/{uid}
   nombre, email, objetivos[], sexo, edad, alturaCm, pesoKg, pesoInicial, pesoObjetivo, fechaInicio, onboarded
 users/{uid}/pesos/{AAAA-MM-DD}
   fecha, kg
+users/{uid}  → campo rutina
+  tipos[], otro, dias[] (0 = lunes), modo (propuesta | propia), sesiones{dia: {t, nombre, min, ej[] | ses | det}}
+users/{uid}/entrenos/{id}
+  fecha, tipo (gym | bici | cardio | otro), nombre, min, km, elev, pulso, esf, kcal, ejercicios[{n, series[{kg, reps}]}]
 ```
