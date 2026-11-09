@@ -46,8 +46,8 @@ async function firebaseBackend(config) {
     async saveProfile(uid, data) {
       await F.setDoc(userRef(uid), { ...data, actualizado: F.serverTimestamp() }, { merge: true });
     },
-    async addWeight(uid, date, kg) {
-      await F.setDoc(weightRef(uid, date), { fecha: date, kg });
+    async addWeight(uid, date, kg, extra = {}) {
+      await F.setDoc(weightRef(uid, date), { fecha: date, kg, ...extra }, { merge: true });
     },
     async deleteWeight(uid, date) { await F.deleteDoc(weightRef(uid, date)); },
     async listWeights(uid, n = 120) {
@@ -117,7 +117,7 @@ function localBackend() {
       const s = read(); const u = byUid(s, uid); if (!u) return;
       u.profile = { ...u.profile, ...data, actualizado: Date.now() }; write(s);
     },
-    async addWeight(uid, date, kg) { const s = read(); const u = byUid(s, uid); if (!u) return; u.pesos[date] = { fecha: date, kg }; write(s); },
+    async addWeight(uid, date, kg, extra = {}) { const s = read(); const u = byUid(s, uid); if (!u) return; u.pesos[date] = { ...(u.pesos[date] || {}), fecha: date, kg, ...extra }; write(s); },
     async deleteWeight(uid, date) { const s = read(); const u = byUid(s, uid); if (!u) return; delete u.pesos[date]; write(s); },
     async listWeights(uid, n = 120) {
       const u = byUid(read(), uid); if (!u) return [];

@@ -232,7 +232,8 @@ function viewOnboarding() {
       </label>
       <label class="field"><span>Peso objetivo ${wantsTarget ? '' : '<span class="muted">(opcional)</span>'}</span>
         <div class="big-input"><input name="pesoObjetivo" inputmode="decimal" maxlength="5" value="${esc(o.pesoObjetivo)}" placeholder="${wantsTarget ? 'Ej. 70' : 'Déjalo vacío si no tienes'}" data-ob="pesoObjetivo"><em>kg</em></div>
-      </label>`;
+      </label>
+      ${pesoGuiaHTML(num(o.alturaCm), o.sexo, o.objetivos, 'ob')}`;
     canNext = !!o.pesoKg;
   } else {
     const p = obProfile();
@@ -287,7 +288,7 @@ function obValidate() {
   }
   if (s === 3) {
     const w = num(o.pesoKg); if (!(w >= 30 && w <= 250)) return 'Escribe un peso entre 30 y 250 kg.';
-    if (o.pesoObjetivo.trim()) { const t = num(o.pesoObjetivo); if (!(t >= 30 && t <= 250)) return 'El peso objetivo tiene que estar entre 30 y 250 kg, o déjalo vacío.'; }
+    if (o.pesoObjetivo.trim()) { const err = objetivoInvalido(num(o.pesoObjetivo), num(o.alturaCm), o.sexo, o.objetivos); if (err) return err; }
   }
   return '';
 }
@@ -441,7 +442,41 @@ function installCard(dismissable) {
 }
 
 /* ---------- pestaña Peso ---------- */
-function chart(points, target) {
+/* ---------- peso saludable ---------- */
+// Rango saludable por IMC (18,5–25; hasta 27,5 si buscas ganar músculo) y un peso ideal orientativo (IMC 22,5 hombres / 21,5 mujeres).
+function rangoPeso(cm, sexo, objetivos) {
+  const h = cm / 100;
+  if (!(h >= 1.2 && h <= 2.3)) return null;
+  const r = (v) => Math.round(v * 2) / 2;
+  const imcMax = (objetivos || []).includes('musculo') ? 27.5 : 25;
+  return { min: r(18.5 * h * h), max: r(imcMax * h * h), ideal: r((sexo === 'mujer' ? 21.5 : 22.5) * h * h), imcMax };
+}
+function objetivoInvalido(t, cm, sexo, objetivos) {
+  if (!isFinite(t)) return 'Escribe el peso objetivo con números, o déjalo vacío.';
+  const r = rangoPeso(cm, sexo, objetivos);
+  if (!r) return t >= 30 && t <= 250 ? '' : 'El peso objetivo tiene que estar entre 30 y 250 kg.';
+  if (t < r.min) return `Con ${nf(cm / 100, 2)} m, por debajo de ${nf(r.min, 1)} kg tendrías bajo peso. Elige un objetivo entre ${nf(r.min, 1)} y ${nf(r.max, 1)} kg.`;
+  if (t > r.max) return `Con ${nf(cm / 100, 2)} m, el objetivo saludable llega hasta ${nf(r.max, 1)} kg. Elige un objetivo entre ${nf(r.min, 1)} y ${nf(r.max, 1)} kg.`;
+  return '';
+}
+function pesoGuiaHTML(cm, sexo, objetivos, ctx) {
+  const r = rangoPeso(cm, sexo, objetivos);
+  if (!r) return '';
+  return `<div class="guia">
+    <p><b>Peso ideal orientativo: ${nf(r.ideal, 1)} kg</b> <button type="button" class="link" data-act="peso-ideal" data-ctx="${ctx}" data-v="${r.ideal}">Usar este</button></p>
+    <p class="small muted">Para ${nf(cm / 100, 2)} m, un objetivo saludable está entre ${nf(r.min, 1)} y ${nf(r.max, 1)} kg${r.imcMax > 25 ? ' (hemos ampliado el máximo porque quieres ganar músculo)' : ''}. Es una guía basada en el IMC: no tiene en cuenta tu musculatura.</p>
+  </div>`;
+}
+
+/* ---------- gráfica y composición corporal ---------- */
+const COMP = [
+  { k: 'kg', t: 'Peso', u: 'kg', d: 1 },
+  { k: 'grasa', t: 'Grasa', u: '%', d: 1, lo: 3, hi: 60 },
+  { k: 'musculo', t: 'Músculo', u: 'kg', d: 1, lo: 10, hi: 100 },
+  { k: 'agua', t: 'Agua', u: '%', d: 1, lo: 30, hi: 75 },
+  { k: 'hueso', t: 'Hueso', u: 'kg', d: 1, lo: 1, hi: 6 },
+];
+function chart(points, target, label = 'Evolución del peso') {
   if (points.length < 2) return '';
   const W = 340, H = 150, P = { l: 30, r: 8, t: 10, b: 22 };
   const ys = points.map((p) => p.kg).concat(target ? [target] : []);
@@ -454,7 +489,7 @@ function chart(points, target) {
   const d = points.map((p, i) => `${i ? 'L' : 'M'}${x(p.fecha).toFixed(1)} ${y(p.kg).toFixed(1)}`).join(' ');
   const area = `${d} L${x(points[points.length - 1].fecha).toFixed(1)} ${H - P.b} L${P.l} ${H - P.b} Z`;
   const ticks = [lo, (lo + hi) / 2, hi];
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Evolución del peso">
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">
     ${ticks.map((t) => `<line class="gl" x1="${P.l}" x2="${W - P.r}" y1="${y(t)}" y2="${y(t)}"/><text x="${P.l - 6}" y="${y(t) + 4}" text-anchor="end">${nf(t, 0)}</text>`).join('')}
     ${target ? `<line class="tg" x1="${P.l}" x2="${W - P.r}" y1="${y(target)}" y2="${y(target)}"/>` : ''}
     <path class="ar" d="${area}"/><path class="ln" d="${d}"/>
@@ -464,15 +499,33 @@ function chart(points, target) {
   </svg>`;
 }
 
+function compCardHTML(ws) {
+  const items = COMP.slice(1).map((c) => {
+    const con = ws.filter((w) => w[c.k] != null);
+    if (!con.length) return '';
+    const last = con[con.length - 1], first = con[0], dd = con.length > 1 ? last[c.k] - first[c.k] : null;
+    const extra = c.k === 'grasa' && last.kg ? `≈ ${nf((last.kg * last.grasa) / 100, 1)} kg de grasa` : c.k === 'agua' && last.kg ? `≈ ${nf((last.kg * last.agua) / 100, 1)} kg de agua` : '';
+    return `<section class="stat"><span class="label">${c.t}</span><span class="val num">${nf(last[c.k], 1)}<em>${c.u}</em></span>
+      <span class="hint">${dd != null ? `${dd > 0 ? '+' : dd < 0 ? '−' : '±'}${nf(Math.abs(dd), 1)} ${c.u} desde el ${esc(fmtDate(first.fecha))}` : 'Primer registro'}${extra ? `<br>${extra}` : ''}</span></section>`;
+  }).join('');
+  return items ? `<div class="stats">${items}</div>` : '';
+}
+
 function viewPeso() {
   const ws = st.weights, p = st.profile;
   const rows = ws.slice().reverse();
+  const disp = COMP.filter((c) => c.k === 'kg' || ws.some((w) => w[c.k] != null));
+  const met = disp.find((c) => c.k === st.pesoMet) || COMP[0];
+  const pts = ws.filter((w) => w[met.k] != null).slice(-90).map((w) => ({ fecha: w.fecha, kg: w[met.k] }));
+  const compTxt = (w) => COMP.slice(1).filter((c) => w[c.k] != null).map((c) => `${c.t} ${nf(w[c.k], 1)} ${c.u}`).join(' · ');
   return `
     <header class="hello"><div><h1>Peso</h1><p>${ws.length} ${ws.length === 1 ? 'registro' : 'registros'}${p.pesoObjetivo ? ` · objetivo ${nf(p.pesoObjetivo, 1)} kg` : ''}</p></div></header>
     <section class="card">
       <h2>Evolución</h2>
-      ${ws.length >= 2 ? chart(ws.slice(-90), p.pesoObjetivo) : '<div class="empty"><b>Aún no hay gráfica</b><span>Con dos registros verás aquí cómo cambia tu peso.</span></div>'}
+      ${disp.length > 1 ? `<div class="seg" role="group" aria-label="Qué ver">${disp.map((c) => `<button type="button" data-act="pesomet" data-v="${c.k}" aria-pressed="${met.k === c.k}">${c.t}</button>`).join('')}</div>` : ''}
+      ${pts.length >= 2 ? chart(pts, met.k === 'kg' ? p.pesoObjetivo : null, `Evolución de ${met.t.toLowerCase()}`) : `<div class="empty"><b>Aún no hay gráfica</b><span>Con dos registros verás aquí cómo cambia ${met.k === 'kg' ? 'tu peso' : 'tu ' + met.t.toLowerCase()}.</span></div>`}
     </section>
+    ${compCardHTML(ws)}
     <section class="card">
       <h2>Añadir registro</h2>
       <form class="form-grid" data-form="addweight" novalidate>
@@ -480,7 +533,17 @@ function viewPeso() {
           <label class="field"><span>Fecha</span><input class="input" type="date" name="fecha" value="${todayISO()}" max="${todayISO()}"></label>
           <label class="field"><span>Peso (kg)</span><input class="input" name="kg" inputmode="decimal" placeholder="${nf(currentKg(), 1)}"></label>
         </div>
-        <button class="btn block" type="submit">Guardar peso</button>
+        <details class="comp">
+          <summary>Composición corporal <span class="muted">(opcional)</span></summary>
+          <p class="small muted">Si tu báscula o tu centro deportivo te dan estos datos, apúntalos para ver cómo cambias por dentro.</p>
+          <div class="two">
+            <label class="field"><span>Grasa (%)</span><input class="input" name="grasa" inputmode="decimal" placeholder="Ej. 18,5"></label>
+            <label class="field"><span>Músculo (kg)</span><input class="input" name="musculo" inputmode="decimal" placeholder="Ej. 58"></label>
+            <label class="field"><span>Agua (%)</span><input class="input" name="agua" inputmode="decimal" placeholder="Ej. 55"></label>
+            <label class="field"><span>Hueso (kg)</span><input class="input" name="hueso" inputmode="decimal" placeholder="Ej. 3,1"></label>
+          </div>
+        </details>
+        <button class="btn block" type="submit">Guardar registro</button>
       </form>
     </section>
     <section class="card">
@@ -488,25 +551,36 @@ function viewPeso() {
       ${rows.length ? `<div class="list">${rows.map((w, i) => {
         const prev = rows[i + 1];
         const dd = prev ? w.kg - prev.kg : null;
-        return `<div class="row"><span>${esc(fmtDate(w.fecha, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }))}</span>
-          <span style="display:flex;align-items:center;gap:10px"><span class="muted small">${dd == null ? '' : (dd > 0 ? '+' : dd < 0 ? '−' : '±') + nf(Math.abs(dd), 1)}</span><b>${nf(w.kg, 1)} kg</b>
+        const ct = compTxt(w);
+        return `<div class="row"><span>${esc(fmtDate(w.fecha, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }))}${ct ? `<br><span class="muted small">${esc(ct)}</span>` : ''}</span>
+          <span style="display:flex;align-items:center;gap:10px"><span class="muted small">${dd == null ? '' : (dd > 0 ? '+' : dd < 0 ? '−' : '±') + nf(Math.abs(dd), 1)}</span><b class="nowrap">${nf(w.kg, 1)} kg</b>
           <button class="iconbtn" data-act="delweight" data-v="${esc(w.fecha)}" aria-label="Borrar registro del ${esc(w.fecha)}">${I.trash}</button></span></div>`;
       }).join('')}</div>` : '<div class="empty">Sin registros todavía.</div>'}
     </section>`;
 }
 
-async function saveWeight(fecha, raw) {
+// comp: { grasa, musculo, agua, hueso } como texto (opcionales)
+async function saveWeight(fecha, raw, comp = {}) {
   const kg = num(raw);
   if (!(kg >= 30 && kg <= 250)) { toast('Escribe un peso entre 30 y 250 kg'); return false; }
   if (!fecha || fecha > todayISO()) { toast('Elige una fecha de hoy o anterior'); return false; }
   const v = Math.round(kg * 10) / 10;
+  const extra = {};
+  for (const c of COMP.slice(1)) {
+    const t = String(comp[c.k] || '').trim();
+    if (!t) continue;
+    const n = num(t);
+    if (!(n >= c.lo && n <= c.hi)) { toast(`${c.t}: escribe un valor entre ${c.lo} y ${c.hi} ${c.u}`); return false; }
+    extra[c.k] = Math.round(n * 10) / 10;
+  }
+  if (extra.musculo && extra.musculo >= v) { toast('El músculo tiene que ser menor que tu peso'); return false; }
   try {
-    await api.addWeight(st.user.uid, fecha, v);
+    await api.addWeight(st.user.uid, fecha, v, extra);
     st.weights = await api.listWeights(st.user.uid);
     const last = latestWeight();
     if (last) { await api.saveProfile(st.user.uid, { pesoKg: last.kg }); st.profile.pesoKg = last.kg; }
     render();
-    toast('Peso guardado');
+    toast(Object.keys(extra).length ? 'Peso y composición guardados' : 'Peso guardado');
     return true;
   } catch (e) { toast(errorText(e)); return false; }
 }
@@ -544,6 +618,7 @@ function viewPerfil() {
         <label class="field"><span>Estatura (cm)</span><input class="input" name="alturaCm" inputmode="numeric" value="${esc(p.alturaCm || '')}"></label>
       </div>
       <label class="field"><span>Peso objetivo (kg)</span><input class="input" name="pesoObjetivo" inputmode="decimal" value="${p.pesoObjetivo ? esc(nf(p.pesoObjetivo, 1)) : ''}" placeholder="Opcional"></label>
+      ${pesoGuiaHTML(p.alturaCm, p.sexo, goals, 'perfil')}
       <div class="field"><span>Objetivos</span>
         <div class="choices">${GOALS.map((g) => `<button type="button" class="choice" data-act="pgoal" data-v="${g.id}" aria-pressed="${goals.includes(g.id)}">
           <span class="ico">${goalIcon(g)}</span><span class="t">${g.t}</span><span class="tick">${goals.includes(g.id) ? I.check : ''}</span></button>`).join('')}</div>
@@ -573,7 +648,7 @@ async function saveProfileForm(form) {
   if (!form.nombre.value.trim()) return toast('Escribe tu nombre');
   if (!(edad >= 14 && edad <= 100)) return toast('La edad tiene que estar entre 14 y 100');
   if (!(alt >= 120 && alt <= 230)) return toast('La estatura tiene que estar entre 120 y 230 cm');
-  if (obj != null && !(obj >= 30 && obj <= 250)) return toast('El peso objetivo tiene que estar entre 30 y 250 kg');
+  if (obj != null) { const err = objetivoInvalido(obj, alt, form.sexo.value, goals); if (err) return toast(err); }
   if (!goals.length) return toast('Elige al menos un objetivo');
   const data = { nombre: form.nombre.value.trim(), sexo: form.sexo.value, edad: Math.round(edad), alturaCm: Math.round(alt), pesoObjetivo: obj == null ? null : Math.round(obj * 10) / 10, objetivos: goals };
   try {
@@ -727,7 +802,7 @@ function rxHTML(d, i, e, s, re) {
   const alts = open ? E.alternativas(e, s.ej.map((x) => x.n), re.draft.equipo).slice(0, 6) : [];
   const x = E.ejercicio(e.n);
   return `<div class="rx">
-    <div class="rx-top"><span class="eqico">${eqIcon(x ? x.eq : 'corporal')}</span><span class="rx-n">${esc(e.n)}<span class="small muted">${x ? E.MUSCULOS[x.m] : ''}</span></span><button type="button" class="iconbtn" data-act="re-del" data-v="${key}" aria-label="Quitar ${esc(e.n)}">✕</button></div>
+    <div class="rx-top">${exThumb(x || { eq: 'corporal' })}<span class="rx-n">${esc(e.n)}<span class="small muted">${x ? E.MUSCULOS[x.m] : ''}</span></span><button type="button" class="iconbtn" data-act="re-del" data-v="${key}" aria-label="Quitar ${esc(e.n)}">✕</button></div>
     <div class="rx-bot">
       <span class="rx-sr"><input class="input" data-re="${d}.ej.${i}.series" inputmode="numeric" value="${esc(e.series)}" aria-label="Series de ${esc(e.n)}"><span>×</span><input class="input" data-re="${d}.ej.${i}.reps" value="${esc(e.reps)}" aria-label="Repeticiones de ${esc(e.n)}"></span>
       <button type="button" class="btn quiet small" data-act="re-alt" data-v="${key}" aria-expanded="${open}">${I.swap} Cambiar</button>
@@ -929,6 +1004,41 @@ async function rwNext() {
 
 /* ---------- panel de ejercicios (sube desde abajo) ---------- */
 const M_ORD = Object.keys(E.MUSCULOS);
+
+// Mapa del cuerpo (dibujo propio): principales en color fuerte, secundarios en suave.
+const BODY = {
+  front: [
+    ['ne', 'r', 27, 15, 6, 6], ['sh', 'e', 17, 26, 6, 5], ['sh', 'e', 43, 26, 6, 5], ['ch', 'e', 25, 32, 6.5, 5], ['ch', 'e', 35, 32, 6.5, 5],
+    ['bi', 'e', 12.5, 40, 3.5, 7], ['bi', 'e', 47.5, 40, 3.5, 7], ['fo', 'e', 9.5, 56, 3, 8], ['fo', 'e', 50.5, 56, 3, 8],
+    ['ab', 'r', 25, 38, 10, 23], ['ab', 'e', 21, 50, 2.5, 8], ['ab', 'e', 39, 50, 2.5, 8], ['abd', 'e', 18.5, 65, 3, 5], ['abd', 'e', 41.5, 65, 3, 5],
+    ['qu', 'e', 22, 83, 5, 14], ['qu', 'e', 38, 83, 5, 14], ['ad', 'e', 27.5, 77, 2.2, 8], ['ad', 'e', 32.5, 77, 2.2, 8],
+    ['ca', 'e', 22, 112, 3.5, 11], ['ca', 'e', 38, 112, 3.5, 11],
+  ],
+  back: [
+    ['ne', 'r', 27, 15, 6, 6], ['tp', 'p', '30,18 41,25 30,37 19,25'], ['sh', 'e', 17, 26, 6, 5], ['sh', 'e', 43, 26, 6, 5],
+    ['mb', 'r', 26, 29, 8, 14], ['la', 'e', 22, 41, 5.5, 10], ['la', 'e', 38, 41, 5.5, 10], ['lb', 'r', 25.5, 47, 9, 10],
+    ['tr', 'e', 12.5, 40, 3.5, 7], ['tr', 'e', 47.5, 40, 3.5, 7], ['fo', 'e', 9.5, 56, 3, 8], ['fo', 'e', 50.5, 56, 3, 8],
+    ['abd', 'e', 18.5, 62, 3, 4], ['abd', 'e', 41.5, 62, 3, 4], ['gl', 'e', 24.5, 67, 5.5, 6], ['gl', 'e', 35.5, 67, 5.5, 6],
+    ['ha', 'e', 22.5, 86, 5, 12], ['ha', 'e', 37.5, 86, 5, 12], ['ad', 'e', 28, 80, 2, 6], ['ad', 'e', 32, 80, 2, 6],
+    ['ca', 'e', 22, 110, 4, 10], ['ca', 'e', 38, 110, 4, 10],
+  ],
+};
+function bodyMap(x, cls = '') {
+  const { p, s } = E.musculosDet(x);
+  const fill = (k) => (p.includes(k) ? 'mp' : s.includes(k) ? 'ms' : 'm0');
+  const fig = (parts, dx) => `<g transform="translate(${dx} 0)">
+    <circle class="bh" cx="30" cy="8" r="6.5"/>
+    ${parts.map(([k, t, a, b, c, d]) => t === 'e' ? `<ellipse class="${fill(k)}" cx="${a}" cy="${b}" rx="${c}" ry="${d}"/>`
+      : t === 'r' ? `<rect class="${fill(k)}" x="${a}" y="${b}" width="${c}" height="${d}" rx="2.5"/>` : `<polygon class="${fill(k)}" points="${a}"/>`).join('')}
+    <ellipse class="bh" cx="22" cy="125" rx="3.5" ry="2"/><ellipse class="bh" cx="38" cy="125" rx="3.5" ry="2"/></g>`;
+  const names = [...p.map((k) => E.MUSC_DET[k]), ...s.map((k) => E.MUSC_DET[k])].filter(Boolean);
+  return `<svg class="bodymap ${cls}" viewBox="0 0 128 130" role="img" aria-label="Músculos que trabaja: ${esc(names.join(', '))}">${fig(BODY.front, 2)}${fig(BODY.back, 66)}</svg>`;
+}
+const exThumb = (x) => {
+  const im = E.imagenes(x)[0];
+  return im ? `<span class="thumb"><img src="${im}" alt="" loading="lazy" onerror="this.parentNode.classList.add('noimg');this.remove()">${eqIcon(x.eq)}</span>` : `<span class="eqico">${eqIcon(x ? x.eq : 'corporal')}</span>`;
+};
+
 // o = { mode: 'add' | 'swap', ctx: 're' | 'live', d, i }
 function libOpen(o) {
   const r = rutinaOf();
@@ -945,7 +1055,7 @@ function libOpen(o) {
     if (o.mode === 'swap') from = L.ex[o.i].n;
   }
   const equipo = (R && R.equipo) || (r && r.equipo) || null;
-  st.lib = { ...o, q: '', sel: [], rec, usados, from, equipo, soloEq: !!equipo, crear: null, anim: true,
+  st.lib = { ...o, q: '', sel: [], rec, usados, from, equipo, soloEq: !!equipo, eqF: 'todo', crear: null, det: null, anim: true,
     m: o.mode === 'swap' ? 'alt' : rec.length ? 'rec' : 'todos' };
   render();
   st.lib.anim = false;
@@ -959,57 +1069,85 @@ function libItems() {
   else if (L.m === 'rec') items = E.todosEjercicios().filter((x) => L.rec.includes(x.m)).sort((a, b) => L.rec.indexOf(a.m) - L.rec.indexOf(b.m));
   else if (L.m === 'todos') items = E.todosEjercicios().slice().sort((a, b) => M_ORD.indexOf(a.m) - M_ORD.indexOf(b.m));
   else items = E.todosEjercicios().filter((x) => x.m === L.m);
-  if (L.equipo && L.soloEq) items = items.filter((x) => x.eq === 'corporal' || L.equipo.includes(x.eq));
+  if (L.eqF !== 'todo') items = items.filter((x) => x.eq === L.eqF);
+  else if (L.equipo && L.soloEq) items = items.filter((x) => x.eq === 'corporal' || L.equipo.includes(x.eq));
   if (q) items = items.filter((x) => E.normTxt(x.n).includes(q) || E.normTxt(E.MUSCULOS[x.m]).includes(q) || E.normTxt(E.EQUIPOS[x.eq]).includes(q));
   return items;
 }
 
 function libListHTML() {
   const L = st.lib, items = libItems();
-  if (!items.length) return `<div class="empty"><b>No hay ejercicios así</b><span>Prueba otro filtro o créalo con «Crear».</span></div>`;
+  if (!items.length) return `<div class="empty"><b>No hay ejercicios así</b><span>Prueba otro grupo o equipo, o créalo con «Crear».</span></div>`;
   const grouped = !L.q && (L.m === 'todos' || L.m === 'rec');
   const used = new Set(L.usados.map(E.normTxt));
-  let prev = '', out = '';
+  let prev = '', out = `<p class="small muted lcount">${items.length} ${items.length === 1 ? 'ejercicio' : 'ejercicios'}</p>`;
   for (const x of items) {
     if (grouped && x.m !== prev) { out += `<div class="lgroup">${E.MUSCULOS[x.m]}</div>`; prev = x.m; }
     const inUse = L.mode === 'add' && used.has(E.normTxt(x.n));
     const on = L.sel.includes(x.n);
-    out += `<button type="button" class="lrow ${on ? 'on' : ''}" data-act="lib-pick" data-n="${esc(x.n)}" ${inUse ? 'disabled' : ''}>
-      <span class="eqico">${eqIcon(x.eq)}</span>
-      <span class="lrow-t"><b>${esc(x.n)}</b><span class="small muted">${E.MUSCULOS[x.m] || ''} · ${E.EQUIPOS[x.eq] || ''}${x.propio ? ' · Creado por ti' : ''}${inUse ? ' · Ya está en la sesión' : ''}</span></span>
-      ${L.mode === 'add' ? `<span class="lrow-c">${on ? I.check : ''}</span>` : ''}</button>`;
+    const mus = E.musculosDet(x).p.map((k) => E.MUSC_DET[k]).join(', ') || E.MUSCULOS[x.m] || '';
+    out += `<div class="lrow ${on ? 'on' : ''} ${inUse ? 'used' : ''}">
+      <button type="button" class="lrow-main" data-act="lib-pick" data-n="${esc(x.n)}" ${inUse ? 'disabled' : ''}>
+        ${exThumb(x)}
+        <span class="lrow-t"><b>${esc(x.n)}</b><span class="small muted">${esc(mus)} · ${E.EQUIPOS[x.eq] || ''}${x.propio ? ' · Creado por ti' : ''}${inUse ? ' · Ya está en la sesión' : ''}</span></span>
+        ${L.mode === 'add' ? `<span class="lrow-c">${on ? I.check : ''}</span>` : ''}</button>
+      <button type="button" class="iconbtn info" data-act="lib-det" data-n="${esc(x.n)}" aria-label="Ver cómo se hace ${esc(x.n)}">i</button>
+    </div>`;
   }
   return out;
 }
 
 function libFootLabel() { const n = st.lib.sel.length; return n ? `Añadir ${n} ${n === 1 ? 'ejercicio' : 'ejercicios'}` : 'Elige ejercicios'; }
 
+function libDetHTML(x) {
+  const L = st.lib, [a, b] = E.imagenes(x), { p, s } = E.musculosDet(x);
+  const used = L.mode === 'add' && L.usados.map(E.normTxt).includes(E.normTxt(x.n));
+  const on = L.sel.includes(x.n);
+  return `<div class="sheet-head"><button type="button" class="iconbtn" data-act="lib-det-close" aria-label="Volver">${I.back}</button><h2 class="det-title">${esc(x.n)}</h2><span style="width:36px"></span></div>
+    <div class="sheet-list det">
+      ${a ? `<div class="det-imgs"><figure><img src="${a}" alt="${esc(x.n)}: posición inicial"><figcaption>Inicio</figcaption></figure><figure><img src="${b}" alt="${esc(x.n)}: posición final"><figcaption>Final</figcaption></figure></div>` : ''}
+      <div class="det-body">${bodyMap(x, 'big')}
+        <div class="det-mus">
+          ${p.length ? `<p><span class="dot mp"></span><b>Principal:</b> ${esc(p.map((k) => E.MUSC_DET[k]).join(', '))}</p>` : ''}
+          ${s.length ? `<p><span class="dot ms"></span><b>Secundarios:</b> ${esc(s.map((k) => E.MUSC_DET[k]).join(', '))}</p>` : ''}
+          <p class="small muted">Equipo: ${E.EQUIPOS[x.eq] || 'Otro'}</p>
+        </div></div>
+    </div>
+    <div class="sheet-foot">${L.mode === 'swap' ? `<button type="button" class="btn block" data-act="lib-pick" data-n="${esc(x.n)}">Usar este ejercicio</button>`
+      : used ? `<button type="button" class="btn block" disabled>Ya está en la sesión</button>`
+      : `<button type="button" class="btn block ${on ? 'quiet' : ''}" data-act="lib-det-toggle" data-n="${esc(x.n)}">${on ? 'Quitar de la selección' : 'Seleccionar'}</button>`}</div>`;
+}
+
 function libSheetHTML() {
   const L = st.lib;
   let inner;
-  if (L.crear) {
+  if (L.det) inner = libDetHTML(E.ejercicio(L.det) || { n: L.det, eq: 'otro' });
+  else if (L.crear) {
     const c = L.crear;
     inner = `<div class="sheet-head"><button type="button" class="iconbtn" data-act="lib-crear-cancel" aria-label="Volver">${I.back}</button><h2>Crear ejercicio</h2><span style="width:36px"></span></div>
       <div class="sheet-list form-grid">
         <label class="field"><span>Nombre</span><input class="input" data-libc="n" maxlength="50" value="${esc(c.n)}" placeholder="Ej. Press inclinado en máquina"></label>
-        <label class="field"><span>Músculo principal</span><select class="input" data-libc="m">${Object.entries(E.MUSCULOS).map(([k, v]) => `<option value="${k}" ${c.m === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+        <label class="field"><span>Grupo muscular</span><select class="input" data-libc="m">${Object.entries(E.MUSCULOS).map(([k, v]) => `<option value="${k}" ${c.m === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
         <label class="field"><span>Equipo</span><select class="input" data-libc="eq">${Object.entries(E.EQUIPOS).map(([k, v]) => `<option value="${k}" ${c.eq === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
         ${c.msg ? `<div class="msg" role="alert">${esc(c.msg)}</div>` : ''}
       </div>
       <div class="sheet-foot"><button type="button" class="btn block" data-act="lib-crear-save">Guardar ejercicio</button></div>`;
   } else {
     const title = L.mode === 'swap' ? 'Cambiar ejercicio' : 'Añadir ejercicios';
-    const chips = [...(L.mode === 'swap' ? [['alt', 'Alternativas']] : []), ...(L.rec.length ? [['rec', 'Recomendados']] : []), ['todos', 'Todos'], ...Object.entries(E.MUSCULOS)];
+    const gOpts = [...(L.mode === 'swap' ? [['alt', 'Alternativas']] : []), ...(L.rec.length ? [['rec', 'Recomendados para esta sesión']] : []), ['todos', 'Todos'], ...Object.entries(E.MUSCULOS)];
     inner = `<div class="sheet-head"><button type="button" class="iconbtn" data-act="lib-close" aria-label="Cerrar">✕</button><h2>${title}</h2><button type="button" class="btn quiet small" data-act="lib-crear">${I.plus} Crear</button></div>
       ${L.mode === 'swap' ? `<p class="small muted sheet-sub">En lugar de <b>${esc(L.from)}</b></p>` : ''}
+      <div class="filters">
+        <label class="field"><span>Grupo muscular</span><select class="input" data-libm>${gOpts.map(([k, t]) => `<option value="${k}" ${L.m === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+        <label class="field"><span>Equipo</span><select class="input" data-libeqf><option value="todo">Todo</option>${Object.entries(E.EQUIPOS).map(([k, v]) => `<option value="${k}" ${L.eqF === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+      </div>
       <input class="input" type="search" data-libq placeholder="Buscar ejercicio" value="${esc(L.q)}" aria-label="Buscar ejercicio" autocomplete="off">
-      <div class="chiprow" role="group" aria-label="Filtrar por músculo">${chips.map(([k, t]) => `<button type="button" class="chip chipbtn ${L.m === k ? 'on' : ''}" data-act="lib-m" data-v="${k}" aria-pressed="${L.m === k}">${t}</button>`).join('')}</div>
-      ${L.equipo ? `<label class="eqtoggle"><input type="checkbox" data-libeq ${L.soloEq ? 'checked' : ''}> Solo con mi material</label>` : ''}
+      ${L.equipo && L.eqF === 'todo' ? `<label class="eqtoggle"><input type="checkbox" data-libeq ${L.soloEq ? 'checked' : ''}> Solo con mi material</label>` : ''}
       <div class="sheet-list" id="lib-list">${libListHTML()}</div>
       ${L.mode === 'add' ? `<div class="sheet-foot"><button type="button" class="btn block" id="lib-addbtn" data-act="lib-add" ${L.sel.length ? '' : 'disabled'}>${libFootLabel()}</button></div>` : ''}`;
   }
   return `<div class="sheet-back" data-act="lib-close"></div>
-    <div class="sheet ${L.anim ? 'anim' : ''}" role="dialog" aria-modal="true" aria-label="${L.crear ? 'Crear ejercicio' : 'Ejercicios'}"><div class="sheet-grab"></div>${inner}</div>`;
+    <div class="sheet ${L.anim ? 'anim' : ''}" role="dialog" aria-modal="true" aria-label="Ejercicios"><div class="sheet-grab"></div>${inner}</div>`;
 }
 
 function libApply(names) {
@@ -1040,16 +1178,34 @@ async function libCrearSave() {
     st.profile.ejPropios = propios; E.setPropios(propios);
   }
   if (st.lib.mode === 'swap') return libApply([nombre]);
-  st.lib.crear = null; st.lib.q = ''; st.lib.m = 'todos';
+  st.lib.crear = null; st.lib.q = ''; st.lib.m = 'todos'; st.lib.eqF = 'todo';
   if (!st.lib.sel.includes(nombre)) st.lib.sel.push(nombre);
   render(); toast(existe ? 'Ese ejercicio ya existía: lo hemos marcado' : 'Ejercicio creado');
 }
 
 /* ---------- entrenamiento de fuerza en directo ---------- */
 const liveSave = () => lsSet('cadencia-live', st.live ? JSON.stringify(st.live) : null);
+// "8-12" → 8 · "10 por pierna" → 10 · "30-45 s" → 30
+const primerNumero = (t) => { const m = String(t || '').match(/\d+/); return m ? m[0] : ''; };
 function liveEx(n, nSets, obj) {
   const x = E.ejercicio(n), prev = E.lastSets(st.workouts, n) || [];
-  return { n, m: x ? x.m : '', obj: obj || '', prev, s: Array.from({ length: Math.max(1, Math.min(10, nSets || 3)) }, () => ({ kg: '', reps: '', done: false })) };
+  const objReps = obj ? obj.split('×')[1].trim() : '';
+  return { n, m: x ? x.m : '', obj: obj || '', objReps, uni: false, prev, s: Array.from({ length: Math.max(1, Math.min(10, nSets || 3)) }, () => ({ kg: '', reps: '', done: false })) };
+}
+// Sesiones que puede elegir como título: las de su rutina y las de su tipo de entrenamiento.
+function liveOpciones() {
+  const r = rutinaOf(), out = [];
+  const add = (nombre, foco, ej) => { if (nombre && !out.some((o) => o.nombre === nombre)) out.push({ nombre, foco: foco || '', ej: ej || null }); };
+  if (r) for (const d of r.dias) { const s = r.sesiones[d]; if (s && s.t === 'fuerza') add(s.nombre, s.foco, s.ej); }
+  const split = r && r.split && r.split !== 'auto' ? r.split : null;
+  if (split) for (const k of E.splitOrden(split, 3, goalsKind())) add(E.SES_FUERZA[k].n, k, null);
+  return out;
+}
+function liveCargarSesion(op) {
+  const L = st.live, r = rutinaOf();
+  const ej = op.ej || E.sesionFuerza(op.foco, goalsKind(), { exp: r && r.exp, equipo: r && r.equipo }).ej;
+  L.nombre = op.nombre; L.foco = op.foco || ''; L.custom = false;
+  L.ex = ej.map((e) => liveEx(e.n, e.series, `${e.series} × ${e.reps}`));
 }
 function startLive(fecha) {
   if (st.live) {
@@ -1058,34 +1214,50 @@ function startLive(fecha) {
     return;
   }
   const dp = dayPlan(fecha), plan = dp && dp.t === 'fuerza' ? dp : null;
-  st.live = { uid: st.user.uid, fecha, start: Date.now(), nombre: plan ? plan.nombre : 'Fuerza', foco: (plan && plan.foco) || '',
+  st.live = { uid: st.user.uid, fecha, start: Date.now(), nombre: plan ? plan.nombre : 'Entrenamiento', foco: (plan && plan.foco) || '', custom: !plan && !liveOpciones().length,
     ex: plan ? plan.ej.map((e) => liveEx(e.n, e.series, `${e.series} × ${e.reps}`)) : [], msg: '' };
   st.liveMin = false; st.wk = null; liveSave(); render(); window.scrollTo(0, 0);
 }
+// Una serie cuenta si la marcaste con ✓ o si escribiste algo en ella.
+const serieCuenta = (s) => s.done || String(s.reps).trim() !== '' || String(s.kg).trim() !== '';
 function liveTotals() {
   let vol = 0, sets = 0;
-  for (const ex of st.live.ex) for (const s of ex.s) if (s.done) { sets++; vol += (num(s.kg) || 0) * (num(s.reps) || 0); }
+  for (const ex of st.live.ex) for (const s of ex.s) if (s.done) { sets++; vol += (num(s.kg) || 0) * (num(s.reps) || 0) * (ex.uni ? 2 : 1); }
   return { vol: Math.round(vol), sets };
 }
 const liveIsToday = () => st.live && st.live.fecha === todayISO();
+
+function liveTitleHTML(L) {
+  const ops = liveOpciones();
+  const sel = L.custom ? '__custom' : ops.some((o) => o.nombre === L.nombre) ? L.nombre : '__custom';
+  return `<span class="live-title">
+    <select class="title-sel" data-livetitle aria-label="Sesión de hoy">
+      ${ops.map((o) => `<option value="${esc(o.nombre)}" ${sel === o.nombre ? 'selected' : ''}>${esc(o.nombre)}</option>`).join('')}
+      <option value="__custom" ${sel === '__custom' ? 'selected' : ''}>Personalizado…</option>
+    </select>
+    ${sel === '__custom' ? `<input class="input title-in" data-livename value="${esc(L.custom || !ops.some((o) => o.nombre === L.nombre) ? (L.nombre === 'Entrenamiento' ? '' : L.nombre) : '')}" maxlength="40" placeholder="Ej. Pierna y hombro" aria-label="Nombre del entrenamiento">` : ''}
+    <span class="small muted">${liveIsToday() ? 'Hoy' : esc(fmtDate(L.fecha, { weekday: 'long', day: 'numeric', month: 'long' }))}</span>
+  </span>`;
+}
 
 function viewLive() {
   const L = st.live, t = liveTotals(), today = liveIsToday();
   const fmtKg = (v) => (v ? String(v).replace('.', ',') : '');
   const blocks = L.ex.map((e, i) => {
-    const x = E.ejercicio(e.n);
+    const x = E.ejercicio(e.n), uniOk = E.puedeUnilateral(e.n);
     return `<section class="lex">
-      <div class="lex-head"><span class="eqico">${eqIcon(x ? x.eq : 'corporal')}</span>
+      <div class="lex-head">${exThumb(x || { eq: 'corporal' })}
         <span class="lex-t"><b>${esc(e.n)}</b><span class="small muted">${x ? E.MUSCULOS[x.m] : ''}${e.obj ? ` · Objetivo ${esc(e.obj)}` : ''}</span></span>
         <button type="button" class="iconbtn" data-act="live-swap" data-v="${i}" aria-label="Cambiar ${esc(e.n)}">${I.swap}</button>
         <button type="button" class="iconbtn" data-act="live-del" data-v="${i}" aria-label="Quitar ${esc(e.n)}">${I.trash}</button></div>
+      ${uniOk ? `<div class="seg mini" role="group" aria-label="Lados"><button type="button" data-act="live-uni" data-v="${i}" data-u="0" aria-pressed="${!e.uni}">Ambos lados</button><button type="button" data-act="live-uni" data-v="${i}" data-u="1" aria-pressed="${!!e.uni}">Unilateral</button></div>` : ''}
       <div class="ltab">
-        <div class="lrow-h"><span>Serie</span><span>Anterior</span><span>kg</span><span>Reps</span><span></span></div>
-        ${e.s.map((s, j) => { const p = e.prev[j]; return `<div class="lset ${s.done ? 'on' : ''}">
+        <div class="lrow-h"><span>Serie</span><span>Anterior</span><span>kg</span><span>${e.uni ? 'Reps/lado' : 'Reps'}</span><span></span></div>
+        ${e.s.map((s, j) => { const p = e.prev[j]; const phKg = p && p.kg ? fmtKg(p.kg) : '–'; const phR = p ? String(p.reps) : e.objReps || '–'; return `<div class="lset ${s.done ? 'on' : ''}">
           <span class="num sn">${j + 1}</span>
-          <span class="prev">${p ? `${p.kg ? fmtKg(p.kg) + ' × ' : ''}${p.reps}` : '—'}</span>
-          <input class="input" data-lv="${i}.${j}.kg" inputmode="decimal" value="${esc(s.kg)}" placeholder="${p && p.kg ? fmtKg(p.kg) : '–'}" aria-label="Kilos serie ${j + 1} de ${esc(e.n)}">
-          <input class="input" data-lv="${i}.${j}.reps" inputmode="numeric" value="${esc(s.reps)}" placeholder="${p ? p.reps : '–'}" aria-label="Repeticiones serie ${j + 1} de ${esc(e.n)}">
+          <span class="prev">${p ? `${p.kg ? fmtKg(p.kg) + ' × ' : ''}${p.reps}${p.uni ? ' /lado' : ''}` : '—'}</span>
+          <input class="input" data-lv="${i}.${j}.kg" inputmode="decimal" value="${esc(s.kg)}" placeholder="${esc(phKg)}" aria-label="Kilos serie ${j + 1} de ${esc(e.n)}">
+          <input class="input" data-lv="${i}.${j}.reps" inputmode="numeric" value="${esc(s.reps)}" placeholder="${esc(phR)}" aria-label="Repeticiones serie ${j + 1} de ${esc(e.n)}">
           <button type="button" class="chk" data-act="live-done" data-v="${i}.${j}" aria-pressed="${s.done}" aria-label="Marcar serie ${j + 1} como hecha">${I.check}</button>
         </div>`; }).join('')}
       </div>
@@ -1096,7 +1268,7 @@ function viewLive() {
   return `<div class="screen live">
     <div class="live-top">
       <button type="button" class="ob-back" data-act="live-min" aria-label="Minimizar">${I.down}</button>
-      <span class="live-title"><b>${esc(L.nombre)}</b><span class="small muted">${today ? 'Hoy' : esc(fmtDate(L.fecha, { weekday: 'long', day: 'numeric', month: 'long' }))}</span></span>
+      ${liveTitleHTML(L)}
       <button type="button" class="btn small" data-act="live-fin">Finalizar</button>
     </div>
     <div class="live-stats">
@@ -1104,9 +1276,10 @@ function viewLive() {
       <div><span>Volumen</span><b class="num" id="live-vol">${nf(t.vol)} kg</b></div>
       <div><span>Series</span><b class="num" id="live-sets">${t.sets}</b></div>
     </div>
-    ${blocks || `<div class="empty"><b>Aún no hay ejercicios</b><span>Añade los que vayas a hacer hoy.</span></div>`}
+    <p class="small muted live-hint">Los números grises son tu referencia (la última vez o el objetivo). Si marcas ✓ sin escribir, se apunta ese valor.</p>
+    ${blocks || `<div class="empty"><b>Aún no hay ejercicios</b><span>Elige la sesión arriba o añade los que vayas a hacer.</span></div>`}
     <button type="button" class="btn block" data-act="live-lib">${I.plus} Añadir ejercicios</button>
-    ${L.msg ? `<div class="msg" role="alert">${esc(L.msg)}</div>` : ''}
+    ${L.msg ? `<div class="msg" role="alert" id="live-msg">${esc(L.msg)}</div>` : ''}
     <button type="button" class="link center" data-act="live-discard">Descartar entrenamiento</button>
   </div>`;
 }
@@ -1119,23 +1292,36 @@ setInterval(() => {
   if (a) a.textContent = t; if (b) b.textContent = t;
 }, 1000);
 
+// Rellena una serie con la referencia (la última vez, o el objetivo) si está vacía.
+function rellenarSerie(ex, j) {
+  const s = ex.s[j], p = ex.prev[j];
+  if (!String(s.reps).trim()) s.reps = p ? String(p.reps) : primerNumero(ex.objReps);
+  if (!String(s.kg).trim() && p && p.kg) s.kg = String(p.kg).replace('.', ',');
+  return !!String(s.reps).trim();
+}
+
 async function liveFinish() {
   const L = st.live, ejs = [];
+  const fail = (m) => { L.msg = m; render(); toast(m); const el = document.getElementById('live-msg'); if (el) el.scrollIntoView({ block: 'center' }); };
+  if (!(L.nombre || '').trim()) L.nombre = 'Entrenamiento';
   for (const ex of L.ex) {
     const series = [];
-    for (const s of ex.s) {
-      if (!s.done) continue;
+    for (let j = 0; j < ex.s.length; j++) {
+      const s = ex.s[j];
+      if (!serieCuenta(s)) continue;
+      if (!String(s.reps).trim()) rellenarSerie(ex, j);
       const reps = Math.round(num(s.reps)), kg = String(s.kg).trim() ? num(s.kg) : 0;
-      if (!(reps >= 1 && reps <= 200) || !(kg >= 0 && kg <= 600)) { L.msg = `Revisa las series de «${ex.n}»: repeticiones entre 1 y 200 y kilos entre 0 y 600.`; return render(); }
+      if (!(reps >= 1 && reps <= 200) || !(kg >= 0 && kg <= 600)) return fail(`Revisa la serie ${j + 1} de «${ex.n}»: repeticiones entre 1 y 200 y kilos entre 0 y 600.`);
       series.push({ kg: Math.round(kg * 10) / 10, reps });
     }
-    if (series.length) ejs.push({ n: ex.n, series });
+    if (series.length) ejs.push(ex.uni ? { n: ex.n, uni: true, series } : { n: ex.n, series });
   }
-  if (!ejs.length) { L.msg = 'Marca con ✓ al menos una serie hecha para guardar el entrenamiento.'; return render(); }
+  if (!ejs.length) return fail('Apunta al menos una serie (escribe los kilos o reps, o márcala con ✓) para guardar el entrenamiento.');
   const nSets = ejs.reduce((a, e) => a + e.series.length, 0);
   const min = liveIsToday() ? Math.max(1, Math.min(600, Math.round((Date.now() - L.start) / 60000))) : Math.max(15, nSets * 3);
-  const o = { id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), fecha: L.fecha, tipo: 'gym', nombre: L.nombre, min, esf: 2, ejercicios: ejs };
+  const o = { id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), fecha: L.fecha, tipo: 'gym', nombre: L.nombre.trim().slice(0, 60), min, esf: 2, ejercicios: ejs };
   o.kcal = E.estimateKcal(o, currentKg());
+  toast('Guardando…');
   try {
     const before = E.records(st.workouts), after = E.records([...st.workouts, o]);
     await api.saveWorkout(st.user.uid, o);
@@ -1144,7 +1330,7 @@ async function liveFinish() {
     st.tab = 'entreno'; st.wkTab = 'semana'; lsSet('cadencia-tab', 'entreno'); lsSet('cadencia-wktab', 'semana');
     render(); window.scrollTo(0, 0);
     toast(E.beatsRecord(before, after) ? '¡Nuevo récord personal!' : `Entrenamiento guardado · ${nSets} series`);
-  } catch (e) { L.msg = errorText(e); render(); }
+  } catch (e) { fail(`No se ha podido guardar: ${errorText(e)}`); }
 }
 
 /* ---------- registro de bici, cardio y otros ---------- */
@@ -1237,7 +1423,9 @@ root.addEventListener('click', async (e) => {
   // panel de ejercicios
   if (L && act.startsWith('lib-')) {
     if (act === 'lib-close') { st.lib = null; return render(); }
-    if (act === 'lib-m') { L.m = v; return render(); }
+    if (act === 'lib-det') { L.det = b.dataset.n; return render(); }
+    if (act === 'lib-det-close') { L.det = null; return render(); }
+    if (act === 'lib-det-toggle') { const n = b.dataset.n; L.sel = L.sel.includes(n) ? L.sel.filter((x) => x !== n) : [...L.sel, n]; L.det = null; return render(); }
     if (act === 'lib-crear') { L.crear = { n: L.q, m: L.rec[0] || 'pecho', eq: (L.equipo && L.equipo[0]) || 'mancuernas', msg: '' }; return render(); }
     if (act === 'lib-crear-cancel') { L.crear = null; return render(); }
     if (act === 'lib-crear-save') return libCrearSave();
@@ -1247,7 +1435,7 @@ root.addEventListener('click', async (e) => {
       if (L.mode === 'swap') return libApply([n]);
       L.sel = L.sel.includes(n) ? L.sel.filter((x) => x !== n) : [...L.sel, n];
       const on = L.sel.includes(n);
-      b.classList.toggle('on', on); b.querySelector('.lrow-c').innerHTML = on ? I.check : '';
+      b.parentNode.classList.toggle('on', on); b.querySelector('.lrow-c').innerHTML = on ? I.check : '';
       const btn = document.getElementById('lib-addbtn'); if (btn) { btn.disabled = !L.sel.length; btn.textContent = libFootLabel(); }
       return;
     }
@@ -1297,13 +1485,11 @@ root.addEventListener('click', async (e) => {
     if (act === 'live-set-add') { const ex = Lv.ex[Number(v)], last = ex.s[ex.s.length - 1] || { kg: '' }; ex.s.push({ kg: last.kg, reps: '', done: false }); liveSave(); return render(); }
     if (act === 'live-set-del') { const ex = Lv.ex[Number(v)]; if (ex.s.length > 1) ex.s.pop(); liveSave(); return render(); }
     if (act === 'live-done') {
-      const [i, j] = v.split('.').map(Number), ex = Lv.ex[i], s = ex.s[j], p = ex.prev[j];
-      if (!s.done && !String(s.reps).trim()) {
-        if (p) { s.reps = String(p.reps); if (!String(s.kg).trim() && p.kg) s.kg = String(p.kg).replace('.', ','); }
-        else { toast('Escribe las repeticiones de la serie'); return; }
-      }
+      const [i, j] = v.split('.').map(Number), ex = Lv.ex[i], s = ex.s[j];
+      if (!s.done && !rellenarSerie(ex, j)) { toast('Escribe las repeticiones de la serie'); return; }
       s.done = !s.done; Lv.msg = ''; liveSave(); return render();
     }
+    if (act === 'live-uni') { Lv.ex[Number(v)].uni = b.dataset.u === '1'; liveSave(); return render(); }
     if (act === 'live-fin') return liveFinish();
     if (act === 'live-discard') {
       if (!window.confirm('¿Descartar este entrenamiento? Se perderán las series apuntadas.')) return;
@@ -1332,6 +1518,7 @@ root.addEventListener('input', (e) => {
   if (st.lib && t.dataset.libq != null) { st.lib.q = t.value; const l = document.getElementById('lib-list'); if (l) { l.innerHTML = libListHTML(); l.scrollTop = 0; } return; }
   if (st.lib && st.lib.crear && t.dataset.libc) { st.lib.crear[t.dataset.libc] = t.value; return; }
   if (st.rw && t.dataset.rw) { st.rw[t.dataset.rw] = t.value; return; }
+  if (st.live && t.dataset.livename != null) { st.live.nombre = t.value; st.live.custom = true; liveSave(); return; }
   if (st.live && t.dataset.lv) {
     const [i, j, k] = t.dataset.lv.split('.'); st.live.ex[Number(i)].s[Number(j)][k] = t.value; liveSave();
     const tt = liveTotals(), vEl = document.getElementById('live-vol'); if (vEl) vEl.textContent = `${nf(tt.vol)} kg`;
@@ -1351,8 +1538,24 @@ root.addEventListener('input', (e) => {
   if (kc) { const v = wkKcal(); kc.textContent = v ? '≈ ' + nf(v) + ' kcal' : '–'; }
 });
 
+root.addEventListener('focusin', (e) => {
+  const t = e.target;
+  if (t.matches && t.matches('[data-re$=".series"], [data-re$=".reps"], [data-re$=".min"], [data-lv]')) setTimeout(() => { try { t.select(); } catch (err) { /* nada */ } }, 0);
+});
+
 root.addEventListener('change', (e) => {
   const t = e.target;
+  if (st.lib && t.dataset.libm != null) { st.lib.m = t.value; return render(); }
+  if (st.lib && t.dataset.libeqf != null) { st.lib.eqF = t.value; return render(); }
+  if (st.live && t.dataset.livetitle != null) {
+    const L = st.live;
+    if (t.value === '__custom') { L.custom = true; L.nombre = ''; liveSave(); render(); const i = document.querySelector('[data-livename]'); if (i) i.focus(); return; }
+    const op = liveOpciones().find((o) => o.nombre === t.value);
+    const hecho = L.ex.some((ex) => ex.s.some(serieCuenta));
+    if (op && !hecho) { liveCargarSesion(op); toast(`Cargados los ejercicios de ${op.nombre}`); }
+    else { L.nombre = t.value; L.foco = op ? op.foco : ''; L.custom = false; if (hecho) toast('Nombre cambiado. Tus series se mantienen.'); }
+    liveSave(); return render();
+  }
   if (st.lib && t.dataset.libeq != null) { st.lib.soloEq = t.checked; const l = document.getElementById('lib-list'); if (l) l.innerHTML = libListHTML(); return; }
   if (st.lib && st.lib.crear && t.dataset.libc) { st.lib.crear[t.dataset.libc] = t.value; return; }
   // Cambiar el tipo de un día de la rutina.
@@ -1409,6 +1612,13 @@ root.addEventListener('click', async (e) => {
   else if (act === 'install') { if (installEvt) { installEvt.prompt(); const r = await installEvt.userChoice; if (r.outcome === 'accepted') installEvt = null; render(); } }
   else if (act === 'install-hide') { lsSet('cadencia-install-hide', '1'); render(); }
   else if (act === 'delweight') delWeight(v);
+  else if (act === 'pesomet') { st.pesoMet = v; render(); }
+  else if (act === 'peso-ideal') {
+    const val = nf(Number(v), 1);
+    if (b.dataset.ctx === 'ob' && st.ob) { st.ob.pesoObjetivo = val; st.ob.msg = ''; render(); }
+    else { const i = root.querySelector('form[data-form="profile"] [name="pesoObjetivo"]'); if (i) i.value = val; }
+    toast(`Objetivo: ${val} kg`);
+  }
   else if (act === 'psex') { const f = b.closest('form'); f.sexo.value = v; b.parentElement.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); }
   else if (act === 'pgoal') {
     const g = st.editGoals || [...(st.profile.objetivos || [])];
@@ -1438,7 +1648,7 @@ root.addEventListener('submit', async (e) => {
   else if (kind === 'register') onRegister(f);
   else if (kind === 'ob') obNext();
   else if (kind === 'quickweight') { const ok = await saveWeight(todayISO(), f.kg.value); if (!ok) return; }
-  else if (kind === 'addweight') saveWeight(f.fecha.value, f.kg.value);
+  else if (kind === 'addweight') saveWeight(f.fecha.value, f.kg.value, { grasa: f.grasa.value, musculo: f.musculo.value, agua: f.agua.value, hueso: f.hueso.value });
   else if (kind === 'profile') saveProfileForm(f);
   else if (kind === 'wk') wkSave();
   else if (kind === 'rw') rwNext();

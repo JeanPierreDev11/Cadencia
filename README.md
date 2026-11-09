@@ -46,13 +46,17 @@ La `apiKey` de Firebase no es secreta: está pensada para ir en la web. La segur
 
 Cada vez que cambies archivos, sube el número de `VERSION` en `sw.js` (por ejemplo `cadencia-v2`) para que los móviles con la app instalada descarguen la versión nueva.
 
+## Ejercicios e imágenes
+
+Los ejercicios con foto vienen de [Free Exercise DB](https://github.com/yuhonas/free-exercise-db) (dominio público, licencia Unlicense), con los nombres traducidos al español. Las imágenes se cargan desde GitHub y la app las guarda para verlas sin conexión. El mapa de músculos es un dibujo propio de la app.
+
 ## Estructura de datos en Firestore
 
 ```
 users/{uid}
   nombre, email, objetivos[], sexo, edad, alturaCm, pesoKg, pesoInicial, pesoObjetivo, fechaInicio, onboarded
 users/{uid}/pesos/{AAAA-MM-DD}
-  fecha, kg
+  fecha, kg, grasa (%), musculo (kg), agua (%), hueso (kg)
 users/{uid}  → campo rutina
   tipos[], otro, dias[] (0 = lunes), modo (propuesta | propia), sesiones{dia: {t, nombre, min, ej[] | ses | det}}
 users/{uid}/entrenos/{id}

@@ -1,3 +1,4 @@
+import { IMG_BASE, IMG_CUR, EXTRA } from './ejercicios.js';
 // Lógica del entrenamiento: solo cálculos y datos, sin pantalla.
 
 export const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -116,13 +117,21 @@ export const RTIPOS = { fuerza: 'Fuerza', bici: 'Bici', cardio: 'Cardio', otro: 
 
 /* ---------- biblioteca de ejercicios ---------- */
 export const MUSCULOS = {
-  pecho: 'Pecho', espalda: 'Espalda', hombro: 'Hombro', biceps: 'Bíceps', triceps: 'Tríceps', cuadriceps: 'Cuádriceps',
-  femoral: 'Femoral', gluteo: 'Glúteo', gemelos: 'Gemelos', core: 'Core', antebrazo: 'Antebrazo',
+  pecho: 'Pecho', espalda: 'Espalda', hombro: 'Hombros', biceps: 'Bíceps', triceps: 'Tríceps', antebrazo: 'Antebrazos',
+  cuadriceps: 'Cuádriceps', femoral: 'Isquiotibiales', gluteo: 'Glúteos', gemelos: 'Gemelos', core: 'Core',
+  aductores: 'Aductores', abductores: 'Abductores de la cadera',
 };
 export const EQUIPOS = {
-  barra: 'Barra', mancuernas: 'Mancuernas', maquina: 'Máquina', polea: 'Polea', multipower: 'Multipower',
-  kettlebell: 'Kettlebell', banda: 'Banda elástica', corporal: 'Peso corporal',
+  barra: 'Barra', barraz: 'Barra Z', mancuernas: 'Mancuernas', kettlebell: 'Kettlebells', polea: 'Polea', maquina: 'Máquina',
+  multipower: 'Multipower', corporal: 'Peso corporal', banda: 'Bandas elásticas', balon: 'Balón medicinal', fitball: 'Fitball',
+  suspension: 'Correas de suspensión', trineo: 'Trineo', cuerdas: 'Cuerdas de batalla', otro: 'Otro',
 };
+// Músculos concretos (para el mapa del cuerpo)
+export const MUSC_DET = {
+  ch: 'Pecho', sh: 'Hombros', bi: 'Bíceps', tr: 'Tríceps', fo: 'Antebrazos', ab: 'Abdominales', qu: 'Cuádriceps', ha: 'Isquiotibiales',
+  gl: 'Glúteos', ca: 'Gemelos', la: 'Dorsales', mb: 'Espalda media', lb: 'Lumbares', tp: 'Trapecios', ne: 'Cuello', ad: 'Aductores', abd: 'Abductores',
+};
+const GRUPO_DET = { pecho: 'ch', espalda: 'la', hombro: 'sh', biceps: 'bi', triceps: 'tr', antebrazo: 'fo', cuadriceps: 'qu', femoral: 'ha', gluteo: 'gl', gemelos: 'ca', core: 'ab', aductores: 'ad', abductores: 'abd' };
 // nombre | músculo | patrón de movimiento (los del mismo patrón son alternativas entre sí) | equipo
 const TABLA = `
 Press banca|pecho|empuje_h|barra
@@ -263,13 +272,31 @@ Curl de muñeca|antebrazo|antebrazo|mancuernas
 Curl inverso|antebrazo|antebrazo|barra
 Paseo del granjero|antebrazo|antebrazo|mancuernas
 `;
-export const BIBLIOTECA = TABLA.trim().split('\n').map((l) => { const [n, m, p, eq] = l.split('|'); return { n, m, p, eq }; });
+// Los ejercicios principales (con patrón de movimiento) y el resto de la base con imagen.
+export const BIBLIOTECA = TABLA.trim().split('\n').map((l) => {
+  const [n, m, p, eq] = l.split('|'), c = IMG_CUR[n];
+  return { n, m, p, eq, img: c ? c[0] : '', mu: c ? c[1] : GRUPO_DET[m], base: true };
+});
+const RESTO = EXTRA.map(([n, m, eq, img, mu, cat]) => ({ n, m, p: null, eq, img, mu, cat }));
 let PROPIOS = [];
-export const setPropios = (l) => { PROPIOS = (l || []).filter((x) => x && x.n).map((x) => ({ n: x.n, m: x.m || 'core', p: null, eq: x.eq || 'corporal', propio: true })); };
-export const todosEjercicios = () => [...PROPIOS, ...BIBLIOTECA];
+let INDICE = null;
+export const setPropios = (l) => { PROPIOS = (l || []).filter((x) => x && x.n).map((x) => ({ n: x.n, m: x.m || 'core', p: null, eq: x.eq || 'corporal', img: '', mu: GRUPO_DET[x.m] || '', propio: true })); INDICE = null; };
+export const todosEjercicios = () => [...PROPIOS, ...BIBLIOTECA, ...RESTO];
 export const TODOS_EJERCICIOS = BIBLIOTECA.map((x) => x.n);
-export const normTxt = (s) => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-export const ejercicio = (n) => { const k = normTxt(n); return todosEjercicios().find((x) => normTxt(x.n) === k) || null; };
+export const normTxt = (s) => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+export const ejercicio = (n) => {
+  if (!INDICE) { INDICE = new Map(); for (const x of todosEjercicios()) { const k = normTxt(x.n); if (!INDICE.has(k)) INDICE.set(k, x); } }
+  return INDICE.get(normTxt(n)) || null;
+};
+export const imagenes = (x) => (x && x.img ? [0, 1].map((i) => IMG_BASE + x.img.split('/').map(encodeURIComponent).join('/') + `/${i}.jpg`) : []);
+// "ch,tr|sh" → { p: ['ch','tr'], s: ['sh'] }
+export const musculosDet = (x) => { const [p = '', s = ''] = String((x && x.mu) || '').split('|'); return { p: p ? p.split(',') : [], s: s ? s.split(',') : [] }; };
+// ¿Tiene sentido hacerlo con un lado cada vez? (máquinas, poleas, mancuernas…; no barras ni los que ya son a una mano)
+export function puedeUnilateral(n) {
+  const x = ejercicio(n);
+  if (!x || /una (mano|pierna)|altern|por lado|unilateral|búlgara|zancada|step-up|pistol/i.test(x.n)) return false;
+  return ['maquina', 'polea', 'mancuernas', 'kettlebell', 'banda'].includes(x.eq);
+}
 const tieneEq = (x, eq) => (!eq || x.eq === 'corporal' || eq.includes(x.eq) ? 1 : 0);
 
 // Alternativas: primero las del mismo movimiento, luego las del mismo músculo; antes las que puedes hacer con tu equipo.
@@ -278,9 +305,10 @@ export function alternativas(e, usados = [], equipo = null, todas = false) {
   if (!x) return [];
   const u = new Set(usados.map(normTxt));
   const libres = todosEjercicios().filter((y) => normTxt(y.n) !== normTxt(e.n) && !u.has(normTxt(y.n)));
-  const mismo = libres.filter((y) => x.p && y.p === x.p);
-  const musculo = todas ? libres.filter((y) => y.m === x.m && !(x.p && y.p === x.p)) : [];
-  const ord = (l) => l.sort((a, b) => tieneEq(b, equipo) - tieneEq(a, equipo));
+  // Mismo movimiento si lo conocemos; si no, los principales del mismo músculo.
+  const mismo = x.p ? libres.filter((y) => y.p === x.p) : libres.filter((y) => y.m === x.m && y.base);
+  const musculo = todas ? libres.filter((y) => y.m === x.m && !mismo.includes(y)) : [];
+  const ord = (l) => l.sort((a, b) => tieneEq(b, equipo) - tieneEq(a, equipo) || (b.base ? 1 : 0) - (a.base ? 1 : 0));
   return [...ord(mismo), ...ord(musculo)].map((y) => y.n);
 }
 

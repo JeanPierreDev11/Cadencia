@@ -1,6 +1,6 @@
 // Service worker: permite instalar la app y abrirla sin conexión.
 // Sube el número de versión cada vez que publiques cambios para que los móviles se actualicen.
-const VERSION = 'cadencia-v6';
+const VERSION = 'cadencia-v7';
 const SHELL = [
   './',
   './index.html',
@@ -9,6 +9,7 @@ const SHELL = [
   './js/data.js',
   './js/config.js',
   './js/entreno.js',
+  './js/ejercicios.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -49,8 +50,8 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // Tipografías y librería de Firebase (versiones fijas): se guardan la primera vez.
-  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com' || (url.hostname === 'www.gstatic.com' && url.pathname.startsWith('/firebasejs/'))) {
+  // Tipografías, librería de Firebase e imágenes de ejercicios (versiones fijas): se guardan la primera vez.
+  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com' || (url.hostname === 'www.gstatic.com' && url.pathname.startsWith('/firebasejs/')) || (url.hostname === 'raw.githubusercontent.com' && url.pathname.startsWith('/yuhonas/free-exercise-db/'))) {
     e.respondWith(
       caches.match(req).then((hit) => hit || fetch(req).then((res) => { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); return res; }))
     );
