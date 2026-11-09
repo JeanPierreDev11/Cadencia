@@ -55,6 +55,13 @@ async function firebaseBackend(config) {
       const s = await F.getDocs(q);
       return s.docs.map((d) => d.data()).reverse();
     },
+    async saveWorkout(uid, w) { await F.setDoc(F.doc(db, 'users', uid, 'entrenos', w.id), w); },
+    async deleteWorkout(uid, id) { await F.deleteDoc(F.doc(db, 'users', uid, 'entrenos', id)); },
+    async listWorkouts(uid, n = 500) { // de más reciente a más antiguo
+      const q = F.query(F.collection(db, 'users', uid, 'entrenos'), F.orderBy('fecha', 'desc'), F.limit(n));
+      const s = await F.getDocs(q);
+      return s.docs.map((d) => d.data());
+    },
   };
 }
 
@@ -115,6 +122,12 @@ function localBackend() {
     async listWeights(uid, n = 120) {
       const u = byUid(read(), uid); if (!u) return [];
       return Object.values(u.pesos).sort((a, b) => a.fecha.localeCompare(b.fecha)).slice(-n);
+    },
+    async saveWorkout(uid, w) { const s = read(); const u = byUid(s, uid); if (!u) return; (u.entrenos = u.entrenos || {})[w.id] = w; write(s); },
+    async deleteWorkout(uid, id) { const s = read(); const u = byUid(s, uid); if (!u || !u.entrenos) return; delete u.entrenos[id]; write(s); },
+    async listWorkouts(uid, n = 500) {
+      const u = byUid(read(), uid); if (!u || !u.entrenos) return [];
+      return Object.values(u.entrenos).sort((a, b) => b.fecha.localeCompare(a.fecha) || (b.id > a.id ? 1 : -1)).slice(0, n);
     },
   };
 }
