@@ -1,6 +1,7 @@
 import { createBackend, errorText } from './data.js';
 import { APP_NAME } from './config.js';
 import * as E from './entreno.js';
+import { crearSecciones } from './secciones.js';
 
 /* ================================================================== */
 /* Utilidades                                                          */
@@ -92,7 +93,7 @@ function render() {
   else if (st.view === 'main') root.innerHTML = viewMain();
   else if (st.view === 'error') root.innerHTML = viewError();
   document.title = APP_NAME;
-  document.body.classList.toggle('noscroll', !!st.lib);
+  document.body.classList.toggle('noscroll', !!(st.lib || st.food || st.tl));
 }
 
 /* ================================================================== */
@@ -310,7 +311,7 @@ async function obNext() {
     await api.addWeight(uid, todayISO(), p.pesoKg);
     st.profile = { ...(st.profile || {}), ...data };
     st.weights = await api.listWeights(uid);
-    st.workouts = []; st.wk = null; st.rw = null; st.re = null;
+    st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.dias = {};
     st.tab = 'inicio';
     st.view = 'main';
     render();
@@ -328,21 +329,21 @@ function focusFirst() {
 /* ================================================================== */
 /* App principal                                                       */
 /* ================================================================== */
-const TABS = [
-  { id: 'inicio', t: 'Inicio', ico: I.home },
-  { id: 'entreno', t: 'Entreno', ico: I.pulse },
-  { id: 'peso', t: 'Peso', ico: I.scale },
-  { id: 'perfil', t: 'Perfil', ico: I.user },
-];
+// Nutrición, Rutas, Taller y Progreso viven en secciones.js.
+const M = crearSecciones({
+  st, get api() { return api; }, render, toast, esc, num, nf, todayISO, fmtDate, lsGet, lsSet, I, E, errorText,
+  currentKg: () => currentKg(), rutinaOf: () => rutinaOf(), viewPeso: (sub) => viewPeso(sub),
+});
 
 function viewMain() {
-  const sheet = st.lib ? libSheetHTML() : '';
+  const sheet = st.lib ? libSheetHTML() : M.sheet();
   if (st.rw) return viewRutWizard() + sheet;
   if (st.live && !st.liveMin) return viewLive() + sheet;
   if (st.wk) return viewWkForm();
-  const body = st.tab === 'peso' ? viewPeso() : st.tab === 'perfil' ? viewPerfil() : st.tab === 'entreno' ? viewEntreno() : viewInicio();
+  const tab = M.tabActual(), tabs = M.tabs();
+  const body = tab === 'perfil' ? viewPerfil() : tab === 'entreno' ? viewEntreno() : tab === 'inicio' ? viewInicio() : M.view(tab);
   return `<main class="main ${st.live ? 'has-live' : ''}">${body}</main>${st.live ? liveBarHTML() : ''}${sheet}
-  <div class="tabbar"><nav aria-label="Secciones">${TABS.map((t) => `<button type="button" data-act="tab" data-v="${t.id}" ${st.tab === t.id ? 'aria-current="page"' : ''}>${t.ico}<span>${t.t}</span></button>`).join('')}</nav></div>`;
+  <div class="tabbar"><nav aria-label="Secciones" class="n${tabs.length}">${tabs.map((t) => `<button type="button" data-act="tab" data-v="${t.id}" ${tab === t.id ? 'aria-current="page"' : ''}>${t.ico}<span>${t.t}</span></button>`).join('')}</nav></div>`;
 }
 
 const latestWeight = () => (st.weights.length ? st.weights[st.weights.length - 1] : null);
@@ -392,6 +393,8 @@ function viewInicio() {
     </section>
 
     ${homeTraining()}
+
+    ${M.homeCards()}
 
     <div class="stats">
       <section class="stat">
@@ -511,7 +514,7 @@ function compCardHTML(ws) {
   return items ? `<div class="stats">${items}</div>` : '';
 }
 
-function viewPeso() {
+function viewPeso(sub = false) {
   const ws = st.weights, p = st.profile;
   const rows = ws.slice().reverse();
   const disp = COMP.filter((c) => c.k === 'kg' || ws.some((w) => w[c.k] != null));
@@ -519,7 +522,7 @@ function viewPeso() {
   const pts = ws.filter((w) => w[met.k] != null).slice(-90).map((w) => ({ fecha: w.fecha, kg: w[met.k] }));
   const compTxt = (w) => COMP.slice(1).filter((c) => w[c.k] != null).map((c) => `${c.t} ${nf(w[c.k], 1)} ${c.u}`).join(' · ');
   return `
-    <header class="hello"><div><h1>Peso</h1><p>${ws.length} ${ws.length === 1 ? 'registro' : 'registros'}${p.pesoObjetivo ? ` · objetivo ${nf(p.pesoObjetivo, 1)} kg` : ''}</p></div></header>
+    ${sub ? '' : `<header class="hello"><div><h1>Peso</h1><p>${ws.length} ${ws.length === 1 ? 'registro' : 'registros'}${p.pesoObjetivo ? ` · objetivo ${nf(p.pesoObjetivo, 1)} kg` : ''}</p></div></header>`}
     <section class="card">
       <h2>Evolución</h2>
       ${disp.length > 1 ? `<div class="seg" role="group" aria-label="Qué ver">${disp.map((c) => `<button type="button" data-act="pesomet" data-v="${c.k}" aria-pressed="${met.k === c.k}">${c.t}</button>`).join('')}</div>` : ''}
@@ -1372,7 +1375,8 @@ function viewWkForm() {
           <label class="field"><span>Distancia (km)</span><input class="input" data-wk="km" inputmode="decimal" value="${esc(w.km)}" placeholder="45"></label>
           <label class="field"><span>Desnivel (m)</span><input class="input" data-wk="elev" inputmode="numeric" value="${esc(w.elev)}" placeholder="600"></label>
         </div>
-        <label class="field"><span>Pulso medio <span class="muted">(opcional)</span></span><input class="input" data-wk="pulso" inputmode="numeric" value="${esc(w.pulso)}" placeholder="140"></label>` : ''}
+        <label class="field"><span>Pulso medio <span class="muted">(opcional)</span></span><input class="input" data-wk="pulso" inputmode="numeric" value="${esc(w.pulso)}" placeholder="140"></label>
+        ${M.wkBiciHTML(w)}` : ''}
       ${t === 'cardio' ? `<label class="field"><span>Distancia (km) <span class="muted">(opcional)</span></span><input class="input" data-wk="km" inputmode="decimal" value="${esc(w.km)}" placeholder="6"></label>` : ''}
       <div class="field"><span>Esfuerzo</span>
         <div class="seg" role="group" aria-label="Esfuerzo">${[[1, 'Suave'], [2, 'Medio'], [3, 'Duro']].map(([v, l]) => `<button type="button" data-act="wk-esf" data-v="${v}" aria-pressed="${w.esf === v}">${l}</button>`).join('')}</div></div>
@@ -1397,8 +1401,12 @@ async function wkSave() {
     if (w.tipo === 'bici') {
       const el = opt(w.elev, 0, 10000, 'El desnivel tiene que estar entre 0 y 10.000 m.');
       const pu = opt(w.pulso, 40, 230, 'El pulso tiene que estar entre 40 y 230.');
+      const np = opt(w.np || '', 50, 700, 'La potencia normalizada tiene que estar entre 50 y 700 W.');
       if (el) o.elev = Math.round(el);
       if (pu) o.pulso = Math.round(pu);
+      if (np) o.np = Math.round(np);
+      const bs = (st.profile.garaje && st.profile.garaje.bicis) || [];
+      if (bs.length) o.bici = w.bici || bs[0].id;
     }
   } catch (e) { return fail(e.message); }
   o.kcal = E.estimateKcal(o, currentKg());
@@ -1543,8 +1551,9 @@ root.addEventListener('focusin', (e) => {
   if (t.matches && t.matches('[data-re$=".series"], [data-re$=".reps"], [data-re$=".min"], [data-lv]')) setTimeout(() => { try { t.select(); } catch (err) { /* nada */ } }, 0);
 });
 
-root.addEventListener('change', (e) => {
+root.addEventListener('change', async (e) => {
   const t = e.target;
+  if (st.view === 'main' && await M.change(t)) return;
   if (st.lib && t.dataset.libm != null) { st.lib.m = t.value; return render(); }
   if (st.lib && t.dataset.libeqf != null) { st.lib.eqF = t.value; return render(); }
   if (st.live && t.dataset.livetitle != null) {
@@ -1582,12 +1591,13 @@ function viewError() {
 /* ================================================================== */
 async function enter(u) {
   st.user = u; st.busy = false;
-  if (!u) { st.view = 'auth'; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; return render(); }
+  if (!u) { st.view = 'auth'; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
   try {
     st.profile = await api.getProfile(u.uid);
     if (!st.profile || !st.profile.onboarded) return startOnboarding();
     st.weights = await api.listWeights(u.uid);
     st.workouts = await api.listWorkouts(u.uid);
+    await M.cargar(u.uid);
     E.setPropios(st.profile.ejPropios);
     // Si cerraste la app a mitad de un entrenamiento de fuerza, sigue donde lo dejaste.
     try { const sv = JSON.parse(lsGet('cadencia-live') || 'null'); if (sv && sv.uid === u.uid && Array.isArray(sv.ex)) { st.live = sv; st.liveMin = true; } } catch (e) { /* nada */ }
@@ -1602,13 +1612,14 @@ root.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-act]');
   if (!b) return;
   const act = b.dataset.act, v = b.dataset.v;
+  if (await M.click(act, v, b)) return;
   if (act === 'mode') { st.authMode = v; st.authMsg = null; const f = root.querySelector('form'); const email = f && f.email.value; render(); keepForm({ email }); }
   else if (act === 'peek') { const i = b.previousElementSibling; i.type = i.type === 'password' ? 'text' : 'password'; b.textContent = i.type === 'password' ? 'Ver' : 'Ocultar'; }
   else if (act === 'forgot') onForgot();
   else if (act === 'goal') { const g = st.ob.objetivos; st.ob.objetivos = g.includes(v) ? g.filter((x) => x !== v) : [...g, v]; render(); }
   else if (act === 'sex') { st.ob.sexo = v; render(); }
   else if (act === 'ob-back') { st.ob.step = Math.max(0, st.ob.step - 1); st.ob.msg = ''; render(); }
-  else if (act === 'tab') { st.tab = v; st.editGoals = null; lsSet('cadencia-tab', v); render(); window.scrollTo(0, 0); }
+  else if (act === 'tab') { st.tab = v; st.editGoals = null; st.food = null; st.tl = null; lsSet('cadencia-tab', v); render(); window.scrollTo(0, 0); }
   else if (act === 'install') { if (installEvt) { installEvt.prompt(); const r = await installEvt.userChoice; if (r.outcome === 'accepted') installEvt = null; render(); } }
   else if (act === 'install-hide') { lsSet('cadencia-install-hide', '1'); render(); }
   else if (act === 'delweight') delWeight(v);
@@ -1632,6 +1643,7 @@ root.addEventListener('click', async (e) => {
 });
 
 root.addEventListener('input', (e) => {
+  if (st.view === 'main' && M.input(e.target)) return;
   const k = e.target.dataset && e.target.dataset.ob;
   if (!k || !st.ob) return;
   st.ob[k] = e.target.value;
@@ -1644,6 +1656,7 @@ root.addEventListener('input', (e) => {
 root.addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = e.target, kind = f.dataset.form;
+  if (await M.submit(kind, f)) return;
   if (kind === 'login') onLogin(f);
   else if (kind === 'register') onRegister(f);
   else if (kind === 'ob') obNext();

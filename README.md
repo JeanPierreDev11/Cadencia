@@ -15,6 +15,8 @@ App web instalable (PWA) para iPhone y Android: registro e inicio de sesión, cu
 | `css/app.css` | Diseño (colores, tipografía, modo oscuro) |
 | `js/app.js` | Pantallas y lógica |
 | `js/data.js` | Conexión con Firebase y modo prueba |
+| `js/secciones.js` | Nutrición, Rutas, Taller y Progreso |
+| `js/br.js`, `js/alimentos.js` | Cálculos (calorías, carga, nutrición en ruta, presión de ruedas, % graso) y tabla de alimentos de la app Bilbao Ride |
 | `js/config.js` | **Aquí va la configuración de Firebase** |
 | `manifest.webmanifest`, `sw.js`, `icons/` | Lo que hace que se instale como app y abra sin conexión |
 | `firestore.rules` | Reglas de seguridad: cada persona solo ve sus datos |
@@ -60,5 +62,15 @@ users/{uid}/pesos/{AAAA-MM-DD}
 users/{uid}  → campo rutina
   tipos[], otro, dias[] (0 = lunes), modo (propuesta | propia), sesiones{dia: {t, nombre, min, ej[] | ses | det}}
 users/{uid}/entrenos/{id}
-  fecha, tipo (gym | bici | cardio | otro), nombre, min, km, elev, pulso, esf, kcal, ejercicios[{n, series[{kg, reps}]}]
+  fecha, tipo (gym | bici | cardio | otro), nombre, min, km, elev, pulso, np, bici, esf, kcal, ejercicios[{n, series[{kg, reps}]}]
+users/{uid}/comidas/{AAAA-MM-DD}
+  fecha, items[{id, m (0 desayuno … 4 otros), n, g, k, p, c, f, fid, prep}]
+users/{uid}  → campos nutri {neat, rate, eat}, atleta {fcMax, fcRep, ftp}
+users/{uid}  → campo garaje
+  bicis[{id, nombre, tipo, marcaModelo, anio, pesoKg, cubiertaMm, tubeless, kmPrevios, comps[{id, cat, nombre, desde, kmIni, cadaKm, precio}]}]
+  mejora {presupuesto, metas[], deseos[{id, n, precio}]}
 ```
+
+## Tiempo
+
+La previsión de Rutas viene de [Open-Meteo](https://open-meteo.com/) (sin clave). Su uso gratuito es solo para fines no comerciales: si la app pasa a cobrar suscripciones, hay que contratar su plan de pago o cambiar de servicio.

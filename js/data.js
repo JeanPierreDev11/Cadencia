@@ -57,6 +57,12 @@ async function firebaseBackend(config) {
     },
     async saveWorkout(uid, w) { await F.setDoc(F.doc(db, 'users', uid, 'entrenos', w.id), w); },
     async deleteWorkout(uid, id) { await F.deleteDoc(F.doc(db, 'users', uid, 'entrenos', id)); },
+    async saveDia(uid, fecha, data) { await F.setDoc(F.doc(db, 'users', uid, 'comidas', fecha), { ...data, fecha }); },
+    async listDias(uid, desde) {
+      const q = F.query(F.collection(db, 'users', uid, 'comidas'), F.where('fecha', '>=', desde));
+      const s = await F.getDocs(q);
+      return s.docs.map((d) => d.data());
+    },
     async listWorkouts(uid, n = 500) { // de más reciente a más antiguo
       const q = F.query(F.collection(db, 'users', uid, 'entrenos'), F.orderBy('fecha', 'desc'), F.limit(n));
       const s = await F.getDocs(q);
@@ -125,6 +131,8 @@ function localBackend() {
     },
     async saveWorkout(uid, w) { const s = read(); const u = byUid(s, uid); if (!u) return; (u.entrenos = u.entrenos || {})[w.id] = w; write(s); },
     async deleteWorkout(uid, id) { const s = read(); const u = byUid(s, uid); if (!u || !u.entrenos) return; delete u.entrenos[id]; write(s); },
+    async saveDia(uid, fecha, data) { const s = read(); const u = byUid(s, uid); if (!u) return; (u.comidas = u.comidas || {})[fecha] = { ...data, fecha }; write(s); },
+    async listDias(uid, desde) { const u = byUid(read(), uid); if (!u || !u.comidas) return []; return Object.values(u.comidas).filter((d) => d.fecha >= desde); },
     async listWorkouts(uid, n = 500) {
       const u = byUid(read(), uid); if (!u || !u.entrenos) return [];
       return Object.values(u.entrenos).sort((a, b) => b.fecha.localeCompare(a.fecha) || (b.id > a.id ? 1 : -1)).slice(0, n);
