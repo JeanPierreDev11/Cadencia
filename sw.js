@@ -1,6 +1,6 @@
 // Service worker: permite instalar la app y abrirla sin conexión.
 // Sube el número de versión cada vez que publiques cambios para que los móviles se actualicen.
-const VERSION = 'cadencia-v4';
+const VERSION = 'cadencia-v5';
 const SHELL = [
   './',
   './index.html',
@@ -39,13 +39,12 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // Archivos propios: copia guardada al instante y se actualiza en segundo plano.
+  // Archivos propios: primero la red (siempre la última versión); sin conexión, la copia guardada.
   if (url.origin === self.location.origin) {
     e.respondWith(
-      caches.match(req).then((hit) => {
-        const net = fetch(req).then((res) => { if (res.ok) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); } return res; }).catch(() => hit);
-        return hit || net;
-      })
+      fetch(req, { cache: 'no-cache' })
+        .then((res) => { if (res.ok) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); } return res; })
+        .catch(() => caches.match(req, { ignoreSearch: true }))
     );
     return;
   }

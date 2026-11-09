@@ -1170,7 +1170,10 @@ root.addEventListener('submit', async (e) => {
 /* ---------- arranque ---------- */
 (async function boot() {
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-    navigator.serviceWorker.register('sw.js').catch(() => { /* sin modo sin conexión */ });
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => reg.update()).catch(() => { /* sin modo sin conexión */ });
+    // Cuando llega una versión nueva de la app, recarga una vez para usarla.
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded && navigator.serviceWorker.controller) { reloaded = true; location.reload(); } });
   }
   try {
     api = await createBackend();
