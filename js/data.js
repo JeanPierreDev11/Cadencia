@@ -26,6 +26,7 @@ async function firebaseBackend(config) {
   const weightRef = (uid, date) => F.doc(db, 'users', uid, 'pesos', date);
 
   const toUser = (u) => (u ? { uid: u.uid, email: u.email, name: u.displayName || '' } : null);
+  let iaFn = null; // función «ia» en Cloud Functions (europe-west1), se carga la primera vez
 
   return {
     mode: 'firebase',
@@ -77,6 +78,14 @@ async function firebaseBackend(config) {
       }
       await F.deleteDoc(userRef(u.uid));
       await A.deleteUser(u);
+    },
+    // IA (foto del plato y Taller) a través de la Cloud Function «ia».
+    async ia(data) {
+      if (!iaFn) {
+        const Fn = await import(FB + 'firebase-functions.js');
+        iaFn = Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), 'ia', { timeout: 95000 });
+      }
+      return (await iaFn(data)).data;
     },
     async listWorkouts(uid, n = 500) { // de más reciente a más antiguo
       const q = F.query(F.collection(db, 'users', uid, 'entrenos'), F.orderBy('fecha', 'desc'), F.limit(n));
@@ -154,6 +163,11 @@ function localBackend() {
       if (u.pass !== (await hash(pass))) throw err('auth/invalid-credential');
       delete s.users[email]; s.session = null; write(s); emit();
     },
+    // En modo prueba no hay servidor: la IA solo responde si una prueba automática la simula.
+    async ia(data) {
+      if (typeof globalThis.cadenciaIAPrueba === 'function') return globalThis.cadenciaIAPrueba(data);
+      throw err('local/no-ia');
+    },
     async listWorkouts(uid, n = 500) {
       const u = byUid(read(), uid); if (!u || !u.entrenos) return [];
       return Object.values(u.entrenos).sort((a, b) => b.fecha.localeCompare(a.fecha) || (b.id > a.id ? 1 : -1)).slice(0, n);
@@ -182,6 +196,11 @@ const MESSAGES = {
   'unavailable': 'Sin conexión con la base de datos. Se guardará al volver la conexión.',
   'auth/no-current-user': 'No hay ninguna sesión iniciada.',
   'auth/requires-recent-login': 'Por seguridad, vuelve a escribir tu contraseña.',
+  'local/no-ia': 'La IA solo funciona con la app conectada a Firebase.',
+  'functions/not-found': 'La IA todavía no está activada en el servidor.',
+  'functions/unauthenticated': 'Inicia sesión otra vez para usar la IA.',
+  'functions/deadline-exceeded': 'La IA ha tardado demasiado. Prueba otra vez.',
+  'functions/internal': 'La IA no está disponible ahora mismo. Prueba más tarde.',
   'local/no-reset': 'En modo prueba no se puede recuperar la contraseña: crea una cuenta nueva.',
 };
 export const errorText = (e) => MESSAGES[e && e.code] || (e && e.message) || 'Algo ha fallado. Vuelve a probar.';

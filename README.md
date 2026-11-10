@@ -77,6 +77,17 @@ users/{uid}  → campo garaje
   mejora {presupuesto, metas[], deseos[{id, n, precio}]}
 ```
 
+## IA (foto del plato y Taller)
+
+Una sola Cloud Function, `ia` (carpeta `functions/`, región `europe-west1`), llama a la API de Claude:
+`claude-haiku-5-5` para la foto del plato y `claude-sonnet-5-5` para el Taller. Límites: 10 consultas al día por persona
+(`iaUso/{uid}_{día}`) y 300 al día en total (`iaGlobal/{día}`), solo accesibles desde el servidor.
+La clave se guarda como secreto `ANTHROPIC_API_KEY` en Firebase. Si cambias la tabla de alimentos, ejecuta
+`node functions/generar-catalogo.mjs` para que la IA la conozca.
+
+Se publica sola con GitHub Actions (`.github/workflows/desplegar-ia.yml`) al cambiar `functions/`, y necesita
+dos secretos en el repositorio: `FIREBASE_SERVICE_ACCOUNT` (JSON de una cuenta de servicio) y `ANTHROPIC_API_KEY`.
+
 ## Privacidad
 
 Al crear la cuenta hay que aceptar los términos (se guarda `legal {v, fecha}` en el perfil). En Perfil → Privacidad y cuenta se pueden leer y se puede borrar la cuenta: pide la contraseña y escribir BORRAR, borra `pesos`, `entrenos`, `comidas`, el documento `users/{uid}` y el usuario de Firebase Auth. Antes de abrir la app al público, rellena `CONTACTO` en `js/legal.js` y revisa los textos con un profesional.

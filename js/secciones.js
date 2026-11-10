@@ -20,12 +20,13 @@ const ICO = {
   warn: svg('<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/>', 16),
   spark: svg('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>', 18),
   bici: svg('<circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5l4-8h6l3 8M9.5 8.5h-2M12 16.5l3.5-8"/>'),
+  camara: svg('<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>', 15),
   scan: svg('<path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M8 8v8M11 8v8M14 8v8M17 8v8"/>', 22),
   bell: svg('<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>', 22),
 };
 
 /* Novedades: cambia NOV_V cada vez que publiques algo nuevo para que salga la nota en Inicio. */
-const NOV_V = '2026-11-10';
+const NOV_V = '2026-11-10b';
 
 /* Objetivos de entreno: [id, grupo, texto, unidad, periodo (sem | mes | reto), ejemplo] */
 const META_T = [
@@ -197,11 +198,12 @@ export function crearSecciones(ctx) {
 
     // Comidas
     const prev = dia(E.addDays(d, -1)).items, ayerTxt = d === t ? 'ayer' : 'el día anterior';
-    h += `<section class="card"><div class="card-head"><h2>Lo que has comido</h2></div>
+    if (st.iaQuedan == null) setTimeout(() => iaEstado(), 0);
+    h += `<section class="card"><div class="card-head"><h2>Lo que has comido</h2>${st.iaQuedan != null ? `<span class="small muted">IA: ${iaQuedanTxt()}</span>` : ''}</div>
       ${MEALS.map((name, i) => {
         const arr = it.filter((x) => x.m === i), k = arr.reduce((a, x) => a + x.k, 0), ayer = prev.filter((x) => x.m === i);
         return `<div class="meal">
-          <div class="meal-h"><b>${name}</b><span class="muted small">${arr.length ? nf(k) + ' kcal' : ''}</span><button type="button" class="chipbtn chip" data-act="n-add" data-v="${i}">${I.plus} Añadir</button></div>
+          <div class="meal-h"><span class="meal-n"><b>${name}</b>${arr.length ? `<span class="muted small">${nf(k)} kcal</span>` : ''}</span><span class="meal-acts"><label class="chipbtn chip iachip" aria-label="Foto con IA para ${name.toLowerCase()}"><input type="file" accept="image/*" capture="environment" data-iafoto="${i}" hidden>${ICO.camara} Foto con IA</label><button type="button" class="chipbtn chip" data-act="n-add" data-v="${i}">${I.plus} Añadir</button></span></div>
           ${ayer.length ? `<button type="button" class="link repetir" data-act="n-repetir" data-v="${i}">Repetir de ${ayerTxt} · ${ayer.length === 1 ? esc(ayer[0].n.length > 28 ? ayer[0].n.slice(0, 27) + '…' : ayer[0].n) : ayer.length + ' alimentos'} (${nf(ayer.reduce((a, x) => a + x.k, 0))} kcal)</button>` : ''}
           ${arr.map((x) => `<div class="fitem"><span>${esc(x.n)}<small class="muted">${x.g ? nf(x.g) + ' g · ' : ''}P ${nf(x.p, 0)} · H ${nf(x.c, 0)} · G ${nf(x.f, 0)}</small></span><b class="num">${nf(x.k)}</b><button class="iconbtn" data-act="n-del" data-v="${esc(x.id)}" aria-label="Quitar ${esc(x.n)}">${I.trash}</button></div>`).join('')}
         </div>`;
@@ -608,6 +610,7 @@ export function crearSecciones(ctx) {
   }
 
   function viewBici() {
+    if (!st.biciSub) st.biciSub = lsGet('cadencia-bicisub') || 'rutas';
     const sub = st.biciSub === 'taller' ? 'taller' : 'rutas';
     return head('Bici', sub === 'rutas' ? 'Rutas por Bilbao y alrededores' : 'Tu bici, sus piezas y qué mejorar')
       + seg('bici-sub', [['rutas', 'Rutas'], ['taller', 'Taller']], sub, 'Rutas o Taller')
@@ -671,9 +674,7 @@ export function crearSecciones(ctx) {
         ${pres ? `<div class="budget"><span>${eur(gastado)} de ${eur(pres)}</span><b class="${gastado > pres ? 'bad' : ''}">${gastado > pres ? `Te pasas ${eur(gastado - pres)}` : `Quedan ${eur(pres - gastado)}`}</b></div>${pbar(gastado / pres, gastado > pres ? 'over' : '')}` : ''}` : '<p class="small muted">Apunta las piezas que te interesan con su precio y verás cuánto te queda.</p>'}
       <form class="quick" data-form="deseo" novalidate><input class="input" name="n" maxlength="60" placeholder="Pieza" aria-label="Pieza"><input class="input eur" name="precio" inputmode="decimal" placeholder="€" aria-label="Precio en euros"><button class="btn small" type="submit">${I.plus}</button></form>
     </section>
-    <section class="card ai-card"><h2>${ICO.spark} Recomendación con IA</h2>
-      <p>Muy pronto: la IA leerá tus componentes, tus kilómetros y tu presupuesto, y te propondrá piezas concretas compatibles con tu bici y dónde comprarlas.</p>
-      <button class="btn block" disabled>Próximamente</button></section>`;
+    ${iaTallerHTML(b, M, pres, gastado)}`;
     return h;
   }
   function ideasHTML(b, M, pres) {
@@ -940,7 +941,7 @@ export function crearSecciones(ctx) {
       case 'r-ruta': st.ruta = v; render(); return true;
       case 'r-zona': st.zona = v; render(); return true;
       case 'r-ver': st.ruta = v; st.tab = 'bici'; st.biciSub = 'rutas'; lsSet('cadencia-tab', 'bici'); render(); window.scrollTo(0, 0); return true;
-      case 'bici-sub': st.biciSub = v; render(); window.scrollTo(0, 0); return true;
+      case 'bici-sub': st.biciSub = v; lsSet('cadencia-bicisub', v); render(); window.scrollTo(0, 0); return true;
       // Taller
       case 'tl-bici': tlOpen('bici', v); return true;
       case 'tl-comp': tlOpen('comp', v); return true;
@@ -971,6 +972,18 @@ export function crearSecciones(ctx) {
         return true;
       }
       case 'n-off': buscarOFF(); return true;
+      // IA
+      case 'ia-close': if (st.iaFoto && st.iaFoto.fase === 'cargando') { toast('Espera a que termine el análisis'); return true; } st.iaFoto = null; render(); return true;
+      case 'ia-del': st.iaFoto.items = st.iaFoto.items.filter((x) => x.key !== v); render(); return true;
+      case 'ia-add-food': { const f = asFood(v); if (!f) return true; const gp = prepOf(f); st.iaFoto.items.push({ key: nid('i'), fid: f.id, n: f.n, g: f.u ? String(f.u.g) : '100', prep: gp ? gp[0].id : null, per100: { k: f.k, p: f.p, c: f.c, f: f.f }, conf: 'alta' }); st.iaFoto.q = ''; render(); return true; }
+      case 'ia-guardar': iaGuardar(); return true;
+      case 'ia-taller': iaTaller(); return true;
+      case 'ia-deseo': {
+        const g = garaje(), R = g.mejora.ia, x = R && R.res.recomendaciones[Number(v)]; if (!x) return true;
+        const key = `${R.fecha}-${v}`, precio = Math.round(((Number(x.precio_min) || 0) + (Number(x.precio_max) || 0)) / 2 / 5) * 5;
+        g.mejora.deseos = [...g.mejora.deseos, { id: nid('d'), n: `${x.pieza}${x.modelo_ejemplo ? ` (${x.modelo_ejemplo})` : ''}`.slice(0, 80), precio, iaKey: key }];
+        await saveGaraje(g); toast('Añadido a tu lista de compra'); return true;
+      }
       case 'n-scan': st.food.scan = { msg: '' }; render(); return true;
       // Novedades
       case 'nov-open': st.novOpen = true; render(); { const n = document.getElementById('novedades'); if (n) n.scrollIntoView({ block: 'start' }); } return true;
@@ -1007,6 +1020,15 @@ export function crearSecciones(ctx) {
     if (F && F.quick && t.dataset.fqk) { F.quick[t.dataset.fqk] = t.value; return true; }
     if (st.tl && t.dataset.tf) { st.tl.d[t.dataset.tf] = t.value; return true; }
     if (st.meta && t.dataset.mf) { st.meta.d[t.dataset.mf] = t.value; return true; }
+    if (t.dataset.iatxt != null) { st.iaTxt = t.value; return true; }
+    if (st.iaFoto && t.dataset.iag) {
+      const it = st.iaFoto.items.find((x) => x.key === t.dataset.iag); if (!it) return true;
+      it.g = t.value;
+      const k = document.getElementById('iak-' + it.key); if (k) k.innerHTML = `${nf(iaVals(it).k)}<small> kcal</small>`;
+      const tot = document.getElementById('ia-total'); if (tot) tot.textContent = nf(iaTotal());
+      return true;
+    }
+    if (st.iaFoto && t.dataset.iaq != null) { st.iaFoto.q = t.value; const r = document.getElementById('ia-res'); if (r) r.innerHTML = iaResHTML(); return true; }
     if (t.dataset.body) {
       const B = st.body || (st.body = {}); B[t.dataset.body] = t.value;
       // Recalcular sin redibujar toda la pantalla (para no perder el teclado).
@@ -1020,6 +1042,8 @@ export function crearSecciones(ctx) {
   }
   async function change(t) {
     if (t.dataset.ndate != null) { if (t.value && t.value <= todayISO()) { st.nDate = t.value; render(); } return true; }
+    if (t.dataset.iafoto != null) { const f = t.files && t.files[0]; t.value = ''; st.food = null; fotoPlato(f, Number(t.dataset.iafoto)); return true; }
+    if (st.iaFoto && t.dataset.iaprep) { const it = st.iaFoto.items.find((x) => x.key === t.dataset.iaprep); if (it) it.prep = t.value; render(); return true; }
     if (t.dataset.wxh != null) { st.wxIdx = Number(t.value); render(); return true; }
     if (st.tl && t.dataset.tfs) { st.tl.d[t.dataset.tfs] = t.value; st.tl.d.cadaKm = ''; render(); return true; }
     if (t.dataset.presu != null) {
@@ -1048,11 +1072,187 @@ export function crearSecciones(ctx) {
     return false;
   }
   /* ================================================================ */
+  /* IA: foto del plato y recomendación del Taller                    */
+  /* ================================================================ */
+  const iaQuedanTxt = () => `te quedan ${st.iaQuedan} ${st.iaQuedan === 1 ? 'consulta' : 'consultas'} hoy`;
+  let iaEstadoPedido = '';
+  async function iaEstado() {
+    const hoy = todayISO();
+    if (iaEstadoPedido === hoy || api.mode !== 'firebase' && typeof globalThis.cadenciaIAPrueba !== 'function') return;
+    iaEstadoPedido = hoy;
+    try { const r = await api.ia({ modo: 'estado' }); if (r && Number.isFinite(r.quedan)) { st.iaQuedan = r.quedan; if (!document.activeElement || !document.activeElement.matches('input,textarea,select')) render(); } } catch (e) { /* la IA aún no está activada: no mostramos nada */ }
+  }
+  const iaErr = (e) => (e && e.code === 'functions/resource-exhausted' ? e.message : errorText(e));
+
+  // Reduce la foto (lado largo 1024 px, JPEG) para que suba rápido y gaste menos.
+  async function comprimir(file) {
+    let img;
+    try { img = await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch (e) {
+      img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = URL.createObjectURL(file); });
+    }
+    const k = Math.min(1, 1024 / Math.max(img.width, img.height));
+    const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const url = c.toDataURL('image/jpeg', 0.72);
+    return { url, b64: url.split(',')[1] };
+  }
+  async function fotoPlato(file, meal) {
+    if (!file) return;
+    const fecha = st.nDate || todayISO();
+    if (st.iaQuedan === 0) { toast('Ya has usado tus consultas de IA de hoy'); return; }
+    st.iaFoto = { meal, fecha, fase: 'cargando', thumb: '', items: [], nota: '', msg: '', q: '' };
+    render();
+    let foto;
+    try { foto = await comprimir(file); } catch (e) { st.iaFoto = { ...st.iaFoto, fase: 'error', msg: 'No se ha podido leer la foto. Prueba con otra.' }; render(); return; }
+    if (!st.iaFoto) return;
+    st.iaFoto.thumb = foto.url; render();
+    try {
+      const r = await api.ia({ modo: 'plato', imagen: foto.b64, comida: MEALS[meal] });
+      if (!st.iaFoto) return;
+      if (Number.isFinite(r.quedan)) st.iaQuedan = r.quedan;
+      const items = (r.alimentos || []).slice(0, 15).map((a) => {
+        const food = a.id ? FOODS_BY_ID[a.id] : null, gp = food ? prepOf(food) : null;
+        return {
+          key: nid('i'), fid: food ? food.id : null, n: food ? food.n : String(a.nombre || 'Alimento').slice(0, 60),
+          g: String(Math.max(1, Math.round(Number(a.gramos) || 100))), prep: gp ? (gp.find((m) => m.id === a.prep) || gp[0]).id : null,
+          per100: { k: Number(a.kcal_100g) || 0, p: Number(a.proteina_100g) || 0, c: Number(a.hidratos_100g) || 0, f: Number(a.grasa_100g) || 0 },
+          conf: a.confianza || 'media',
+        };
+      });
+      st.iaFoto = { ...st.iaFoto, fase: 'revisar', items, nota: String(r.nota || '') };
+    } catch (e) {
+      if (!st.iaFoto) return;
+      st.iaFoto = { ...st.iaFoto, fase: 'error', msg: iaErr(e) };
+    }
+    render();
+  }
+  function iaVals(it) {
+    const g = num(it.g), food = it.fid ? asFood(it.fid) : null;
+    if (!(g > 0)) return { k: 0, p: 0, c: 0, f: 0 };
+    if (food) {
+      const gp = prepOf(food), pm = gp ? gp.find((m) => m.id === it.prep) || gp[0] : null;
+      return pm ? prepVals(food, pm, g) : { k: Math.round((food.k * g) / 100), p: r1((food.p * g) / 100), c: r1((food.c * g) / 100), f: r1((food.f * g) / 100) };
+    }
+    const q = it.per100;
+    return { k: Math.round((q.k * g) / 100), p: r1((q.p * g) / 100), c: r1((q.c * g) / 100), f: r1((q.f * g) / 100) };
+  }
+  const iaTotal = () => (st.iaFoto ? st.iaFoto.items.reduce((a, it) => a + iaVals(it).k, 0) : 0);
+  function iaResHTML() {
+    const q = (st.iaFoto && st.iaFoto.q || '').trim();
+    if (!q) return '';
+    const res = searchFoods(q).slice(0, 6);
+    return res.length ? res.map((f) => `<button type="button" class="frow" data-act="ia-add-food" data-v="${esc(f.id)}"><span><b>${esc(f.n)}</b><small>${nf(f.k)} kcal por 100 g</small></span>${I.plus}</button>`).join('') : '<p class="small muted">No está en la tabla.</p>';
+  }
+  function iaFotoSheet() {
+    const F = st.iaFoto, meal = MEALS[F.meal].toLowerCase();
+    let body = '', foot = '';
+    if (F.fase === 'cargando') {
+      body = `<div class="iafoto">${F.thumb ? `<img src="${F.thumb}" alt="Tu foto">` : ''}<p class="iawait"><span class="spinner dark"></span> ${F.thumb ? 'Analizando tu plato…' : 'Preparando la foto…'}</p></div>`;
+    } else if (F.fase === 'error') {
+      body = `<div class="iafoto">${F.thumb ? `<img src="${F.thumb}" alt="Tu foto">` : ''}</div><div class="msg" role="alert">${esc(F.msg)}</div>`;
+      foot = `<label class="btn block"><input type="file" accept="image/*" capture="environment" data-iafoto="${F.meal}" hidden>${ICO.camara} Hacer otra foto</label>`;
+    } else {
+      body = `<div class="iahead">${F.thumb ? `<img src="${F.thumb}" alt="Tu foto">` : ''}<p class="small">${F.items.length ? `La IA ha visto <b>${F.items.length} ${F.items.length === 1 ? 'alimento' : 'alimentos'}</b>. Revisa los gramos y cómo está cocinado antes de guardar.` : 'La IA no ha encontrado comida en la foto.'}${F.nota ? `<br><span class="muted">${esc(F.nota)}</span>` : ''}</p></div>
+        <div class="ialist">${F.items.map((it) => {
+          const food = it.fid ? asFood(it.fid) : null, gp = food ? prepOf(food) : null, v = iaVals(it);
+          return `<div class="iarow">
+            <div class="iarow-t"><b>${esc(it.n)}</b>${it.conf === 'baja' ? '<span class="tag warn">Revisa</span>' : ''}${!food ? '<span class="tag">Estimado</span>' : ''}</div>
+            <div class="iarow-c">
+              ${gp ? `<select class="input" data-iaprep="${it.key}" aria-label="Cómo está cocinado">${gp.map((m) => `<option value="${m.id}" ${m.id === it.prep ? 'selected' : ''}>${esc(m.n)}</option>`).join('')}</select>` : '<span></span>'}
+              <label class="iag"><input class="input" data-iag="${it.key}" inputmode="decimal" value="${esc(it.g)}" aria-label="Gramos de ${esc(it.n)}"><span>g</span></label>
+              <b class="num iak" id="iak-${it.key}">${nf(v.k)}<small> kcal</small></b>
+              <button type="button" class="iconbtn" data-act="ia-del" data-v="${it.key}" aria-label="Quitar ${esc(it.n)}">${I.trash}</button>
+            </div></div>`;
+        }).join('')}</div>
+        <div class="iaadd"><input class="input" type="search" data-iaq value="${esc(F.q)}" placeholder="Añadir otro alimento: salsa, pan…" autocomplete="off" aria-label="Añadir otro alimento"><div id="ia-res">${iaResHTML()}</div></div>
+        ${st.iaQuedan != null ? `<p class="small muted">IA: ${iaQuedanTxt()}.</p>` : ''}`;
+      foot = `<button class="btn block" data-act="ia-guardar" ${F.items.length ? '' : 'disabled'}>Guardar en mi ${meal} · <span id="ia-total">${nf(iaTotal())}</span> kcal</button>`;
+    }
+    return `<div class="sheet-back" data-act="ia-close"></div>
+      <div class="sheet" role="dialog" aria-modal="true" aria-label="Foto con IA">
+        <div class="sheet-grab"></div>
+        <div class="sheet-head"><button type="button" class="iconbtn" data-act="ia-close" aria-label="Cerrar">${ICO.close}</button><h2>Foto con IA · ${esc(MEALS[F.meal])}</h2><span style="width:36px"></span></div>
+        <div class="sheet-list form-grid">${body}</div>
+        ${foot ? `<div class="sheet-foot">${foot}</div>` : ''}
+      </div>`;
+  }
+  function iaGuardar() {
+    const F = st.iaFoto, add = [];
+    for (const it of F.items) {
+      const g = num(it.g);
+      if (!(g > 0 && g <= 3000)) { toast(`Revisa los gramos de ${it.n}`); return; }
+      const v = iaVals(it), food = it.fid ? asFood(it.fid) : null, gp = food ? prepOf(food) : null, pm = gp ? gp.find((m) => m.id === it.prep) || gp[0] : null;
+      add.push({ id: nid('f'), m: F.meal, n: it.n + (pm && pm.id !== gp[0].id ? ' · ' + pm.n.toLowerCase() : ''), g: Math.round(g), k: v.k, p: v.p, c: v.c, f: v.f, ...(food ? { fid: food.id } : {}), ...(pm ? { prep: pm.id } : {}), ia: true });
+    }
+    const d = F.fecha;
+    st.iaFoto = null;
+    guardarDia(d, [...dia(d).items, ...add]);
+    toast(`${add.length} ${add.length === 1 ? 'alimento guardado' : 'alimentos guardados'}${st.iaQuedan != null ? ` · te quedan ${st.iaQuedan} consultas de IA hoy` : ''}`);
+  }
+
+  /* ----- Taller ----- */
+  function iaTallerHTML(b, M, pres, gastado) {
+    const R = M.ia && M.ia.bici === b.id ? M.ia : null, busy = st.iaTallerBusy;
+    if (st.iaQuedan == null) setTimeout(() => iaEstado(), 0);
+    const enLista = (x) => (M.deseos || []).some((d) => d.iaKey === x);
+    return `<section class="card ai-card" id="ia-taller"><h2>${ICO.spark} Recomendación con IA</h2>
+      <p class="small">La IA lee tu ${esc(b.nombre)}, sus componentes y tu presupuesto, y te propone 3 piezas compatibles con precio orientativo.</p>
+      ${pres ? '' : '<p class="small"><b>Pon tu presupuesto arriba</b> para pedir la recomendación.</p>'}
+      <label class="field"><span>¿Qué quieres conseguir? <span class="muted">(opcional)</span></span><input class="input" data-iatxt maxlength="200" value="${esc(st.iaTxt != null ? st.iaTxt : '')}" placeholder="Ej. bajar peso en mi bici de carretera"></label>
+      <button class="btn block" data-act="ia-taller" ${pres && !busy ? '' : 'disabled'}>${busy ? '<span class="spinner"></span> Pensando…' : R ? 'Pedir otra recomendación' : 'Pedir 3 recomendaciones'}</button>
+      ${st.iaQuedan != null ? `<p class="small muted">IA: ${iaQuedanTxt()} (fotos y Taller).</p>` : ''}
+      ${st.iaTallerMsg ? `<div class="msg" role="alert">${esc(st.iaTallerMsg)}</div>` : ''}
+      ${R ? `<div class="iarec">
+        <p>${esc(R.res.resumen || '')}</p>
+        ${(R.res.recomendaciones || []).slice(0, 3).map((x, i) => {
+          const key = `${R.fecha}-${i}`, dentro = (x.precio_min || 0) <= Math.max(0, pres - gastado);
+          return `<div class="rec">
+            <div class="rec-h"><b>${i + 1}. ${esc(x.pieza)}</b><span class="nowrap rec-p">${eur(x.precio_min)}–${eur(x.precio_max)}</span></div>
+            <p class="small"><b>${esc(x.modelo_ejemplo)}</b>${x.mejora ? ` · <span class="tag ok">${esc(x.mejora)}</span>` : ''}</p>
+            <p class="small">${esc(x.por_que)}</p>
+            <p class="small muted">Compatibilidad: ${esc(x.compatibilidad)}</p>
+            ${dentro ? '' : '<p class="small bad">No cabe en lo que te queda de presupuesto.</p>'}
+            <button class="btn ghost small" data-act="ia-deseo" data-v="${i}" ${enLista(key) ? 'disabled' : ''}>${enLista(key) ? `${I.check} En tu lista` : `${I.plus} Añadir a mi lista`}</button>
+          </div>`;
+        }).join('')}
+        ${bul((R.res.avisos || []).slice(0, 4))}
+        <p class="small muted">Recomendación del ${esc(fmtDate(R.fecha))}. Precios orientativos: compruébalos en la tienda y confirma la compatibilidad antes de comprar.</p>
+      </div>` : ''}
+    </section>`;
+  }
+  async function iaTaller() {
+    const g = garaje(), b = biciActiva(), M = g.mejora;
+    if (!b || !M.presupuesto) return;
+    st.iaTallerBusy = true; st.iaTallerMsg = ''; render();
+    const gastado = (M.deseos || []).reduce((a, x) => a + (x.precio || 0), 0);
+    const payload = {
+      modo: 'taller',
+      bici: { nombre: b.nombre, tipo: (BIKE_TIPOS.find((x) => x[0] === b.tipo) || ['', b.tipo])[1], marcaModelo: b.marcaModelo || '', anio: b.anio || null, pesoKg: b.pesoKg || null, cubiertaMm: b.cubiertaMm || null, tubeless: !!b.tubeless, km: Math.round(kmBici(b)) },
+      componentes: (b.comps || []).map((c) => ({ pieza: compDef(c.cat)[1], nombre: c.nombre || '', km: Math.round(kmComp(b, c)), cadaKm: c.cadaKm || null })),
+      presupuesto: M.presupuesto, gastado, deseos: (M.deseos || []).map((d) => d.n),
+      metas: M.metas.map((m) => (METAS.find((x) => x[0] === m) || ['', m])[1]),
+      texto: String(st.iaTxt || '').trim(),
+    };
+    try {
+      const r = await api.ia(payload);
+      if (Number.isFinite(r.quedan)) st.iaQuedan = r.quedan;
+      const g2 = garaje(); g2.mejora.ia = { fecha: todayISO(), bici: b.id, res: { resumen: r.resumen || '', recomendaciones: (r.recomendaciones || []).slice(0, 3), avisos: r.avisos || [] } };
+      st.iaTallerBusy = false;
+      await saveGaraje(g2);
+      const el = document.getElementById('ia-taller'); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    } catch (e) {
+      st.iaTallerBusy = false; st.iaTallerMsg = iaErr(e); render();
+    }
+  }
+
+  /* ================================================================ */
   /* Novedades                                                         */
   /* ================================================================ */
   function novItems() {
     const bici = tieneBici();
     return [
+      { t: 'Foto del plato con IA', d: 'Haz una foto a tu plato: la IA reconoce los alimentos, estima los gramos y cómo están cocinados, y los busca en la tabla de la app. Tú revisas y corriges antes de guardar.', como: 'Nutrición → «Foto con IA» en cada comida. Tienes 10 consultas de IA al día.', act: 'tab', v: 'nutricion', btn: 'Ir a Nutrición' },
+      { t: 'Recomendación de piezas con IA', d: 'En el Taller, la IA lee tu bici, sus componentes y tu presupuesto, y te propone 3 piezas compatibles con precio orientativo que puedes añadir a tu lista de compra.', como: bici ? 'Bici → Taller → Recomendación con IA.' : 'Aparece cuando tu rutina incluye bici: Entreno → Rutinas → Cambiar días o tipos → marca Bici.', act: bici ? 'tab' : 'nov-bici', v: 'taller', btn: bici ? 'Ir al Taller' : 'Añadir bici a mi rutina' },
       { t: 'Elige qué registras cada día', d: 'Si hoy te tocaba fuerza pero sales en bici o a correr, «Registrar» te pregunta qué has hecho: fuerza, bici o cardio.', como: 'Inicio → Entreno de hoy → Registrar, o Entreno → Registrar. También tocando un día de la semana.', act: 'nov-wk', v: 'semana', btn: 'Ir a Entreno' },
       { t: 'Descanso entre series', d: 'En el entreno en directo, al marcar una serie empieza una cuenta atrás de 90 segundos con +30s, −30s y Saltar. Suena y vibra al acabar, y recuerda el tiempo que elijas.', como: 'Entreno en directo → marca una serie con ✓.', act: 'nov-wk', v: 'semana', btn: 'Ir a Entreno' },
       { t: 'Repetir de ayer y código de barras', d: 'Cada comida tiene «Repetir de ayer» para copiar lo que comiste ayer en esa comida. Y en el buscador puedes escanear el código de barras de un producto con la cámara.', como: 'Nutrición → debajo de cada comida, o el icono de código de barras junto al buscador.', act: 'tab', v: 'nutricion', btn: 'Ir a Nutrición' },
@@ -1190,7 +1390,7 @@ export function crearSecciones(ctx) {
     render(); toast('Objetivo guardado');
   }
 
-  function sheet() { return st.food ? foodSheet() : st.tl ? tlSheet() : st.meta ? metaSheet() : ''; }
+  function sheet() { return st.iaFoto ? iaFotoSheet() : st.food ? foodSheet() : st.tl ? tlSheet() : st.meta ? metaSheet() : ''; }
   function view(tab) {
     if (tab === 'nutricion') return viewNutricion();
     if (tab === 'bici') return viewBici();

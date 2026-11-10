@@ -58,7 +58,7 @@ function render() {
   else if (st.view === 'error') root.innerHTML = viewError();
   document.title = APP_NAME;
   if (M) M.afterRender();
-  document.body.classList.toggle('noscroll', !!(st.lib || st.food || st.tl || st.pesoSheet || st.meta || st.regPick || st.legal || st.del));
+  document.body.classList.toggle('noscroll', !!(st.lib || st.food || st.tl || st.pesoSheet || st.meta || st.regPick || st.legal || st.del || st.iaFoto));
 }
 
 /* ================================================================== */
