@@ -25,6 +25,7 @@ async function firebaseBackend(config) {
   const userRef = (uid) => F.doc(db, 'users', uid);
   const weightRef = (uid, date) => F.doc(db, 'users', uid, 'pesos', date);
 
+  const err = (code) => { const e = new Error(code); e.code = code; return e; };
   const toUser = (u) => (u ? { uid: u.uid, email: u.email, name: u.displayName || '' } : null);
   let iaFn = null, stravaFn = null; // funciones «ia» y «strava» en Cloud Functions (europe-west1), se cargan la primera vez
 
@@ -105,6 +106,19 @@ async function firebaseBackend(config) {
       }
       return (await stravaFn(data)).data;
     },
+    // Notificaciones push (Firebase Cloud Messaging). El token identifica este dispositivo; se guarda en users/{uid}.fcmTokens.
+    async pushToken(vapidKey) {
+      const M = await import(FB + 'firebase-messaging.js');
+      if (!(await M.isSupported())) throw err('push/no-soportado');
+      const espera = new Promise((_, no) => setTimeout(() => no(err('push/sin-sw')), 10000));
+      const reg = await Promise.race([navigator.serviceWorker.ready, espera]);
+      return M.getToken(M.getMessaging(app), { vapidKey, serviceWorkerRegistration: reg });
+    },
+    async pushBorrarToken() {
+      try { const M = await import(FB + 'firebase-messaging.js'); await M.deleteToken(M.getMessaging(app)); } catch (e) { /* ya no había token */ }
+    },
+    async saveToken(uid, token) { await F.setDoc(userRef(uid), { fcmTokens: F.arrayUnion(token) }, { merge: true }); },
+    async removeToken(uid, token) { await F.setDoc(userRef(uid), { fcmTokens: F.arrayRemove(token) }, { merge: true }); },
     async listWorkouts(uid, n = 500) { // de más reciente a más antiguo
       const q = F.query(F.collection(db, 'users', uid, 'entrenos'), F.orderBy('fecha', 'desc'), F.limit(n));
       const s = await F.getDocs(q);
@@ -195,6 +209,14 @@ function localBackend() {
       if (typeof globalThis.cadenciaStravaPrueba === 'function') return globalThis.cadenciaStravaPrueba(data);
       throw err('local/no-strava');
     },
+    // En modo prueba no hay servidor de notificaciones: solo responde si una prueba automática lo simula.
+    async pushToken(vapidKey) {
+      if (typeof globalThis.cadenciaPushPrueba === 'function') return globalThis.cadenciaPushPrueba(vapidKey);
+      throw err('local/no-push');
+    },
+    async pushBorrarToken() { /* nada que borrar */ },
+    async saveToken(uid, token) { const s = read(); const u = byUid(s, uid); if (!u) return; const a = u.profile.fcmTokens || []; if (!a.includes(token)) a.push(token); u.profile.fcmTokens = a; write(s); },
+    async removeToken(uid, token) { const s = read(); const u = byUid(s, uid); if (!u) return; u.profile.fcmTokens = (u.profile.fcmTokens || []).filter((x) => x !== token); write(s); },
     async listWorkouts(uid, n = 500) {
       const u = byUid(read(), uid); if (!u || !u.entrenos) return [];
       return Object.values(u.entrenos).sort((a, b) => b.fecha.localeCompare(a.fecha) || (b.id > a.id ? 1 : -1)).slice(0, n);
@@ -223,6 +245,8 @@ const MESSAGES = {
   'unavailable': 'Sin conexión con la base de datos. Se guardará al volver la conexión.',
   'auth/no-current-user': 'No hay ninguna sesión iniciada.',
   'auth/requires-recent-login': 'Por seguridad, vuelve a escribir tu contraseña.',
+  'local/no-push': 'Las notificaciones solo funcionan con la app conectada a Firebase.',
+  'push/no-soportado': 'Este navegador no permite notificaciones push.',
   'local/no-strava': 'En el modo de prueba no se puede conectar Strava.',
   'local/no-ia': 'La IA solo funciona con la app conectada a Firebase.',
   'functions/not-found': 'La IA todavía no está activada en el servidor.',

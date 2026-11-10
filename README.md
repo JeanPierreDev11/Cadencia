@@ -127,3 +127,11 @@ La previsión de Rutas viene de [Open-Meteo](https://open-meteo.com/) (sin clave
 - Secretos de Firebase: `STRAVA_CLIENT_ID` y `STRAVA_CLIENT_SECRET` (desde los secretos de GitHub, con el workflow «Publicar IA en Firebase»). El Client ID (público) también va en `js/strava.js`.
 - Límites de Strava: las apps nuevas empiezan en «single-player» (solo el propietario); hay que pedir más capacidad y pasar la revisión de Strava antes de abrirlo a más gente. 200 peticiones/15 min y 2.000/día.
 
+## Recordatorios (notificaciones push)
+- Perfil → **Recordatorios**: tres interruptores (peso 08:00, comidas 21:00, entreno 18:00; la hora se puede cambiar). El primero que se activa pide el permiso del navegador (`Notification.requestPermission()`), obtiene el token de FCM del dispositivo y lo guarda en `users/{uid}`: `fcmTokens` (lista de dispositivos), `recordatorios {peso|comidas|entreno: {on, h}}`, `recTz` (zona horaria) y `recActivo`.
+- **`js/push.js`** lleva la clave pública VAPID (`VAPID_KEY`, hay que pegarla ahí) y la lógica; `data.js` obtiene el token con `firebase-messaging.js` usando el service worker de la app (`sw.js`), así que no hace falta un `firebase-messaging-sw.js` aparte.
+- **`sw.js`**: eventos `push` (muestra el aviso; si la app está abierta y a la vista no lo muestra) y `notificationclick` (abre `./?ir=peso|comidas|entreno`). No toca la caché: solo se sube la versión y se añade `push.js` a SHELL.
+- **Cloud Function `recordatorios`** (`onSchedule`, cada hora en punto, Cloud Scheduler): busca `recActivo == true`, calcula la hora local de cada persona con su `recTz`, y manda con `sendEach` un mensaje solo de datos a sus dispositivos. No avisa si ese día ya está hecho (peso, comidas o entreno apuntados), ni los días de descanso de la rutina (entreno), ni dos veces el mismo día (`recEnviado`). Borra los tokens caducados.
+- iPhone: las notificaciones web solo funcionan con la app añadida a la pantalla de inicio (iOS 16.4 o superior).
+- Escala: cada hora lee los usuarios con avisos activos; con muchos miles habrá que filtrar por hora en la consulta.
+

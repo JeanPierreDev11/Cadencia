@@ -1,6 +1,6 @@
 // Service worker: permite instalar la app y abrirla sin conexión.
 // Sube el número de versión cada vez que publiques cambios para que los móviles se actualicen.
-const VERSION = 'cadencia-v21';
+const VERSION = 'cadencia-v22';
 const SHELL = [
   './',
   './index.html',
@@ -20,6 +20,7 @@ const SHELL = [
   './js/trazados.js',
   './js/strava.js',
   './js/strava-ui.js',
+  './js/push.js',
   './js/alimentos.js',
   './js/br.js',
   './manifest.webmanifest',
@@ -35,6 +36,34 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k)))).then(() => self.clients.claim())
+  );
+});
+
+// Notificaciones push (recordatorios). FCM entrega un mensaje solo con datos y aquí se muestra el aviso.
+// Es independiente de la caché de arriba: no toca los archivos guardados.
+self.addEventListener('push', (e) => {
+  let j = {};
+  try { j = e.data ? e.data.json() : {}; } catch (err) { j = {}; }
+  const d = Object.assign({}, j.notification || {}, j.data || {});
+  const titulo = d.title || 'Cadencia';
+  const opciones = { body: d.body || '', icon: './icons/icon-192.png', badge: './icons/icon-192.png', tag: d.tag || 'cadencia', data: { url: d.url || './' } };
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((cs) => {
+      // Si la app está abierta y a la vista, no hace falta molestar.
+      if (cs.some((c) => c.visibilityState === 'visible' && c.focused)) return;
+      return self.registration.showNotification(titulo, opciones);
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const destino = new URL((e.notification.data && e.notification.data.url) || './', self.registration.scope).href;
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((cs) => {
+      for (const c of cs) { if ('focus' in c && c.url.startsWith(self.registration.scope)) { return c.navigate(destino).then((x) => (x || c).focus()).catch(() => c.focus()); } }
+      return self.clients.openWindow(destino);
+    })
   );
 });
 

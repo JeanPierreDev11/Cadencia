@@ -10,6 +10,8 @@ const { defineSecret } = require('firebase-functions/params');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
+const { getMessaging } = require('firebase-admin/messaging');
+const { onSchedule } = require('firebase-functions/v2/scheduler');
 const Stripe = require('stripe');
 const Anthropic = require('@anthropic-ai/sdk');
 const CATALOGO = require('./catalogo.json');
@@ -405,4 +407,75 @@ exports.strava = onCall({ secrets: [STRAVA_ID, STRAVA_SECRETO], memory: '256MiB'
     return { items, total, omitidas: total - items.length };
   }
   throw new HttpsError('invalid-argument', 'Petición no válida.');
+});
+
+/* ------------------------------------------------------------------ */
+/* Recordatorios push (cada hora)                                      */
+/* ------------------------------------------------------------------ */
+// Perfil → Recordatorios guarda en users/{uid}: recordatorios {peso|comidas|entreno: {on, h}}, recTz (zona horaria),
+// recActivo (true si hay alguno activo) y fcmTokens (dispositivos). Cada hora en punto se busca a quien le toca ahora,
+// en SU zona horaria, y se le manda un mensaje solo con datos; el service worker (sw.js) lo muestra.
+// No se avisa si ese día ya está hecho (peso apuntado, comidas apuntadas o entreno registrado), ni dos veces el mismo día.
+const TEXTOS_REC = {
+  peso: [['Hora de pesarte', 'Súbete a la báscula y apunta tu peso: son diez segundos.'], ['Buenos días', 'Apunta tu peso de hoy para no perder el hilo de tu progreso.'], ['¿Te pesas hoy?', 'Mejor en ayunas y a la misma hora. Anótalo en Cadencia.']],
+  comidas: [['Apunta tus comidas', 'Registra lo que has comido hoy para que tus calorías y macros cuenten.'], ['¿Qué has comido hoy?', 'Dos minutos ahora y tu día queda completo en Cadencia.'], ['Cierra tu día', 'Anota tus comidas de hoy antes de acabar el día.']],
+  entreno: [['Hoy toca entrenar', 'Tu entreno de hoy te espera. ¡A por ello!'], ['Hora de moverse', 'Hoy tienes entreno. Ábrelo y empieza cuando quieras.'], ['No lo dejes para luego', 'Tu sesión de hoy está lista en Cadencia.']],
+};
+const DESTINO_REC = { peso: './?ir=peso', comidas: './?ir=comidas', entreno: './?ir=entreno' };
+const TOKEN_MUERTO = new Set(['messaging/registration-token-not-registered', 'messaging/invalid-registration-token', 'messaging/invalid-argument']);
+
+// Fecha (AAAA-MM-DD), hora (0-23) y día de la semana (0 = lunes) en la zona horaria de la persona.
+function horaLocal(zona, ahora) {
+  let tz = zona;
+  try { new Intl.DateTimeFormat('en-CA', { timeZone: tz }); } catch (e) { tz = 'Europe/Madrid'; }
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' }).formatToParts(ahora).map((x) => [x.type, x.value]));
+  const fecha = `${p.year}-${p.month}-${p.day}`;
+  return { fecha, hora: Number(p.hour), semana: (new Date(`${fecha}T12:00:00Z`).getUTCDay() + 6) % 7 };
+}
+
+async function yaHecho(uid, k, fecha) {
+  if (k === 'peso') return (await db.doc(`users/${uid}/pesos/${fecha}`).get()).exists;
+  if (k === 'comidas') { const d = await db.doc(`users/${uid}/comidas/${fecha}`).get(); return d.exists && Array.isArray(d.data().items) && d.data().items.length > 0; }
+  return !(await db.collection(`users/${uid}/entrenos`).where('fecha', '==', fecha).limit(1).get()).empty;
+}
+
+async function avisarUsuario(doc, ahora) {
+  const d = doc.data(), uid = doc.id, rec = d.recordatorios || {};
+  const loc = horaLocal(d.recTz, ahora);
+  const tokens = (Array.isArray(d.fcmTokens) ? d.fcmTokens : []).filter((t) => typeof t === 'string' && t).slice(-10);
+  if (!tokens.length) return 0;
+  let enviados = 0;
+  for (const k of ['peso', 'comidas', 'entreno']) {
+    const r = rec[k];
+    if (!r || r.on !== true || r.h !== loc.hora) continue;
+    if (d.recEnviado && d.recEnviado[k] === loc.fecha) continue; // ya se mandó hoy (por si el cron se repite)
+    if (k === 'entreno') { // solo los días de tu rutina (si la tienes)
+      const dias = (await userRef(uid).get()).get('rutina.dias');
+      if (Array.isArray(dias) && dias.length && !dias.includes(loc.semana)) continue;
+    }
+    if (await yaHecho(uid, k, loc.fecha)) continue;
+    const [title, body] = TEXTOS_REC[k][Number(loc.fecha.slice(8)) % TEXTOS_REC[k].length];
+    const res = await getMessaging().sendEach(tokens.map((token) => ({
+      token,
+      data: { title, body, url: DESTINO_REC[k], tag: `cadencia-${k}` },
+      webpush: { headers: { TTL: '3600', Urgency: 'normal' } },
+    })));
+    const muertos = [];
+    res.responses.forEach((x, i) => { if (!x.success && x.error && TOKEN_MUERTO.has(x.error.code)) muertos.push(tokens[i]); });
+    if (muertos.length) await userRef(uid).update({ fcmTokens: FieldValue.arrayRemove(...muertos) });
+    if (res.successCount > 0) { await userRef(uid).update({ [`recEnviado.${k}`]: loc.fecha }); enviados += 1; }
+    else console.warn('recordatorio sin entregar', { uid, k, fallos: res.failureCount });
+  }
+  return enviados;
+}
+
+exports.recordatorios = onSchedule({ schedule: '0 * * * *', timeZone: 'Europe/Madrid', memory: '256MiB', timeoutSeconds: 300, maxInstances: 1, retryCount: 0 }, async () => {
+  const ahora = new Date();
+  const snap = await db.collection('users').where('recActivo', '==', true).select('recordatorios', 'recTz', 'fcmTokens', 'recEnviado').get();
+  let enviados = 0, errores = 0;
+  for (let i = 0; i < snap.docs.length; i += 20) { // de 20 en 20 para no saturar
+    const r = await Promise.allSettled(snap.docs.slice(i, i + 20).map((doc) => avisarUsuario(doc, ahora)));
+    r.forEach((x) => { if (x.status === 'fulfilled') enviados += x.value; else { errores += 1; console.error('recordatorio falló', x.reason && x.reason.message); } });
+  }
+  console.log(`recordatorios: ${snap.size} personas con avisos activos, ${enviados} enviados, ${errores} errores`);
 });

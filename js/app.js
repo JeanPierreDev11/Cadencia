@@ -6,6 +6,7 @@ import { crearEntreno } from './entreno-ui.js';
 import { LEGAL_V, legalHTML } from './legal.js';
 import { PORTAL_LINK, PRO_PRECIO } from './pro.js';
 import { leerRetorno } from './strava.js';
+import { crearRecordatorios, leerIr } from './push.js';
 import { crearStrava } from './strava-ui.js';
 
 /* ================================================================== */
@@ -355,6 +356,8 @@ const M = crearSecciones({
 });
 
 const S = crearStrava({ st, get api() { return api; }, render, toast, esc, E, currentKg: () => currentKg(), todayISO, fmtDate, lsGet, lsSet, errorText });
+const R = crearRecordatorios({ st, get api() { return api; }, render, toast, esc, lsGet, lsSet, errorText });
+let irPendiente = leerIr(); // si venimos de tocar un aviso, aquí queda la pantalla a la que ir
 let stravaRet = leerRetorno(); // si venimos de la pantalla de permisos de Strava, aquí queda el código temporal
 
 function viewMain() {
@@ -673,6 +676,7 @@ function viewPerfil() {
   return `
     <header class="hello"><div><h1>Perfil</h1><p>${esc(st.user.email || '')}</p></div></header>
     ${planCardHTML()}
+    ${R.cardHTML()}
     ${S.integracionesHTML()}
     <form class="card form-grid" data-form="profile" novalidate>
       <h2>Tus datos</h2>
@@ -768,6 +772,8 @@ async function enter(u) {
     st.view = 'main';
     render();
     if (stravaRet) { const r = stravaRet; stravaRet = null; S.vuelta(r); }
+    else if (irPendiente) { const d = irPendiente; irPendiente = null; st.tab = d.tab; lsSet('cadencia-tab', d.tab); if (d.hoja === 'peso') st.pesoSheet = true; render(); }
+    R.mantener();
   } catch (e) {
     st.errText = errorText(e); st.view = 'error'; render();
   }
@@ -777,6 +783,7 @@ root.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-act]');
   if (!b) return;
   const act = b.dataset.act, v = b.dataset.v;
+  if (R.click(act, v)) return; // sin esperar a nada: el permiso de notificaciones debe pedirse al instante del toque
   if (await S.click(act, v)) return;
   if (await M.click(act, v, b)) return;
   if (act === 'mode') { st.authMode = v; st.authMsg = null; const f = root.querySelector('form'); const email = f && f.email.value; render(); keepForm({ email }); }
@@ -830,7 +837,7 @@ root.addEventListener('input', (e) => {
   if (next) next.disabled = !ok;
 });
 
-root.addEventListener('change', async (e) => { if (st.view === 'main') await M.change(e.target); });
+root.addEventListener('change', async (e) => { if (st.view === 'main') { if (R.change(e.target)) return; await M.change(e.target); } });
 
 root.addEventListener('submit', async (e) => {
   e.preventDefault();
