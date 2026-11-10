@@ -60,14 +60,14 @@ jobs:
           FB="npx --yes firebase-tools@15.34.0"
           for NAME in ANTHROPIC_API_KEY STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET; do
             VAL="${!NAME}"
-            CUR=$($FB functions:secrets:access $NAME --project cadencia-11cb6 2>/dev/null || true)
+            if CUR=$($FB functions:secrets:access $NAME --project cadencia-11cb6 2>/dev/null); then EXISTE=1; else EXISTE=0; CUR=""; fi
             if [ -n "$VAL" ]; then
-              if [ "$FORZAR" = "true" ] || [ -z "$CUR" ] || [ "$CUR" = "pendiente" ]; then
+              if [ "$FORZAR" = "true" ] || [ "$EXISTE" = "0" ] || [ "$CUR" = "pendiente" ]; then
                 printf '%s' "$VAL" | $FB functions:secrets:set $NAME --data-file=- --force --project cadencia-11cb6
               else
                 echo "$NAME ya estaba guardada."
               fi
-            elif [ -z "$CUR" ]; then
+            elif [ "$EXISTE" = "0" ]; then
               echo "$NAME no está en GitHub: se guarda «pendiente» hasta que la añadas."
               printf '%s' "pendiente" | $FB functions:secrets:set $NAME --data-file=- --force --project cadencia-11cb6
             fi
