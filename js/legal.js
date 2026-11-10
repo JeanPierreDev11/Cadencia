@@ -2,7 +2,7 @@
 // Si cambias el texto de forma importante, sube LEGAL_V: queda guardada la versión que aceptó cada persona.
 export const LEGAL_V = '2026-11-10';
 // Correo de contacto para consultas de privacidad (obligatorio por el RGPD antes de abrir la app al público).
-export const CONTACTO = '';
+export const CONTACTO = 'jeanpierreramirezcova@gmail.com';
 
 export function legalHTML() {
   const contacto = CONTACTO
@@ -22,7 +22,8 @@ export function legalHTML() {
     <ul class="bul">
       <li><b>Qué guardamos:</b> tu nombre y email; tu sexo, edad, estatura, peso y composición corporal; tus objetivos, rutinas y entrenos (incluidos pulso y potencia si los apuntas); lo que comes; y los datos de tus bicis. Algunos son <b>datos de salud</b>, y solo los tratamos porque das tu consentimiento expreso al crear la cuenta.</li>
       <li><b>Para qué:</b> únicamente para calcular y mostrarte tus métricas dentro de Cadencia. No los vendemos, no los compartimos con anunciantes y no los usamos para publicidad.</li>
-      <li><b>Quién los ve:</b> solo tú. Se guardan en Firebase (Google Cloud), con conexión cifrada y reglas que impiden que otra persona lea tus datos.</li>
+      <li><b>Quién los ve:</b> solo tú. Se guardan en Firebase (Google Cloud), en servidores de la Unión Europea, con conexión cifrada y reglas que impiden que otra persona lea tus datos.</li>
+      <li><b>Funciones con IA:</b> si usas «Foto con IA» o «Recomendación con IA», la foto del plato, o los datos de tu bici, tu presupuesto y tu objetivo, se envían a través de nuestro servidor a Anthropic (el proveedor de Claude) para generar la respuesta. Las fotos no se guardan en Cadencia. Son opcionales: si no las usas, no se envía nada. Cada persona tiene un límite diario de consultas.</li>
       <li><b>Servicios externos:</b> si usas tu ubicación en Rutas, se envían tus coordenadas a Open-Meteo para consultar el tiempo; si buscas o escaneas productos de marca, se envía el texto o el código de barras a Open Food Facts. Ninguno recibe tu nombre ni tu email. La app se descarga desde GitHub Pages.</li>
       <li><b>En tu móvil</b> se guardan algunas preferencias (tema, pestaña abierta, entreno en curso, tiempo de descanso, última ubicación) para que la app funcione mejor. No usamos cookies de publicidad ni analítica.</li>
       <li><b>Cuánto tiempo:</b> mientras tengas la cuenta. Desde <b>Perfil → Privacidad y cuenta</b> puedes borrar tu cuenta y todos tus datos al momento y para siempre.</li>
