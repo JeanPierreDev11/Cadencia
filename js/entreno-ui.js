@@ -69,13 +69,14 @@ function homeTraining() {
 /* ---------- pestaña Entreno ---------- */
 function viewEntreno() {
   if (!rutinaOf()) {
-    return `<div class="wk-empty"><button type="button" class="addbig" data-act="rw-start"><span class="addbig-c">${I.plusBig}</span><span>Añadir rutina</span></button></div>`;
+    return `${ctx.stravaBtn ? ctx.stravaBtn() : ''}<div class="wk-empty"><button type="button" class="addbig" data-act="rw-start"><span class="addbig-c">${I.plusBig}</span><span>Añadir rutina</span></button></div>`;
   }
   const today = todayISO(), mon = E.mondayOf(today), sun = E.addDays(mon, 6);
   const sub = ['semana', 'historial', 'rutina', 'objetivos'].includes(st.wkTab) ? st.wkTab : 'semana';
   const body = sub === 'historial' ? wkHistorial() : sub === 'rutina' ? wkRutina() : sub === 'objetivos' ? M.viewObjetivos() : wkSemana();
   return `<header class="hello"><div><h1>Entreno</h1><p>Semana del ${esc(fmtDate(mon))} al ${esc(fmtDate(sun))}</p></div>
       <button class="btn small" data-act="wk-new" data-date="${today}">${I.plus} Registrar</button></header>
+    ${ctx.stravaBtn ? ctx.stravaBtn() : ''}
     <div class="seg" role="group" aria-label="Secciones de entreno">
       ${[['semana', 'Semana'], ['historial', 'Historial'], ['rutina', 'Rutinas'], ['objetivos', 'Objetivos']].map(([v, t]) => `<button type="button" data-act="wktab" data-v="${v}" aria-pressed="${sub === v}">${t}</button>`).join('')}
     </div>
@@ -135,6 +136,7 @@ function wkRow(w) {
   const sub = [fmtDate(w.fecha, { weekday: 'short', day: 'numeric', month: 'short' }), fmtDur(w.min)];
   if (w.km) sub.push(`${nf(w.km, 1)} km`);
   if (w.elev) sub.push(`+${nf(w.elev)} m`);
+  if (w.fuente === 'strava') sub.push('Strava');
   const ne = (w.ejercicios || []).length; if (ne) sub.push(`${ne} ${ne === 1 ? 'ejercicio' : 'ejercicios'}`);
   const icoT = w.tipo === 'gym' ? 'fuerza' : w.tipo;
   return `<div class="row wrow"><span class="wico">${tipoIcon(icoT)}</span>

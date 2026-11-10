@@ -5,6 +5,8 @@ import { crearSecciones } from './secciones.js';
 import { crearEntreno } from './entreno-ui.js';
 import { LEGAL_V, legalHTML } from './legal.js';
 import { PORTAL_LINK, PRO_PRECIO } from './pro.js';
+import { leerRetorno } from './strava.js';
+import { crearStrava } from './strava-ui.js';
 
 /* ================================================================== */
 /* Utilidades                                                          */
@@ -345,12 +347,15 @@ function focusFirst() {
 /* App principal                                                       */
 /* ================================================================== */
 // Entreno vive en entreno-ui.js; Nutrición, Rutas, Taller, Progreso y Objetivos en secciones.js.
-const W = crearEntreno({ st, root, get api() { return api; }, render, get M() { return M; }, currentKg: () => currentKg(), goalById: (id) => goalById(id) });
+const W = crearEntreno({ st, root, get api() { return api; }, render, get M() { return M; }, currentKg: () => currentKg(), goalById: (id) => goalById(id), stravaBtn: () => S.syncBtnHTML() });
 const { rutinaOf, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, regSheetHTML } = W;
 const M = crearSecciones({
   st, get api() { return api; }, render, toast, esc, num, nf, todayISO, fmtDate, lsGet, lsSet, I, E, errorText,
   currentKg: () => currentKg(), rutinaOf: () => rutinaOf(), viewPeso: (sub) => viewPeso(sub),
 });
+
+const S = crearStrava({ st, get api() { return api; }, render, toast, esc, E, currentKg: () => currentKg(), todayISO, fmtDate, lsGet, lsSet, errorText });
+let stravaRet = leerRetorno(); // si venimos de la pantalla de permisos de Strava, aquí queda el código temporal
 
 function viewMain() {
   const sheet = st.legal ? legalSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.regPick ? regSheetHTML() : st.pesoSheet ? pesoSheetHTML() : M.sheet();
@@ -668,6 +673,7 @@ function viewPerfil() {
   return `
     <header class="hello"><div><h1>Perfil</h1><p>${esc(st.user.email || '')}</p></div></header>
     ${planCardHTML()}
+    ${S.integracionesHTML()}
     <form class="card form-grid" data-form="profile" novalidate>
       <h2>Tus datos</h2>
       <label class="field"><span>Nombre</span><input class="input" name="nombre" value="${esc(p.nombre || '')}" autocomplete="given-name"></label>
@@ -761,6 +767,7 @@ async function enter(u) {
     try { const sv = JSON.parse(lsGet('cadencia-live') || 'null'); if (sv && sv.uid === u.uid && Array.isArray(sv.ex)) { st.live = sv; st.liveMin = true; } } catch (e) { /* nada */ }
     st.view = 'main';
     render();
+    if (stravaRet) { const r = stravaRet; stravaRet = null; S.vuelta(r); }
   } catch (e) {
     st.errText = errorText(e); st.view = 'error'; render();
   }
@@ -770,6 +777,7 @@ root.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-act]');
   if (!b) return;
   const act = b.dataset.act, v = b.dataset.v;
+  if (await S.click(act, v)) return;
   if (await M.click(act, v, b)) return;
   if (act === 'mode') { st.authMode = v; st.authMsg = null; const f = root.querySelector('form'); const email = f && f.email.value; render(); keepForm({ email }); }
   else if (act === 'legal-open') { if (st.view === 'auth') { const f = root.querySelector('form'); st.authKeep = f ? { name: f.name ? f.name.value : '', email: f.email.value, pass: f.pass.value, acepto: f.acepto ? f.acepto.checked : false } : null; } st.legal = true; render(); if (st.authKeep) keepForm(st.authKeep); }

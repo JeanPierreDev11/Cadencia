@@ -118,3 +118,12 @@ La previsión de Rutas viene de [Open-Meteo](https://open-meteo.com/) (sin clave
 - `js/mapa.js`: el mapa vive en un `<div>` propio que se recoloca tras cada `render()` (no se recarga).
 - Rutas guardadas: `users/{uid}/rutas/{id}` = `{id, nombre, km, desnivel, altMax, puntos:[lat,lon,…], creado, origen}`. Se borran con la cuenta.
 
+## Strava
+- Perfil → **Integraciones**: «Conectar con Strava» / «Desconectar Strava». Entreno → **Sincronizar Strava** (solo si está conectado).
+- Flujo OAuth 2.0: la app manda a la persona a `strava.com/oauth/authorize` (scope `activity:read_all`, `state` aleatorio comprobado al volver, `redirect_uri` = la URL de la app). Strava devuelve `?code=…`; la app lo envía a la Cloud Function **`strava`** (modo `conectar`), que lo cambia por los tokens con el Client Secret.
+- Tokens (`access_token`, `refresh_token`, `expires_at`) en **`stravaTokens/{uid}`**: colección sin reglas de cliente (solo el servidor la lee y escribe). En `users/{uid}.strava` solo hay `{conectado, atleta, desde}` y el campo está protegido en `firestore.rules` (solo lo cambia el servidor). El `access_token` (dura 6 h) se renueva solo con el `refresh_token`; si Strava lo revoca se limpia la conexión.
+- Modos de `strava`: `conectar`, `actividades` (lee `/athlete/activities`, filtra y devuelve campos normalizados; tiene un tiempo mínimo de 20 s entre sincronizaciones por persona y un tope global diario), `desconectar` (revoca en Strava y borra tokens).
+- La app guarda cada actividad en `users/{uid}/entrenos/strava_<id>` (id fijo = sin duplicados). `Ride`/`VirtualRide` → `bici` (km, elev, pulso, np); `Run` → `cardio` (km). Se añade `fuente: 'strava'`. kcal e intensidad (`esf`) se calculan en el móvil con las mismas fórmulas que los entrenos manuales; si ya apuntaste esa salida a mano (misma fecha y tipo, con duración o km casi iguales) no se duplica.
+- Secretos de Firebase: `STRAVA_CLIENT_ID` y `STRAVA_CLIENT_SECRET` (desde los secretos de GitHub, con el workflow «Publicar IA en Firebase»). El Client ID (público) también va en `js/strava.js`.
+- Límites de Strava: las apps nuevas empiezan en «single-player» (solo el propietario); hay que pedir más capacidad y pasar la revisión de Strava antes de abrirlo a más gente. 200 peticiones/15 min y 2.000/día.
+

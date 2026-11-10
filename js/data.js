@@ -26,7 +26,7 @@ async function firebaseBackend(config) {
   const weightRef = (uid, date) => F.doc(db, 'users', uid, 'pesos', date);
 
   const toUser = (u) => (u ? { uid: u.uid, email: u.email, name: u.displayName || '' } : null);
-  let iaFn = null; // función «ia» en Cloud Functions (europe-west1), se carga la primera vez
+  let iaFn = null, stravaFn = null; // funciones «ia» y «strava» en Cloud Functions (europe-west1), se cargan la primera vez
 
   return {
     mode: 'firebase',
@@ -84,6 +84,7 @@ async function firebaseBackend(config) {
         for (const d of snap.docs) { b.delete(d.ref); if (++n === 450) { await b.commit(); b = F.writeBatch(db); n = 0; } }
         if (n) await b.commit();
       }
+      try { await this.strava({ modo: 'desconectar' }); } catch (e) { /* sin Strava conectado */ }
       try { await this.ia({ modo: 'borrar' }); } catch (e) { /* si no hay IA, no hay contadores que borrar */ }
       await F.deleteDoc(userRef(u.uid));
       await A.deleteUser(u);
@@ -95,6 +96,14 @@ async function firebaseBackend(config) {
         iaFn = Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), 'ia', { timeout: 95000 });
       }
       return (await iaFn(data)).data;
+    },
+    // Strava a través de la Cloud Function «strava» (conectar, actividades, desconectar). Los tokens nunca llegan al móvil.
+    async strava(data) {
+      if (!stravaFn) {
+        const Fn = await import(FB + 'firebase-functions.js');
+        stravaFn = Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), 'strava', { timeout: 60000 });
+      }
+      return (await stravaFn(data)).data;
     },
     async listWorkouts(uid, n = 500) { // de más reciente a más antiguo
       const q = F.query(F.collection(db, 'users', uid, 'entrenos'), F.orderBy('fecha', 'desc'), F.limit(n));
@@ -181,6 +190,11 @@ function localBackend() {
       if (typeof globalThis.cadenciaIAPrueba === 'function') return globalThis.cadenciaIAPrueba(data);
       throw err('local/no-ia');
     },
+    // En modo prueba no hay servidor: Strava solo responde si una prueba automática lo simula.
+    async strava(data) {
+      if (typeof globalThis.cadenciaStravaPrueba === 'function') return globalThis.cadenciaStravaPrueba(data);
+      throw err('local/no-strava');
+    },
     async listWorkouts(uid, n = 500) {
       const u = byUid(read(), uid); if (!u || !u.entrenos) return [];
       return Object.values(u.entrenos).sort((a, b) => b.fecha.localeCompare(a.fecha) || (b.id > a.id ? 1 : -1)).slice(0, n);
@@ -209,6 +223,7 @@ const MESSAGES = {
   'unavailable': 'Sin conexión con la base de datos. Se guardará al volver la conexión.',
   'auth/no-current-user': 'No hay ninguna sesión iniciada.',
   'auth/requires-recent-login': 'Por seguridad, vuelve a escribir tu contraseña.',
+  'local/no-strava': 'En el modo de prueba no se puede conectar Strava.',
   'local/no-ia': 'La IA solo funciona con la app conectada a Firebase.',
   'functions/not-found': 'La IA todavía no está activada en el servidor.',
   'functions/permission-denied': 'La IA es de Cadencia Pro.',

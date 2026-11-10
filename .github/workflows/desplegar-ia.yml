@@ -6,7 +6,9 @@
 #   ANTHROPIC_API_KEY         la clave de la API de Claude                             (obligatorio)
 #   STRIPE_SECRET_KEY         la clave de la API de Stripe (rk_… o sk_…)               (para cobrar Pro)
 #   STRIPE_WEBHOOK_SECRET     el secreto de firma del webhook de Stripe (whsec_…)      (para cobrar Pro)
-# Si aún no has creado los de Stripe se guarda el valor «pendiente» y el webhook responde 503 hasta que los pongas.
+#   STRAVA_CLIENT_ID          el «Client ID» de la aplicación de Strava                (para conectar Strava)
+#   STRAVA_CLIENT_SECRET      el «Client Secret» de la aplicación de Strava            (para conectar Strava)
+# Si aún no has creado los de Stripe o Strava se guarda el valor «pendiente» y esa parte avisa de que no está configurada.
 name: Publicar IA en Firebase
 
 on:
@@ -55,10 +57,12 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
+          STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
           FORZAR: ${{ github.event.inputs.actualizar_clave }}
         run: |
           FB="npx --yes firebase-tools@15.34.0"
-          for NAME in ANTHROPIC_API_KEY STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET; do
+          for NAME in ANTHROPIC_API_KEY STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STRAVA_CLIENT_ID STRAVA_CLIENT_SECRET; do
             VAL="${!NAME}"
             if CUR=$($FB functions:secrets:access $NAME --project cadencia-11cb6 2>/dev/null); then EXISTE=1; else EXISTE=0; CUR=""; fi
             if [ -n "$VAL" ]; then

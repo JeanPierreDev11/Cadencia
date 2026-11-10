@@ -1,6 +1,6 @@
 // Service worker: permite instalar la app y abrirla sin conexión.
 // Sube el número de versión cada vez que publiques cambios para que los móviles se actualicen.
-const VERSION = 'cadencia-v20';
+const VERSION = 'cadencia-v21';
 const SHELL = [
   './',
   './index.html',
@@ -18,6 +18,8 @@ const SHELL = [
   './js/gpx.js',
   './js/mapa.js',
   './js/trazados.js',
+  './js/strava.js',
+  './js/strava-ui.js',
   './js/alimentos.js',
   './js/br.js',
   './manifest.webmanifest',

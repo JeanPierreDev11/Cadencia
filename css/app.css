@@ -680,3 +680,9 @@ a.btn { text-decoration: none; display: block; text-align: center; box-sizing: b
 .urow { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; }
 .urow-m { flex: 1; min-width: 0; text-align: left; background: none; border: 0; color: inherit; font: inherit; padding: 6px 0; display: grid; gap: 2px; }
 .chip.danger { color: var(--bad); border-color: var(--bad-soft); }
+
+/* Strava */
+.btn.strava { background: #FC4C02; border-color: #FC4C02; color: #fff; font-weight: 700; }
+.btn.strava[disabled] { opacity: .65; }
+.strava-row { display: grid; gap: 4px; margin: 0 0 12px; }
+.strava-row p { margin: 0; text-align: center; }

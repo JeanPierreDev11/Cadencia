@@ -30,7 +30,7 @@ const ICO = {
 };
 
 /* Novedades: cambia NOV_V cada vez que publiques algo nuevo para que salga la nota en Inicio. */
-const NOV_V = '2026-11-11';
+const NOV_V = '2026-11-11b';
 
 /* Objetivos de entreno: [id, grupo, texto, unidad, periodo (sem | mes | reto), ejemplo] */
 const META_T = [
@@ -1436,6 +1436,7 @@ export function crearSecciones(ctx) {
   function novItems() {
     const bici = tieneBici();
     return [
+      { t: 'Conecta Strava', d: 'Conecta tu cuenta de Strava y trae tus salidas de bici y tus carreras a Cadencia con un toque, sin teclear los km ni el desnivel. Lo que apuntes a mano sigue funcionando igual.', como: 'Perfil → Integraciones → Conectar con Strava. Después, Entreno → Sincronizar Strava.', act: 'tab', v: 'perfil', btn: 'Ir al Perfil' },
       { t: 'Mapas interactivos y subida de rutas GPX', d: 'En Rutas ya hay un mapa: elige una salida y verás su recorrido (orientativo). Con «Subir ruta GPX» cargas un archivo de tu móvil: leemos los km y el desnivel en tu propio teléfono, dibujamos la ruta y la guardas en tu cuenta. Es gratis para todos.', como: bici ? 'Bici → Rutas → Mapa → Subir ruta GPX.' : 'Aparece cuando tu rutina incluye bici: Entreno → Rutinas → Cambiar días o tipos → marca Bici.', act: bici ? 'nov-rutas' : 'nov-bici', v: 'rutas', btn: bici ? 'Ver el mapa' : 'Añadir bici a mi rutina' },
       { t: 'Foto del plato con IA', d: 'Haz una foto a tu plato: la IA reconoce los alimentos, estima los gramos y cómo están cocinados, y los busca en la tabla de la app. Tú revisas y corriges antes de guardar.', como: 'Nutrición → «Foto con IA» en cada comida. Tienes 10 consultas de IA al día.', act: 'tab', v: 'nutricion', btn: 'Ir a Nutrición' },
       { t: 'Recomendación de piezas con IA', d: 'En el Taller, la IA lee tu bici, sus componentes y tu presupuesto, y te propone 3 piezas compatibles con precio orientativo que puedes añadir a tu lista de compra.', como: bici ? 'Bici → Taller → Recomendación con IA.' : 'Aparece cuando tu rutina incluye bici: Entreno → Rutinas → Cambiar días o tipos → marca Bici.', act: bici ? 'tab' : 'nov-bici', v: 'taller', btn: bici ? 'Ir al Taller' : 'Añadir bici a mi rutina' },

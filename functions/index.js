@@ -19,6 +19,8 @@ const db = getFirestore();
 const CLAVE = defineSecret('ANTHROPIC_API_KEY');
 const STRIPE_CLAVE = defineSecret('STRIPE_SECRET_KEY'); // clave de la API de Stripe (restringida: solo leer Clientes)
 const STRIPE_FIRMA = defineSecret('STRIPE_WEBHOOK_SECRET'); // secreto de firma del webhook (empieza por whsec_)
+const STRAVA_ID = defineSecret('STRAVA_CLIENT_ID'); // datos de la aplicación creada en developers.strava.com
+const STRAVA_SECRETO = defineSecret('STRAVA_CLIENT_SECRET'); // el «Client Secret» nunca sale del servidor
 setGlobalOptions({ region: 'europe-west1', maxInstances: 3 });
 
 const LIMITE_USUARIO = 10; // consultas de IA por persona y día (fotos + Taller)
@@ -186,7 +188,8 @@ exports.ia = onCall({ secrets: [CLAVE], timeoutSeconds: 90, memory: '512MiB', cp
     const s = await usoRef(uid, dia).get();
     return { quedan: Math.max(0, LIMITE_USUARIO - ((s.exists && s.data().n) || 0)), limite: LIMITE_USUARIO, pro };
   }
-  if (modo === 'borrar') { // la app lo llama al borrar la cuenta: elimina los contadores de uso de esta persona
+  if (modo === 'borrar') { // la app lo llama al borrar la cuenta: elimina los contadores de uso y los tokens de Strava de esta persona
+    await db.doc(`stravaTokens/${uid}`).delete().catch(() => {});
     const q = await db.collection('iaUso').where('uid', '==', uid).get();
     const b = db.batch();
     q.docs.forEach((d) => b.delete(d.ref));
@@ -285,4 +288,121 @@ exports.stripeWebhook = onRequest({ secrets: [STRIPE_CLAVE, STRIPE_FIRMA], memor
   }
   try { await procesarEvento(stripe, ev); } catch (e) { console.error('Stripe', ev.type, e && e.message); res.status(500).send('Error'); return; } // Stripe vuelve a intentarlo
   res.json({ received: true });
+});
+
+/* ------------------------------------------------------------------ */
+/* Strava: conexión OAuth 2.0 y lectura de actividades                 */
+/* ------------------------------------------------------------------ */
+// Los tokens de Strava se guardan SOLO en stravaTokens/{uid}, una colección que las reglas de Firestore
+// no dejan leer ni escribir desde la app: únicamente esta función (con permisos de servidor) la toca.
+// En el perfil (users/{uid}.strava) solo queda un aviso «conectado» sin ningún secreto.
+const STRAVA_API = 'https://www.strava.com';
+const TIPOS_STRAVA = { Ride: 'bici', VirtualRide: 'bici', Run: 'cardio' };
+const tokensRef = (uid) => db.doc(`stravaTokens/${uid}`);
+const COOLDOWN_STRAVA_S = 20; // segundos entre sincronizaciones de una misma persona
+const LIMITE_STRAVA_DIA = 600; // sincronizaciones al día entre todas las personas (Strava permite 2.000 peticiones/día)
+
+async function pedirStrava(ruta, opciones) {
+  const r = await fetch(STRAVA_API + ruta, { signal: AbortSignal.timeout(20000), ...opciones });
+  let cuerpo = null; try { cuerpo = await r.json(); } catch (e) { /* sin cuerpo */ }
+  return { ok: r.ok, status: r.status, cuerpo };
+}
+const formularioToken = (obj) => ({ method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(obj).toString() });
+function credencialesStrava() {
+  const id = String(STRAVA_ID.value() || '').trim(), secreto = String(STRAVA_SECRETO.value() || '').trim();
+  if (!id || !secreto || id === 'pendiente' || secreto === 'pendiente') throw new HttpsError('failed-precondition', 'Strava todavía no está configurado en el servidor.');
+  return { id, secreto };
+}
+// Quita la conexión: borra los tokens y el aviso del perfil. Si `revocar`, también le dice a Strava que deje de dar acceso.
+async function olvidarStrava(uid, revocar) {
+  const t = await tokensRef(uid).get();
+  if (revocar && t.exists) {
+    try {
+      const c = credencialesStrava();
+      await fetch(STRAVA_API + '/oauth/revoke', { signal: AbortSignal.timeout(15000), method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: 'Basic ' + Buffer.from(`${c.id}:${c.secreto}`).toString('base64') }, body: new URLSearchParams({ token: t.data().refresh_token, token_type_hint: 'refresh_token' }).toString() });
+    } catch (e) { console.warn('Strava: no se pudo revocar', e && e.message); }
+  }
+  await tokensRef(uid).delete().catch(() => {});
+  if ((await userRef(uid).get()).exists) await userRef(uid).update({ strava: FieldValue.delete() }).catch(() => {});
+}
+// Devuelve un access_token válido; si caducó (dura 6 horas) lo renueva con el refresh_token y guarda el nuevo par.
+async function tokenStrava(uid) {
+  const t = await tokensRef(uid).get();
+  if (!t.exists) throw new HttpsError('failed-precondition', 'Strava no está conectado.', { codigo: 'strava-no-conectado' });
+  const d = t.data();
+  if (d.expires_at - 120 > Math.floor(Date.now() / 1000)) return d.access_token;
+  const c = credencialesStrava();
+  const r = await pedirStrava('/oauth/token', formularioToken({ client_id: c.id, client_secret: c.secreto, grant_type: 'refresh_token', refresh_token: d.refresh_token }));
+  if (!r.ok || !r.cuerpo || !r.cuerpo.access_token) {
+    if (r.status === 400 || r.status === 401) { await olvidarStrava(uid, false); throw new HttpsError('failed-precondition', 'Strava ha dejado de dar acceso. Vuelve a conectarlo desde el Perfil.', { codigo: 'strava-revocado' }); }
+    throw new HttpsError('unavailable', 'Strava no responde ahora. Prueba en unos minutos.');
+  }
+  await tokensRef(uid).set({ access_token: r.cuerpo.access_token, refresh_token: r.cuerpo.refresh_token || d.refresh_token, expires_at: r.cuerpo.expires_at }, { merge: true });
+  return r.cuerpo.access_token;
+}
+// Una actividad de Strava → campos que ya usa la app (el resto de campos se calculan en el móvil).
+function normalizarActividad(a) {
+  const tipo = TIPOS_STRAVA[a.type] || TIPOS_STRAVA[a.sport_type];
+  if (!tipo) return null;
+  const fecha = String(a.start_date_local || a.start_date || '').slice(0, 10);
+  const min = Math.round((a.moving_time || a.elapsed_time || 0) / 60);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || min < 5 || min > 1440) return null;
+  const o = { sid: String(a.id), fecha, tipo, min, nombre: String(a.name || '').slice(0, 60) };
+  const km = Math.round((a.distance || 0) / 100) / 10;
+  if (km > 0 && km <= 500) o.km = km;
+  if (tipo === 'bici') {
+    const el = Math.round(a.total_elevation_gain || 0), pu = Math.round(a.average_heartrate || 0), np = Math.round(a.weighted_average_watts || 0);
+    if (el > 0 && el <= 10000) o.elev = el;
+    if (pu >= 40 && pu <= 230) o.pulso = pu;
+    if (np >= 50 && np <= 700) o.np = np;
+  }
+  return o;
+}
+
+exports.strava = onCall({ secrets: [STRAVA_ID, STRAVA_SECRETO], memory: '256MiB', timeoutSeconds: 60, concurrency: 10 }, async (req) => {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión para usar Strava.');
+  const uid = req.auth.uid, data = req.data || {}, modo = data.modo;
+
+  if (modo === 'conectar') {
+    const code = String(data.code || '').trim();
+    if (!/^[A-Za-z0-9_-]{8,128}$/.test(code)) throw new HttpsError('invalid-argument', 'El código de Strava no es válido.');
+    const c = credencialesStrava();
+    const r = await pedirStrava('/oauth/token', formularioToken({ client_id: c.id, client_secret: c.secreto, code, grant_type: 'authorization_code' }));
+    if (!r.ok || !r.cuerpo || !r.cuerpo.access_token) throw new HttpsError('invalid-argument', 'Strava no ha aceptado la conexión. Vuelve a intentarlo.');
+    const b = r.cuerpo;
+    if (!/activity:read/.test(String(b.scope || data.scope || ''))) throw new HttpsError('permission-denied', 'Para importar tus salidas tienes que aceptar el permiso «ver tus actividades» en Strava.', { codigo: 'strava-permiso' });
+    const nombre = b.athlete ? [b.athlete.firstname, b.athlete.lastname].filter(Boolean).join(' ').slice(0, 60) : '';
+    await tokensRef(uid).set({ access_token: b.access_token, refresh_token: b.refresh_token, expires_at: b.expires_at, athleteId: b.athlete ? b.athlete.id : null, scope: String(b.scope || ''), conectado: FieldValue.serverTimestamp() });
+    const perfil = { conectado: true, atleta: nombre, desde: Date.now() };
+    await userRef(uid).set({ strava: perfil }, { merge: true });
+    return { ok: true, strava: perfil };
+  }
+
+  if (modo === 'desconectar') { await olvidarStrava(uid, true); return { ok: true }; }
+
+  if (modo === 'actividades') {
+    const t0 = await tokensRef(uid).get();
+    if (!t0.exists) throw new HttpsError('failed-precondition', 'Strava no está conectado.', { codigo: 'strava-no-conectado' });
+    const ahora = Math.floor(Date.now() / 1000);
+    if (t0.data().ultimaPeticion && ahora - t0.data().ultimaPeticion < COOLDOWN_STRAVA_S) throw new HttpsError('resource-exhausted', 'Acabas de sincronizar. Espera unos segundos.');
+    const dia = hoyMadrid(), gref = db.doc(`stravaGlobal/${dia}`);
+    const n = await db.runTransaction(async (tx) => { const g = await tx.get(gref); const v = ((g.exists && g.data().n) || 0) + 1; if (v <= LIMITE_STRAVA_DIA) tx.set(gref, { n: v }); return v; });
+    if (n > LIMITE_STRAVA_DIA) throw new HttpsError('resource-exhausted', 'Hoy se han hecho demasiadas sincronizaciones con Strava. Prueba mañana.');
+    await tokensRef(uid).set({ ultimaPeticion: ahora }, { merge: true });
+    let desde = Number(data.desde); if (!Number.isFinite(desde) || desde < ahora - 400 * 86400) desde = ahora - 45 * 86400;
+    const token = await tokenStrava(uid);
+    const items = []; let total = 0;
+    for (let pag = 1; pag <= 3; pag++) {
+      const r = await pedirStrava(`/api/v3/athlete/activities?after=${Math.floor(desde)}&per_page=100&page=${pag}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (r.status === 401) { await olvidarStrava(uid, false); throw new HttpsError('failed-precondition', 'Strava ha dejado de dar acceso. Vuelve a conectarlo desde el Perfil.', { codigo: 'strava-revocado' }); }
+      if (r.status === 429) throw new HttpsError('resource-exhausted', 'Strava pide esperar un poco. Prueba en unos minutos.');
+      if (!r.ok || !Array.isArray(r.cuerpo)) throw new HttpsError('unavailable', 'Strava no responde ahora. Prueba en unos minutos.');
+      total += r.cuerpo.length;
+      r.cuerpo.forEach((a) => { const o = normalizarActividad(a); if (o) items.push(o); });
+      if (r.cuerpo.length < 100) break;
+    }
+    items.sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
+    return { items, total, omitidas: total - items.length };
+  }
+  throw new HttpsError('invalid-argument', 'Petición no válida.');
 });
