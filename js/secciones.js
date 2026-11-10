@@ -19,11 +19,13 @@ const ICO = {
   pin: svg('<path d="M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>', 18),
   warn: svg('<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/>', 16),
   spark: svg('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>', 18),
+  bici: svg('<circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5l4-8h6l3 8M9.5 8.5h-2M12 16.5l3.5-8"/>'),
+  scan: svg('<path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M8 8v8M11 8v8M14 8v8M17 8v8"/>', 22),
   bell: svg('<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>', 22),
 };
 
 /* Novedades: cambia NOV_V cada vez que publiques algo nuevo para que salga la nota en Inicio. */
-const NOV_V = '2026-11-09b';
+const NOV_V = '2026-11-10';
 
 /* Objetivos de entreno: [id, grupo, texto, unidad, periodo (sem | mes | reto), ejemplo] */
 const META_T = [
@@ -106,15 +108,17 @@ export function crearSecciones(ctx) {
   }
   function tabs() {
     const t = [{ id: 'inicio', t: 'Inicio', ico: I.home }, { id: 'entreno', t: 'Entreno', ico: I.pulse }, { id: 'nutricion', t: 'Nutrición', ico: ICO.food }];
-    if (tieneBici()) t.push({ id: 'rutas', t: 'Rutas', ico: ICO.ruta }, { id: 'taller', t: 'Taller', ico: ICO.llave });
+    if (tieneBici()) t.push({ id: 'bici', t: 'Bici', ico: ICO.bici });
     t.push({ id: 'progreso', t: 'Progreso', ico: ICO.prog });
     return t;
   }
   function tabActual() {
     let t = st.tab;
     if (t === 'peso') t = 'progreso';
-    if ((t === 'rutas' || t === 'taller') && !tieneBici()) t = 'inicio';
-    if (!['inicio', 'entreno', 'nutricion', 'rutas', 'taller', 'progreso', 'perfil'].includes(t)) t = 'inicio';
+    // Rutas y Taller viven dentro de la pestaña Bici.
+    if (t === 'rutas' || t === 'taller') { st.biciSub = t; st.tab = t = 'bici'; lsSet('cadencia-tab', 'bici'); }
+    if (t === 'bici' && !tieneBici()) t = 'inicio';
+    if (!['inicio', 'entreno', 'nutricion', 'bici', 'progreso', 'perfil'].includes(t)) t = 'inicio';
     return t;
   }
 
@@ -192,16 +196,17 @@ export function crearSecciones(ctx) {
     </section>`;
 
     // Comidas
-    const prev = dia(E.addDays(d, -1)).items;
+    const prev = dia(E.addDays(d, -1)).items, ayerTxt = d === t ? 'ayer' : 'el día anterior';
     h += `<section class="card"><div class="card-head"><h2>Lo que has comido</h2></div>
       ${MEALS.map((name, i) => {
-        const arr = it.filter((x) => x.m === i), k = arr.reduce((a, x) => a + x.k, 0);
+        const arr = it.filter((x) => x.m === i), k = arr.reduce((a, x) => a + x.k, 0), ayer = prev.filter((x) => x.m === i);
         return `<div class="meal">
           <div class="meal-h"><b>${name}</b><span class="muted small">${arr.length ? nf(k) + ' kcal' : ''}</span><button type="button" class="chipbtn chip" data-act="n-add" data-v="${i}">${I.plus} Añadir</button></div>
+          ${ayer.length ? `<button type="button" class="link repetir" data-act="n-repetir" data-v="${i}">Repetir de ${ayerTxt} · ${ayer.length === 1 ? esc(ayer[0].n.length > 28 ? ayer[0].n.slice(0, 27) + '…' : ayer[0].n) : ayer.length + ' alimentos'} (${nf(ayer.reduce((a, x) => a + x.k, 0))} kcal)</button>` : ''}
           ${arr.map((x) => `<div class="fitem"><span>${esc(x.n)}<small class="muted">${x.g ? nf(x.g) + ' g · ' : ''}P ${nf(x.p, 0)} · H ${nf(x.c, 0)} · G ${nf(x.f, 0)}</small></span><b class="num">${nf(x.k)}</b><button class="iconbtn" data-act="n-del" data-v="${esc(x.id)}" aria-label="Quitar ${esc(x.n)}">${I.trash}</button></div>`).join('')}
         </div>`;
       }).join('')}
-      ${!it.length && prev.length ? `<button class="btn ghost small" data-act="n-copiar">Copiar lo de ${d === t ? 'ayer' : 'el día anterior'} (${prev.length})</button>` : ''}
+      ${!it.length && prev.length ? `<button class="btn ghost small" data-act="n-copiar">Copiar todo lo de ${ayerTxt} (${prev.length})</button>` : ''}
     </section>`;
 
     // Ejercicio del día
@@ -300,6 +305,14 @@ export function crearSecciones(ctx) {
         <p class="small muted">Útil para comidas fuera de casa o productos con etiqueta: copia las calorías de la ración que has tomado.</p>
       </div>
       <div class="sheet-foot"><button class="btn block" data-act="n-addquick">Añadir a ${MEALS[F.meal].toLowerCase()}</button></div>`;
+    } else if (F.scan) {
+      const S = F.scan;
+      body = `<div class="sheet-list form-grid">
+        <div class="scanbox ${S.cam ? '' : 'nocam'}"><video id="scan-video" playsinline muted autoplay></video><span class="scanframe"></span>
+          <p id="scan-msg" class="scanmsg">${esc(S.msg || 'Abriendo la cámara…')}</p></div>
+        <form class="quick" data-form="scan" novalidate><input class="input" name="code" inputmode="numeric" maxlength="14" placeholder="O escribe el código (8 a 14 cifras)" aria-label="Código de barras" value="${esc(S.code || '')}"><button class="btn small" type="submit">Buscar</button></form>
+        <p class="small muted">Busca el producto en <a href="https://es.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a>. Compara los datos con la etiqueta.</p>
+      </div>`;
     } else if (food) {
       const c = foodChoice(food), extra = c.pm ? prepKcal100(c.pm) : 0;
       body = `<div class="sheet-list form-grid">
@@ -312,14 +325,14 @@ export function crearSecciones(ctx) {
       </div>
       <div class="sheet-foot"><button class="btn block" id="food-add" data-act="n-addfood" ${c.grams > 0 ? '' : 'disabled'}>Añadir a ${MEALS[F.meal].toLowerCase()}</button></div>`;
     } else {
-      body = `<input class="input" type="search" data-fq value="${esc(F.q)}" placeholder="Busca: pollo, arroz, yogur…" autocomplete="off" enterkeyhint="search" aria-label="Buscar alimento">
+      body = `<div class="fsearch"><input class="input" type="search" data-fq value="${esc(F.q)}" placeholder="Busca: pollo, arroz, yogur…" autocomplete="off" enterkeyhint="search" aria-label="Buscar alimento"><button type="button" class="iconbtn scanbtn" data-act="n-scan" aria-label="Escanear código de barras">${ICO.scan}</button></div>
         <div class="sheet-list" id="food-res">${foodResults()}</div>`;
     }
-    const back = food || F.quick;
+    const back = food || F.quick || F.scan;
     return `<div class="sheet-back" data-act="n-close"></div>
       <div class="sheet" role="dialog" aria-modal="true" aria-label="Añadir alimento">
         <div class="sheet-grab"></div>
-        <div class="sheet-head"><button type="button" class="iconbtn" data-act="${back ? 'n-unpick' : 'n-close'}" aria-label="${back ? 'Volver' : 'Cerrar'}">${back ? I.back : ICO.close}</button><h2>${back ? (F.quick ? 'A mano' : 'Cantidad') : 'Añadir alimento'}</h2><span style="width:36px"></span></div>
+        <div class="sheet-head"><button type="button" class="iconbtn" data-act="${back ? 'n-unpick' : 'n-close'}" aria-label="${back ? 'Volver' : 'Cerrar'}">${back ? I.back : ICO.close}</button><h2>${back ? (F.quick ? 'A mano' : F.scan ? 'Escanear' : 'Cantidad') : 'Añadir alimento'}</h2><span style="width:36px"></span></div>
         <div class="chiprow">${MEALS.map((m, i) => `<button type="button" class="chip chipbtn ${F.meal === i ? 'on' : ''}" data-act="n-meal" data-v="${i}">${m}</button>`).join('')}</div>
         ${body}
       </div>`;
@@ -354,6 +367,86 @@ export function crearSecciones(ctx) {
     }
     if (st.food && st.food.off && st.food.off.q === q) { st.food.off = res; refreshRes(); }
   }
+  /* ----- escáner de código de barras ----- */
+  // Cámara trasera + lector nativo del navegador si existe (Android) o ZXing (iPhone), cargado solo al escanear.
+  let scanCtl = null;
+  const scanMsg = (t) => { const el = document.getElementById('scan-msg'); if (el) el.textContent = t; if (st.food && st.food.scan) st.food.scan.msg = t; };
+  function stopScan() {
+    const c = scanCtl; scanCtl = null;
+    if (!c) return;
+    try { c.stop(); } catch (e) { /* nada */ }
+  }
+  async function startScan() {
+    stopScan();
+    const video = document.getElementById('scan-video');
+    if (!video) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { scanMsg('Este dispositivo no deja usar la cámara aquí. Escribe el código debajo.'); return; }
+    const token = {}; scanCtl = { stop() {} , token };
+    const found = (code) => { if (scanCtl && scanCtl.token === token) { stopScan(); buscarCodigo(code); } };
+    try {
+      if ('BarcodeDetector' in window) {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+        if (!scanCtl || scanCtl.token !== token) { stream.getTracks().forEach((t) => t.stop()); return; }
+        let timer = 0;
+        scanCtl.stop = () => { clearTimeout(timer); stream.getTracks().forEach((t) => t.stop()); };
+        video.srcObject = stream; await video.play().catch(() => {});
+        st.food.scan.cam = true; document.querySelector('.scanbox')?.classList.remove('nocam');
+        scanMsg('Apunta al código de barras');
+        const det = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'] });
+        const loop = async () => {
+          if (!scanCtl || scanCtl.token !== token) return;
+          try { const r = await det.detect(video); if (r && r[0] && r[0].rawValue) return found(r[0].rawValue); } catch (e) { /* sigue */ }
+          timer = setTimeout(loop, 250);
+        };
+        loop();
+      } else {
+        scanMsg('Abriendo la cámara…');
+        const Z = await import('./vendor/zxing.js');
+        if (!scanCtl || scanCtl.token !== token) return;
+        const hints = new Map([[Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.UPC_E]]]);
+        const reader = new Z.BrowserMultiFormatReader(hints);
+        const ctl = await reader.decodeFromConstraints({ video: { facingMode: 'environment' }, audio: false }, video, (res) => { if (res) found(res.getText()); });
+        if (!scanCtl || scanCtl.token !== token) { ctl.stop(); return; }
+        scanCtl.stop = () => ctl.stop();
+        st.food.scan.cam = true; document.querySelector('.scanbox')?.classList.remove('nocam');
+        scanMsg('Apunta al código de barras');
+      }
+    } catch (e) {
+      stopScan();
+      scanMsg(e && e.name === 'NotAllowedError' ? 'Sin permiso para la cámara. Actívalo en los ajustes del navegador o escribe el código debajo.' : 'No se ha podido abrir la cámara. Escribe el código debajo.');
+    }
+  }
+  async function buscarCodigo(raw) {
+    const code = String(raw || '').replace(/\D/g, '');
+    if (!(code.length >= 8 && code.length <= 14)) { toast('El código tiene entre 8 y 14 cifras'); return; }
+    const F = st.food; if (!F) return;
+    F.scan = { ...(F.scan || {}), code, msg: `Buscando ${code}…` }; scanMsg(`Buscando ${code}…`);
+    try { if (navigator.vibrate) navigator.vibrate(60); } catch (e) { /* nada */ }
+    const ya = misAlim().find((x) => x.id === 'o:' + code);
+    if (ya) { F.scan = null; F.sel = ya.id; F.mode = ya.u ? 'u' : 'g'; F.amt = ''; render(); return; }
+    try {
+      const ctrl = new AbortController(), tm = setTimeout(() => ctrl.abort(), 15000);
+      const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=code,product_name,product_name_es,brands,nutriments,serving_quantity`, { signal: ctrl.signal });
+      clearTimeout(tm);
+      const j = r.ok ? await r.json() : null;
+      const f = j && j.product ? offFood({ ...j.product, code: j.product.code || code }) : null;
+      if (!st.food) return;
+      if (!f) { st.food.scan = { ...st.food.scan, msg: `El código ${code} no está en Open Food Facts o no tiene calorías. Búscalo por nombre o apúntalo a mano.` }; render(); return; }
+      offCache[f.id] = f;
+      st.food.scan = null; st.food.sel = f.id; st.food.mode = f.u ? 'u' : 'g'; st.food.amt = ''; st.food.prep = null;
+      render(); toast(f.n);
+    } catch (e) {
+      if (st.food && st.food.scan) { st.food.scan.msg = 'No se ha podido buscar ahora (sin conexión). Prueba en un momento.'; render(); }
+    }
+  }
+  function afterRender() {
+    // Si la pantalla del escáner ya no está, apaga la cámara; si acaba de aparecer, enciéndela.
+    const v = document.getElementById('scan-video');
+    if (!v) { stopScan(); return; }
+    if (!scanCtl && st.food && st.food.scan && !st.food.scan.code && !st.food.scan.off) startScan();
+    else if (scanCtl && st.food && st.food.scan && v.srcObject == null && !st.food.scan.code) { stopScan(); startScan(); }
+  }
+
   // Los productos de marca que usas se guardan en «tus alimentos» para encontrarlos siempre.
   function recordarAlimento(food) {
     if (!food.mine || misAlim().some((x) => x.id === food.id)) return;
@@ -445,12 +538,12 @@ export function crearSecciones(ctx) {
   const KIND = (k) => (RT.KIND_LABEL || {})[k] || k;
 
   function viewRutas() {
-    if (!RT || !RF) return head('Rutas') + '<section class="card"><p>No se han podido cargar las rutas.</p></section>';
+    if (!RT || !RF) return '<section class="card"><p>No se han podido cargar las rutas.</p></section>';
     if (!st.wx && !st.wxLoading && !st.wxErr) setTimeout(() => loadWx(), 0);
     const w = wxNow(), ranked = rankedRoutes(), pm = pmcData();
     const selId = st.ruta && ranked.some((x) => x.route.id === st.ruta) ? st.ruta : ranked[0].route.id;
     const sel = ranked.find((x) => x.route.id === selId).route;
-    let h = head('Rutas', 'Bilbao y alrededores');
+    let h = '';
 
     // Ubicación
     const g = st.geo;
@@ -513,6 +606,13 @@ export function crearSecciones(ctx) {
     return h;
   }
 
+  function viewBici() {
+    const sub = st.biciSub === 'taller' ? 'taller' : 'rutas';
+    return head('Bici', sub === 'rutas' ? 'Rutas por Bilbao y alrededores' : 'Tu bici, sus piezas y qué mejorar')
+      + seg('bici-sub', [['rutas', 'Rutas'], ['taller', 'Taller']], sub, 'Rutas o Taller')
+      + (sub === 'rutas' ? viewRutas() : viewTaller());
+  }
+
   /* ================================================================ */
   /* Taller                                                            */
   /* ================================================================ */
@@ -525,7 +625,7 @@ export function crearSecciones(ctx) {
 
   function viewTaller() {
     const g = garaje(), b = biciActiva();
-    let h = head('Taller', 'Tu bici, sus piezas y qué mejorar');
+    let h = '';
     if (!b) {
       return h + `<section class="card tl-empty"><button class="addbig" data-act="tl-bici"><span class="addbig-c">${I.plusBig}</span><b>Añadir mi bici</b></button>
         <p class="muted" style="text-align:center">Apunta sus componentes y te avisamos cuando toque cambiar cadena, cubiertas o pastillas según los km que hagas.</p></section>`;
@@ -794,8 +894,8 @@ export function crearSecciones(ctx) {
       case 'n-ir': st.nDate = v; render(); window.scrollTo(0, 0); return true;
       case 'n-add': st.food = { meal: Number(v), q: '', sel: null, mode: 'g', amt: '', prep: null, oil: '' }; render(); focusSheet(); return true;
       case 'n-hoy': st.tab = 'nutricion'; lsSet('cadencia-tab', 'nutricion'); st.nDate = todayISO(); st.food = { meal: mealNow(), q: '', sel: null, mode: 'g', amt: '', prep: null, oil: '' }; render(); focusSheet(); return true;
-      case 'n-close': st.food = null; render(); return true;
-      case 'n-unpick': st.food.sel = null; st.food.quick = null; st.food.amt = ''; st.food.prep = null; st.food.oil = ''; render(); focusSheet(); return true;
+      case 'n-close': stopScan(); st.food = null; render(); return true;
+      case 'n-unpick': stopScan(); st.food.scan = null; st.food.sel = null; st.food.quick = null; st.food.amt = ''; st.food.prep = null; st.food.oil = ''; render(); focusSheet(); return true;
       case 'n-meal': st.food.meal = Number(v); render(); return true;
       case 'n-q': st.food.q = v; render(); return true;
       case 'n-pick': { const f = asFood(v); st.food.sel = v; st.food.mode = f && f.u ? 'u' : 'g'; st.food.amt = ''; st.food.prep = null; st.food.oil = ''; render(); const i = document.querySelector('[data-famt]'); if (i) i.focus({ preventScroll: true }); return true; }
@@ -819,6 +919,13 @@ export function crearSecciones(ctx) {
         return true;
       }
       case 'n-del': { const d = st.nDate || todayISO(); guardarDia(d, dia(d).items.filter((x) => x.id !== v)); return true; }
+      case 'n-repetir': {
+        const d = st.nDate || todayISO(), m = Number(v), add = dia(E.addDays(d, -1)).items.filter((x) => x.m === m).map((x) => ({ ...x, id: nid('f') }));
+        if (!add.length) return true;
+        guardarDia(d, [...dia(d).items, ...add]);
+        toast(`${MEALS[m]}: ${add.length === 1 ? add[0].n : add.length + ' alimentos'} repetido${add.length === 1 ? '' : 's'}`);
+        return true;
+      }
       case 'n-copiar': { const d = st.nDate || todayISO(); const prev = dia(E.addDays(d, -1)).items.map((x) => ({ ...x, id: nid('f') })); guardarDia(d, prev); toast(`${prev.length} alimentos copiados`); return true; }
       case 'n-neat': case 'n-rate': case 'n-eat': {
         const key = { 'n-neat': 'neat', 'n-rate': 'rate', 'n-eat': 'eat' }[act];
@@ -831,7 +938,8 @@ export function crearSecciones(ctx) {
       case 'r-preset': st.wxPreset = v || null; render(); return true;
       case 'r-ruta': st.ruta = v; render(); return true;
       case 'r-zona': st.zona = v; render(); return true;
-      case 'r-ver': st.ruta = v; st.tab = 'rutas'; lsSet('cadencia-tab', 'rutas'); render(); window.scrollTo(0, 0); return true;
+      case 'r-ver': st.ruta = v; st.tab = 'bici'; st.biciSub = 'rutas'; lsSet('cadencia-tab', 'bici'); render(); window.scrollTo(0, 0); return true;
+      case 'bici-sub': st.biciSub = v; render(); window.scrollTo(0, 0); return true;
       // Taller
       case 'tl-bici': tlOpen('bici', v); return true;
       case 'tl-comp': tlOpen('comp', v); return true;
@@ -862,6 +970,7 @@ export function crearSecciones(ctx) {
         return true;
       }
       case 'n-off': buscarOFF(); return true;
+      case 'n-scan': st.food.scan = { msg: '' }; render(); return true;
       // Novedades
       case 'nov-open': st.novOpen = true; render(); { const n = document.getElementById('novedades'); if (n) n.scrollIntoView({ block: 'start' }); } return true;
       case 'nov-ok': st.novOpen = false; if (novNueva()) await saveProfile({ novVista: NOV_V }); render(); return true;
@@ -920,6 +1029,7 @@ export function crearSecciones(ctx) {
     return false;
   }
   async function submit(kind, f) {
+    if (kind === 'scan') { stopScan(); buscarCodigo(f.code.value); return true; }
     if (kind === 'deseo') {
       const n = f.n.value.trim(), pr = String(f.precio.value).trim() ? num(f.precio.value) : 0;
       if (!n) { toast('Escribe qué pieza es'); return true; }
@@ -942,9 +1052,12 @@ export function crearSecciones(ctx) {
   function novItems() {
     const bici = tieneBici();
     return [
+      { t: 'Elige qué registras cada día', d: 'Si hoy te tocaba fuerza pero sales en bici o a correr, «Registrar» te pregunta qué has hecho: fuerza, bici o cardio.', como: 'Inicio → Entreno de hoy → Registrar, o Entreno → Registrar. También tocando un día de la semana.', act: 'nov-wk', v: 'semana', btn: 'Ir a Entreno' },
+      { t: 'Descanso entre series', d: 'En el entreno en directo, al marcar una serie empieza una cuenta atrás de 90 segundos con +30s, −30s y Saltar. Suena y vibra al acabar, y recuerda el tiempo que elijas.', como: 'Entreno en directo → marca una serie con ✓.', act: 'nov-wk', v: 'semana', btn: 'Ir a Entreno' },
+      { t: 'Repetir de ayer y código de barras', d: 'Cada comida tiene «Repetir de ayer» para copiar lo que comiste ayer en esa comida. Y en el buscador puedes escanear el código de barras de un producto con la cámara.', como: 'Nutrición → debajo de cada comida, o el icono de código de barras junto al buscador.', act: 'tab', v: 'nutricion', btn: 'Ir a Nutrición' },
+      { t: 'Pestaña Bici', d: 'Rutas y Taller están ahora juntos en una sola pestaña, «Bici», con dos apartados arriba. La barra de abajo queda más despejada.', como: bici ? 'Pestaña Bici, abajo.' : 'Aparece cuando tu rutina incluye bici: Entreno → Rutinas → Cambiar días o tipos → marca Bici.', act: bici ? 'tab' : 'nov-bici', v: 'bici', btn: bici ? 'Ir a Bici' : 'Añadir bici a mi rutina' },
       { t: 'Mis rutinas', d: 'Guarda varias rutinas, ponles nombre y cambia entre ellas cuando quieras.', como: 'Entreno → Rutinas.', act: 'nov-wk', v: 'rutina', btn: 'Ver mis rutinas' },
       { t: 'Objetivos de bici, cardio y pesos', d: 'Ponte metas como km de bici a la semana, minutos de cardio, entrenos por semana o kilos en un ejercicio, y mira cuánto te falta.', como: 'Entreno → Objetivos → Nuevo.', act: 'nov-wk', v: 'objetivos', btn: 'Crear un objetivo' },
-      { t: 'Taller y Rutas para ciclistas', d: 'Guarda tu bici y sus piezas, recibe avisos cuando toque cambiar cadena o cubiertas, pon un presupuesto para mejorarla y elige ruta por Bilbao según el tiempo.', como: bici ? 'Ya los tienes: pestañas Rutas y Taller, abajo.' : 'Aparecen cuando tu rutina incluye bici: Entreno → Rutinas → Cambiar días o tipos → marca Bici.', act: bici ? 'tab' : 'nov-bici', v: 'taller', btn: bici ? 'Ir al Taller' : 'Añadir bici a mi rutina' },
       { t: 'Nutrición', d: 'Apunta lo que comes con más de 550 alimentos (queso de Burgos incluido), productos de marca y cómo los preparas. Tu objetivo de calorías sube los días que entrenas.', como: 'Pestaña Nutrición → «Añadir» en cada comida.', act: 'tab', v: 'nutricion', btn: 'Apuntar comida' },
       { t: 'Grasa, músculo, agua y hueso', d: 'Además del peso, apunta tu composición corporal para ver cómo cambias por dentro.', como: 'Inicio → «Añadir grasa, músculo, agua y hueso», o Progreso → Peso.', act: 'peso-sheet', v: '', btn: 'Apuntar ahora' },
       { t: 'Peso objetivo si tienes músculo', d: 'Ya no te limitamos al IMC. Con tu % de grasa calculamos tu peso ideal según tu músculo.', como: 'Perfil → Peso objetivo.', act: 'tab', v: 'perfil', btn: 'Revisar mi objetivo' },
@@ -1079,11 +1192,10 @@ export function crearSecciones(ctx) {
   function sheet() { return st.food ? foodSheet() : st.tl ? tlSheet() : st.meta ? metaSheet() : ''; }
   function view(tab) {
     if (tab === 'nutricion') return viewNutricion();
-    if (tab === 'rutas') return viewRutas();
-    if (tab === 'taller') return viewTaller();
+    if (tab === 'bici') return viewBici();
     if (tab === 'progreso') return viewProgreso();
     return '';
   }
 
-  return { tabs, tabActual, tieneBici, cargar, view, sheet, homeCards, wkBiciHTML, click, input, change, submit, novBell, novedadesHTML, viewObjetivos };
+  return { afterRender, tabs, tabActual, tieneBici, cargar, view, sheet, homeCards, wkBiciHTML, click, input, change, submit, novBell, novedadesHTML, viewObjetivos };
 }

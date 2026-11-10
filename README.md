@@ -13,7 +13,10 @@ App web instalable (PWA) para iPhone y Android: registro e inicio de sesión, cu
 |---|---|
 | `index.html` | Página de la app |
 | `css/app.css` | Diseño (colores, tipografía, modo oscuro) |
-| `js/app.js` | Pantallas y lógica |
+| `js/app.js` | Núcleo: acceso, cuestionario inicial, Inicio, Peso, Perfil, navegación y arranque |
+| `js/entreno-ui.js` | Entreno: semana, historial, rutinas, asistente, biblioteca, entreno en directo con descanso, registro |
+| `js/util.js` | Utilidades compartidas (formato, avisos, iconos) |
+| `js/vendor/zxing.js` | Lector de códigos de barras (ZXing, MIT/Apache-2.0), solo se carga al escanear en iPhone |
 | `js/data.js` | Conexión con Firebase y modo prueba |
 | `js/secciones.js` | Nutrición, Rutas, Taller y Progreso |
 | `js/br.js`, `js/alimentos.js` | Cálculos (calorías, carga, nutrición en ruta, presión de ruedas, % graso) y tabla de alimentos de la app Bilbao Ride |

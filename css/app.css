@@ -471,8 +471,7 @@ details.card[open] > summary::after { transform: rotate(-135deg); margin-top: 4p
 .fcalc div:first-child b { color: var(--accent); }
 .fcalc span { font-size: 12px; color: var(--muted); font-weight: 600; }
 .sheet .chips { gap: 6px; }
-.loc p { display: flex; gap: 8px; align-items: flex-start; }
-.loc p svg { flex: none; margin-top: 2px; color: var(--accent); }
+.loc p svg { vertical-align: -3px; margin-right: 4px; color: var(--accent); }
 .spinner.dark { color: var(--muted); }
 .wxnow { display: flex; align-items: center; gap: 14px; }
 .wxnow > b { font-size: 52px; line-height: 1; font-stretch: 118%; font-weight: 800; }
@@ -562,6 +561,39 @@ details.card[open] > summary::after { transform: rotate(-135deg); margin-top: 4p
 .choices.tight .choice { padding: 12px 14px; }
 .sheet.short { height: auto; max-height: 88dvh; }
 .sheet.short .sheet-list { padding-bottom: 8px; }
+
+/* ---------- registrar, descanso, escáner ---------- */
+.regopts { display: grid; gap: 10px; padding-bottom: 20px; }
+.regopt { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; border: 1.5px solid var(--line); background: var(--surface); border-radius: var(--r-md); padding: 16px; color: var(--ink); }
+.regopt svg { width: 26px; height: 26px; color: var(--accent); flex: none; }
+.regopt > span { display: grid; gap: 2px; }
+.regopt b { font-size: 17px; }
+.regopt:active { background: var(--accent-soft); border-color: var(--accent); }
+.restbar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(12px + env(safe-area-inset-bottom)); width: min(calc(100% - 24px), 480px); z-index: 40; background: var(--ink); color: var(--bg); border-radius: 18px; box-shadow: 0 10px 30px rgba(0,0,0,.25); overflow: hidden; }
+.restbar.fin { background: var(--ok); color: #fff; }
+.rest-prog { height: 4px; background: color-mix(in srgb, currentColor 18%, transparent); }
+.rest-prog i { display: block; height: 100%; background: var(--road); transition: width .25s linear; }
+.restbar.fin .rest-prog i { background: #fff; }
+.rest-row { display: flex; align-items: center; gap: 8px; padding: 10px 12px 12px 16px; }
+.rest-t { display: grid; flex: 1; min-width: 0; }
+.rest-t small { font-size: 12px; opacity: .75; font-weight: 600; }
+.rest-t b { font-size: 26px; font-stretch: 112%; line-height: 1.1; white-space: nowrap; }
+.restbar.fin .rest-t b { font-size: 18px; }
+.restbtn { border: 0; border-radius: 999px; padding: 10px 12px; font-weight: 700; font-size: 15px; background: color-mix(in srgb, currentColor 14%, transparent); color: inherit; min-width: 56px; }
+.restbtn.skip { background: var(--road); color: #111; }
+.restbar.fin .restbtn.skip { background: #fff; color: var(--ok); }
+.screen.live { padding-bottom: 110px; }
+.fsearch { display: flex; gap: 8px; align-items: center; }
+.fsearch .input { flex: 1; }
+.scanbtn { width: 48px; height: 48px; flex: none; border: 1.5px solid var(--line); border-radius: var(--r-md); color: var(--ink); background: var(--surface); }
+.scanbox { position: relative; border-radius: var(--r-md); overflow: hidden; background: #000; aspect-ratio: 4 / 3; display: grid; place-items: center; }
+.scanbox video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.scanbox.nocam video { display: none; }
+.scanframe { position: absolute; left: 12%; right: 12%; top: 32%; bottom: 32%; border: 2.5px solid var(--road); border-radius: 12px; box-shadow: 0 0 0 999px rgba(0,0,0,.35); }
+.scanbox.nocam .scanframe { display: none; }
+.scanmsg { position: absolute; left: 12px; right: 12px; bottom: 10px; margin: 0; color: #fff; font-size: 14px; text-align: center; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+.scanbox.nocam .scanmsg { position: static; padding: 24px 16px; }
+.link.repetir { font-size: 13px; text-align: left; justify-self: start; padding: 2px 0 4px; }
 
 /* ---------- aviso ---------- */
 .toast { position: fixed; left: 50%; bottom: calc(var(--safe-b) + 84px); transform: translateX(-50%); z-index: 20; background: var(--ink); color: var(--bg); padding: 11px 18px; border-radius: 999px; font-size: 15px; font-weight: 600; max-width: calc(100% - 32px); box-shadow: 0 10px 30px -10px rgba(0,0,0,.4); }

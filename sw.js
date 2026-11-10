@@ -1,6 +1,6 @@
 // Service worker: permite instalar la app y abrirla sin conexión.
 // Sube el número de versión cada vez que publiques cambios para que los móviles se actualicen.
-const VERSION = 'cadencia-v9';
+const VERSION = 'cadencia-v10';
 const SHELL = [
   './',
   './index.html',
@@ -11,6 +11,8 @@ const SHELL = [
   './js/entreno.js',
   './js/ejercicios.js',
   './js/secciones.js',
+  './js/entreno-ui.js',
+  './js/util.js',
   './js/alimentos.js',
   './js/br.js',
   './manifest.webmanifest',
