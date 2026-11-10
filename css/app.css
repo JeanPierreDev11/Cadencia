@@ -659,3 +659,9 @@ details.card[open] > summary::after { transform: rotate(-135deg); margin-top: 4p
 .pw-price { display: flex; align-items: baseline; gap: 4px; justify-content: center; }
 .pw-price b { font-size: 40px; line-height: 1; }
 .pw-price span { color: var(--muted); font-weight: 600; }
+.pw-list { list-style: none; margin: 4px 0; padding: 0; display: grid; gap: 12px; text-align: left; width: 100%; }
+.pw-list li { display: flex; gap: 12px; align-items: flex-start; }
+.pw-list small { display: block; color: var(--muted); font-weight: 400; margin-top: 2px; }
+.pw-li-i { flex: none; width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+.pw-li-i svg { width: 18px; height: 18px; }
+.welcome h3 { font-size: 26px; }

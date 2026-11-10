@@ -129,6 +129,7 @@ export function crearSecciones(ctx) {
   /* ================================================================ */
   async function cargar(u) {
     st.dias = {};
+    escucharPro(); if (revisarBienvenida()) render();
     try {
       const list = await api.listDias(u, E.addDays(todayISO(), -90));
       list.forEach((d) => { st.dias[d.fecha] = d; });
@@ -976,7 +977,9 @@ export function crearSecciones(ctx) {
       // IA
       case 'pro-open': st.pro = { from: v }; render(); return true;
       case 'pro-close': st.pro = null; render(); return true;
-      case 'pro-go': if (!PRO_LINK) { toast('La suscripción estará disponible muy pronto.'); return true; } return false; // con enlace, el navegador abre Stripe
+      case 'pro-go': if (!PRO_LINK) { toast('La suscripción estará disponible muy pronto.'); return true; } vigilarPago(); return false; // con enlace, el navegador abre Stripe
+      case 'pro-welcome-close': st.proWelcome = false; render(); return true;
+      case 'pro-welcome-go': st.proWelcome = false; st.tab = 'nutricion'; st.food = null; st.tl = null; lsSet('cadencia-tab', 'nutricion'); render(); window.scrollTo(0, 0); return true;
       case 'pro-refresh': refrescarPro(true); return true;
       case 'ia-close': if (st.iaFoto && st.iaFoto.fase === 'cargando') { toast('Espera a que termine el análisis'); return true; } st.iaFoto = null; render(); return true;
       case 'ia-del': st.iaFoto.items = st.iaFoto.items.filter((x) => x.key !== v); render(); return true;
@@ -1080,18 +1083,62 @@ export function crearSecciones(ctx) {
   /* Cadencia Pro                                                      */
   /* ================================================================ */
   const esPro = () => !!(st.profile && st.profile.isPro === true);
-  // Vuelve a leer del servidor si la cuenta es Pro (p. ej. al volver de pagar en Stripe).
+  // Cuando la cuenta pasa a Pro (el servidor lo activa al cobrar), se actualiza sola y se da la bienvenida.
+  const bienvenidaKey = () => `cadencia-pro-bienvenida-${st.user ? st.user.uid : ''}`;
+  function revisarBienvenida() {
+    if (!esPro() || !st.user || lsGet(bienvenidaKey())) return false;
+    lsSet(bienvenidaKey(), '1'); st.pro = null; st.proWelcome = true; return true;
+  }
+  function aplicarPro(p) {
+    if (!st.profile || !p) return;
+    const antes = esPro(), ahora = p.isPro === true;
+    if (antes === ahora) return;
+    st.profile.isPro = ahora; st.pro = null;
+    if (ahora) { st.iaQuedan = null; iaEstadoPedido = ''; revisarBienvenida(); } else lsSet(bienvenidaKey(), '');
+    render();
+  }
+  let dejarDeEscuchar = null, sondeo = null;
+  function escucharPro() {
+    pararPro();
+    if (!st.user || typeof api.watchProfile !== 'function') return;
+    dejarDeEscuchar = api.watchProfile(st.user.uid, aplicarPro);
+  }
+  function pararPro() { if (dejarDeEscuchar) { try { dejarDeEscuchar(); } catch (e) { /* ya estaba parado */ } dejarDeEscuchar = null; } if (sondeo) { clearInterval(sondeo); sondeo = null; } }
+  // Lee del servidor si la cuenta es Pro (al volver de pagar en Stripe, o con el botón de la ventana).
   async function refrescarPro(manual) {
     if (!st.user || !st.profile) return;
     try {
-      const p = await api.getProfile(st.user.uid), antes = esPro();
-      st.profile.isPro = !!(p && p.isPro === true);
-      if (st.profile.isPro && !antes) { st.pro = null; st.iaQuedan = null; iaEstadoPedido = ''; toast('¡Ya eres Cadencia Pro!'); render(); }
-      else if (manual) { toast('Todavía no vemos tu pago. Puede tardar un minuto.'); }
-      else if (antes !== st.profile.isPro) render();
+      const p = await api.getProfile(st.user.uid);
+      if (p && p.isPro === true && !esPro()) aplicarPro(p);
+      else if (manual) toast('Todavía no vemos tu pago. Puede tardar un minuto.');
     } catch (e) { if (manual) toast('No se ha podido comprobar. Revisa tu conexión.'); }
   }
+  // Tras pulsar «Suscribirme» comprobamos cada pocos segundos durante unos minutos, por si el aviso en directo no llega.
+  function vigilarPago() {
+    if (sondeo) clearInterval(sondeo);
+    let n = 0;
+    sondeo = setInterval(() => { if (esPro() || ++n > 60) { clearInterval(sondeo); sondeo = null; return; } refrescarPro(false); }, 5000);
+  }
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && st.user && st.profile && !esPro()) refrescarPro(false); });
+  function proWelcomeSheet() {
+    const ventajas = [
+      [ICO.camara, 'Foto con IA', 'Haz una foto a tu plato y la IA calcula las calorías y los macros. Tú lo revisas y lo guardas.'],
+      [ICO.spark, 'Recomendaciones para tu bici', 'En el Taller, 3 piezas compatibles con tu bici y tu presupuesto, con precio aproximado.'],
+      [I.check, '10 consultas de IA al día', 'Se reparten entre fotos y recomendaciones, y se renuevan cada día.'],
+    ];
+    return `<div class="sheet-back" data-act="pro-welcome-close"></div>
+      <div class="sheet short paywall" role="dialog" aria-modal="true" aria-label="Bienvenida a Cadencia Pro">
+        <div class="sheet-grab"></div>
+        <div class="sheet-list pw welcome">
+          <div class="pw-ico">${ICO.spark}</div>
+          <h3>¡Bienvenido a Cadencia Pro!</h3>
+          <p>Gracias por apoyar Cadencia. Esto es lo que ya tienes desbloqueado:</p>
+          <ul class="pw-list">${ventajas.map(([ic, t, d]) => `<li><span class="pw-li-i">${ic}</span><span><b>${t}</b><small>${d}</small></span></li>`).join('')}</ul>
+          <button type="button" class="btn block" data-act="pro-welcome-go">Probar Foto con IA</button>
+          <button type="button" class="btn ghost block" data-act="pro-welcome-close">Empezar</button>
+        </div>
+      </div>`;
+  }
   function proSheet() {
     const go = PRO_LINK
       ? `<a class="btn block" id="pro-go" href="${esc(proUrl(st.user))}" target="_blank" rel="noopener" data-act="pro-go">Suscribirme</a>`
@@ -1438,7 +1485,7 @@ export function crearSecciones(ctx) {
     render(); toast('Objetivo guardado');
   }
 
-  function sheet() { return st.pro ? proSheet() : st.iaFoto ? iaFotoSheet() : st.food ? foodSheet() : st.tl ? tlSheet() : st.meta ? metaSheet() : ''; }
+  function sheet() { return st.proWelcome ? proWelcomeSheet() : st.pro ? proSheet() : st.iaFoto ? iaFotoSheet() : st.food ? foodSheet() : st.tl ? tlSheet() : st.meta ? metaSheet() : ''; }
   function view(tab) {
     if (tab === 'nutricion') return viewNutricion();
     if (tab === 'bici') return viewBici();
@@ -1446,5 +1493,5 @@ export function crearSecciones(ctx) {
     return '';
   }
 
-  return { afterRender, tabs, tabActual, tieneBici, cargar, view, sheet, homeCards, wkBiciHTML, click, input, change, submit, novBell, novedadesHTML, viewObjetivos };
+  return { pararPro, afterRender, tabs, tabActual, tieneBici, cargar, view, sheet, homeCards, wkBiciHTML, click, input, change, submit, novBell, novedadesHTML, viewObjetivos };
 }

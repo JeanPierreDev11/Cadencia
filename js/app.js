@@ -59,7 +59,7 @@ function render() {
   else if (st.view === 'error') root.innerHTML = viewError();
   document.title = APP_NAME;
   if (M) M.afterRender();
-  document.body.classList.toggle('noscroll', !!(st.lib || st.food || st.tl || st.pesoSheet || st.meta || st.regPick || st.legal || st.del || st.iaFoto || st.pro));
+  document.body.classList.toggle('noscroll', !!(st.lib || st.food || st.tl || st.pesoSheet || st.meta || st.regPick || st.legal || st.del || st.iaFoto || st.pro || st.proWelcome));
 }
 
 /* ================================================================== */
@@ -737,6 +737,7 @@ function viewError() {
 /* ================================================================== */
 async function enter(u) {
   st.user = u; st.busy = false;
+  if (!u && M) M.pararPro();
   if (!u) { st.del = null; st.legal = false; st.view = 'auth'; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
   try {
     st.profile = await api.getProfile(u.uid);

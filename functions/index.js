@@ -274,11 +274,14 @@ async function procesarEvento(stripe, ev) {
 
 exports.stripeWebhook = onRequest({ secrets: [STRIPE_CLAVE, STRIPE_FIRMA], memory: '256MiB', maxInstances: 2, timeoutSeconds: 30 }, async (req, res) => {
   if (req.method !== 'POST') { res.status(405).send('Solo POST'); return; }
-  const firma = STRIPE_FIRMA.value();
+  const firma = String(STRIPE_FIRMA.value() || '').trim(); // por si al pegar el secreto se coló un espacio o un salto de línea
   if (!firma || firma === 'pendiente') { res.status(503).send('Webhook sin configurar'); return; }
-  const stripe = new Stripe(STRIPE_CLAVE.value());
+  const stripe = new Stripe(String(STRIPE_CLAVE.value() || '').trim());
   let ev;
-  try { ev = stripe.webhooks.constructEvent(req.rawBody, req.headers['stripe-signature'], firma); } catch (e) { res.status(400).send('Firma no válida'); return; }
+  try { ev = stripe.webhooks.constructEvent(req.rawBody, req.headers['stripe-signature'], firma); } catch (e) {
+    console.error('Stripe: firma no válida —', e && e.message, '| secreto: empieza por', firma.slice(0, 6), 'longitud', firma.length, '| cuerpo', req.rawBody ? req.rawBody.length + ' bytes' : 'vacío');
+    res.status(400).send('Firma no válida'); return;
+  }
   try { await procesarEvento(stripe, ev); } catch (e) { console.error('Stripe', ev.type, e && e.message); res.status(500).send('Error'); return; } // Stripe vuelve a intentarlo
   res.json({ received: true });
 });

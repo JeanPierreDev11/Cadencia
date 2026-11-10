@@ -47,6 +47,10 @@ async function firebaseBackend(config) {
     async saveProfile(uid, data) {
       await F.setDoc(userRef(uid), { ...data, actualizado: F.serverTimestamp() }, { merge: true });
     },
+    // Avisa en directo de los cambios del perfil (p. ej. cuando el servidor activa Pro). Devuelve la función para dejar de escuchar.
+    watchProfile(uid, cb) {
+      return F.onSnapshot(userRef(uid), (s) => { if (s.exists()) cb(s.data()); }, () => {});
+    },
     async addWeight(uid, date, kg, extra = {}) {
       await F.setDoc(weightRef(uid, date), { fecha: date, kg, ...extra }, { merge: true });
     },
@@ -144,6 +148,7 @@ function localBackend() {
     async logout() { const s = read(); s.session = null; write(s); emit(); },
     async resetPassword() { throw err('local/no-reset'); },
     async getProfile(uid) { const u = byUid(read(), uid); return u ? u.profile : null; },
+    watchProfile(uid, cb) { const t = setInterval(() => { const u = byUid(read(), uid); if (u) cb(u.profile); }, 1500); return () => clearInterval(t); },
     async saveProfile(uid, data) {
       const s = read(); const u = byUid(s, uid); if (!u) return;
       u.profile = { ...u.profile, ...data, actualizado: Date.now() }; write(s);
