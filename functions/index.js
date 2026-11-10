@@ -267,7 +267,8 @@ async function procesarEvento(stripe, ev) {
     for (const uid of await uidsDeCliente(stripe, o.customer)) {
       const d = (await userRef(uid).get()).data() || {};
       if (d.stripeSubscriptionId && d.stripeSubscriptionId !== o.id) continue; // es una suscripción antigua
-      await ponerPro(uid, activa, activa ? { stripeCustomerId: o.customer, stripeSubscriptionId: o.id } : null);
+      const fin = o.current_period_end || (o.items && o.items.data && o.items.data[0] && o.items.data[0].current_period_end) || null; // segundos
+      await ponerPro(uid, activa, activa ? { stripeCustomerId: o.customer, stripeSubscriptionId: o.id, proRenueva: fin ? fin * 1000 : null, proCancela: !!(o.cancel_at_period_end || o.cancel_at) } : { proCancela: false });
     }
   }
 }

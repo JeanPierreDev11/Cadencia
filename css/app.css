@@ -665,3 +665,5 @@ details.card[open] > summary::after { transform: rotate(-135deg); margin-top: 4p
 .pw-li-i { flex: none; width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
 .pw-li-i svg { width: 18px; height: 18px; }
 .welcome h3 { font-size: 26px; }
+.hello-r .protag.pill { margin: 0 8px 0 0; border: 0; cursor: pointer; padding: 5px 10px; font-size: 12px; }
+a.btn { text-decoration: none; display: block; text-align: center; box-sizing: border-box; }

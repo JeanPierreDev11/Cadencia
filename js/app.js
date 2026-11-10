@@ -4,7 +4,7 @@ import * as E from './entreno.js';
 import { crearSecciones } from './secciones.js';
 import { crearEntreno } from './entreno-ui.js';
 import { LEGAL_V, legalHTML } from './legal.js';
-import { PORTAL_LINK } from './pro.js';
+import { PORTAL_LINK, PRO_PRECIO } from './pro.js';
 
 /* ================================================================== */
 /* Utilidades                                                          */
@@ -391,7 +391,7 @@ function viewInicio() {
   return `
     <header class="hello">
       <div><h1>Hola, ${esc(name)}</h1><p>${esc(new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }))}</p></div>
-      <div class="hello-r">${M.novBell()}<button class="avatar" data-act="tab" data-v="perfil" aria-label="Tu perfil">${esc((name || '?').trim().charAt(0).toUpperCase())}</button></div>
+      <div class="hello-r">${M.novBell()}${st.profile && st.profile.isPro === true ? '<button class="protag pill" data-act="tab" data-v="perfil" aria-label="Tu plan: Cadencia Pro">Pro</button>' : ''}<button class="avatar" data-act="tab" data-v="perfil" aria-label="Tu perfil">${esc((name || '?').trim().charAt(0).toUpperCase())}</button></div>
     </header>
     ${M.novedadesHTML()}
 
@@ -644,12 +644,30 @@ async function delWeight(fecha) {
 }
 
 /* ---------- pestaña Perfil ---------- */
+function planCardHTML() {
+  const pr = st.profile || {}, pro = pr.isPro === true;
+  const dia = (ms) => fmtDate(new Date(ms).toISOString().slice(0, 10));
+  const renueva = pro && pr.proRenueva ? (pr.proCancela ? `Tu suscripción está cancelada: sigues con Pro hasta el <b>${dia(pr.proRenueva)}</b>.` : `Próxima renovación: <b>${dia(pr.proRenueva)}</b>.`) : '';
+  if (!pro) return `<section class="card" id="plan-card">
+      <div class="card-head"><h2>Tu plan</h2><span class="tag" id="plan-tag">Gratuita</span></div>
+      <p class="small muted">El registro manual, las rutinas, las rutas y el resto de la app son gratis. Con Pro desbloqueas la IA: Foto con IA y recomendaciones del Taller.</p>
+      <button class="btn block" data-act="pro-open" data-v="perfil">Hazte Pro · ${esc(PRO_PRECIO)}</button>
+    </section>`;
+  return `<section class="card" id="plan-card">
+      <div class="card-head"><h2>Tu plan</h2><span class="tag ok" id="plan-tag">Pro</span></div>
+      <p><b>Cadencia Pro</b> · ${esc(PRO_PRECIO)} · suscripción mensual</p>
+      <p class="small muted">Incluye Foto con IA, recomendaciones del Taller con IA y 10 consultas de IA al día. ${renueva}</p>
+      ${PORTAL_LINK ? `<a class="btn ghost block" href="${esc(PORTAL_LINK)}" target="_blank" rel="noopener">Gestionar o cancelar mi suscripción</a><p class="small muted">Se abre Stripe: ahí puedes cancelar, cambiar la tarjeta o ver tus recibos.</p>` : ''}
+    </section>`;
+}
+
 function viewPerfil() {
   const p = st.profile;
   const goals = st.editGoals || p.objetivos || [];
   const theme = lsGet('cadencia-theme') || 'auto';
   return `
     <header class="hello"><div><h1>Perfil</h1><p>${esc(st.user.email || '')}</p></div></header>
+    ${planCardHTML()}
     <form class="card form-grid" data-form="profile" novalidate>
       <h2>Tus datos</h2>
       <label class="field"><span>Nombre</span><input class="input" name="nombre" value="${esc(p.nombre || '')}" autocomplete="given-name"></label>
@@ -680,13 +698,6 @@ function viewPerfil() {
       <div class="seg" role="group" aria-label="Tema">
         ${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([v, t]) => `<button type="button" data-act="theme" data-v="${v}" aria-pressed="${theme === v}">${t}</button>`).join('')}
       </div>
-    </section>
-
-    <section class="card" id="plan-card">
-      <div class="card-head"><h2>Tu plan</h2>${st.profile && st.profile.isPro === true ? '<span class="tag ok" id="plan-tag">Pro</span>' : '<span class="tag" id="plan-tag">Gratuita</span>'}</div>
-      ${st.profile && st.profile.isPro === true
-        ? `<p class="small muted">Tienes Cadencia Pro: Foto con IA y recomendaciones del Taller con IA. Gracias por apoyar Cadencia.</p>${PORTAL_LINK ? `<a class="btn ghost block" href="${esc(PORTAL_LINK)}" target="_blank" rel="noopener">Gestionar mi suscripción</a>` : ''}`
-        : '<p class="small muted">El registro manual, las rutinas, las rutas y el resto de la app son gratis. Con Pro desbloqueas la IA.</p><button class="btn block" data-act="pro-open" data-v="perfil">Hazte Pro</button>'}
     </section>
 
     <section class="card">
@@ -831,7 +842,7 @@ root.addEventListener('submit', async (e) => {
 /* ---------- arranque ---------- */
 (async function boot() {
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => reg.update()).catch(() => { /* sin modo sin conexión */ });
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => { reg.update(); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); }); }).catch(() => { /* sin modo sin conexión */ });
     // Cuando llega una versión nueva de la app, recarga una vez para usarla.
     let reloaded = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded && navigator.serviceWorker.controller) { reloaded = true; location.reload(); } });
