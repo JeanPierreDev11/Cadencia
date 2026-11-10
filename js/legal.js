@@ -24,6 +24,7 @@ export function legalHTML() {
       <li><b>Para qué:</b> únicamente para calcular y mostrarte tus métricas dentro de Cadencia. No los vendemos, no los compartimos con anunciantes y no los usamos para publicidad.</li>
       <li><b>Quién los ve:</b> solo tú. Se guardan en Firebase (Google Cloud), en servidores de la Unión Europea, con conexión cifrada y reglas que impiden que otra persona lea tus datos.</li>
       <li><b>Funciones con IA:</b> si usas «Foto con IA» o «Recomendación con IA», la foto del plato, o los datos de tu bici, tu presupuesto y tu objetivo, se envían a través de nuestro servidor a Anthropic (el proveedor de Claude) para generar la respuesta. Las fotos no se guardan en Cadencia. Son opcionales: si no las usas, no se envía nada. Cada persona tiene un límite diario de consultas.</li>
+      <li><b>Pagos (Cadencia Pro):</b> la suscripción la gestiona Stripe. Stripe recibe tu email y los datos de pago; Cadencia nunca ve ni guarda tu tarjeta. En tu perfil solo guardamos si eres Pro y los identificadores de cliente y suscripción de Stripe.</li>
       <li><b>Servicios externos:</b> si usas tu ubicación en Rutas, se envían tus coordenadas a Open-Meteo para consultar el tiempo; si buscas o escaneas productos de marca, se envía el texto o el código de barras a Open Food Facts. Ninguno recibe tu nombre ni tu email. La app se descarga desde GitHub Pages.</li>
       <li><b>En tu móvil</b> se guardan algunas preferencias (tema, pestaña abierta, entreno en curso, tiempo de descanso, última ubicación) para que la app funcione mejor. No usamos cookies de publicidad ni analítica.</li>
       <li><b>Cuánto tiempo:</b> mientras tengas la cuenta. Desde <b>Perfil → Privacidad y cuenta</b> puedes borrar tu cuenta y todos tus datos al momento y para siempre.</li>
@@ -36,6 +37,7 @@ export function legalHTML() {
       <li>Cadencia se ofrece tal cual, para ayudarte a organizar tu entreno y tu alimentación. Intentamos que funcione bien, pero no garantizamos que esté siempre disponible ni libre de errores.</li>
       <li>Tú eres responsable de tu cuenta y de las decisiones que tomes sobre tu salud y tu entreno. Cadencia no responde de lesiones o daños derivados de seguir sus estimaciones.</li>
       <li>Los datos de productos de marca vienen de Open Food Facts (licencia ODbL) y los rellena una comunidad: pueden tener errores, compáralos con la etiqueta. Las fotos de ejercicios vienen de Free Exercise DB (dominio público).</li>
+      <li><b>Cadencia Pro:</b> las funciones de IA (Foto con IA y Recomendación del Taller) son de pago, 4,99 €/mes, con renovación mensual. Puedes cancelar cuando quieras y seguirás con Pro hasta el final del periodo ya pagado. Borrar tu cuenta no cancela la suscripción: cancélala antes en Stripe. Todo lo demás de Cadencia es gratis.</li>
       <li>Podemos cambiar estos términos; si el cambio es importante, te lo avisaremos en la app.</li>
     </ul>`;
 }

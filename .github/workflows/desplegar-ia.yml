@@ -1,9 +1,12 @@
 # Publica la función de IA (functions/) y las reglas de Firestore en Firebase.
 # Se lanza sola al cambiar functions/, firestore.rules o firebase.json, o a mano desde
 # GitHub → Actions → «Publicar IA en Firebase» → Run workflow.
-# Necesita dos secretos del repositorio (Settings → Secrets and variables → Actions):
-#   FIREBASE_SERVICE_ACCOUNT  el contenido del archivo JSON de la cuenta de servicio
-#   ANTHROPIC_API_KEY         la clave de la API de Claude
+# Secretos del repositorio (Settings → Secrets and variables → Actions):
+#   FIREBASE_SERVICE_ACCOUNT  el contenido del archivo JSON de la cuenta de servicio   (obligatorio)
+#   ANTHROPIC_API_KEY         la clave de la API de Claude                             (obligatorio)
+#   STRIPE_SECRET_KEY         la clave de la API de Stripe (rk_… o sk_…)               (para cobrar Pro)
+#   STRIPE_WEBHOOK_SECRET     el secreto de firma del webhook de Stripe (whsec_…)      (para cobrar Pro)
+# Si aún no has creado los de Stripe se guarda el valor «pendiente» y el webhook responde 503 hasta que los pongas.
 name: Publicar IA en Firebase
 
 on:
@@ -13,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       actualizar_clave:
-        description: 'Volver a guardar la clave de la API de Claude (si la has cambiado)'
+        description: 'Volver a guardar las claves (Claude y Stripe) aunque ya estuvieran guardadas'
         type: boolean
         default: false
 
@@ -47,16 +50,28 @@ jobs:
       - name: Instalar dependencias de la función
         run: npm ci --prefix functions
 
-      - name: Guardar la clave de la API de Claude como secreto de Firebase
+      - name: Guardar las claves como secretos de Firebase
         env:
-          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           FORZAR: ${{ github.event.inputs.actualizar_clave }}
         run: |
-          if [ "$FORZAR" = "true" ] || ! npx --yes firebase-tools@15.34.0 functions:secrets:access ANTHROPIC_API_KEY --project cadencia-11cb6 >/dev/null 2>&1; then
-            printf '%s' "$KEY" | npx --yes firebase-tools@15.34.0 functions:secrets:set ANTHROPIC_API_KEY --data-file=- --force --project cadencia-11cb6
-          else
-            echo "La clave ya estaba guardada."
-          fi
+          FB="npx --yes firebase-tools@15.34.0"
+          for NAME in ANTHROPIC_API_KEY STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET; do
+            VAL="${!NAME}"
+            CUR=$($FB functions:secrets:access $NAME --project cadencia-11cb6 2>/dev/null || true)
+            if [ -n "$VAL" ]; then
+              if [ "$FORZAR" = "true" ] || [ -z "$CUR" ] || [ "$CUR" = "pendiente" ]; then
+                printf '%s' "$VAL" | $FB functions:secrets:set $NAME --data-file=- --force --project cadencia-11cb6
+              else
+                echo "$NAME ya estaba guardada."
+              fi
+            elif [ -z "$CUR" ]; then
+              echo "$NAME no está en GitHub: se guarda «pendiente» hasta que la añadas."
+              printf '%s' "pendiente" | $FB functions:secrets:set $NAME --data-file=- --force --project cadencia-11cb6
+            fi
+          done
 
       - name: Publicar función y reglas
         run: npx --yes firebase-tools@15.34.0 deploy --only functions,firestore:rules --project cadencia-11cb6 --force --non-interactive

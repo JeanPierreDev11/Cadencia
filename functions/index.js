@@ -4,17 +4,21 @@
 //  - modo «estado»: cuántas consultas le quedan hoy (no gasta ninguna).
 // Límites: 10 consultas al día por persona y un tope global diario para no gastar de más.
 // La clave de la API de Claude se guarda como secreto (ANTHROPIC_API_KEY), nunca en el código ni en la app.
-const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { setGlobalOptions } = require('firebase-functions/v2');
 const { defineSecret } = require('firebase-functions/params');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getAuth } = require('firebase-admin/auth');
+const Stripe = require('stripe');
 const Anthropic = require('@anthropic-ai/sdk');
 const CATALOGO = require('./catalogo.json');
 
 initializeApp();
 const db = getFirestore();
 const CLAVE = defineSecret('ANTHROPIC_API_KEY');
+const STRIPE_CLAVE = defineSecret('STRIPE_SECRET_KEY'); // clave de la API de Stripe (restringida: solo leer Clientes)
+const STRIPE_FIRMA = defineSecret('STRIPE_WEBHOOK_SECRET'); // secreto de firma del webhook (empieza por whsec_)
 setGlobalOptions({ region: 'europe-west1', maxInstances: 3 });
 
 const LIMITE_USUARIO = 10; // consultas de IA por persona y día (fotos + Taller)
@@ -25,6 +29,8 @@ const MODELO_TALLER = 'claude-sonnet-5-5'; // más conocimiento de componentes y
 const hoyMadrid = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date());
 const usoRef = (uid, dia) => db.doc(`iaUso/${uid}_${dia}`);
 const globalRef = (dia) => db.doc(`iaGlobal/${dia}`);
+const userRef = (uid) => db.doc(`users/${uid}`);
+const esPro = async (uid) => { const d = await userRef(uid).get(); return d.exists && d.data().isPro === true; };
 
 /* ------------------------------------------------------------------ */
 /* Foto del plato                                                      */
@@ -174,9 +180,11 @@ function leerJSON(r) {
 exports.ia = onCall({ secrets: [CLAVE], timeoutSeconds: 90, memory: '512MiB', cpu: 1, concurrency: 10 }, async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión para usar la IA.');
   const uid = req.auth.uid, data = req.data || {}, modo = data.modo, dia = hoyMadrid();
+  // La IA es de Cadencia Pro. Se comprueba aquí, en el servidor, antes de leer nada de la petición.
+  const pro = await esPro(uid);
   if (modo === 'estado') {
     const s = await usoRef(uid, dia).get();
-    return { quedan: Math.max(0, LIMITE_USUARIO - ((s.exists && s.data().n) || 0)), limite: LIMITE_USUARIO };
+    return { quedan: Math.max(0, LIMITE_USUARIO - ((s.exists && s.data().n) || 0)), limite: LIMITE_USUARIO, pro };
   }
   if (modo === 'borrar') { // la app lo llama al borrar la cuenta: elimina los contadores de uso de esta persona
     const q = await db.collection('iaUso').where('uid', '==', uid).get();
@@ -186,6 +194,7 @@ exports.ia = onCall({ secrets: [CLAVE], timeoutSeconds: 90, memory: '512MiB', cp
     return { ok: true };
   }
   if (modo !== 'plato' && modo !== 'taller') throw new HttpsError('invalid-argument', 'Petición no válida.');
+  if (!pro) throw new HttpsError('permission-denied', 'Esta función es de Cadencia Pro.', { codigo: 'pro-requerido' });
 
   // Reserva una consulta (por persona y global) antes de llamar a la IA.
   let usadas = 0;
@@ -211,4 +220,65 @@ exports.ia = onCall({ secrets: [CLAVE], timeoutSeconds: 90, memory: '512MiB', cp
     console.error('IA', modo, e && e.status, e && e.message);
     throw new HttpsError('unavailable', 'La IA no ha respondido. Prueba otra vez en un momento.');
   }
+});
+
+/* ------------------------------------------------------------------ */
+/* Webhook de Stripe: activa o quita Cadencia Pro                      */
+/* ------------------------------------------------------------------ */
+// Pone isPro en el perfil. Solo el servidor puede cambiarlo (las reglas de Firestore lo impiden desde la app).
+async function ponerPro(uid, valor, extra) {
+  const ref = userRef(uid);
+  if (!(await ref.get()).exists) { console.warn('Stripe: no existe users/' + uid); return false; }
+  await ref.set({ isPro: valor, proActualizado: FieldValue.serverTimestamp(), ...(extra || {}) }, { merge: true });
+  console.log('Stripe: isPro=' + valor + ' para ' + uid);
+  return true;
+}
+const porEmail = async (email) => {
+  if (!email) return null;
+  try { return (await getAuth().getUserByEmail(String(email).trim().toLowerCase())).uid; } catch (e) { return null; }
+};
+// Devuelve los uid cuyo perfil guarda este cliente de Stripe (si no hay, busca por el email del cliente).
+async function uidsDeCliente(stripe, customerId) {
+  if (!customerId) return [];
+  const q = await db.collection('users').where('stripeCustomerId', '==', customerId).limit(5).get();
+  if (q.size) return q.docs.map((d) => d.id);
+  try {
+    const c = await stripe.customers.retrieve(customerId);
+    const uid = await porEmail(c && !c.deleted ? c.email : null);
+    return uid ? [uid] : [];
+  } catch (e) { console.error('Stripe: no se pudo leer el cliente', e && e.message); return []; }
+}
+
+async function procesarEvento(stripe, ev) {
+  const o = ev.data.object;
+  if (ev.type === 'checkout.session.completed') {
+    if (o.mode !== 'subscription' || o.payment_status === 'unpaid') return;
+    let uid = null;
+    if (o.client_reference_id && (await userRef(o.client_reference_id).get()).exists) uid = o.client_reference_id;
+    if (!uid) uid = await porEmail((o.customer_details && o.customer_details.email) || o.customer_email);
+    if (!uid) { console.warn('Stripe: pago sin usuario asociado', o.id); return; }
+    await ponerPro(uid, true, { stripeCustomerId: o.customer || null, stripeSubscriptionId: o.subscription || null });
+    return;
+  }
+  if (ev.type === 'customer.subscription.deleted' || ev.type === 'customer.subscription.updated') {
+    const activa = ev.type === 'customer.subscription.updated' && (o.status === 'active' || o.status === 'trialing');
+    const caida = ev.type === 'customer.subscription.deleted' || ['canceled', 'unpaid', 'incomplete_expired'].includes(o.status);
+    if (!activa && !caida) return; // past_due, incomplete…: no cambiamos nada
+    for (const uid of await uidsDeCliente(stripe, o.customer)) {
+      const d = (await userRef(uid).get()).data() || {};
+      if (d.stripeSubscriptionId && d.stripeSubscriptionId !== o.id) continue; // es una suscripción antigua
+      await ponerPro(uid, activa, activa ? { stripeCustomerId: o.customer, stripeSubscriptionId: o.id } : null);
+    }
+  }
+}
+
+exports.stripeWebhook = onRequest({ secrets: [STRIPE_CLAVE, STRIPE_FIRMA], memory: '256MiB', maxInstances: 2, timeoutSeconds: 30 }, async (req, res) => {
+  if (req.method !== 'POST') { res.status(405).send('Solo POST'); return; }
+  const firma = STRIPE_FIRMA.value();
+  if (!firma || firma === 'pendiente') { res.status(503).send('Webhook sin configurar'); return; }
+  const stripe = new Stripe(STRIPE_CLAVE.value());
+  let ev;
+  try { ev = stripe.webhooks.constructEvent(req.rawBody, req.headers['stripe-signature'], firma); } catch (e) { res.status(400).send('Firma no válida'); return; }
+  try { await procesarEvento(stripe, ev); } catch (e) { console.error('Stripe', ev.type, e && e.message); res.status(500).send('Error'); return; } // Stripe vuelve a intentarlo
+  res.json({ received: true });
 });

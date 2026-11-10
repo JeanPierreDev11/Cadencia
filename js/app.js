@@ -4,6 +4,7 @@ import * as E from './entreno.js';
 import { crearSecciones } from './secciones.js';
 import { crearEntreno } from './entreno-ui.js';
 import { LEGAL_V, legalHTML } from './legal.js';
+import { PORTAL_LINK } from './pro.js';
 
 /* ================================================================== */
 /* Utilidades                                                          */
@@ -58,7 +59,7 @@ function render() {
   else if (st.view === 'error') root.innerHTML = viewError();
   document.title = APP_NAME;
   if (M) M.afterRender();
-  document.body.classList.toggle('noscroll', !!(st.lib || st.food || st.tl || st.pesoSheet || st.meta || st.regPick || st.legal || st.del || st.iaFoto));
+  document.body.classList.toggle('noscroll', !!(st.lib || st.food || st.tl || st.pesoSheet || st.meta || st.regPick || st.legal || st.del || st.iaFoto || st.pro));
 }
 
 /* ================================================================== */
@@ -120,6 +121,7 @@ function delSheetHTML() {
       <div class="sheet-head"><button type="button" class="iconbtn" data-act="del-close" aria-label="Cerrar">${I.back}</button><h2>Borrar mi cuenta</h2><span style="width:36px"></span></div>
       <form class="sheet-list form-grid" data-form="delacc" novalidate>
         <div class="msg">Se borrarán <b>para siempre</b> tu cuenta y todos tus datos: perfil, pesos, entrenos, rutinas, objetivos, comidas y taller. No se puede deshacer.</div>
+        ${st.profile && st.profile.isPro === true ? '<div class="msg ok">Tienes Cadencia Pro. Borrar la cuenta <b>no cancela la suscripción</b>: cancélala antes desde el enlace del recibo de Stripe que te llegó por email.</div>' : ''}
         <label class="field"><span>Tu contraseña</span><input class="input" type="password" name="pass" data-del="pass" autocomplete="current-password" value="${esc(D.pass)}"></label>
         <label class="field"><span>Escribe BORRAR para confirmar</span><input class="input" name="txt" data-del="txt" autocapitalize="characters" autocomplete="off" value="${esc(D.txt)}" placeholder="BORRAR"></label>
         ${D.msg ? `<div class="msg" role="alert">${esc(D.msg)}</div>` : ''}
@@ -678,6 +680,13 @@ function viewPerfil() {
       <div class="seg" role="group" aria-label="Tema">
         ${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([v, t]) => `<button type="button" data-act="theme" data-v="${v}" aria-pressed="${theme === v}">${t}</button>`).join('')}
       </div>
+    </section>
+
+    <section class="card" id="plan-card">
+      <div class="card-head"><h2>Tu plan</h2>${st.profile && st.profile.isPro === true ? '<span class="tag ok" id="plan-tag">Pro</span>' : '<span class="tag" id="plan-tag">Gratuita</span>'}</div>
+      ${st.profile && st.profile.isPro === true
+        ? `<p class="small muted">Tienes Cadencia Pro: Foto con IA y recomendaciones del Taller con IA. Gracias por apoyar Cadencia.</p>${PORTAL_LINK ? `<a class="btn ghost block" href="${esc(PORTAL_LINK)}" target="_blank" rel="noopener">Gestionar mi suscripción</a>` : ''}`
+        : '<p class="small muted">El registro manual, las rutinas, las rutas y el resto de la app son gratis. Con Pro desbloqueas la IA.</p><button class="btn block" data-act="pro-open" data-v="perfil">Hazte Pro</button>'}
     </section>
 
     <section class="card">

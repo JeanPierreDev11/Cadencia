@@ -1,9 +1,19 @@
 rules_version = '2';
 // Cada persona solo puede leer y escribir sus propios datos.
+// Excepción: «isPro» y los datos de Stripe solo los cambia el servidor (la función stripeWebhook),
+// para que nadie pueda hacerse Pro desde la app.
 service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.get('isPro', false) == false
+        && !('stripeCustomerId' in request.resource.data)
+        && !('stripeSubscriptionId' in request.resource.data);
+      allow update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.get('isPro', false) == resource.data.get('isPro', false)
+        && request.resource.data.get('stripeCustomerId', null) == resource.data.get('stripeCustomerId', null)
+        && request.resource.data.get('stripeSubscriptionId', null) == resource.data.get('stripeSubscriptionId', null);
       match /{document=**} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }

@@ -2,6 +2,7 @@
 // Los cálculos (calorías, carga de entreno, nutrición en ruta, ropa, presión de ruedas, % graso)
 // vienen de la librería de la app «Bilbao Ride» (js/br.js); aquí está la parte visual y los datos de cada persona.
 import { FOODS, FOODS_BY_ID, prepOf, prepVals, prepKcal100, normTxt as normFood } from './alimentos.js';
+import { PRO_LINK, PORTAL_LINK, PRO_PRECIO, proUrl } from './pro.js';
 
 const BR = globalThis.BR || {};
 const N = BR.nutrition, T = BR.training, RF = BR.routeFuel, RT = BR.routes, BD = BR.body, GS = BR.groupsets;
@@ -199,11 +200,11 @@ export function crearSecciones(ctx) {
     // Comidas
     const prev = dia(E.addDays(d, -1)).items, ayerTxt = d === t ? 'ayer' : 'el día anterior';
     if (st.iaQuedan == null) setTimeout(() => iaEstado(), 0);
-    h += `<section class="card"><div class="card-head"><h2>Lo que has comido</h2>${st.iaQuedan != null ? `<span class="small muted">IA: ${iaQuedanTxt()}</span>` : ''}</div>
+    h += `<section class="card"><div class="card-head"><h2>Lo que has comido</h2>${st.iaQuedan != null && esPro() ? `<span class="small muted">IA: ${iaQuedanTxt()}</span>` : ''}</div>
       ${MEALS.map((name, i) => {
         const arr = it.filter((x) => x.m === i), k = arr.reduce((a, x) => a + x.k, 0), ayer = prev.filter((x) => x.m === i);
         return `<div class="meal">
-          <div class="meal-h"><span class="meal-n"><b>${name}</b>${arr.length ? `<span class="muted small">${nf(k)} kcal</span>` : ''}</span><span class="meal-acts"><label class="chipbtn chip iachip" aria-label="Foto con IA para ${name.toLowerCase()}"><input type="file" accept="image/*" capture="environment" data-iafoto="${i}" hidden>${ICO.camara} Foto con IA</label><button type="button" class="chipbtn chip" data-act="n-add" data-v="${i}">${I.plus} Añadir</button></span></div>
+          <div class="meal-h"><span class="meal-n"><b>${name}</b>${arr.length ? `<span class="muted small">${nf(k)} kcal</span>` : ''}</span><span class="meal-acts">${esPro() ? `<label class="chipbtn chip iachip" aria-label="Foto con IA para ${name.toLowerCase()}"><input type="file" accept="image/*" capture="environment" data-iafoto="${i}" hidden>${ICO.camara} Foto con IA</label>` : `<button type="button" class="chipbtn chip iachip" data-act="pro-open" data-v="foto" aria-label="Foto con IA para ${name.toLowerCase()} (Cadencia Pro)">${ICO.camara} Foto con IA <span class="protag">Pro</span></button>`}<button type="button" class="chipbtn chip" data-act="n-add" data-v="${i}">${I.plus} Añadir</button></span></div>
           ${ayer.length ? `<button type="button" class="link repetir" data-act="n-repetir" data-v="${i}">Repetir de ${ayerTxt} · ${ayer.length === 1 ? esc(ayer[0].n.length > 28 ? ayer[0].n.slice(0, 27) + '…' : ayer[0].n) : ayer.length + ' alimentos'} (${nf(ayer.reduce((a, x) => a + x.k, 0))} kcal)</button>` : ''}
           ${arr.map((x) => `<div class="fitem"><span>${esc(x.n)}<small class="muted">${x.g ? nf(x.g) + ' g · ' : ''}P ${nf(x.p, 0)} · H ${nf(x.c, 0)} · G ${nf(x.f, 0)}</small></span><b class="num">${nf(x.k)}</b><button class="iconbtn" data-act="n-del" data-v="${esc(x.id)}" aria-label="Quitar ${esc(x.n)}">${I.trash}</button></div>`).join('')}
         </div>`;
@@ -973,6 +974,10 @@ export function crearSecciones(ctx) {
       }
       case 'n-off': buscarOFF(); return true;
       // IA
+      case 'pro-open': st.pro = { from: v }; render(); return true;
+      case 'pro-close': st.pro = null; render(); return true;
+      case 'pro-go': if (!PRO_LINK) { toast('La suscripción estará disponible muy pronto.'); return true; } return false; // con enlace, el navegador abre Stripe
+      case 'pro-refresh': refrescarPro(true); return true;
       case 'ia-close': if (st.iaFoto && st.iaFoto.fase === 'cargando') { toast('Espera a que termine el análisis'); return true; } st.iaFoto = null; render(); return true;
       case 'ia-del': st.iaFoto.items = st.iaFoto.items.filter((x) => x.key !== v); render(); return true;
       case 'ia-add-food': { const f = asFood(v); if (!f) return true; const gp = prepOf(f); st.iaFoto.items.push({ key: nid('i'), fid: f.id, n: f.n, g: f.u ? String(f.u.g) : '100', prep: gp ? gp[0].id : null, per100: { k: f.k, p: f.p, c: f.c, f: f.f }, conf: 'alta' }); st.iaFoto.q = ''; render(); return true; }
@@ -1072,6 +1077,43 @@ export function crearSecciones(ctx) {
     return false;
   }
   /* ================================================================ */
+  /* Cadencia Pro                                                      */
+  /* ================================================================ */
+  const esPro = () => !!(st.profile && st.profile.isPro === true);
+  // Vuelve a leer del servidor si la cuenta es Pro (p. ej. al volver de pagar en Stripe).
+  async function refrescarPro(manual) {
+    if (!st.user || !st.profile) return;
+    try {
+      const p = await api.getProfile(st.user.uid), antes = esPro();
+      st.profile.isPro = !!(p && p.isPro === true);
+      if (st.profile.isPro && !antes) { st.pro = null; st.iaQuedan = null; iaEstadoPedido = ''; toast('¡Ya eres Cadencia Pro!'); render(); }
+      else if (manual) { toast('Todavía no vemos tu pago. Puede tardar un minuto.'); }
+      else if (antes !== st.profile.isPro) render();
+    } catch (e) { if (manual) toast('No se ha podido comprobar. Revisa tu conexión.'); }
+  }
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && st.user && st.profile && !esPro()) refrescarPro(false); });
+  function proSheet() {
+    const go = PRO_LINK
+      ? `<a class="btn block" id="pro-go" href="${esc(proUrl(st.user))}" target="_blank" rel="noopener" data-act="pro-go">Suscribirme</a>`
+      : '<button type="button" class="btn block" id="pro-go" data-act="pro-go">Suscribirme</button>';
+    return `<div class="sheet-back" data-act="pro-close"></div>
+      <div class="sheet short paywall" role="dialog" aria-modal="true" aria-label="Cadencia Pro">
+        <div class="sheet-grab"></div>
+        <div class="sheet-head"><button type="button" class="iconbtn" data-act="pro-close" aria-label="Cerrar">${I.back}</button><h2>Cadencia Pro</h2><span style="width:36px"></span></div>
+        <div class="sheet-list pw">
+          <div class="pw-ico">${ICO.spark}</div>
+          <h3>Cadencia Pro</h3>
+          <p>Desbloquea la IA para escanear tus platos al instante y recibir recomendaciones personalizadas para tu bici.</p>
+          <div class="pw-price"><b>${esc(PRO_PRECIO.split('/')[0])}</b><span>/mes</span></div>
+          <p class="small muted">Cancela cuando quieras.</p>
+          ${go}
+          ${PRO_LINK ? '<p class="small muted">Paga con el mismo email de tu cuenta de Cadencia. Al volver a la app, tu cuenta se actualiza sola.</p>' : ''}
+          <button type="button" class="btn ghost block" data-act="pro-refresh">Ya he pagado: actualizar</button>
+        </div>
+      </div>`;
+  }
+
+  /* ================================================================ */
   /* IA: foto del plato y recomendación del Taller                    */
   /* ================================================================ */
   const iaQuedanTxt = () => `te quedan ${st.iaQuedan} ${st.iaQuedan === 1 ? 'consulta' : 'consultas'} hoy`;
@@ -1080,8 +1122,10 @@ export function crearSecciones(ctx) {
     const hoy = todayISO();
     if (iaEstadoPedido === hoy || api.mode !== 'firebase' && typeof globalThis.cadenciaIAPrueba !== 'function') return;
     iaEstadoPedido = hoy;
-    try { const r = await api.ia({ modo: 'estado' }); if (r && Number.isFinite(r.quedan)) { st.iaQuedan = r.quedan; if (!document.activeElement || !document.activeElement.matches('input,textarea,select')) render(); } } catch (e) { /* la IA aún no está activada: no mostramos nada */ }
+    try { const r = await api.ia({ modo: 'estado' }); if (r && typeof r.pro === 'boolean' && st.profile) st.profile.isPro = r.pro; if (r && Number.isFinite(r.quedan)) { st.iaQuedan = r.quedan; if (!document.activeElement || !document.activeElement.matches('input,textarea,select')) render(); } } catch (e) { /* la IA aún no está activada: no mostramos nada */ }
   }
+  // Si el servidor dice que no eres Pro (p. ej. la suscripción terminó), enseñamos el paywall.
+  const noPro = (e) => { if (!(e && e.code === 'functions/permission-denied')) return false; if (st.profile) st.profile.isPro = false; st.iaFoto = null; st.iaTallerBusy = false; st.iaTallerMsg = ''; st.pro = { from: 'servidor' }; render(); return true; };
   const iaErr = (e) => (e && e.code === 'functions/resource-exhausted' ? e.message : errorText(e));
 
   // Reduce la foto (lado largo 1024 px, JPEG) para que suba rápido y gaste menos.
@@ -1098,6 +1142,7 @@ export function crearSecciones(ctx) {
   }
   async function fotoPlato(file, meal) {
     if (!file) return;
+    if (!esPro()) { st.pro = { from: 'foto' }; render(); return; }
     const fecha = st.nDate || todayISO();
     if (st.iaQuedan === 0) { toast('Ya has usado tus consultas de IA de hoy'); return; }
     st.iaFoto = { meal, fecha, fase: 'cargando', thumb: '', items: [], nota: '', msg: '', q: '' };
@@ -1122,6 +1167,7 @@ export function crearSecciones(ctx) {
       st.iaFoto = { ...st.iaFoto, fase: 'revisar', items, nota: String(r.nota || '') };
     } catch (e) {
       if (!st.iaFoto) return;
+      if (noPro(e)) return;
       st.iaFoto = { ...st.iaFoto, fase: 'error', msg: iaErr(e) };
     }
     render();
@@ -1199,8 +1245,8 @@ export function crearSecciones(ctx) {
       <p class="small">La IA lee tu ${esc(b.nombre)}, sus componentes y tu presupuesto, y te propone 3 piezas compatibles con precio orientativo.</p>
       ${pres ? '' : '<p class="small"><b>Pon tu presupuesto arriba</b> para pedir la recomendación.</p>'}
       <label class="field"><span>¿Qué quieres conseguir? <span class="muted">(opcional)</span></span><input class="input" data-iatxt maxlength="200" value="${esc(st.iaTxt != null ? st.iaTxt : '')}" placeholder="Ej. bajar peso en mi bici de carretera"></label>
-      <button class="btn block" data-act="ia-taller" ${pres && !busy ? '' : 'disabled'}>${busy ? '<span class="spinner"></span> Pensando…' : R ? 'Pedir otra recomendación' : 'Pedir 3 recomendaciones'}</button>
-      ${st.iaQuedan != null ? `<p class="small muted">IA: ${iaQuedanTxt()} (fotos y Taller).</p>` : ''}
+      ${esPro() ? `<button class="btn block" data-act="ia-taller" ${pres && !busy ? '' : 'disabled'}>${busy ? '<span class="spinner"></span> Pensando…' : R ? 'Pedir otra recomendación' : 'Pedir 3 recomendaciones'}</button>` : `<button class="btn block" data-act="pro-open" data-v="taller">Pedir 3 recomendaciones <span class="protag inv">Pro</span></button>`}
+      ${st.iaQuedan != null && esPro() ? `<p class="small muted">IA: ${iaQuedanTxt()} (fotos y Taller).</p>` : ''}
       ${st.iaTallerMsg ? `<div class="msg" role="alert">${esc(st.iaTallerMsg)}</div>` : ''}
       ${R ? `<div class="iarec">
         <p>${esc(R.res.resumen || '')}</p>
@@ -1222,6 +1268,7 @@ export function crearSecciones(ctx) {
   }
   async function iaTaller() {
     const g = garaje(), b = biciActiva(), M = g.mejora;
+    if (!esPro()) { st.pro = { from: 'taller' }; render(); return; }
     if (!b || !M.presupuesto) return;
     st.iaTallerBusy = true; st.iaTallerMsg = ''; render();
     const gastado = (M.deseos || []).reduce((a, x) => a + (x.precio || 0), 0);
@@ -1241,6 +1288,7 @@ export function crearSecciones(ctx) {
       await saveGaraje(g2);
       const el = document.getElementById('ia-taller'); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
     } catch (e) {
+      if (noPro(e)) return;
       st.iaTallerBusy = false; st.iaTallerMsg = iaErr(e); render();
     }
   }
@@ -1390,7 +1438,7 @@ export function crearSecciones(ctx) {
     render(); toast('Objetivo guardado');
   }
 
-  function sheet() { return st.iaFoto ? iaFotoSheet() : st.food ? foodSheet() : st.tl ? tlSheet() : st.meta ? metaSheet() : ''; }
+  function sheet() { return st.pro ? proSheet() : st.iaFoto ? iaFotoSheet() : st.food ? foodSheet() : st.tl ? tlSheet() : st.meta ? metaSheet() : ''; }
   function view(tab) {
     if (tab === 'nutricion') return viewNutricion();
     if (tab === 'bici') return viewBici();

@@ -103,3 +103,11 @@ La búsqueda de productos de marca usa [Open Food Facts](https://es.openfoodfact
 ## Tiempo
 
 La previsión de Rutas viene de [Open-Meteo](https://open-meteo.com/) (sin clave). Su uso gratuito es solo para fines no comerciales: si la app pasa a cobrar suscripciones, hay que contratar su plan de pago o cambiar de servicio.
+
+## Cadencia Pro (Stripe)
+- La IA (Foto con IA y Recomendación del Taller) es de pago: 4,99 €/mes con un Payment Link de Stripe.
+- `users/{uid}.isPro` (false por defecto). **Solo lo cambia el servidor**: las reglas de Firestore impiden que la app lo modifique (igual que `stripeCustomerId` y `stripeSubscriptionId`).
+- La función `ia` comprueba `isPro` en el servidor antes de procesar nada (error `permission-denied`); la app lo recibe y enseña el paywall.
+- `stripeWebhook` (europe-west1) recibe `checkout.session.completed`, `customer.subscription.updated` y `customer.subscription.deleted`, valida la firma y activa o quita `isPro`. Localiza a la persona por `client_reference_id` (el uid, que la app añade al enlace) o por el email.
+- Enlace de pago y portal: `js/pro.js` (`PRO_LINK`, `PORTAL_LINK`). Secretos de Firebase: `STRIPE_SECRET_KEY` y `STRIPE_WEBHOOK_SECRET` (se guardan desde los secretos de GitHub con el workflow «Publicar IA en Firebase»).
+

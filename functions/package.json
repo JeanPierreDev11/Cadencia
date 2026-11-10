@@ -1,12 +1,15 @@
 {
   "name": "cadencia-functions",
   "private": true,
-  "description": "Función de IA de Cadencia: foto del plato y recomendación del Taller.",
+  "description": "Funci\u00f3n de IA de Cadencia: foto del plato y recomendaci\u00f3n del Taller.",
   "main": "index.js",
-  "engines": { "node": "22" },
+  "engines": {
+    "node": "22"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "0.135.0",
     "firebase-admin": "14.5.0",
-    "firebase-functions": "7.4.0"
+    "firebase-functions": "7.4.0",
+    "stripe": "22.6.2"
   }
 }

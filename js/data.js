@@ -34,7 +34,7 @@ async function firebaseBackend(config) {
     async register(name, email, pass) {
       const cred = await A.createUserWithEmailAndPassword(auth, email, pass);
       if (name) await A.updateProfile(cred.user, { displayName: name });
-      await F.setDoc(userRef(cred.user.uid), { nombre: name, email, creado: F.serverTimestamp(), onboarded: false }, { merge: true });
+      await F.setDoc(userRef(cred.user.uid), { nombre: name, email, creado: F.serverTimestamp(), onboarded: false, isPro: false }, { merge: true });
       return toUser(cred.user);
     },
     async login(email, pass) { return toUser((await A.signInWithEmailAndPassword(auth, email, pass)).user); },
@@ -128,7 +128,7 @@ function localBackend() {
       const s = read();
       if (s.users[email]) throw err('auth/email-already-in-use');
       const uid = 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-      s.users[email] = { uid, email, pass: await hash(pass), profile: { nombre: name, email, onboarded: false, creado: Date.now() }, pesos: {} };
+      s.users[email] = { uid, email, pass: await hash(pass), profile: { nombre: name, email, onboarded: false, creado: Date.now(), isPro: false }, pesos: {} };
       s.session = email;
       write(s); emit();
       return current();
@@ -199,6 +199,7 @@ const MESSAGES = {
   'auth/requires-recent-login': 'Por seguridad, vuelve a escribir tu contraseña.',
   'local/no-ia': 'La IA solo funciona con la app conectada a Firebase.',
   'functions/not-found': 'La IA todavía no está activada en el servidor.',
+  'functions/permission-denied': 'La IA es de Cadencia Pro.',
   'functions/unauthenticated': 'Inicia sesión otra vez para usar la IA.',
   'functions/deadline-exceeded': 'La IA ha tardado demasiado. Prueba otra vez.',
   'functions/internal': 'La IA no está disponible ahora mismo. Prueba más tarde.',
