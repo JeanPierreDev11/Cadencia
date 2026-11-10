@@ -3,6 +3,7 @@ import { APP_NAME } from './config.js';
 import * as E from './entreno.js';
 import { crearSecciones } from './secciones.js';
 import { crearEntreno } from './entreno-ui.js';
+import { LEGAL_V, legalHTML } from './legal.js';
 
 /* ================================================================== */
 /* Utilidades                                                          */
@@ -57,7 +58,7 @@ function render() {
   else if (st.view === 'error') root.innerHTML = viewError();
   document.title = APP_NAME;
   if (M) M.afterRender();
-  document.body.classList.toggle('noscroll', !!(st.lib || st.food || st.tl || st.pesoSheet || st.meta || st.regPick));
+  document.body.classList.toggle('noscroll', !!(st.lib || st.food || st.tl || st.pesoSheet || st.meta || st.regPick || st.legal || st.del));
 }
 
 /* ================================================================== */
@@ -91,13 +92,58 @@ function viewAuth() {
         <label class="field"><span>Contraseña</span>
           <div class="pass-wrap"><input class="input" type="password" name="pass" autocomplete="${reg ? 'new-password' : 'current-password'}" required minlength="6" placeholder="${reg ? 'Mínimo 6 caracteres' : ''}"><button type="button" data-act="peek">Ver</button></div>
         </label>
+        ${reg ? `<label class="check"><input type="checkbox" name="acepto" required><span>Acepto los <button type="button" class="link" data-act="legal-open">Términos de Uso, la Política de Privacidad y el aviso de salud</button></span></label>` : ''}
         ${m ? `<div class="msg ${m.ok ? 'ok' : ''}" role="alert">${esc(m.text)}</div>` : ''}
         <button class="btn block" type="submit" ${st.busy ? 'disabled' : ''}>${st.busy ? '<span class="spinner"></span>' : reg ? 'Crear cuenta' : 'Entrar'}</button>
         ${reg ? '' : '<button type="button" class="link" data-act="forgot">He olvidado mi contraseña</button>'}
       </form>
       ${api.mode === 'local' ? `<p class="note"><span>●</span><span><b>Modo prueba.</b> Las cuentas y los datos se guardan solo en este dispositivo hasta que conectes Firebase.</span></p>` : ''}
     </div>
-  </div>`;
+  </div>${st.legal ? legalSheetHTML() : ''}`;
+}
+
+/* ---------- términos, privacidad y borrar la cuenta ---------- */
+function legalSheetHTML() {
+  return `<div class="sheet-back" data-act="legal-close"></div>
+    <div class="sheet" role="dialog" aria-modal="true" aria-label="Términos, privacidad y aviso de salud">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><button type="button" class="iconbtn" data-act="legal-close" aria-label="Cerrar">${I.back}</button><h2>Términos y privacidad</h2><span style="width:36px"></span></div>
+      <div class="sheet-list legal">${legalHTML()}</div>
+      <div class="sheet-foot"><button class="btn block" data-act="legal-close">Entendido</button></div>
+    </div>`;
+}
+function delSheetHTML() {
+  const D = st.del, ok = D.txt.trim().toUpperCase() === 'BORRAR' && !!D.pass;
+  return `<div class="sheet-back" data-act="del-close"></div>
+    <div class="sheet short" role="dialog" aria-modal="true" aria-label="Borrar mi cuenta">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><button type="button" class="iconbtn" data-act="del-close" aria-label="Cerrar">${I.back}</button><h2>Borrar mi cuenta</h2><span style="width:36px"></span></div>
+      <form class="sheet-list form-grid" data-form="delacc" novalidate>
+        <div class="msg">Se borrarán <b>para siempre</b> tu cuenta y todos tus datos: perfil, pesos, entrenos, rutinas, objetivos, comidas y taller. No se puede deshacer.</div>
+        <label class="field"><span>Tu contraseña</span><input class="input" type="password" name="pass" data-del="pass" autocomplete="current-password" value="${esc(D.pass)}"></label>
+        <label class="field"><span>Escribe BORRAR para confirmar</span><input class="input" name="txt" data-del="txt" autocapitalize="characters" autocomplete="off" value="${esc(D.txt)}" placeholder="BORRAR"></label>
+        ${D.msg ? `<div class="msg" role="alert">${esc(D.msg)}</div>` : ''}
+        <button class="btn block danger-solid" type="submit" id="del-go" ${ok && !D.busy ? '' : 'disabled'}>${D.busy ? '<span class="spinner"></span> Borrando…' : 'Borrar mi cuenta y todos mis datos'}</button>
+      </form>
+    </div>`;
+}
+async function borrarCuenta() {
+  const D = st.del;
+  if (D.txt.trim().toUpperCase() !== 'BORRAR') { D.msg = 'Escribe BORRAR para confirmar.'; return render(); }
+  if (!D.pass) { D.msg = 'Escribe tu contraseña.'; return render(); }
+  D.busy = true; D.msg = ''; render();
+  try {
+    await api.deleteAccount(D.pass);
+    // Limpia lo que la app guarda en este móvil (salvo el tema claro u oscuro).
+    try { Object.keys(localStorage).filter((k) => k.startsWith('cadencia-') && k !== 'cadencia-theme' && k !== 'cadencia-local-v1').forEach((k) => localStorage.removeItem(k)); } catch (e) { /* nada */ }
+    st.del = null; st.live = null; st.tab = 'inicio'; st.authMode = 'login';
+    st.authMsg = { ok: true, text: 'Tu cuenta y todos tus datos se han borrado.' };
+    if (st.user) enter(null); else render();
+  } catch (e) {
+    D.busy = false;
+    D.msg = ['auth/invalid-credential', 'auth/wrong-password', 'auth/invalid-login-credentials'].includes(e && e.code) ? 'La contraseña no es correcta.' : `No se ha podido borrar: ${errorText(e)}`;
+    render();
+  }
 }
 
 async function onLogin(form) {
@@ -112,9 +158,12 @@ async function onRegister(form) {
   if (!name) { st.authMsg = { text: 'Escribe tu nombre.' }; render(); return keepForm({ email }); }
   if (!email) { st.authMsg = { text: 'Escribe tu email.' }; render(); return keepForm({ name }); }
   if (pass.length < 6) { st.authMsg = { text: 'La contraseña necesita al menos 6 caracteres.' }; render(); return keepForm({ name, email }); }
+  if (!form.acepto.checked) { st.authMsg = { text: 'Para crear la cuenta tienes que aceptar los Términos de Uso, la Política de Privacidad y el aviso de salud.' }; render(); return keepForm({ name, email, pass }); }
   st.busy = true; st.authMsg = null; st.registering = true; render();
   try {
     const u = await api.register(name, email, pass);
+    // Consentimiento expreso (datos de salud): qué versión aceptó y cuándo.
+    try { await api.saveProfile(u.uid, { legal: { v: LEGAL_V, fecha: new Date().toISOString() } }); } catch (e) { /* se reintenta en el siguiente guardado */ }
     st.registering = false;
     await enter(u);
   } catch (e) {
@@ -125,7 +174,7 @@ async function onRegister(form) {
 function keepForm(vals) {
   const f = root.querySelector('form');
   if (!f) return;
-  Object.entries(vals).forEach(([k, v]) => { if (f[k]) f[k].value = v; });
+  Object.entries(vals).forEach(([k, v]) => { if (f[k]) { if (f[k].type === 'checkbox') f[k].checked = !!v; else f[k].value = v; } });
 }
 
 async function onForgot() {
@@ -302,7 +351,7 @@ const M = crearSecciones({
 });
 
 function viewMain() {
-  const sheet = st.lib ? libSheetHTML() : st.regPick ? regSheetHTML() : st.pesoSheet ? pesoSheetHTML() : M.sheet();
+  const sheet = st.legal ? legalSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.regPick ? regSheetHTML() : st.pesoSheet ? pesoSheetHTML() : M.sheet();
   if (st.rw) return viewRutWizard() + sheet;
   if (st.live && !st.liveMin) return viewLive() + sheet;
   if (st.wk) return viewWkForm();
@@ -635,6 +684,13 @@ function viewPerfil() {
       <h2>Cuenta</h2>
       <p class="small muted">${api.mode === 'firebase' ? 'Tus datos se guardan en la nube y los verás en cualquier dispositivo donde inicies sesión.' : 'Modo prueba: tus datos se guardan solo en este dispositivo.'}</p>
       <button class="btn ghost block" data-act="logout">Cerrar sesión</button>
+    </section>
+
+    <section class="card">
+      <h2>Privacidad y cuenta</h2>
+      <p class="small muted">Tus datos son privados y solo se usan para calcular tus métricas en Cadencia.</p>
+      <button class="btn ghost block" data-act="legal-open">Leer Términos y Privacidad</button>
+      <button class="btn block danger-solid" data-act="del-open">Borrar mi cuenta y todos mis datos</button>
     </section>`;
 }
 
@@ -672,7 +728,7 @@ function viewError() {
 /* ================================================================== */
 async function enter(u) {
   st.user = u; st.busy = false;
-  if (!u) { st.view = 'auth'; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
+  if (!u) { st.del = null; st.legal = false; st.view = 'auth'; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
   try {
     st.profile = await api.getProfile(u.uid);
     if (!st.profile || !st.profile.onboarded) return startOnboarding();
@@ -695,6 +751,10 @@ root.addEventListener('click', async (e) => {
   const act = b.dataset.act, v = b.dataset.v;
   if (await M.click(act, v, b)) return;
   if (act === 'mode') { st.authMode = v; st.authMsg = null; const f = root.querySelector('form'); const email = f && f.email.value; render(); keepForm({ email }); }
+  else if (act === 'legal-open') { if (st.view === 'auth') { const f = root.querySelector('form'); st.authKeep = f ? { name: f.name ? f.name.value : '', email: f.email.value, pass: f.pass.value, acepto: f.acepto ? f.acepto.checked : false } : null; } st.legal = true; render(); if (st.authKeep) keepForm(st.authKeep); }
+  else if (act === 'legal-close') { st.legal = false; render(); if (st.view === 'auth' && st.authKeep) { keepForm(st.authKeep); st.authKeep = null; } }
+  else if (act === 'del-open') { st.del = { pass: '', txt: '', msg: '', busy: false }; render(); }
+  else if (act === 'del-close') { if (!st.del || !st.del.busy) { st.del = null; render(); } }
   else if (act === 'peek') { const i = b.previousElementSibling; i.type = i.type === 'password' ? 'text' : 'password'; b.textContent = i.type === 'password' ? 'Ver' : 'Ocultar'; }
   else if (act === 'forgot') onForgot();
   else if (act === 'goal') { const g = st.ob.objetivos; st.ob.objetivos = g.includes(v) ? g.filter((x) => x !== v) : [...g, v]; render(); }
@@ -726,6 +786,11 @@ root.addEventListener('click', async (e) => {
 });
 
 root.addEventListener('input', (e) => {
+  if (st.del && e.target.dataset.del) {
+    st.del[e.target.dataset.del] = e.target.value;
+    const go = document.getElementById('del-go'); if (go) go.disabled = !(st.del.txt.trim().toUpperCase() === 'BORRAR' && st.del.pass) || st.del.busy;
+    return;
+  }
   if (st.view === 'main' && M.input(e.target)) return;
   const k = e.target.dataset && e.target.dataset.ob;
   if (!k || !st.ob) return;
@@ -748,6 +813,7 @@ root.addEventListener('submit', async (e) => {
   else if (kind === 'quickweight') { const ok = await saveWeight(todayISO(), f.kg.value); if (!ok) return; }
   else if (kind === 'addweight') saveWeight(f.fecha.value, f.kg.value, { grasa: f.grasa.value, musculo: f.musculo.value, agua: f.agua.value, hueso: f.hueso.value });
   else if (kind === 'profile') saveProfileForm(f);
+  else if (kind === 'delacc') borrarCuenta();
   else if (kind === 'wk') wkSave();
   else if (kind === 'rw') rwNext();
 });

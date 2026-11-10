@@ -275,11 +275,12 @@ export function crearSecciones(ctx) {
     const off = !O ? `<button type="button" class="btn ${res.length ? 'ghost ' : ''}small" style="margin-top:8px" data-act="n-off">Buscar «${esc(q)}» en productos de marca</button>`
       : O.loading ? '<p class="muted small" style="padding:8px 2px">Buscando productos de marca…</p>'
       : O.err ? `<p class="small" style="padding:8px 2px">${esc(O.err)}</p>`
-      : O.list.length ? `<div class="lgroup">Productos de marca</div>${O.list.map(foodRow).join('')}<p class="small muted">Datos de <a href="https://es.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a>, una base abierta: compáralos con la etiqueta.</p>`
+      : O.list.length ? `<div class="lgroup">Productos de marca</div>${O.list.map(foodRow).join('')}<p class="small muted">Compáralos con la etiqueta: los rellena una comunidad.</p>`
       : '<p class="small muted" style="padding:8px 2px">No hay productos de marca con ese nombre.</p>';
     return `${res.map(foodRow).join('') || `<p class="muted" style="padding:6px 2px">No está en la tabla de alimentos.</p>`}
       ${all.length > res.length ? `<p class="small muted">Hay ${all.length - res.length} más: afina la búsqueda.</p>` : ''}
       ${off}
+      <p class="offnote">Datos de productos de marca de <a href="https://es.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a> (Licencia <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">ODbL</a>)</p>
       <button type="button" class="btn ghost small" style="margin-top:8px" data-act="n-quick">¿No está? Apúntalo a mano</button>`;
   }
   function foodChoice(food) {
@@ -311,7 +312,7 @@ export function crearSecciones(ctx) {
         <div class="scanbox ${S.cam ? '' : 'nocam'}"><video id="scan-video" playsinline muted autoplay></video><span class="scanframe"></span>
           <p id="scan-msg" class="scanmsg">${esc(S.msg || 'Abriendo la cámara…')}</p></div>
         <form class="quick" data-form="scan" novalidate><input class="input" name="code" inputmode="numeric" maxlength="14" placeholder="O escribe el código (8 a 14 cifras)" aria-label="Código de barras" value="${esc(S.code || '')}"><button class="btn small" type="submit">Buscar</button></form>
-        <p class="small muted">Busca el producto en <a href="https://es.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a>. Compara los datos con la etiqueta.</p>
+        <p class="offnote">Datos de productos de marca de <a href="https://es.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a> (Licencia <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">ODbL</a>)</p>
       </div>`;
     } else if (food) {
       const c = foodChoice(food), extra = c.pm ? prepKcal100(c.pm) : 0;

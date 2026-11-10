@@ -15,6 +15,7 @@ App web instalable (PWA) para iPhone y Android: registro e inicio de sesión, cu
 | `css/app.css` | Diseño (colores, tipografía, modo oscuro) |
 | `js/app.js` | Núcleo: acceso, cuestionario inicial, Inicio, Peso, Perfil, navegación y arranque |
 | `js/entreno-ui.js` | Entreno: semana, historial, rutinas, asistente, biblioteca, entreno en directo con descanso, registro |
+| `js/legal.js` | Términos de uso, privacidad y aviso de salud (`LEGAL_V` = versión; `CONTACTO` = correo de privacidad) |
 | `js/util.js` | Utilidades compartidas (formato, avisos, iconos) |
 | `js/vendor/zxing.js` | Lector de códigos de barras (ZXing, MIT/Apache-2.0), solo se carga al escanear en iPhone |
 | `js/data.js` | Conexión con Firebase y modo prueba |
@@ -75,6 +76,10 @@ users/{uid}  → campo garaje
   bicis[{id, nombre, tipo, marcaModelo, anio, pesoKg, cubiertaMm, tubeless, kmPrevios, comps[{id, cat, nombre, desde, kmIni, cadaKm, precio}]}]
   mejora {presupuesto, metas[], deseos[{id, n, precio}]}
 ```
+
+## Privacidad
+
+Al crear la cuenta hay que aceptar los términos (se guarda `legal {v, fecha}` en el perfil). En Perfil → Privacidad y cuenta se pueden leer y se puede borrar la cuenta: pide la contraseña y escribir BORRAR, borra `pesos`, `entrenos`, `comidas`, el documento `users/{uid}` y el usuario de Firebase Auth. Antes de abrir la app al público, rellena `CONTACTO` en `js/legal.js` y revisa los textos con un profesional.
 
 ## Novedades
 

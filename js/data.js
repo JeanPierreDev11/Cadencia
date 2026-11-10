@@ -63,6 +63,21 @@ async function firebaseBackend(config) {
       const s = await F.getDocs(q);
       return s.docs.map((d) => d.data());
     },
+    // Borra la cuenta: primero confirma la contraseña, luego todos los datos (pesos, entrenos, comidas y perfil) y por último el usuario.
+    async deleteAccount(pass) {
+      const u = auth.currentUser;
+      if (!u) throw Object.assign(new Error('no-user'), { code: 'auth/no-current-user' });
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) throw Object.assign(new Error('offline'), { code: 'auth/network-request-failed' });
+      await A.reauthenticateWithCredential(u, A.EmailAuthProvider.credential(u.email, pass));
+      for (const sub of ['pesos', 'entrenos', 'comidas']) {
+        const snap = await F.getDocsFromServer(F.collection(db, 'users', u.uid, sub));
+        let b = F.writeBatch(db), n = 0;
+        for (const d of snap.docs) { b.delete(d.ref); if (++n === 450) { await b.commit(); b = F.writeBatch(db); n = 0; } }
+        if (n) await b.commit();
+      }
+      await F.deleteDoc(userRef(u.uid));
+      await A.deleteUser(u);
+    },
     async listWorkouts(uid, n = 500) { // de más reciente a más antiguo
       const q = F.query(F.collection(db, 'users', uid, 'entrenos'), F.orderBy('fecha', 'desc'), F.limit(n));
       const s = await F.getDocs(q);
@@ -133,6 +148,12 @@ function localBackend() {
     async deleteWorkout(uid, id) { const s = read(); const u = byUid(s, uid); if (!u || !u.entrenos) return; delete u.entrenos[id]; write(s); },
     async saveDia(uid, fecha, data) { const s = read(); const u = byUid(s, uid); if (!u) return; (u.comidas = u.comidas || {})[fecha] = { ...data, fecha }; write(s); },
     async listDias(uid, desde) { const u = byUid(read(), uid); if (!u || !u.comidas) return []; return Object.values(u.comidas).filter((d) => d.fecha >= desde); },
+    async deleteAccount(pass) {
+      const s = read(), email = s.session, u = email && s.users[email];
+      if (!u) throw err('auth/no-current-user');
+      if (u.pass !== (await hash(pass))) throw err('auth/invalid-credential');
+      delete s.users[email]; s.session = null; write(s); emit();
+    },
     async listWorkouts(uid, n = 500) {
       const u = byUid(read(), uid); if (!u || !u.entrenos) return [];
       return Object.values(u.entrenos).sort((a, b) => b.fecha.localeCompare(a.fecha) || (b.id > a.id ? 1 : -1)).slice(0, n);
@@ -159,6 +180,8 @@ const MESSAGES = {
   'auth/unauthorized-domain': 'Esta dirección web no está autorizada en Firebase (Authentication → Settings → Authorized domains).',
   'permission-denied': 'La base de datos ha rechazado la operación. Revisa las reglas de Firestore.',
   'unavailable': 'Sin conexión con la base de datos. Se guardará al volver la conexión.',
+  'auth/no-current-user': 'No hay ninguna sesión iniciada.',
+  'auth/requires-recent-login': 'Por seguridad, vuelve a escribir tu contraseña.',
   'local/no-reset': 'En modo prueba no se puede recuperar la contraseña: crea una cuenta nueva.',
 };
 export const errorText = (e) => MESSAGES[e && e.code] || (e && e.message) || 'Algo ha fallado. Vuelve a probar.';
