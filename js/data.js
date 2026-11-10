@@ -63,6 +63,10 @@ async function firebaseBackend(config) {
     async saveWorkout(uid, w) { await F.setDoc(F.doc(db, 'users', uid, 'entrenos', w.id), w); },
     async deleteWorkout(uid, id) { await F.deleteDoc(F.doc(db, 'users', uid, 'entrenos', id)); },
     async saveDia(uid, fecha, data) { await F.setDoc(F.doc(db, 'users', uid, 'comidas', fecha), { ...data, fecha }); },
+    // Rutas importadas de un GPX (recorrido simplificado, km y desnivel).
+    async saveRuta(uid, r) { await F.setDoc(F.doc(db, 'users', uid, 'rutas', r.id), r); },
+    async listRutas(uid) { const s = await F.getDocs(F.collection(db, 'users', uid, 'rutas')); return s.docs.map((d) => d.data()).sort((a, b) => (b.creado || '').localeCompare(a.creado || '')); },
+    async deleteRuta(uid, id) { await F.deleteDoc(F.doc(db, 'users', uid, 'rutas', id)); },
     async listDias(uid, desde) {
       const q = F.query(F.collection(db, 'users', uid, 'comidas'), F.where('fecha', '>=', desde));
       const s = await F.getDocs(q);
@@ -74,7 +78,7 @@ async function firebaseBackend(config) {
       if (!u) throw Object.assign(new Error('no-user'), { code: 'auth/no-current-user' });
       if (typeof navigator !== 'undefined' && navigator.onLine === false) throw Object.assign(new Error('offline'), { code: 'auth/network-request-failed' });
       await A.reauthenticateWithCredential(u, A.EmailAuthProvider.credential(u.email, pass));
-      for (const sub of ['pesos', 'entrenos', 'comidas']) {
+      for (const sub of ['pesos', 'entrenos', 'comidas', 'rutas']) {
         const snap = await F.getDocsFromServer(F.collection(db, 'users', u.uid, sub));
         let b = F.writeBatch(db), n = 0;
         for (const d of snap.docs) { b.delete(d.ref); if (++n === 450) { await b.commit(); b = F.writeBatch(db); n = 0; } }
@@ -162,6 +166,9 @@ function localBackend() {
     async saveWorkout(uid, w) { const s = read(); const u = byUid(s, uid); if (!u) return; (u.entrenos = u.entrenos || {})[w.id] = w; write(s); },
     async deleteWorkout(uid, id) { const s = read(); const u = byUid(s, uid); if (!u || !u.entrenos) return; delete u.entrenos[id]; write(s); },
     async saveDia(uid, fecha, data) { const s = read(); const u = byUid(s, uid); if (!u) return; (u.comidas = u.comidas || {})[fecha] = { ...data, fecha }; write(s); },
+    async saveRuta(uid, r) { const s = read(); const u = byUid(s, uid); if (!u) return; (u.rutas = u.rutas || {})[r.id] = r; write(s); },
+    async listRutas(uid) { const u = byUid(read(), uid); return u && u.rutas ? Object.values(u.rutas).sort((a, c) => (c.creado || '').localeCompare(a.creado || '')) : []; },
+    async deleteRuta(uid, id) { const s = read(); const u = byUid(s, uid); if (u && u.rutas) { delete u.rutas[id]; write(s); } },
     async listDias(uid, desde) { const u = byUid(read(), uid); if (!u || !u.comidas) return []; return Object.values(u.comidas).filter((d) => d.fecha >= desde); },
     async deleteAccount(pass) {
       const s = read(), email = s.session, u = email && s.users[email];

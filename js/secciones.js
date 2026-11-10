@@ -3,6 +3,9 @@
 // vienen de la librería de la app «Bilbao Ride» (js/br.js); aquí está la parte visual y los datos de cada persona.
 import { FOODS, FOODS_BY_ID, prepOf, prepVals, prepKcal100, normTxt as normFood } from './alimentos.js';
 import { PRO_LINK, PORTAL_LINK, PRO_PRECIO, proUrl } from './pro.js';
+import { leerGPX, MAX_BYTES } from './gpx.js';
+import { trazado, IDA_Y_VUELTA } from './trazados.js';
+import { crearMapa } from './mapa.js';
 
 const BR = globalThis.BR || {};
 const N = BR.nutrition, T = BR.training, RF = BR.routeFuel, RT = BR.routes, BD = BR.body, GS = BR.groupsets;
@@ -27,7 +30,7 @@ const ICO = {
 };
 
 /* Novedades: cambia NOV_V cada vez que publiques algo nuevo para que salga la nota en Inicio. */
-const NOV_V = '2026-11-10b';
+const NOV_V = '2026-11-11';
 
 /* Objetivos de entreno: [id, grupo, texto, unidad, periodo (sem | mes | reto), ejemplo] */
 const META_T = [
@@ -134,6 +137,7 @@ export function crearSecciones(ctx) {
       const list = await api.listDias(u, E.addDays(todayISO(), -90));
       list.forEach((d) => { st.dias[d.fecha] = d; });
     } catch (e) { /* sin comidas: no impide entrar */ }
+    try { st.rutas = await api.listRutas(u); } catch (e) { st.rutas = st.rutas || []; }
     try { const g = JSON.parse(lsGet('cadencia-geo') || 'null'); if (g && g.lat) st.geo = { ...g, status: 'ok' }; } catch (e) { /* nada */ }
   }
   async function saveProfile(data) {
@@ -445,6 +449,7 @@ export function crearSecciones(ctx) {
     }
   }
   function afterRender() {
+    pintarMapa();
     // Si la pantalla del escáner ya no está, apaga la cámara; si acaba de aparecer, enciéndela.
     const v = document.getElementById('scan-video');
     if (!v) { stopScan(); return; }
@@ -542,12 +547,83 @@ export function crearSecciones(ctx) {
   }
   const KIND = (k) => (RT.KIND_LABEL || {})[k] || k;
 
+  /* ----- Mapa y rutas GPX ----- */
+  const mapa = crearMapa();
+  let rutaVista = null; // id de la ruta que se está viendo (la pone viewRutas en cada pintado)
+  const pares = (flat) => { const o = []; for (let i = 0; i + 1 < flat.length; i += 2) o.push([flat[i], flat[i + 1]]); return o; };
+  const rutaUsuario = (id) => (st.rutas || []).find((r) => 'u:' + r.id === id);
+  const comoRuta = (r) => ({ id: 'u:' + r.id, name: r.nombre, kind: 'propia', km: r.km, climbM: r.desnivel || 0, maxAltM: r.altMax || 100, description: 'Tu ruta importada desde un archivo GPX.' });
+  // Pinta el mapa tras cada render: primero el GPX que acabas de abrir; si no, la ruta elegida.
+  function pintarMapa() {
+    const host = document.getElementById('rutamap');
+    if (!host) return;
+    if (!mapa.montar(host)) return;
+    if (st.gpx && st.gpx.puntos) { mapa.dibujar('gpx:' + st.gpx.k, pares(st.gpx.puntos)); return; }
+    const u = rutaVista && rutaUsuario(rutaVista);
+    if (u) { mapa.dibujar(rutaVista, pares(u.puntos)); return; }
+    const t = rutaVista && trazado(rutaVista);
+    if (t) mapa.dibujar(rutaVista, t);
+  }
+  async function abrirGPX(file) {
+    if (!file) return;
+    if (file.size > MAX_BYTES) { toast('El archivo es demasiado grande (máximo 25 MB)'); return; }
+    try {
+      const g = leerGPX(await file.text());
+      st.gpx = { ...g, k: Date.now(), nombre: g.nombre || file.name.replace(/\.gpx$/i, '').slice(0, 80) };
+      render();
+      const f = document.getElementById('gpx-form'); if (f && f.scrollIntoView) f.scrollIntoView({ block: 'nearest' });
+    } catch (e) { toast(e && e.message ? e.message : 'No se ha podido leer el archivo GPX'); }
+  }
+  async function guardarRuta(f) {
+    const g = st.gpx; if (!g) return;
+    const nombre = f.nombre.value.trim().slice(0, 80), km = num(f.km.value), ds = String(f.desnivel.value).trim() ? num(f.desnivel.value) : null;
+    if (!nombre) { toast('Ponle un nombre a la ruta'); return; }
+    if (!(km > 0 && km <= 2000)) { toast('Revisa los km'); return; }
+    if (ds != null && !(ds >= 0 && ds <= 30000)) { toast('Revisa el desnivel'); return; }
+    const r = { id: 'g' + Date.now().toString(36), nombre, km: Math.round(km * 10) / 10, desnivel: ds == null ? null : Math.round(ds), altMax: g.altMax, puntos: g.puntos, creado: todayISO(), origen: 'gpx' };
+    try { await api.saveRuta(uid(), r); } catch (e) { toast(errorText(e)); return; }
+    st.rutas = [r, ...(st.rutas || [])]; st.gpx = null; st.ruta = 'u:' + r.id; st.rutaDel = null;
+    render(); toast('Ruta guardada');
+  }
+  function misRutasHTML() {
+    const L = st.rutas || [];
+    if (!L.length) return '';
+    return `<section class="card"><div class="card-head"><h2>Mis rutas</h2></div><div class="routes">${L.map((r) => `<div class="route urow ${rutaVista === 'u:' + r.id ? 'on' : ''}">
+      <button type="button" class="urow-m" data-act="r-ver-u" data-v="${esc(r.id)}"><span class="route-t"><b>${esc(r.nombre)}</b></span><span class="muted small">${nf(r.km, 1)} km${r.desnivel != null ? ` · ${nf(r.desnivel)} m+` : ''} · ${esc(fmtDate(r.creado || todayISO()))}</span></button>
+      ${st.rutaDel === r.id ? `<button type="button" class="chipbtn chip danger" data-act="r-del-u" data-v="${esc(r.id)}">Confirmar</button>` : `<button type="button" class="chipbtn chip" data-act="r-del-u" data-v="${esc(r.id)}" aria-label="Borrar ${esc(r.nombre)}">Borrar</button>`}
+    </div>`).join('')}</div></section>`;
+  }
+  function mapaCardHTML(selName) {
+    const g = st.gpx, u = rutaVista && rutaUsuario(rutaVista);
+    const nota = g ? `Ruta del archivo: <b>${nf(g.km, 1)} km</b>${g.desnivel != null ? ` · <b>${nf(g.desnivel)} m+</b>` : ''}. Revísala y guárdala.`
+      : u ? `Tu ruta guardada «${esc(u.nombre)}».`
+      : `Trazado <b>orientativo</b> de «${esc(selName)}»${IDA_Y_VUELTA.has(rutaVista) ? ' (ida y vuelta por el mismo camino)' : ''}: para verlo exacto, sube tu GPX.`;
+    const form = g ? `<form id="gpx-form" class="form-grid gpxform" data-form="gpx" novalidate>
+        <h3>Nueva ruta desde tu GPX</h3>
+        <label class="field"><span>Nombre</span><input class="input" name="nombre" maxlength="80" value="${esc(g.nombre)}"></label>
+        <div class="two"><label class="field"><span>Distancia (km)</span><input class="input" name="km" inputmode="decimal" value="${esc(String(g.km).replace('.', ','))}"></label>
+        <label class="field"><span>Desnivel + (m)</span><input class="input" name="desnivel" inputmode="numeric" value="${g.desnivel != null ? esc(String(g.desnivel)) : ''}" placeholder="${g.desnivel == null ? 'Sin altitud en el archivo' : ''}"></label></div>
+        <p class="small muted">Se ha leído en tu móvil: el archivo no se envía a ningún sitio. Solo guardamos el recorrido simplificado (${nf(g.puntos.length / 2)} puntos de ${nf(g.total)}).</p>
+        <button class="btn block" type="submit">Guardar ruta</button>
+        <button class="btn ghost block" type="button" data-act="gpx-cancel">Descartar</button>
+      </form>` : '';
+    return `<section class="card mapcard">
+      <div class="card-head"><h2>Mapa</h2><button type="button" class="chipbtn chip" data-act="map-big" aria-pressed="${!!st.mapBig}">${st.mapBig ? 'Reducir' : 'Ampliar'}</button></div>
+      <div id="rutamap" class="rutamap${st.mapBig ? ' big' : ''}"></div>
+      <p class="small muted" id="map-nota">${nota}</p>
+      <label class="btn ghost block gpxbtn"><input type="file" id="gpxfile" data-gpx accept=".gpx,application/gpx+xml,application/xml,text/xml,application/octet-stream" hidden>Subir ruta GPX</label>
+      ${form}
+    </section>`;
+  }
+
   function viewRutas() {
     if (!RT || !RF) return '<section class="card"><p>No se han podido cargar las rutas.</p></section>';
     if (!st.wx && !st.wxLoading && !st.wxErr) setTimeout(() => loadWx(), 0);
     const w = wxNow(), ranked = rankedRoutes(), pm = pmcData();
-    const selId = st.ruta && ranked.some((x) => x.route.id === st.ruta) ? st.ruta : ranked[0].route.id;
-    const sel = ranked.find((x) => x.route.id === selId).route;
+    const uSel = st.ruta && String(st.ruta).startsWith('u:') ? rutaUsuario(st.ruta) : null;
+    const selId = uSel ? st.ruta : st.ruta && ranked.some((x) => x.route.id === st.ruta) ? st.ruta : ranked[0].route.id;
+    const sel = uSel ? comoRuta(uSel) : ranked.find((x) => x.route.id === selId).route;
+    rutaVista = selId;
     let h = '';
 
     // Ubicación
@@ -559,6 +635,7 @@ export function crearSecciones(ctx) {
     else if (g.km <= 60) loc = `<p>${ICO.pin} Estás a ${nf(g.km)} km de Bilbao: el tiempo es el de tu zona.</p>`;
     else loc = `<p>${ICO.pin} Estás a ${nf(g.km)} km de Bilbao. <b>De momento solo hay rutas por Bilbao</b>; te las enseñamos con el tiempo de allí para cuando vayas.</p>`;
     h += `<section class="card loc">${loc}</section>`;
+    h += mapaCardHTML(sel.name);
 
     // Tiempo
     const hrs = st.wx ? st.wx.hours : [];
@@ -580,6 +657,7 @@ export function crearSecciones(ctx) {
         ${x.why.length ? `<span class="small why">${esc(x.why.join(' · '))}</span>` : ''}
       </button>`).join('')}</div>
       <p class="small muted">Km y desnivel orientativos: ajusta con tu ruta real.</p></section>`;
+    h += misRutasHTML();
 
     // Plan de la ruta elegida
     const kg = currentKg() || 70, zona = st.zona || 'Z2';
@@ -940,7 +1018,16 @@ export function crearSecciones(ctx) {
       // Rutas
       case 'r-geo': locate(); return true;
       case 'r-preset': st.wxPreset = v || null; render(); return true;
-      case 'r-ruta': st.ruta = v; render(); return true;
+      case 'r-ruta': st.ruta = v; st.gpx = null; render(); return true;
+      case 'r-ver-u': st.ruta = 'u:' + v; st.gpx = null; render(); return true;
+      case 'r-del-u': {
+        if (st.rutaDel !== v) { st.rutaDel = v; render(); return true; }
+        try { await api.deleteRuta(uid(), v); } catch (e) { toast(errorText(e)); return true; }
+        st.rutas = (st.rutas || []).filter((r) => r.id !== v); st.rutaDel = null; if (st.ruta === 'u:' + v) st.ruta = null;
+        render(); toast('Ruta borrada'); return true;
+      }
+      case 'gpx-cancel': st.gpx = null; render(); return true;
+      case 'map-big': st.mapBig = !st.mapBig; render(); return true;
       case 'r-zona': st.zona = v; render(); return true;
       case 'r-ver': st.ruta = v; st.tab = 'bici'; st.biciSub = 'rutas'; lsSet('cadencia-tab', 'bici'); render(); window.scrollTo(0, 0); return true;
       case 'bici-sub': st.biciSub = v; lsSet('cadencia-bicisub', v); render(); window.scrollTo(0, 0); return true;
@@ -996,6 +1083,7 @@ export function crearSecciones(ctx) {
       // Novedades
       case 'nov-open': st.novOpen = true; render(); { const n = document.getElementById('novedades'); if (n) n.scrollIntoView({ block: 'start' }); } return true;
       case 'nov-ok': st.novOpen = false; if (novNueva()) await saveProfile({ novVista: NOV_V }); render(); return true;
+      case 'nov-rutas': st.tab = 'bici'; st.biciSub = 'rutas'; lsSet('cadencia-tab', 'bici'); lsSet('cadencia-bicisub', 'rutas'); render(); window.scrollTo(0, 0); return true;
       case 'nov-wk': st.tab = 'entreno'; st.wkTab = v; lsSet('cadencia-tab', 'entreno'); lsSet('cadencia-wktab', v); render(); window.scrollTo(0, 0); return true;
       // Objetivos
       case 'meta-new': st.meta = { d: { g: 'Bici', tipo: 'bici_km_sem', valor: '', ej: '', hasta: '' } }; if (!tieneBici()) { st.meta.d.g = 'General'; st.meta.d.tipo = 'sesiones_sem'; } render(); return true;
@@ -1050,6 +1138,7 @@ export function crearSecciones(ctx) {
   }
   async function change(t) {
     if (t.dataset.ndate != null) { if (t.value && t.value <= todayISO()) { st.nDate = t.value; render(); } return true; }
+    if (t.dataset.gpx != null) { const f = t.files && t.files[0]; t.value = ''; abrirGPX(f); return true; }
     if (t.dataset.iafoto != null) { const f = t.files && t.files[0]; t.value = ''; st.food = null; fotoPlato(f, Number(t.dataset.iafoto)); return true; }
     if (st.iaFoto && t.dataset.iaprep) { const it = st.iaFoto.items.find((x) => x.key === t.dataset.iaprep); if (it) it.prep = t.value; render(); return true; }
     if (t.dataset.wxh != null) { st.wxIdx = Number(t.value); render(); return true; }
@@ -1063,6 +1152,7 @@ export function crearSecciones(ctx) {
   }
   async function submit(kind, f) {
     if (kind === 'scan') { stopScan(); buscarCodigo(f.code.value); return true; }
+    if (kind === 'gpx') { await guardarRuta(f); return true; }
     if (kind === 'deseo') {
       const n = f.n.value.trim(), pr = String(f.precio.value).trim() ? num(f.precio.value) : 0;
       if (!n) { toast('Escribe qué pieza es'); return true; }
@@ -1346,6 +1436,7 @@ export function crearSecciones(ctx) {
   function novItems() {
     const bici = tieneBici();
     return [
+      { t: 'Mapas interactivos y subida de rutas GPX', d: 'En Rutas ya hay un mapa: elige una salida y verás su recorrido (orientativo). Con «Subir ruta GPX» cargas un archivo de tu móvil: leemos los km y el desnivel en tu propio teléfono, dibujamos la ruta y la guardas en tu cuenta. Es gratis para todos.', como: bici ? 'Bici → Rutas → Mapa → Subir ruta GPX.' : 'Aparece cuando tu rutina incluye bici: Entreno → Rutinas → Cambiar días o tipos → marca Bici.', act: bici ? 'nov-rutas' : 'nov-bici', v: 'rutas', btn: bici ? 'Ver el mapa' : 'Añadir bici a mi rutina' },
       { t: 'Foto del plato con IA', d: 'Haz una foto a tu plato: la IA reconoce los alimentos, estima los gramos y cómo están cocinados, y los busca en la tabla de la app. Tú revisas y corriges antes de guardar.', como: 'Nutrición → «Foto con IA» en cada comida. Tienes 10 consultas de IA al día.', act: 'tab', v: 'nutricion', btn: 'Ir a Nutrición' },
       { t: 'Recomendación de piezas con IA', d: 'En el Taller, la IA lee tu bici, sus componentes y tu presupuesto, y te propone 3 piezas compatibles con precio orientativo que puedes añadir a tu lista de compra.', como: bici ? 'Bici → Taller → Recomendación con IA.' : 'Aparece cuando tu rutina incluye bici: Entreno → Rutinas → Cambiar días o tipos → marca Bici.', act: bici ? 'tab' : 'nov-bici', v: 'taller', btn: bici ? 'Ir al Taller' : 'Añadir bici a mi rutina' },
       { t: 'Elige qué registras cada día', d: 'Si hoy te tocaba fuerza pero sales en bici o a correr, «Registrar» te pregunta qué has hecho: fuerza, bici o cardio.', como: 'Inicio → Entreno de hoy → Registrar, o Entreno → Registrar. También tocando un día de la semana.', act: 'nov-wk', v: 'semana', btn: 'Ir a Entreno' },

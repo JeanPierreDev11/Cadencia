@@ -111,3 +111,10 @@ La previsión de Rutas viene de [Open-Meteo](https://open-meteo.com/) (sin clave
 - `stripeWebhook` (europe-west1) recibe `checkout.session.completed`, `customer.subscription.updated` y `customer.subscription.deleted`, valida la firma y activa o quita `isPro`. Localiza a la persona por `client_reference_id` (el uid, que la app añade al enlace) o por el email.
 - Enlace de pago y portal: `js/pro.js` (`PRO_LINK`, `PORTAL_LINK`). Secretos de Firebase: `STRIPE_SECRET_KEY` y `STRIPE_WEBHOOK_SECRET` (se guardan desde los secretos de GitHub con el workflow «Publicar IA en Firebase»).
 
+## Mapas y rutas GPX (gratis para todos)
+- Pestaña Bici → Rutas: mapa interactivo con **Leaflet 1.9.4** (cargado desde unpkg con huella SRI en `index.html`) y teselas de OpenStreetMap, sin clave de API. Atribución de OSM visible. Si en el futuro hay mucho tráfico o uso comercial intensivo, hay que cambiar a un proveedor de teselas propio o de pago (la política de OSM no admite uso masivo).
+- `js/trazados.js`: trazados **orientativos** (puntos de paso suavizados) de las 6 rutas de Bilbao. Sustituirlos por GPX reales cuando se tengan.
+- `js/gpx.js`: `leerGPX(texto)` lee el archivo **en el móvil** (DOMParser): distancia (haversine), desnivel positivo (mediana de 3 + umbral de 3 m) y recorrido simplificado (Douglas-Peucker, ≤ 700 puntos) para que quepa en Firestore.
+- `js/mapa.js`: el mapa vive en un `<div>` propio que se recoloca tras cada `render()` (no se recarga).
+- Rutas guardadas: `users/{uid}/rutas/{id}` = `{id, nombre, km, desnivel, altMax, puntos:[lat,lon,…], creado, origen}`. Se borran con la cuenta.
+
