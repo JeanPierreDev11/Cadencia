@@ -76,6 +76,7 @@ async function firebaseBackend(config) {
         for (const d of snap.docs) { b.delete(d.ref); if (++n === 450) { await b.commit(); b = F.writeBatch(db); n = 0; } }
         if (n) await b.commit();
       }
+      try { await this.ia({ modo: 'borrar' }); } catch (e) { /* si no hay IA, no hay contadores que borrar */ }
       await F.deleteDoc(userRef(u.uid));
       await A.deleteUser(u);
     },

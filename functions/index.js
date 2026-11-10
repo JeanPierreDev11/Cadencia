@@ -7,7 +7,6 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { setGlobalOptions } = require('firebase-functions/v2');
 const { defineSecret } = require('firebase-functions/params');
-const functionsV1 = require('firebase-functions/v1');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const Anthropic = require('@anthropic-ai/sdk');
@@ -179,6 +178,13 @@ exports.ia = onCall({ secrets: [CLAVE], timeoutSeconds: 90, memory: '512MiB', cp
     const s = await usoRef(uid, dia).get();
     return { quedan: Math.max(0, LIMITE_USUARIO - ((s.exists && s.data().n) || 0)), limite: LIMITE_USUARIO };
   }
+  if (modo === 'borrar') { // la app lo llama al borrar la cuenta: elimina los contadores de uso de esta persona
+    const q = await db.collection('iaUso').where('uid', '==', uid).get();
+    const b = db.batch();
+    q.docs.forEach((d) => b.delete(d.ref));
+    if (q.size) await b.commit();
+    return { ok: true };
+  }
   if (modo !== 'plato' && modo !== 'taller') throw new HttpsError('invalid-argument', 'Petición no válida.');
 
   // Reserva una consulta (por persona y global) antes de llamar a la IA.
@@ -205,12 +211,4 @@ exports.ia = onCall({ secrets: [CLAVE], timeoutSeconds: 90, memory: '512MiB', cp
     console.error('IA', modo, e && e.status, e && e.message);
     throw new HttpsError('unavailable', 'La IA no ha respondido. Prueba otra vez en un momento.');
   }
-});
-
-// Al borrar una cuenta, borra también sus contadores de uso de la IA.
-exports.limpiarIA = functionsV1.region('europe-west1').auth.user().onDelete(async (user) => {
-  const q = await db.collection('iaUso').where('uid', '==', user.uid).get();
-  const b = db.batch();
-  q.docs.forEach((d) => b.delete(d.ref));
-  if (q.size) await b.commit();
 });
