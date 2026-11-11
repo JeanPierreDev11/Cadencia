@@ -3,7 +3,7 @@ import { APP_NAME } from './config.js';
 import * as E from './entreno.js';
 import { crearSecciones, NOV_V } from './secciones.js';
 import { crearEntreno } from './entreno-ui.js';
-import { LEGAL_V, legalHTML } from './legal.js';
+import { LEGAL_V, legalHTML, CONTACTO } from './legal.js';
 import { PORTAL_LINK, PRO_PRECIO } from './pro.js';
 import { leerRetorno } from './strava.js';
 import { crearRecordatorios, leerIr } from './push.js';
@@ -69,7 +69,7 @@ function render() {
   else if (st.view === 'error') root.innerHTML = viewError();
   document.title = APP_NAME;
   if (M) M.afterRender();
-  document.body.classList.toggle('noscroll', !!(st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.legal || st.del || st.pro || st.proWelcome || st.recAsk));
+  document.body.classList.toggle('noscroll', !!(st.pf || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.legal || st.del || st.pro || st.proWelcome || st.recAsk));
 }
 
 /* ================================================================== */
@@ -131,7 +131,7 @@ function delSheetHTML() {
       <div class="sheet-grab"></div>
       <div class="sheet-head"><button type="button" class="iconbtn" data-act="del-close" aria-label="Cerrar">${I.back}</button><h2>Borrar mi cuenta</h2><span style="width:36px"></span></div>
       <form class="sheet-list form-grid" data-form="delacc" novalidate>
-        <div class="msg">Se borrarán <b>para siempre</b> tu cuenta y todos tus datos: perfil, pesos, entrenos, rutinas, objetivos, comidas y taller. No se puede deshacer.</div>
+        <div class="msg"><b>¿Estás seguro? Esta acción no se puede deshacer.</b> Se borrarán <b>para siempre</b> tu cuenta y todos tus datos: perfil, foto, pesos, entrenos, rutinas, objetivos, comidas y taller.</div>
         ${st.profile && st.profile.isPro === true ? '<div class="msg ok">Tienes Cadencia Pro. Borrar la cuenta <b>no cancela la suscripción</b>: cancélala antes desde el enlace del recibo de Stripe que te llegó por email.</div>' : ''}
         <label class="field"><span>Tu contraseña</span><input class="input" type="password" name="pass" data-del="pass" autocomplete="current-password" value="${esc(D.pass)}"></label>
         <label class="field"><span>Escribe BORRAR para confirmar</span><input class="input" name="txt" data-del="txt" autocapitalize="characters" autocomplete="off" value="${esc(D.txt)}" placeholder="BORRAR"></label>
@@ -379,7 +379,7 @@ let irPendiente = leerIr(); // si venimos de tocar un aviso, aquí queda la pant
 let stravaRet = leerRetorno(); // si venimos de la pantalla de permisos de Strava, aquí queda el código temporal
 
 function viewMain() {
-  const sheet = st.legal ? legalSheetHTML() : st.modoSel ? modoSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.rutDelAsk ? rutDelSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
+  const sheet = st.legal ? legalSheetHTML() : st.pf ? pfSheetHTML() : st.modoSel ? modoSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.rutDelAsk ? rutDelSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
   if (st.rw) return viewRutWizard() + sheet;
   if (st.live && !st.liveMin) return viewLive() + sheet;
   if (st.wk) return viewWkForm();
@@ -824,71 +824,172 @@ const fotoHTML = (big = false) => {
 const tieneGoogle = () => { try { return api.providers().includes('google.com'); } catch (e) { return false; } };
 const tienePass = () => { try { return api.providers().includes('password'); } catch (e) { return true; } };
 
-function cuentaHTML() {
-  const g = tieneGoogle();
-  return `<section class="card" id="cuenta-card">
-      <h2>Tu cuenta</h2>
-      <div class="acc-list">
-        ${tienePass() ? `<button type="button" class="acc-row" data-act="pwd-open"><span>Modificar contraseña</span>${I.chev}</button>` : ''}
-        ${g ? `<div class="acc-row is-on"><span>Cuenta de Google vinculada</span><span class="tag ok">Vinculada</span></div>` : `<button type="button" class="acc-row" data-act="google-link" ${st.gBusy ? 'disabled' : ''}><span>Vincular cuenta de Google</span>${st.gBusy ? '<span class="spinner"></span>' : I.chev}</button>`}
-      </div>
-    </section>`;
-}
+/* ---------- Perfil: lista de ajustes y una vista (hoja) por apartado ---------- */
+const PF_IC = {
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+  globe: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/>',
+  key: '<circle cx="8" cy="15" r="4"/><path d="M10.8 12.2L21 2M16 7l3 3"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
+  zap: '<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>',
+  mail: '<path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M22 6l-10 7L2 6"/>',
+  help: '<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/>',
+  file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>',
+  shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+  trash: '<path d="M3 6h18M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/>',
+};
+const pfIc = (k) => `<svg class="pf-ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PF_IC[k]}</svg>`;
+// Fila de la lista: botón (act/v) o enlace (href). val = texto gris a la derecha.
+const pfRow = (ic, t, { act, v = '', href, val = '', cls = '', tag = '' } = {}) => {
+  const inner = `${pfIc(ic)}<span class="pf-t">${t}</span>${val ? `<span class="pf-v">${esc(val)}</span>` : ''}${tag}${act || href ? I.chev : ''}`;
+  return href ? `<a class="pf-row ${cls}" href="${href}">${inner}</a>`
+    : act ? `<button type="button" class="pf-row ${cls}" data-act="${act}" data-v="${v}">${inner}</button>`
+    : `<div class="pf-row ${cls}">${inner}</div>`;
+};
+const pfGrupo = (t, filas) => `<section class="pf-group"><h3 class="pf-title">${t}</h3><div class="pf-list">${filas.join('')}</div></section>`;
 
 function viewPerfil() {
   const p = st.profile;
-  const goals = st.editGoals || p.objetivos || [];
-  const open = !!st.datosOpen;
+  const idioma = p.idioma === 'en' ? 'English' : 'Español', tema = { dark: 'Oscuro', light: 'Claro', system: 'Sistema' }[themePref()];
   return `
     <header class="perfil-hero">${fotoHTML(true)}
-      <label class="btn ghost small ${st.fotoBusy ? 'is-busy' : ''}"><input type="file" accept="image/*" data-foto hidden ${st.fotoBusy ? 'disabled' : ''}>${st.fotoBusy ? '<span class="spinner"></span>' : 'Editar foto'}</label>
+      <button type="button" class="btn ghost small" data-act="pf-open" data-v="editar">Editar perfil</button>
       <h2>${esc((p.nombreCompleto || p.nombre || st.user.name || 'Tu perfil').trim())}</h2>
-      <p class="small muted">${esc(st.user.email || '')}</p></header>
+      <p class="small muted">${p.usuario ? `@${esc(p.usuario)} · ` : ''}${esc(st.user.email || '')}</p></header>
     ${planCardHTML()}
-    ${cuentaHTML()}
     ${S.integracionesHTML()}
-    <form class="perfil-form" data-form="profile" novalidate>
-      <section class="card acc">
-        <button type="button" class="acc-h" data-act="acc-toggle" data-v="datos" aria-expanded="${open}" aria-controls="datos-body"><h2>Tus datos</h2><span class="acc-ch" aria-hidden="true">${I.chev}</span></button>
-        <div class="acc-b form-grid" id="datos-body" ${open ? '' : 'hidden'}>
-          <label class="field"><span>Nombres y apellidos</span><input class="input" name="nombre" value="${esc(p.nombreCompleto || p.nombre || '')}" autocomplete="name"></label>
-          <div class="field"><span>Sexo</span>
-            <div class="seg" role="group" aria-label="Sexo">
-              <button type="button" data-act="psex" data-v="hombre" aria-pressed="${p.sexo !== 'mujer'}">Hombre</button>
-              <button type="button" data-act="psex" data-v="mujer" aria-pressed="${p.sexo === 'mujer'}">Mujer</button>
-            </div>
-            <input type="hidden" name="sexo" value="${p.sexo === 'mujer' ? 'mujer' : 'hombre'}">
-          </div>
-          <div class="two">
-            <label class="field"><span>Edad</span><input class="input" name="edad" inputmode="numeric" value="${esc(p.edad || '')}"></label>
-            <label class="field"><span>Estatura (cm)</span><input class="input" name="alturaCm" inputmode="numeric" value="${esc(p.alturaCm || '')}"></label>
-          </div>
-        </div>
-      </section>
-      <section class="card acc">
-        <button type="button" class="acc-h" data-act="acc-toggle" data-v="obj" aria-expanded="${!!st.objOpen}" aria-controls="obj-body"><h2>Objetivos</h2><span class="acc-ch" aria-hidden="true">${I.chev}</span></button>
-        <div class="acc-b form-grid" id="obj-body" ${st.objOpen ? '' : 'hidden'}>
-          <div class="choices">${GOALS.map((g) => `<button type="button" class="choice" data-act="pgoal" data-v="${g.id}" aria-pressed="${goals.includes(g.id)}">
-            <span class="ico">${goalIcon(g)}</span><span class="t">${g.t}</span><span class="tick">${goals.includes(g.id) ? I.check : ''}</span></button>`).join('')}</div>
-          <label class="field"><span>Peso objetivo (kg)</span><input class="input" name="pesoObjetivo" inputmode="decimal" value="${p.pesoObjetivo ? esc(nf(p.pesoObjetivo, 1)) : ''}" placeholder="Opcional"></label>
-          ${pesoGuiaHTML(p.alturaCm, p.sexo, goals, 'perfil', grasaActual(), p.pesoObjetivo, p.hideWeightSuggestion === true)}
-        </div>
-      </section>
-      <div class="savebar" id="perfil-save" ${st.perfilDirty ? '' : 'hidden'}><button class="btn block" type="submit">Guardar cambios</button></div>
-    </form>
+    ${pfGrupo('Cuenta', [
+      pfRow('user', 'Detalles personales', { act: 'pf-open', v: 'detalles' }),
+      pfRow('sliders', 'Preferencias', { act: 'pf-open', v: 'prefs', val: tema }),
+      pfRow('globe', 'Idioma', { act: 'pf-open', v: 'idioma', val: idioma }),
+      tienePass() ? pfRow('key', 'Modificar contraseña', { act: 'pwd-open' }) : '',
+      tieneGoogle() ? pfRow('link', 'Cuenta de Google', { tag: '<span class="tag ok">Vinculada</span>' }) : pfRow('link', 'Vincular cuenta de Google', { act: 'google-link' }),
+    ])}
+    ${pfGrupo('Soporte y legal', [
+      pfRow('zap', 'Solicitar una función', { act: 'pf-open', v: 'func' }),
+      pfRow('mail', 'Correo de soporte', { href: `mailto:${CONTACTO}?subject=${encodeURIComponent('Soporte Cadencia')}` }),
+      pfRow('help', 'FAQ', { act: 'pf-open', v: 'faq' }),
+      pfRow('file', 'Términos y condiciones', { act: 'pf-open', v: 'terminos' }),
+      pfRow('shield', 'Política de privacidad', { act: 'pf-open', v: 'privacidad' }),
+    ])}
+    ${pfGrupo('Acciones de la cuenta', [
+      pfRow('out', 'Cerrar sesión', { act: 'logout', cls: 'mute' }),
+      pfRow('trash', 'Eliminar cuenta', { act: 'del-open', cls: 'danger' }),
+    ])}
+    <p class="small muted pf-foot">${api.mode === 'firebase' ? 'Tus datos se guardan en la nube y los verás en cualquier dispositivo.' : 'Modo prueba: tus datos se guardan solo en este dispositivo.'}</p>`;
+}
 
-    <section class="card">
-      <h2>Sesión</h2>
-      <p class="small muted">${api.mode === 'firebase' ? 'Tus datos se guardan en la nube y los verás en cualquier dispositivo donde inicies sesión.' : 'Modo prueba: tus datos se guardan solo en este dispositivo.'}</p>
-      <button class="btn ghost block" data-act="logout">Cerrar sesión</button>
-    </section>
+const PF_TITULO = { editar: 'Editar perfil', detalles: 'Detalles personales', prefs: 'Preferencias', idioma: 'Idioma', func: 'Solicitar una función', faq: 'Preguntas frecuentes', terminos: 'Términos y condiciones', privacidad: 'Política de privacidad' };
+const pfV = (k, d) => (st.pf.f && k in st.pf.f ? st.pf.f[k] : d); // lo escrito se conserva si la hoja se redibuja (p. ej. tras cambiar la foto)
+// El texto legal es uno solo (legal.js); cada vista toma las secciones que le tocan.
+const pfLegal = (re) => `<div class="sheet-list legal">${legalHTML().split(/(?=<h3>)/).filter((x) => re.test(x.slice(0, 60))).join('')}</div>`;
 
-    <section class="card">
-      <h2>Privacidad</h2>
-      <p class="small muted">Tus datos son privados y solo se usan para calcular tus métricas en Cadencia.</p>
-      <button class="btn ghost block" data-act="legal-open">Leer Términos y Privacidad</button>
-      <button class="btn block danger-solid" data-act="del-open">Borrar mi cuenta y todos mis datos</button>
-    </section>`;
+function pfCuerpo(v) {
+  const p = st.profile;
+  if (v === 'editar') {
+    const full = (p.nombreCompleto || p.nombre || '').trim(), nom = p.nombre || full.split(' ')[0] || '';
+    const ape = p.apellidos != null ? p.apellidos : (full.startsWith(nom) ? full.slice(nom.length).trim() : '');
+    return `<form class="sheet-list form-grid" data-form="pf-editar" novalidate>
+      <div class="pf-foto">${fotoHTML(true)}<label class="btn ghost small"><input type="file" accept="image/*" data-foto hidden>Cambiar foto</label></div>
+      <label class="field"><span>Nombre</span><input class="input" name="nombre" value="${esc(pfV('nombre', nom))}" autocomplete="given-name" maxlength="40"></label>
+      <label class="field"><span>Apellidos</span><input class="input" name="apellidos" value="${esc(pfV('apellidos', ape))}" autocomplete="family-name" maxlength="60"></label>
+      <label class="field"><span>Nombre de usuario</span><input class="input" name="usuario" value="${esc(pfV('usuario', p.usuario || ''))}" autocapitalize="none" autocomplete="username" maxlength="20" placeholder="ej. jean_ramirez"></label>
+      <button class="btn block" type="submit">Guardar</button></form>`;
+  }
+  if (v === 'detalles') {
+    const goals = st.editGoals || p.objetivos || [], sexo = pfV('sexo', p.sexo === 'mujer' ? 'mujer' : 'hombre'), kg = currentKg();
+    return `<form class="sheet-list form-grid" data-form="pf-det" novalidate>
+      <div class="two">
+        <label class="field"><span>Estatura (cm)</span><input class="input" name="alturaCm" inputmode="numeric" value="${esc(pfV('alturaCm', p.alturaCm || ''))}"></label>
+        <label class="field"><span>Peso actual (kg)</span><input class="input" name="pesoKg" inputmode="decimal" value="${esc(pfV('pesoKg', kg ? nf(kg, 1) : ''))}"></label>
+      </div>
+      <label class="field"><span>Fecha de nacimiento${p.fechaNac ? '' : p.edad ? ` (ahora: ${esc(p.edad)} años)` : ''}</span><input class="input" type="date" name="fechaNac" max="${todayISO()}" value="${esc(pfV('fechaNac', p.fechaNac || ''))}"></label>
+      <div class="field"><span>Género</span>
+        <div class="seg" role="group" aria-label="Género">
+          <button type="button" data-act="psex" data-v="hombre" aria-pressed="${sexo === 'hombre'}">Hombre</button>
+          <button type="button" data-act="psex" data-v="mujer" aria-pressed="${sexo === 'mujer'}">Mujer</button>
+        </div><input type="hidden" name="sexo" value="${sexo}">
+      </div>
+      <label class="field"><span>Peso objetivo (kg)</span><input class="input" name="pesoObjetivo" inputmode="decimal" value="${esc(pfV('pesoObjetivo', p.pesoObjetivo ? nf(p.pesoObjetivo, 1) : ''))}" placeholder="Opcional"></label>
+      <div class="field"><span>Objetivos</span><div class="choices">${GOALS.map((g) => `<button type="button" class="choice" data-act="pgoal" data-v="${g.id}" aria-pressed="${goals.includes(g.id)}">
+        <span class="ico">${goalIcon(g)}</span><span class="t">${g.t}</span><span class="tick">${goals.includes(g.id) ? I.check : ''}</span></button>`).join('')}</div></div>
+      ${pesoGuiaHTML(p.alturaCm, p.sexo, goals, 'perfil', grasaActual(), p.pesoObjetivo, p.hideWeightSuggestion === true)}
+      <button class="btn block" type="submit">Guardar</button></form>`;
+  }
+  if (v === 'prefs') {
+    const t = themePref();
+    return `<div class="sheet-list"><section class="card"><h2>Apariencia</h2>
+      <div class="seg" role="group" aria-label="Tema">${[['dark', 'Oscuro'], ['light', 'Claro'], ['system', 'Sistema']].map(([k, l]) => `<button type="button" data-act="theme" data-v="${k}" aria-pressed="${t === k}">${l}</button>`).join('')}</div>
+      <p class="small muted">${t === 'system' ? 'Sigue el modo claro u oscuro de tu móvil.' : t === 'light' ? 'Fondo claro con el mismo amarillo.' : 'Negro y amarillo, el estilo de Cadencia.'}</p></section></div>`;
+  }
+  if (v === 'idioma') {
+    const l = p.idioma === 'en' ? 'en' : 'es';
+    return `<div class="sheet-list"><div class="pf-list">${[['es', 'Español'], ['en', 'English']].map(([k, n]) => `<button type="button" class="pf-row" data-act="pf-idioma" data-v="${k}"><span class="pf-t">${n}</span>${l === k ? `<span class="pf-ok">${I.check}</span>` : ''}</button>`).join('')}</div>
+      <p class="small muted">Cadencia por ahora solo está traducida al español. Guardamos tu elección para activar el inglés en cuanto esté lista.</p></div>`;
+  }
+  if (v === 'func') {
+    return `<form class="sheet-list form-grid" data-form="pf-func" novalidate>
+      <label class="field"><span>¿Qué te gustaría que hiciera Cadencia?</span><textarea class="input" name="texto" rows="6" maxlength="1000" placeholder="Cuéntanos tu idea…">${esc(pfV('texto', ''))}</textarea></label>
+      <button class="btn block" type="submit" ${st.pf.busy ? 'disabled' : ''}>${st.pf.busy ? '<span class="spinner"></span>' : 'Enviar'}</button>
+      <a class="small muted" href="mailto:${CONTACTO}?subject=${encodeURIComponent('Idea para Cadencia')}">O envíanosla por correo</a></form>`;
+  }
+  if (v === 'faq') {
+    const Q = [['¿Cómo registro mi peso?', 'En Forma física, pulsa «Añadir registro». También puedes cambiarlo en Perfil → Detalles personales.'],
+      ['¿Cómo se calcula la recuperación muscular?', 'Al entrenar un músculo baja a 0–20 % según las series, y se recupera en torno a un 33 % cada 24 horas hasta el 100 % a las 72 horas.'],
+      ['¿Cómo cancelo Cadencia Pro?', 'Desde la tarjeta de tu plan en Perfil, con «Gestionar suscripción». Seguirás con Pro hasta que termine el periodo pagado.'],
+      ['¿Mis datos son privados?', 'Sí. Solo tú puedes verlos y no los compartimos con anunciantes. Puedes borrarlos cuando quieras con «Eliminar cuenta».']];
+    return `<div class="sheet-list">${Q.map(([q, a]) => `<details class="faq"><summary>${q}</summary><p class="small muted">${a}</p></details>`).join('')}</div>`;
+  }
+  return pfLegal(v === 'terminos' ? /Aviso|Términos/ : /Privacidad/);
+}
+function pfSheetHTML() {
+  const v = st.pf.v;
+  return `<div class="sheet-back" data-act="pf-close"></div>
+    <div class="sheet" role="dialog" aria-modal="true" aria-label="${PF_TITULO[v]}">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><button type="button" class="iconbtn" data-act="pf-close" aria-label="Cerrar">${I.back}</button><h2>${PF_TITULO[v]}</h2><span style="width:36px"></span></div>
+      ${pfCuerpo(v)}
+    </div>`;
+}
+
+async function pfGuardar(kind, f) {
+  const uid = st.user.uid;
+  let data;
+  if (kind === 'pf-editar') {
+    const nom = f.nombre.value.trim().replace(/\s+/g, ' '), ape = f.apellidos.value.trim().replace(/\s+/g, ' '), us = f.usuario.value.trim().replace(/^@/, '');
+    if (!nom) return toast('Escribe tu nombre');
+    if (us && !/^[a-z0-9_.]{3,20}$/i.test(us)) return toast('El usuario: de 3 a 20 letras, números, punto o guion bajo');
+    data = { nombre: nom, apellidos: ape, nombreCompleto: `${nom} ${ape}`.trim(), usuario: us.toLowerCase() };
+  } else if (kind === 'pf-det') {
+    const goals = st.editGoals || st.profile.objetivos || [], alt = num(f.alturaCm.value), kg = num(f.pesoKg.value), fn = f.fechaNac.value;
+    const obj = f.pesoObjetivo.value.trim() ? num(f.pesoObjetivo.value) : null;
+    let edad = st.profile.edad;
+    if (fn) { const h = new Date(), n = new Date(`${fn}T00:00:00`); edad = h.getFullYear() - n.getFullYear() - (h.getMonth() < n.getMonth() || (h.getMonth() === n.getMonth() && h.getDate() < n.getDate()) ? 1 : 0); }
+    if (!(edad >= 14 && edad <= 100)) return toast('La edad tiene que estar entre 14 y 100 años');
+    if (!(alt >= 120 && alt <= 230)) return toast('La estatura tiene que estar entre 120 y 230 cm');
+    if (!(kg >= 30 && kg <= 300)) return toast('El peso tiene que estar entre 30 y 300 kg');
+    if (!goals.length) return toast('Elige al menos un objetivo');
+    if (obj != null) { const err = objetivoInvalido(obj, alt, f.sexo.value, goals, grasaActual()); if (err) return toast(err); }
+    data = { sexo: f.sexo.value, edad: Math.round(edad), alturaCm: Math.round(alt), pesoObjetivo: obj == null ? null : Math.round(obj * 10) / 10, objetivos: goals };
+    if (fn) data.fechaNac = fn;
+    const k1 = Math.round(kg * 10) / 10;
+    try {
+      if (k1 !== currentKg()) { await api.addWeight(uid, todayISO(), k1); st.weights = await api.listWeights(uid); data.pesoKg = k1; }
+    } catch (e) { return toast(errorText(e)); }
+  } else { // pf-func
+    const texto = f.texto.value.trim();
+    if (texto.length < 5) return toast('Cuéntanos un poco más');
+    st.pf.busy = true; render();
+    try { await api.addFeatureRequest(uid, st.user.email, texto); st.pf = null; render(); toast('¡Gracias! Hemos recibido tu idea'); }
+    catch (e) { st.pf.busy = false; st.pf.f = { texto }; render(); toast(errorText(e)); }
+    return;
+  }
+  try {
+    await api.saveProfile(uid, data);
+    st.profile = { ...st.profile, ...data }; st.pf = null; st.editGoals = null;
+    render(); toast('Cambios guardados');
+  } catch (e) { toast(errorText(e)); }
 }
 
 /* ---------- Configuración (engranaje): apariencia y recordatorios ---------- */
@@ -978,28 +1079,6 @@ async function guardarPwd(f) {
   catch (e) { P.busy = false; P.ok = false; P.msg = ['auth/invalid-credential', 'auth/wrong-password', 'auth/invalid-login-credentials'].includes(e && e.code) ? 'La contraseña actual no es correcta.' : errorText(e); render(); }
 }
 
-// El botón «Guardar cambios» del perfil solo aparece cuando hay algo que guardar.
-function marcaCambios() { st.perfilDirty = true; const bar = document.getElementById('perfil-save'); if (bar) bar.hidden = false; }
-
-async function saveProfileForm(form) {
-  const goals = st.editGoals || st.profile.objetivos || [];
-  const edad = num(form.edad.value), alt = num(form.alturaCm.value), obj = form.pesoObjetivo.value.trim() ? num(form.pesoObjetivo.value) : null;
-  const full = form.nombre.value.trim().replace(/\s+/g, ' ');
-  if (!full) return toast('Escribe tus nombres y apellidos');
-  if (!(edad >= 14 && edad <= 100)) return toast('La edad tiene que estar entre 14 y 100');
-  if (!(alt >= 120 && alt <= 230)) return toast('La estatura tiene que estar entre 120 y 230 cm');
-  if (obj != null) { const err = objetivoInvalido(obj, alt, form.sexo.value, goals, grasaActual()); if (err) return toast(err); }
-  if (!goals.length) return toast('Elige al menos un objetivo');
-  const prevFull = st.profile.nombreCompleto || st.profile.nombre || '';
-  // «nombre» (el de los saludos) solo cambia si has cambiado el nombre completo
-  const data = { nombreCompleto: full, nombre: full === prevFull && st.profile.nombre ? st.profile.nombre : full.split(' ')[0], sexo: form.sexo.value, edad: Math.round(edad), alturaCm: Math.round(alt), pesoObjetivo: obj == null ? null : Math.round(obj * 10) / 10, objetivos: goals };
-  try {
-    await api.saveProfile(st.user.uid, data);
-    st.profile = { ...st.profile, ...data }; st.editGoals = null; st.perfilDirty = false;
-    render(); toast('Cambios guardados');
-  } catch (e) { toast(errorText(e)); }
-}
-
 /* ================================================================== */
 /* Entreno                                                             */
 /* ================================================================== */
@@ -1019,7 +1098,7 @@ function viewError() {
 async function enter(u) {
   st.user = u; st.busy = false;
   if (!u && M) M.pararPro();
-  if (!u) { st.cfg = st.pwd = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = 'auth'; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
+  if (!u) { st.cfg = st.pwd = st.pf = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = 'auth'; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
   try {
     st.profile = await api.getProfile(u.uid);
     if (!st.profile || !st.profile.onboarded) return startOnboarding();
@@ -1053,6 +1132,9 @@ root.addEventListener('click', async (e) => {
   if (act === 'mode') { st.authMode = v; st.authMsg = null; const f = root.querySelector('form'); const email = f && f.email.value; render(); keepForm({ email }); }
   else if (act === 'legal-open') { if (st.view === 'auth') { const f = root.querySelector('form'); st.authKeep = f ? { name: f.name ? f.name.value : '', email: f.email.value, pass: f.pass.value, acepto: f.acepto ? f.acepto.checked : false } : null; } st.legal = true; render(); if (st.authKeep) keepForm(st.authKeep); }
   else if (act === 'legal-close') { st.legal = false; render(); if (st.view === 'auth' && st.authKeep) { keepForm(st.authKeep); st.authKeep = null; } }
+  else if (act === 'pf-open') { st.pf = { v, f: {}, busy: false }; st.editGoals = null; render(); }
+  else if (act === 'pf-close') { st.pf = null; st.editGoals = null; render(); }
+  else if (act === 'pf-idioma') { st.profile.idioma = v; render(); try { await api.saveProfile(st.user.uid, { idioma: v }); } catch (e) { toast(errorText(e)); } }
   else if (act === 'del-open') { st.del = { pass: '', txt: '', msg: '', busy: false }; render(); }
   else if (act === 'del-close') { if (!st.del || !st.del.busy) { st.del = null; render(); } }
   else if (act === 'peek') { const i = b.previousElementSibling; i.type = i.type === 'password' ? 'text' : 'password'; b.textContent = i.type === 'password' ? 'Ver' : 'Ocultar'; }
@@ -1077,9 +1159,8 @@ root.addEventListener('click', async (e) => {
   else if (act === 'comp-ver') { st.pesoComp = v; st.pesoModo = 'kg'; render(); scrollTo(0, 0); }
   else if (act === 'comp-close') { st.pesoComp = null; render(); }
   else if (act === 'comp-modo') { st.pesoModo = v; render(); }
-  else if (act === 'psex') { marcaCambios(); const f = b.closest('form'); f.sexo.value = v; b.parentElement.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); }
+  else if (act === 'psex') { const f = b.closest('form'); f.sexo.value = v; if (st.pf) st.pf.f.sexo = v; b.parentElement.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); }
   else if (act === 'pgoal') {
-    marcaCambios();
     const g = st.editGoals || [...(st.profile.objetivos || [])];
     st.editGoals = g.includes(v) ? g.filter((x) => x !== v) : [...g, v];
     b.setAttribute('aria-pressed', String(st.editGoals.includes(v)));
@@ -1107,10 +1188,6 @@ root.addEventListener('click', async (e) => {
     try { await api.linkGoogle(); toast('Cuenta de Google vinculada'); } catch (e) { toast(errorText(e)); }
     st.gBusy = false; render();
   }
-  else if (act === 'acc-toggle') {
-    const k = v === 'obj' ? 'objOpen' : 'datosOpen'; st[k] = !st[k]; b.setAttribute('aria-expanded', String(st[k]));
-    const body = document.getElementById(v === 'obj' ? 'obj-body' : 'datos-body'); if (body) body.hidden = !st[k];
-  }
   else if (act === 'sug-ignorar') {
     const el = document.getElementById('sug'); if (el) el.remove();
     if (b.dataset.ctx === 'ob' && st.ob) st.ob.hideSug = true;
@@ -1127,7 +1204,7 @@ root.addEventListener('input', (e) => {
     return;
   }
   if (e.target.closest && e.target.closest('form[data-form="addweight"]')) { if (e.target.dataset && e.target.dataset.comp) e.target.dataset.tocado = '1'; pesoHints(); return; }
-  if (e.target.closest && e.target.closest('form[data-form="profile"]')) marcaCambios();
+  if (st.pf && e.target.name && e.target.closest('form[data-form^="pf-"]')) st.pf.f[e.target.name] = e.target.value;
   if (st.view === 'main' && M.input(e.target)) return;
   const k = e.target.dataset && e.target.dataset.ob;
   if (!k || !st.ob) return;
@@ -1148,7 +1225,7 @@ root.addEventListener('submit', async (e) => {
   else if (kind === 'register') onRegister(f);
   else if (kind === 'ob') obNext();
   else if (kind === 'addweight') saveWeight(f.fecha.value, f.kg.value, { grasa: f.grasa.value, musculo: f.musculo.value, agua: f.agua.value, hueso: f.hueso.value }, pesoUnit(), !!f.dataset.edit, keepEdit(f));
-  else if (kind === 'profile') saveProfileForm(f);
+  else if (kind.startsWith('pf-')) pfGuardar(kind, f);
   else if (kind === 'delacc') borrarCuenta();
   else if (kind === 'pwd') guardarPwd(f);
   else if (kind === 'wk') wkSave();

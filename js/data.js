@@ -56,6 +56,7 @@ async function firebaseBackend(config) {
       await S.uploadBytes(r, blob, { contentType: 'image/jpeg', cacheControl: 'public,max-age=3600' });
       return `${await S.getDownloadURL(r)}&v=${Date.now()}`;
     },
+    async addFeatureRequest(uid, email, texto) { await F.addDoc(F.collection(db, 'feature_requests'), { uid, email: email || '', texto, creado: F.serverTimestamp() }); },
     async resetPassword(email) { await A.sendPasswordResetEmail(auth, email); },
     async getProfile(uid) {
       const s = await F.getDoc(userRef(uid));
@@ -105,6 +106,7 @@ async function firebaseBackend(config) {
       }
       try { await this.strava({ modo: 'desconectar' }); } catch (e) { /* sin Strava conectado */ }
       try { await this.ia({ modo: 'borrar' }); } catch (e) { /* si no hay IA, no hay contadores que borrar */ }
+      try { const S = await import(FB + 'firebase-storage.js'); await S.deleteObject(S.ref(S.getStorage(app), `profile_pictures/${u.uid}/avatar.jpg`)); } catch (e) { /* sin foto */ }
       await F.deleteDoc(userRef(u.uid));
       await A.deleteUser(u);
     },
@@ -206,6 +208,7 @@ function localBackend() {
     async uploadAvatar(uid, blob) {
       return new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => no(err('local/foto')); r.readAsDataURL(blob); });
     },
+    async addFeatureRequest(uid, email, texto) { const s = read(); (s.requests = s.requests || []).push({ uid, email, texto, creado: Date.now() }); write(s); },
     async resetPassword() { throw err('local/no-reset'); },
     async getProfile(uid) { const u = byUid(read(), uid); return u ? u.profile : null; },
     watchProfile(uid, cb) { const t = setInterval(() => { const u = byUid(read(), uid); if (u) cb(u.profile); }, 1500); return () => clearInterval(t); },

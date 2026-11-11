@@ -1257,3 +1257,28 @@ details.comp { border: 1px solid var(--bd); border-radius: 2px; }
 .rcv-week { display: flex; justify-content: center; gap: 12px; background: #1A1A1A; border-radius: 8px; padding: 14px 8px; }
 .rcv-week .anat { height: 280px; width: auto; max-width: 46%; }
 .rcv-note { text-align: center; margin-top: 8px; }
+
+/* Perfil: lista de ajustes */
+.pf-group { margin-top: 22px; }
+.pf-title { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 8px 4px; font-weight: 800; }
+.pf-list { background: var(--surface2); border-radius: 8px; overflow: hidden; }
+.pf-row { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 54px; padding: 0 14px; background: transparent; border: 0; border-top: 1px solid var(--line); color: var(--ink); font: inherit; font-size: 15px; text-align: left; text-decoration: none; cursor: pointer; }
+.pf-list > .pf-row:first-child { border-top: 0; }
+.pf-ic { color: var(--muted); flex: none; }
+.pf-t { flex: 1; }
+.pf-v { color: var(--muted); font-size: 14px; }
+.pf-row > svg:last-child { color: var(--muted); flex: none; }
+.pf-ok svg { color: var(--accent-text); }
+.pf-row:active { background: rgba(255, 255, 255, .04); }
+.pf-row.mute, .pf-row.mute .pf-ic { color: var(--muted); }
+.pf-row.danger, .pf-row.danger .pf-ic { color: var(--bad); }
+.pf-foot { text-align: center; margin: 18px 0 8px; }
+.pf-foto { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 8px 0 4px; }
+.pf-foto .avatar.big { width: 110px; height: 110px; border-radius: 50%; font-size: 44px; display: grid; place-items: center; overflow: hidden; }
+.pf-foto .btn { width: auto; padding-inline: 22px; cursor: pointer; }
+.faq { background: var(--surface2); border-radius: 8px; padding: 0 14px; }
+.faq summary { min-height: 52px; display: flex; align-items: center; font-weight: 700; cursor: pointer; list-style: none; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq[open] summary { color: var(--accent-text); }
+.faq p { margin: 0 0 14px; }
+textarea.input { resize: vertical; min-height: 120px; font: inherit; }
