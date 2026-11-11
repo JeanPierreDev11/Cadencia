@@ -9,6 +9,7 @@ import * as CAL from './calorias.js';
 import { leerRetorno } from './strava.js';
 import { crearRecordatorios, leerIr } from './push.js';
 import { crearStrava } from './strava-ui.js';
+import { iniciarInstalar } from './instalar.js';
 
 /* ================================================================== */
 /* Utilidades                                                          */
@@ -1266,6 +1267,7 @@ root.addEventListener('submit', async (e) => {
 
 /* ---------- arranque ---------- */
 (async function boot() {
+  iniciarInstalar();
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => { reg.update(); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); }); }).catch(() => { /* sin modo sin conexión */ });
     // Cuando llega una versión nueva de la app, recarga una vez para usarla.

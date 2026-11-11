@@ -1294,3 +1294,39 @@ textarea.input { resize: vertical; min-height: 120px; font: inherit; }
 .share-code { text-align: center; font-size: 40px; font-weight: 800; letter-spacing: .25em; padding: 18px 0 18px .25em; background: var(--surface2); border-radius: 8px; user-select: all; }
 .code-in { text-transform: uppercase; letter-spacing: .2em; text-align: center; font-weight: 800; }
 .plan .seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+/* ---------- Banner de instalación (js/instalar.js) ---------- */
+.ib { position: fixed; left: 0; right: 0; bottom: calc(var(--safe-b) + 12px); z-index: 50; max-width: 520px; margin: 0 auto; display: flex; align-items: center; gap: 12px; padding: 12px 8px 12px 14px;
+  background: var(--card-bg); color: var(--card-ink); border-top: 2px solid var(--accent); box-shadow: 0 -8px 24px rgba(0,0,0,.35);
+  transform: translateY(130%); transition: transform .28s ease-out; }
+body:has(.tabbar) .ib { bottom: calc(var(--safe-b) + 66px); }
+.ib.on { transform: none; }
+.ib-logo { width: 40px; height: 40px; border-radius: 2px; flex: none; }
+.ib-txt { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.ib-txt b { font-size: 15px; font-weight: 800; text-transform: uppercase; letter-spacing: .02em; }
+.ib-txt span { font-size: 13px; color: var(--card-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ib-btn { flex: none; border: 0; border-radius: 2px; background: var(--accent); color: var(--accent-ink); font: inherit; font-weight: 800; font-size: 14px; text-transform: uppercase; padding: 11px 16px; min-height: 44px; }
+.ib-x { flex: none; width: 36px; height: 44px; border: 0; background: none; color: var(--card-mute); display: grid; place-items: center; }
+.ib-x svg { width: 18px; height: 18px; }
+.ib-back { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.72); opacity: 0; transition: opacity .2s; }
+.ib-back.on { opacity: 1; }
+.ib-sheet { position: absolute; left: 0; right: 0; bottom: 0; max-width: 520px; margin: 0 auto; background: var(--card-bg); color: var(--card-ink); border-top: 2px solid var(--accent);
+  padding: 10px 20px calc(var(--safe-b) + 18px); transform: translateY(100%); transition: transform .26s ease-out; }
+.ib-back.on .ib-sheet { transform: none; }
+.ib-grip { width: 40px; height: 4px; background: var(--card-mute); opacity: .5; margin: 0 auto 14px; border-radius: 2px; }
+.ib-h { margin: 0 0 14px; font-size: 20px; font-weight: 800; text-transform: uppercase; letter-spacing: .02em; }
+.ib-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.ib-steps li { display: flex; align-items: center; gap: 12px; background: var(--card-bg2); padding: 12px; border-radius: 2px; }
+.ib-n { flex: none; width: 26px; height: 26px; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); font-weight: 800; font-size: 14px; border-radius: 2px; }
+.ib-t { flex: 1; font-size: 15px; line-height: 1.35; }
+.ib-i { flex: none; width: 36px; height: 36px; display: grid; place-items: center; border: 1.5px solid var(--accent); color: var(--accent); border-radius: 2px; animation: ibPulse 1.6s ease-in-out infinite; }
+.ib-i svg { width: 22px; height: 22px; }
+.ib-arrow { color: var(--accent); pointer-events: none; }
+.ib-arrow svg { width: 44px; height: 44px; stroke-width: 2.6; }
+.ib-arrow-bot { display: grid; place-items: center; margin: 10px 0 0; animation: ibBounce 1s ease-in-out infinite; }
+.ib-arrow-top { position: fixed; top: calc(var(--safe-t) + 8px); right: 14px; z-index: 61; transform: rotate(180deg); animation: ibBounceUp 1s ease-in-out infinite; }
+.ib-ok { display: block; width: 100%; margin-top: 12px; min-height: 48px; border: 1px solid var(--bd2); border-radius: 2px; background: none; color: var(--card-ink); font: inherit; font-weight: 700; text-transform: uppercase; }
+@keyframes ibBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(10px); } }
+@keyframes ibBounceUp { 0%, 100% { transform: rotate(180deg) translateY(0); } 50% { transform: rotate(180deg) translateY(10px); } }
+@keyframes ibPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(242,190,26,.5); } 50% { box-shadow: 0 0 0 6px rgba(242,190,26,0); } }
+@media (prefers-reduced-motion: reduce) { .ib, .ib-sheet, .ib-back { transition: none; } .ib-arrow, .ib-i { animation: none; } }
