@@ -53,7 +53,10 @@ Reglas:
 - Si un alimento no está en la tabla, deja «id» vacío y rellena el nombre y sus valores por 100 g tal como se come.
 - Rellena siempre «kcal_100g», «proteina_100g», «hidratos_100g» y «grasa_100g» con tu estimación por 100 g tal como se come (sirve de respaldo).
 - Cuenta el aceite o las salsas visibles solo a través de la forma de preparar; no los añadas aparte salvo que se vea una salsa servida aparte.
-- Sé realista con las raciones de un plato normal en España. Si dudas entre dos tamaños, elige el intermedio y marca la confianza como «media» o «baja».
+- Referencia de escala: asume que el plato de fondo es un plato llano estándar de 26 cm de diámetro o usa los cubiertos visibles como referencia de escala.
+- No sobreestimes los pesos. Ancla tus estimaciones a raciones estándar reales (por ejemplo, un filete de pechuga normal pesa ~120 g-150 g, no 200 g-300 g; un huevo pesa 50 g).
+- Sé conservador y lógico con el volumen visible: estima solo lo que ocupa el alimento en el plato, sin suponer capas ocultas.
+- Si dudas entre dos tamaños, elige el menor razonable y marca la confianza como «media» o «baja».
 - Si la foto no muestra comida, devuelve la lista vacía y explícalo en «nota».
 - Escribe los nombres y la nota en español de España. La nota, como mucho dos frases cortas.`;
 const ESQUEMA_PLATO = {
@@ -116,7 +119,7 @@ async function analizarPlato(client, data) {
   } else {
     contenido.push({ type: 'text', text: `Foto de mi ${comida ? comida.toLowerCase() : 'comida'}. Dime qué alimentos hay, cuántos gramos y cómo están cocinados.` });
   }
-  const r = await client.messages.create({
+  const peticion = {
     model: MODELO_PLATO,
     max_tokens: 2000,
     system: [
@@ -125,7 +128,14 @@ async function analizarPlato(client, data) {
     ],
     messages: [{ role: 'user', content: contenido }],
     output_config: { format: { type: 'json_schema', schema: ESQUEMA_PLATO } },
-  });
+  };
+  // Temperatura baja = estimaciones más estables. Si el modelo no admitiera el parámetro, se repite sin él en vez de fallar.
+  let r;
+  try { r = await client.messages.create({ ...peticion, temperature: 0.2 }); } catch (e) {
+    if (!(e && e.status === 400 && /temperature/i.test(String(e.message)))) throw e;
+    console.warn('El modelo no admite temperature; se repite sin ella');
+    r = await client.messages.create(peticion);
+  }
   return leerJSON(r);
 }
 

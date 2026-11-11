@@ -1147,3 +1147,57 @@ details.comp { border: 1px solid var(--bd); border-radius: 2px; }
 .lsug { color: #F2BE1A; font-size: 13px; font-weight: 700; text-align: right; margin: -2px 4px 2px; }
 /* Avisos siempre oscuros con borde amarillo (nunca fondo blanco) */
 .toast { background: #1a1a1a; color: #fff; border: 1px solid #F2BE1A; }
+
+/* ---------- Nutrición estilo Cal.ai: panel con anillos ---------- */
+.nd-nav { margin: 0; padding: 4px 14px 0; }
+.nd { display: grid; gap: 10px; padding: 12px 14px 8px; }
+.nd-main { background: #1A1A1A; border-radius: 6px; padding: 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.nd-t { display: grid; gap: 4px; min-width: 0; }
+.nd-t b { font-size: clamp(44px, 15vw, 64px); line-height: 1; font-weight: 800; font-stretch: 118%; letter-spacing: -.02em; color: #fff; }
+.nd-t b.bad { color: var(--bad); }
+.nd-l { color: #9a9a9a; font-size: 13px; font-weight: 600; }
+.nd-macs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.nd-mac { background: #1A1A1A; border-radius: 6px; aspect-ratio: 1; padding: 12px 10px 10px; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.nd-mac b { font-size: 22px; line-height: 1.1; font-weight: 800; color: #fff; }
+.nd-mac .nd-l { font-size: 11px; line-height: 1.2; }
+.nd-mac .ring { margin: auto auto 0; }
+.ring { position: relative; display: inline-grid; place-items: center; flex: none; }
+.ring svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ring-in { position: relative; font-size: 20px; line-height: 1; display: grid; place-items: center; }
+.ring-ico svg { width: 30px; height: 30px; stroke: #F2BE1A; fill: none; }
+@media (prefers-reduced-motion: no-preference) { .ring .arc { animation: ringin .9s cubic-bezier(.2,.8,.2,1); } }
+@keyframes ringin { from { stroke-dashoffset: var(--c); } }
+
+/* ---------- tarjetas de comida ---------- */
+.mcard { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 8px; padding: 10px; background: #1A1A1A; border: 0; border-radius: 8px; color: inherit; text-align: left; cursor: pointer; font: inherit; }
+.mcard:active { background: #222; }
+.mc-th { width: 64px; height: 64px; flex: none; border-radius: 8px; background: #262626; overflow: hidden; display: grid; place-items: center; font-size: 28px; }
+.mc-th img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mc-b { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.mc-n { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; }
+.mc-k { display: flex; align-items: center; gap: 4px; font-size: 14px; font-weight: 700; color: #fff; }
+.mc-k svg { width: 14px; height: 14px; stroke: #F2BE1A; fill: none; }
+.mc-m { display: flex; gap: 10px; font-size: 12px; color: #9a9a9a; flex-wrap: wrap; }
+.mcard.sk { cursor: default; }
+.mcard.sk .blur { filter: blur(8px); transform: scale(1.25); }
+.sk-ring .ring svg { animation: spin 1s linear infinite; }
+.sk-ring .ring-in { font-size: 11px; font-weight: 800; color: #fff; }
+.sk-ring { flex: none; }
+.mc-acts { display: flex; gap: 16px; }
+
+/* ---------- cámara de escaneo ---------- */
+.cam { position: fixed; inset: 0; z-index: 90; background: #000; color: #fff; display: flex; flex-direction: column; overflow: hidden; }
+.cam video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cam-frame { position: absolute; left: 50%; top: 50%; width: min(86vw, 62dvh); aspect-ratio: 1; transform: translate(-50%, -54%); pointer-events: none; filter: drop-shadow(0 0 4px rgba(0,0,0,.5)); }
+.cam-x { position: absolute; top: max(14px, env(safe-area-inset-top)); left: 14px; width: 44px; height: 44px; display: grid; place-items: center; background: rgba(0,0,0,.55); border: 1px solid #333; color: #fff; border-radius: 2px; }
+.cam-t { position: absolute; top: max(24px, calc(env(safe-area-inset-top) + 10px)); left: 0; right: 0; text-align: center; font-size: 14px; font-weight: 700; text-shadow: 0 1px 4px #000; padding: 0 70px; }
+.cam-err { position: absolute; top: 40%; left: 24px; right: 24px; text-align: center; color: #fff; font-size: 16px; }
+.cam-bar { position: absolute; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 20px 24px max(24px, env(safe-area-inset-bottom)); background: linear-gradient(transparent, rgba(0,0,0,.7)); }
+.cam-gal { justify-self: start; display: grid; justify-items: center; gap: 4px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.cam-shot { width: 76px; height: 76px; border-radius: 50%; border: 4px solid #fff; background: transparent; display: grid; place-items: center; padding: 0; }
+.cam-shot i { width: 58px; height: 58px; border-radius: 50%; background: #fff; display: block; }
+.cam-shot:disabled { opacity: .4; }
+.cam-shot:active i { transform: scale(.92); }
+.cam.fail video, .cam.fail .cam-frame, .cam.fail .cam-shot, .cam.fail .cam-t { display: none; }
+.cam.fail .cam-bar { background: none; grid-template-columns: 1fr; justify-items: center; bottom: 30%; }
+.cam.fail .cam-gal { background: #F2BE1A; color: #000; padding: 14px 26px; flex-direction: row; display: flex; gap: 10px; font-size: 15px; text-transform: uppercase; letter-spacing: .04em; border-radius: 2px; }

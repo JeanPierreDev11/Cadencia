@@ -20,6 +20,8 @@ const ICO = {
   llave: svg('<path d="M14.5 6.5a4 4 0 0 0-5.3 5.3L4 17l3 3 5.2-5.2a4 4 0 0 0 5.3-5.3l-2.5 2.5-2.5-.5-.5-2.5z"/>'),
   prog: svg('<path d="M4 21h16M7 21v-8M12 21V5M17 21v-5"/>'),
   close: svg('<path d="M6 6l12 12M18 6L6 18"/>', 22),
+  llama: svg('<path d="M12 3c1 4 5 6 5 11a5 5 0 0 1-10 0c0-3 2-4 3-6 1 1 1 2 2 2 0-3-1-5 0-7z"/>', 20),
+  imagen: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 9"/>', 22),
   pin: svg('<path d="M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>', 18),
   warn: svg('<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/>', 16),
   spark: svg('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>', 18),
@@ -190,19 +192,20 @@ export function crearSecciones(ctx) {
     const label = d === t ? 'Hoy' : d === E.addDays(t, -1) ? 'Ayer' : fmtDate(d, { weekday: 'long', day: 'numeric', month: 'short' });
     let h = head('Nutrición', 'Lo que comes, sumado solo.');
     const eaten = Math.round(tot.k), left = od ? od.target - eaten : 0;
-    const macro = (n, v, obj) => `<div class="macro"><span>${n}</span><b class="num">${nf(v)}<em> / ${obj != null ? nf(obj) : '–'} g</em></b>${obj ? pbar(v / obj, v > obj * 1.1 ? 'over' : '') : ''}</div>`;
-    h += `<section class="card accent-card">
-      <div class="daynav">
+    // Anillo de progreso (SVG con stroke): pista gris y arco amarillo que se completa con frac (0–1).
+    const ring = (frac, size, sw, inner) => { const r = (size - sw) / 2, c = 2 * Math.PI * r, f = Math.max(0, Math.min(1, frac || 0)), m = size / 2;
+      return `<span class="ring" style="width:${size}px;height:${size}px"><svg viewBox="0 0 ${size} ${size}" aria-hidden="true"><circle cx="${m}" cy="${m}" r="${r}" fill="none" stroke="#333" stroke-width="${sw}"/><circle class="arc" cx="${m}" cy="${m}" r="${r}" fill="none" stroke="#F2BE1A" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${(c * (1 - f)).toFixed(1)}" style="--c:${c.toFixed(1)}" transform="rotate(-90 ${m} ${m})"/></svg>${inner ? `<span class="ring-in">${inner}</span>` : ''}</span>`; };
+    const mac = (nom, ico, v, obj) => { const left = obj != null ? obj - Math.round(v) : null;
+      return `<div class="nd-mac"><b class="num">${nf(left != null ? Math.abs(left) : Math.round(v))}g</b><span class="nd-l">${nom} ${left == null ? (nom === 'Proteína' ? 'tomada' : 'tomados') : left >= 0 ? (nom === 'Proteína' ? 'restante' : 'restantes') : 'de más'}</span>${ring(obj ? v / obj : 0, 52, 5, ico)}</div>`; };
+    h += `<div class="daynav nd-nav">
         <button type="button" class="iconbtn" data-act="n-dia" data-v="-1" aria-label="Día anterior">${I.back}</button>
         <label class="daypick"><b>${esc(label)}</b><input type="date" data-ndate value="${d}" max="${t}" aria-label="Elegir día"></label>
         <button type="button" class="iconbtn flip" data-act="n-dia" data-v="1" aria-label="Día siguiente" ${d >= t ? 'disabled' : ''}>${I.back}</button>
       </div>
-      <div class="kcalrow">
-        <div><div class="big num">${nf(eaten)}</div><span class="muted">kcal${od ? ` de ${nf(od.target)}` : ''}</span></div>
-        ${od ? `<div class="right"><b class="num ${left < 0 ? 'bad' : ''}">${nf(Math.abs(left))}</b><span class="muted">${left >= 0 ? 'te quedan' : 'te pasas'}</span></div>` : ''}
-      </div>
-      ${od ? pbar(eaten / od.target, eaten > od.target * 1.05 ? 'over' : '') : ''}
-      <div class="macros">${macro('Proteína', tot.p, od && od.macros.p)}${macro('Hidratos', tot.c, od && od.macros.c)}${macro('Grasa', tot.f, od && od.macros.f)}</div>
+    <section class="nd">
+      <div class="nd-main"><div class="nd-t"><b class="num ${left < 0 ? 'bad' : ''}">${nf(od ? Math.abs(left) : eaten)}</b><span class="nd-l">${od ? (left >= 0 ? 'Calorías restantes' : 'Calorías sobrantes') : 'Calorías tomadas'}</span></div>
+        ${ring(od ? eaten / od.target : 0, 112, 10, `<span class="ring-ico">${ICO.llama}</span>`)}</div>
+      <div class="nd-macs">${mac('Proteína', '🍗', tot.p, od && od.macros.p)}${mac('Hidratos', '🌾', tot.c, od && od.macros.c)}${mac('Grasas', '🥑', tot.f, od && od.macros.f)}</div>
       ${od ? `<p class="small muted">Objetivo = ${nf(od.PL.tdee)} de gasto sin entrenar${od.PL.pl.dailyDeficit ? ` − ${nf(od.PL.pl.dailyDeficit)} de déficit` : ''}${od.PL.surplus ? ` + ${nf(od.PL.surplus)} para ganar músculo` : ''}${od.add ? ` + <b>${nf(od.add)} de ejercicio</b>` : ''}.</p>`
         : `<p class="small">Completa edad y estatura en tu <button class="link" data-act="tab" data-v="perfil">perfil</button> para calcular tu objetivo.</p>`}
     </section>`;
@@ -210,12 +213,35 @@ export function crearSecciones(ctx) {
     // Comidas
     const prev = dia(E.addDays(d, -1)).items, ayerTxt = d === t ? 'ayer' : 'el día anterior';
     if (st.iaQuedan == null) setTimeout(() => iaEstado(), 0);
-    h += `<section class="card"><div class="card-head"><h2>Lo que has comido</h2>${st.iaQuedan != null && esPro() ? `<span class="small muted">IA: ${iaQuedanTxt()}</span>` : ''}</div>
+    const mac3 = (x) => `<span class="mc-m"><span>🍗 ${nf(x.p, 0)}g</span><span>🌾 ${nf(x.c, 0)}g</span><span>🥑 ${nf(x.f, 0)}g</span></span>`;
+    // Una tarjeta por comida registrada: lo escaneado con IA (un grupo) lleva su foto; lo manual, un emoji.
+    const tarjetas = (i, arr) => {
+      const grupos = [], vistos = {};
+      for (const x of arr) {
+        const key = x.grp || (x.ia ? 'ia-' + i : x.id);
+        if (!vistos[key]) { vistos[key] = { items: [], ia: !!x.ia }; grupos.push(vistos[key]); }
+        vistos[key].items.push(x);
+      }
+      return grupos.map((g) => {
+        const tot = g.items.reduce((a, x) => ({ k: a.k + x.k, p: a.p + x.p, c: a.c + x.c, f: a.f + x.f }), { k: 0, p: 0, c: 0, f: 0 }), foto = (g.items.find((x) => x.foto) || {}).foto;
+        const nom = g.items.map((x) => x.n.split(' · ')[0]).join(', ');
+        return `<button type="button" class="mcard" data-act="meal-open" data-v="${i}" aria-label="${esc(nom)}: ${nf(tot.k)} kcal, ver detalle"><span class="mc-th">${foto ? `<img src="${esc(foto)}" alt="">` : g.ia ? '🍽️' : '🥣'}</span>
+          <span class="mc-b"><b class="mc-n">${esc(nom)}</b><span class="mc-k num">${ICO.llama}${nf(tot.k)} kcal</span>${mac3(tot)}</span></button>`;
+      }).join('');
+    };
+    // Tarjeta «skeleton» mientras la IA estima las porciones (o aviso si falló).
+    const skeleton = (sc) => sc.fase === 'error'
+      ? `<div class="mcard sk err"><span class="mc-th">${sc.url ? `<img src="${esc(sc.url)}" alt="" class="blur">` : '⚠️'}</span><span class="mc-b"><b class="mc-n">No se ha podido analizar</b><span class="small muted">${esc(sc.msg)}</span><span class="mc-acts">${sc.b64 ? `<button type="button" class="link" data-act="scan-reintentar" data-v="${sc.id}">Reintentar</button>` : ''}<button type="button" class="link" data-act="scan-quitar" data-v="${sc.id}">Quitar</button></span></span></div>`
+      : `<div class="mcard sk" role="status" aria-label="Estimando porciones"><span class="mc-th">${sc.url ? `<img src="${esc(sc.url)}" alt="" class="blur">` : ''}</span><span class="mc-b"><b class="mc-n">Estimando porciones...</b><span class="small muted">La IA está viendo tu plato</span></span>
+          <span class="sk-ring">${ring(0.28, 44, 5, `<span class="sk-pct" data-scanpct="${sc.id}">${Math.round(sc.pct)}%</span>`)}</span></div>`;
+    const scans = (st.scans || []).filter((x) => x.fecha === d);
+    h += `<section class="card"><div class="card-head"><h2>Subido recientemente</h2>${st.iaQuedan != null && esPro() ? `<span class="small muted nowrap">IA: ${st.iaQuedan} hoy</span>` : ''}</div>
       ${MEALS.map((name, i) => {
-        const arr = it.filter((x) => x.m === i), k = arr.reduce((a, x) => a + x.k, 0), ayer = prev.filter((x) => x.m === i);
+        const arr = it.filter((x) => x.m === i), k = arr.reduce((a, x) => a + x.k, 0), ayer = prev.filter((x) => x.m === i), sk = scans.filter((x) => x.meal === i);
         return `<div class="meal">
-          <div class="meal-h"><button type="button" class="meal-n meal-open" data-act="meal-open" data-v="${i}" aria-haspopup="dialog" aria-label="${name}: ${arr.length ? nf(k) + ' kcal, ver alimentos' : 'sin alimentos'}"><b>${name}</b>${arr.length ? `<span class="muted small">${nf(k)} kcal</span>` : ''}<span class="chev" aria-hidden="true">${I.chev}</span></button>${arr.length && arr.some((x) => x.ia) ? `<span class="meal-acts full"><button type="button" class="chipbtn chip" data-act="meal-open" data-v="${i}">Modificar</button></span>` : `<span class="meal-acts">${esPro() ? `<label class="chipbtn chip iachip" aria-label="Escanear alimento para ${name.toLowerCase()}"><input type="file" accept="image/*" data-iafoto="${i}" hidden>${ICO.camara} Escanear alimento</label>` : `<button type="button" class="chipbtn chip iachip" data-act="pro-open" data-v="foto" aria-label="Escanear alimento para ${name.toLowerCase()} (Cadencia Pro)">${ICO.camara} Escanear alimento <span class="protag">Pro</span></button>`}${arr.length ? `<button type="button" class="chipbtn chip" data-act="meal-open" data-v="${i}">Modificar</button>` : `<button type="button" class="chipbtn chip" data-act="n-add" data-v="${i}">${I.plus} Añadir</button>`}</span>`}</div>
-          ${ayer.length && !arr.length ? `<button type="button" class="link repetir" data-act="n-repetir" data-v="${i}">Repetir de ${ayerTxt} · ${ayer.length === 1 ? esc(ayer[0].n.length > 28 ? ayer[0].n.slice(0, 27) + '…' : ayer[0].n) : ayer.length + ' alimentos'} (${nf(ayer.reduce((a, x) => a + x.k, 0))} kcal)</button>` : ''}
+          <div class="meal-h"><button type="button" class="meal-n meal-open" data-act="meal-open" data-v="${i}" aria-haspopup="dialog" aria-label="${name}: ${arr.length ? nf(k) + ' kcal, ver alimentos' : 'sin alimentos'}"><b>${name}</b>${arr.length ? `<span class="muted small">${nf(k)} kcal</span>` : ''}<span class="chev" aria-hidden="true">${I.chev}</span></button>${arr.length && arr.some((x) => x.ia) ? `<span class="meal-acts full"><button type="button" class="chipbtn chip" data-act="meal-open" data-v="${i}">Modificar</button></span>` : `<span class="meal-acts">${esPro() ? `<button type="button" class="chipbtn chip iachip" data-act="scan-open" data-v="${i}" aria-label="Escanear alimento para ${name.toLowerCase()}">${ICO.camara} Escanear alimento</button>` : `<button type="button" class="chipbtn chip iachip" data-act="pro-open" data-v="foto" aria-label="Escanear alimento para ${name.toLowerCase()} (Cadencia Pro)">${ICO.camara} Escanear alimento <span class="protag">Pro</span></button>`}${arr.length ? `<button type="button" class="chipbtn chip" data-act="meal-open" data-v="${i}">Modificar</button>` : `<button type="button" class="chipbtn chip" data-act="n-add" data-v="${i}">${I.plus} Añadir</button>`}</span>`}</div>
+          ${sk.map(skeleton).join('')}${tarjetas(i, arr)}
+          ${ayer.length && !arr.length && !sk.length ? `<button type="button" class="link repetir" data-act="n-repetir" data-v="${i}">Repetir de ${ayerTxt} · ${ayer.length === 1 ? esc(ayer[0].n.length > 28 ? ayer[0].n.slice(0, 27) + '…' : ayer[0].n) : ayer.length + ' alimentos'} (${nf(ayer.reduce((a, x) => a + x.k, 0))} kcal)</button>` : ''}
         </div>`;
       }).join('')}
       ${!it.length && prev.length ? `<button class="btn ghost small" data-act="n-copiar">Copiar todo lo de ${ayerTxt} (${prev.length})</button>` : ''}
@@ -1073,14 +1099,12 @@ export function crearSecciones(ctx) {
       case 'pro-welcome-close': st.proWelcome = false; render(); return true;
       case 'pro-welcome-go': st.proWelcome = false; st.tab = 'nutricion'; st.food = null; st.tl = null; lsSet('cadencia-tab', 'nutricion'); render(); window.scrollTo(0, 0); return true;
       case 'pro-refresh': refrescarPro(true); return true;
-      case 'ia-close': if (st.iaFoto && (st.iaFoto.recalc || st.iaFoto.fase === 'cargando')) { toast('Espera a que termine el análisis'); return true; } st.iaFoto = null; render(); return true;
+      case 'scan-open': abrirCamara(Number(v)); return true;
+      case 'scan-quitar': st.scans = (st.scans || []).filter((x) => x.id !== v); render(); return true;
+      case 'scan-reintentar': { const sc = (st.scans || []).find((x) => x.id === v); if (sc) analizarScan(sc); return true; }
       case 'meal-open': st.mealDet = Number(v); st.mealMsg = ''; st.mealCorr = ''; render(); return true;
       case 'meal-close': if (st.mealBusy) return true; st.mealDet = null; render(); return true;
       case 'meal-recalc': mealRecalc(); return true;
-      case 'ia-recalc': iaRecalcular(); return true;
-      case 'ia-del': st.iaFoto.items = st.iaFoto.items.filter((x) => x.key !== v); render(); return true;
-      case 'ia-add-food': { const f = asFood(v); if (!f) return true; const gp = prepOf(f); st.iaFoto.items.push({ key: nid('i'), fid: f.id, n: f.n, g: f.u ? String(f.u.g) : '100', prep: gp ? gp[0].id : null, per100: { k: f.k, p: f.p, c: f.c, f: f.f }, conf: 'alta' }); st.iaFoto.q = ''; render(); return true; }
-      case 'ia-guardar': iaGuardar(); return true;
       case 'ia-taller': iaTaller(); return true;
       case 'ia-deseo': {
         const g = garaje(), R = g.mejora.ia, x = R && R.res.recomendaciones[Number(v)]; if (!x) return true;
@@ -1126,21 +1150,12 @@ export function crearSecciones(ctx) {
     if (st.tl && t.dataset.tf) { st.tl.d[t.dataset.tf] = t.value; return true; }
     if (st.meta && t.dataset.mf) { st.meta.d[t.dataset.mf] = t.value; return true; }
     if (t.dataset.iatxt != null) { st.iaTxt = t.value; return true; }
-    if (st.iaFoto && t.dataset.iag) {
-      const it = st.iaFoto.items.find((x) => x.key === t.dataset.iag); if (!it) return true;
-      it.g = t.value;
-      const k = document.getElementById('iak-' + it.key); if (k) k.innerHTML = `${nf(iaVals(it).k)}<small> kcal</small>`;
-      const tot = document.getElementById('ia-total'); if (tot) tot.textContent = nf(iaTotal());
-      return true;
-    }
     if (st.mealDet != null && t.dataset.mcorr != null) { st.mealCorr = t.value; return true; }
     if (st.mealDet != null && t.dataset.mg) {
       const x = dia(st.nDate || todayISO()).items.find((q) => q.id === t.dataset.mg), g = num(t.value);
       const kEl = document.getElementById('mk-' + t.dataset.mg); if (x && x.g && kEl && g > 0) kEl.textContent = nf(Math.round(x.k * g / x.g));
       return true;
     }
-    if (st.iaFoto && t.dataset.iacorr != null) { st.iaFoto.corr = t.value; return true; }
-    if (st.iaFoto && t.dataset.iaq != null) { st.iaFoto.q = t.value; const r = document.getElementById('ia-res'); if (r) r.innerHTML = iaResHTML(); return true; }
     if (t.dataset.body) {
       const B = st.body || (st.body = {}); B[t.dataset.body] = t.value;
       // Recalcular sin redibujar toda la pantalla (para no perder el teclado).
@@ -1156,8 +1171,6 @@ export function crearSecciones(ctx) {
     if (st.mealDet != null && t.dataset.mg) { mealGramos(t.dataset.mg, t.value); return true; }
     if (t.dataset.ndate != null) { if (t.value && t.value <= todayISO()) { st.nDate = t.value; render(); } return true; }
     if (t.dataset.gpx != null) { const f = t.files && t.files[0]; t.value = ''; abrirGPX(f); return true; }
-    if (t.dataset.iafoto != null) { const f = t.files && t.files[0]; t.value = ''; st.food = null; fotoPlato(f, Number(t.dataset.iafoto)); return true; }
-    if (st.iaFoto && t.dataset.iaprep) { const it = st.iaFoto.items.find((x) => x.key === t.dataset.iaprep); if (it) it.prep = t.value; render(); return true; }
     if (t.dataset.wxh != null) { st.wxIdx = Number(t.value); render(); return true; }
     if (st.tl && t.dataset.tfs) { st.tl.d[t.dataset.tfs] = t.value; st.tl.d.cadaKm = ''; render(); return true; }
     if (t.dataset.presu != null) {
@@ -1279,7 +1292,7 @@ export function crearSecciones(ctx) {
     try { const r = await api.ia({ modo: 'estado' }); if (r && typeof r.pro === 'boolean' && st.profile) st.profile.isPro = r.pro; if (r && Number.isFinite(r.quedan)) { st.iaQuedan = r.quedan; if (!document.activeElement || !document.activeElement.matches('input,textarea,select')) render(); } } catch (e) { /* la IA aún no está activada: no mostramos nada */ }
   }
   // Si el servidor dice que no eres Pro (p. ej. la suscripción terminó), enseñamos el paywall.
-  const noPro = (e) => { if (!(e && e.code === 'functions/permission-denied')) return false; if (st.profile) st.profile.isPro = false; st.iaFoto = null; st.iaTallerBusy = false; st.iaTallerMsg = ''; st.pro = { from: 'servidor' }; render(); return true; };
+  const noPro = (e) => { if (!(e && e.code === 'functions/permission-denied')) return false; if (st.profile) st.profile.isPro = false; st.scans = []; st.iaTallerBusy = false; st.iaTallerMsg = ''; st.pro = { from: 'servidor' }; render(); return true; };
   const iaErr = (e) => (e && e.code === 'functions/resource-exhausted' ? e.message : errorText(e));
 
   // Reduce la foto (lado largo 1024 px, JPEG) para que suba rápido y gaste menos.
@@ -1294,29 +1307,89 @@ export function crearSecciones(ctx) {
     const url = c.toDataURL('image/jpeg', 0.72);
     return { url, b64: url.split(',')[1] };
   }
+  // Miniatura cuadrada de 120 px (JPEG) que se guarda con la comida para pintar la tarjeta.
+  async function miniatura(url) {
+    const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = url; });
+    const side = Math.min(img.width, img.height), c = document.createElement('canvas'); c.width = c.height = 120;
+    c.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, 120, 120);
+    return c.toDataURL('image/jpeg', 0.6);
+  }
+  // Tras la foto se vuelve al panel: aparece una tarjeta «skeleton» y, cuando la IA responde, se guarda la comida y la tarjeta real ocupa su sitio.
   async function fotoPlato(file, meal) {
     if (!file) return;
     if (!esPro()) { st.pro = { from: 'foto' }; render(); return; }
-    const fecha = st.nDate || todayISO();
     if (st.iaQuedan === 0) { toast('Ya has usado tus consultas de IA de hoy'); return; }
-    st.iaFoto = { meal, fecha, fase: 'cargando', thumb: '', items: [], nota: '', msg: '', q: '' };
+    const sc = { id: nid('s'), meal, fecha: st.nDate || todayISO(), fase: 'cargando', msg: '', pct: 4, url: '', b64: '' };
+    (st.scans = st.scans || []).push(sc); st.mealDet = null; render();
+    try { const foto = await comprimir(file); sc.url = foto.url; sc.b64 = foto.b64; } catch (e) { sc.fase = 'error'; sc.msg = 'No se ha podido leer la foto. Prueba con otra.'; render(); return; }
     render();
-    let foto;
-    try { foto = await comprimir(file); } catch (e) { st.iaFoto = { ...st.iaFoto, fase: 'error', msg: 'No se ha podido leer la foto. Prueba con otra.' }; render(); return; }
-    if (!st.iaFoto) return;
-    st.iaFoto.thumb = foto.url; render();
-    st.iaFoto.b64 = foto.b64;
+    analizarScan(sc);
+  }
+  async function analizarScan(sc) {
+    sc.fase = 'cargando'; sc.msg = ''; sc.pct = 4; render();
     try {
-      const r = await api.ia({ modo: 'plato', imagen: foto.b64, comida: MEALS[meal] });
-      if (!st.iaFoto) return;
+      const r = await api.ia({ modo: 'plato', imagen: sc.b64, comida: MEALS[sc.meal] });
+      if (!(st.scans || []).includes(sc)) return;
       if (Number.isFinite(r.quedan)) st.iaQuedan = r.quedan;
-      st.iaFoto = { ...st.iaFoto, fase: 'revisar', items: iaItems(r), nota: String(r.nota || ''), corr: '' };
+      const items = iaItems(r);
+      if (!items.length) { sc.fase = 'error'; sc.msg = String(r.nota || 'No he visto comida en la foto. Prueba con otra.'); render(); return; }
+      const foto = await miniatura(sc.url).catch(() => '');
+      const add = items.map((it, j) => ({ ...iaAItem(it, sc.meal), grp: sc.id, ...(j === 0 && foto ? { foto } : {}) }));
+      st.scans = st.scans.filter((x) => x !== sc);
+      guardarDia(sc.fecha, [...dia(sc.fecha).items, ...add]);
+      toast(`${add.length} ${add.length === 1 ? 'alimento guardado' : 'alimentos guardados'}${st.iaQuedan != null ? ` · te quedan ${st.iaQuedan} consultas de IA hoy` : ''}`);
     } catch (e) {
-      if (!st.iaFoto) return;
+      if (!(st.scans || []).includes(sc)) return;
       if (noPro(e)) return;
-      st.iaFoto = { ...st.iaFoto, fase: 'error', msg: iaErr(e) };
+      sc.fase = 'error'; sc.msg = iaErr(e); render();
     }
-    render();
+  }
+  // El % del skeleton es una ilusión de avance (la IA no da progreso real): sube rápido y se frena hacia el 95 %.
+  setInterval(() => {
+    for (const sc of st.scans || []) {
+      if (sc.fase !== 'cargando') continue;
+      sc.pct = Math.min(95, sc.pct + (95 - sc.pct) * 0.06 + 0.4);
+      const el = document.querySelector(`[data-scanpct="${sc.id}"]`); if (el) el.textContent = Math.round(sc.pct) + '%';
+    }
+  }, 400);
+
+  // Cámara propia a pantalla completa. Vive fuera de #root para que ningún render() la cierre. Si falla, queda el botón de galería.
+  async function abrirCamara(meal) {
+    if (!esPro()) { st.pro = { from: 'foto' }; render(); return; }
+    if (st.iaQuedan === 0) { toast('Ya has usado tus consultas de IA de hoy'); return; }
+    const m = document.createElement('div');
+    m.className = 'cam';
+    m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-label', 'Escanear alimento');
+    m.innerHTML = `<video playsinline muted autoplay></video>
+      <svg class="cam-frame" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><g fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 28V16a4 4 0 0 1 4-4h12"/><path d="M72 12h12a4 4 0 0 1 4 4v12"/><path d="M88 72v12a4 4 0 0 1-4 4H72"/><path d="M28 88H16a4 4 0 0 1-4-4V72"/></g></svg>
+      <button type="button" class="cam-x" data-cam="x" aria-label="Cerrar">${ICO.close}</button>
+      <p class="cam-t">Centra el plato dentro del marco</p>
+      <p class="cam-err" hidden></p>
+      <div class="cam-bar"><label class="cam-gal" aria-label="Elegir de la galería"><input type="file" accept="image/*" hidden>${ICO.imagen || 'Galería'}<span>Galería</span></label>
+        <button type="button" class="cam-shot" data-cam="shot" aria-label="Hacer foto" disabled><i></i></button><span></span></div>`;
+    document.body.appendChild(m);
+    const video = m.querySelector('video'), shot = m.querySelector('[data-cam=shot]'), err = m.querySelector('.cam-err');
+    let stream = null, cerrado = false;
+    const cerrar = () => { if (cerrado) return; cerrado = true; document.removeEventListener('keydown', tecla); if (stream) stream.getTracks().forEach((t) => t.stop()); m.remove(); };
+    const tecla = (e) => { if (e.key === 'Escape') cerrar(); };
+    document.addEventListener('keydown', tecla);
+    m.querySelector('[data-cam=x]').onclick = cerrar;
+    m.querySelector('input[type=file]').onchange = (e) => { const f = e.target.files && e.target.files[0]; cerrar(); fotoPlato(f, meal); };
+    shot.onclick = () => {
+      if (!video.videoWidth) return;
+      const c = document.createElement('canvas'); c.width = video.videoWidth; c.height = video.videoHeight;
+      c.getContext('2d').drawImage(video, 0, 0);
+      c.toBlob((b) => { cerrar(); if (b) fotoPlato(b, meal); }, 'image/jpeg', 0.92);
+    };
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('sin-camara');
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 } }, audio: false });
+      if (cerrado) { stream.getTracks().forEach((t) => t.stop()); return; }
+      video.srcObject = stream; await video.play().catch(() => {}); shot.disabled = false;
+    } catch (e) {
+      m.classList.add('fail'); err.hidden = false;
+      err.textContent = e && e.name === 'NotAllowedError' ? 'No tenemos permiso para usar la cámara. Puedes elegir una foto de tu galería.' : 'No se ha podido abrir la cámara. Puedes elegir una foto de tu galería.';
+    }
   }
   // Respuesta de la IA → filas que se revisan en pantalla.
   function iaItems(r) {
@@ -1330,26 +1403,6 @@ export function crearSecciones(ctx) {
       };
     });
   }
-  // Lo que ve ahora la persona en pantalla, en el mismo formato en que responde la IA.
-  const iaActual = () => st.iaFoto.items.map((it) => ({ id: it.fid || '', nombre: it.n, gramos: Math.round(num(it.g)) || 1, prep: it.prep || '',
-    kcal_100g: it.per100.k, proteina_100g: it.per100.p, hidratos_100g: it.per100.c, grasa_100g: it.per100.f, confianza: it.conf }));
-  async function iaRecalcular() {
-    const F = st.iaFoto, texto = (F.corr || '').trim();
-    if (!texto) { F.corrMsg = 'Escribe qué quieres corregir.'; render(); return; }
-    if (st.iaQuedan === 0) { toast('Ya has usado tus consultas de IA de hoy'); return; }
-    F.corrMsg = ''; F.recalc = true; render();
-    try {
-      const r = await api.ia({ modo: 'plato', comida: MEALS[F.meal], correccion: texto.slice(0, 500), actual: { alimentos: iaActual(), nota: F.nota || '' }, ...(F.b64 ? { imagen: F.b64 } : {}) });
-      if (!st.iaFoto) return;
-      if (Number.isFinite(r.quedan)) st.iaQuedan = r.quedan;
-      st.iaFoto = { ...st.iaFoto, items: iaItems(r), nota: String(r.nota || ''), corr: '', recalc: false, corrOk: true };
-    } catch (e) {
-      if (!st.iaFoto) return;
-      if (noPro(e)) return;
-      st.iaFoto = { ...st.iaFoto, recalc: false, corrMsg: iaErr(e) };
-    }
-    render();
-  }
   function iaVals(it) {
     const g = num(it.g), food = it.fid ? asFood(it.fid) : null;
     if (!(g > 0)) return { k: 0, p: 0, c: 0, f: 0 };
@@ -1360,68 +1413,10 @@ export function crearSecciones(ctx) {
     const q = it.per100;
     return { k: Math.round((q.k * g) / 100), p: r1((q.p * g) / 100), c: r1((q.c * g) / 100), f: r1((q.f * g) / 100) };
   }
-  const iaTotal = () => (st.iaFoto ? st.iaFoto.items.reduce((a, it) => a + iaVals(it).k, 0) : 0);
-  function iaResHTML() {
-    const q = (st.iaFoto && st.iaFoto.q || '').trim();
-    if (!q) return '';
-    const res = searchFoods(q).slice(0, 6);
-    return res.length ? res.map((f) => `<button type="button" class="frow" data-act="ia-add-food" data-v="${esc(f.id)}"><span><b>${esc(f.n)}</b><small>${nf(f.k)} kcal por 100 g</small></span>${I.plus}</button>`).join('') : '<p class="small muted">No está en la tabla.</p>';
-  }
-  function iaFotoSheet() {
-    const F = st.iaFoto, meal = MEALS[F.meal].toLowerCase();
-    let body = '', foot = '';
-    if (F.fase === 'cargando') {
-      body = `<div class="iafoto">${F.thumb ? `<img src="${F.thumb}" alt="Tu foto">` : ''}<p class="iawait"><span class="spinner dark"></span> ${F.thumb ? 'Analizando tu plato…' : 'Preparando la foto…'}</p></div>`;
-    } else if (F.fase === 'error') {
-      body = `<div class="iafoto">${F.thumb ? `<img src="${F.thumb}" alt="Tu foto">` : ''}</div><div class="msg" role="alert">${esc(F.msg)}</div>`;
-      foot = `<label class="btn block"><input type="file" accept="image/*" data-iafoto="${F.meal}" hidden>${ICO.camara} Hacer otra foto</label>`;
-    } else {
-      body = `<div class="iahead">${F.thumb ? `<img src="${F.thumb}" alt="Tu foto">` : ''}<p class="small">${F.items.length ? `La IA ha visto <b>${F.items.length} ${F.items.length === 1 ? 'alimento' : 'alimentos'}</b>. Revisa los gramos y cómo está cocinado antes de guardar.` : 'La IA no ha encontrado comida en la foto.'}${F.nota ? `<br><span class="muted">${esc(F.nota)}</span>` : ''}</p></div>
-        <div class="ialist">${F.items.map((it) => {
-          const food = it.fid ? asFood(it.fid) : null, gp = food ? prepOf(food) : null, v = iaVals(it);
-          return `<div class="iarow">
-            <div class="iarow-t"><b>${esc(it.n)}</b>${it.conf === 'baja' ? '<span class="tag warn">Revisa</span>' : ''}${!food ? '<span class="tag">Estimado</span>' : ''}</div>
-            <div class="iarow-c">
-              ${gp ? `<select class="input" data-iaprep="${it.key}" aria-label="Cómo está cocinado">${gp.map((m) => `<option value="${m.id}" ${m.id === it.prep ? 'selected' : ''}>${esc(m.n)}</option>`).join('')}</select>` : '<span></span>'}
-              <label class="iag"><input class="input" data-iag="${it.key}" inputmode="decimal" value="${esc(it.g)}" aria-label="Gramos de ${esc(it.n)}"><span>g</span></label>
-              <b class="num iak" id="iak-${it.key}">${nf(v.k)}<small> kcal</small></b>
-              <button type="button" class="iconbtn" data-act="ia-del" data-v="${it.key}" aria-label="Quitar ${esc(it.n)}">${I.trash}</button>
-            </div></div>`;
-        }).join('')}</div>
-        <div class="iaadd"><input class="input" type="search" data-iaq value="${esc(F.q)}" placeholder="Añadir otro alimento: salsa, pan…" autocomplete="off" aria-label="Añadir otro alimento"><div id="ia-res">${iaResHTML()}</div></div>
-        <div class="iacorr">
-          <label class="field"><span>Corregir a la IA</span><textarea class="input" rows="2" maxlength="500" data-iacorr placeholder="Ej. debajo había queso, son 100 g de pollo, no 80 g" ${F.recalc ? 'disabled' : ''}>${esc(F.corr || '')}</textarea></label>
-          <button type="button" class="btn ghost block" data-act="ia-recalc" ${F.recalc ? 'disabled' : ''}>Recalcular</button>
-          ${F.corrMsg ? `<div class="msg" role="alert">${esc(F.corrMsg)}</div>` : F.corrOk ? '<p class="small muted">Listo: la IA ha ajustado el plato con tu corrección. Revísalo.</p>' : ''}
-        </div>
-        ${st.iaQuedan != null ? `<p class="small muted">IA: ${iaQuedanTxt()}.</p>` : ''}`;
-      foot = `<button class="btn block" data-act="ia-guardar" ${F.items.length ? '' : 'disabled'}>Guardar en mi ${meal} · <span id="ia-total">${nf(iaTotal())}</span> kcal</button>`;
-    }
-    return `<div class="sheet-back" data-act="ia-close"></div>
-      <div class="sheet" role="dialog" aria-modal="true" aria-label="Escanear alimento">
-        <div class="sheet-grab"></div>
-        <div class="sheet-head"><button type="button" class="iconbtn" data-act="ia-close" aria-label="Cerrar">${ICO.close}</button><h2>Escanear alimento · ${esc(MEALS[F.meal])}</h2><span style="width:36px"></span></div>
-        <div class="sheet-list form-grid ${F.recalc ? 'busy' : ''}" ${F.recalc ? 'inert aria-busy="true"' : ''}>${body}</div>
-        ${F.recalc ? `<div class="ia-loading" role="status"><svg class="logo-mark spin-logo" viewBox="0 0 64 64" aria-hidden="true" fill="currentColor"><path d="M12 8H56V22H28V42H56V56H12Z" transform="translate(6.8 0) skewX(-12)"/></svg><p>Recalculando...</p></div>` : ''}
-        ${foot ? `<div class="sheet-foot">${foot.replace('<button class="btn block"', F.recalc ? '<button disabled class="btn block"' : '<button class="btn block"')}</div>` : ''}
-      </div>`;
-  }
   // Fila revisada de la IA → alimento guardado en el día.
   function iaAItem(it, meal) {
     const g = num(it.g), v = iaVals(it), food = it.fid ? asFood(it.fid) : null, gp = food ? prepOf(food) : null, pm = gp ? gp.find((m) => m.id === it.prep) || gp[0] : null;
     return { id: nid('f'), m: meal, n: it.n + (pm && pm.id !== gp[0].id ? ' · ' + pm.n.toLowerCase() : ''), g: Math.round(g), k: v.k, p: v.p, c: v.c, f: v.f, ...(food ? { fid: food.id } : {}), ...(pm ? { prep: pm.id } : {}), ia: true };
-  }
-  function iaGuardar() {
-    const F = st.iaFoto, add = [];
-    for (const it of F.items) {
-      const g = num(it.g);
-      if (!(g > 0 && g <= 3000)) { toast(`Revisa los gramos de ${it.n}`); return; }
-      add.push(iaAItem(it, F.meal));
-    }
-    const d = F.fecha;
-    st.iaFoto = null;
-    guardarDia(d, [...dia(d).items, ...add]);
-    toast(`${add.length} ${add.length === 1 ? 'alimento guardado' : 'alimentos guardados'}${st.iaQuedan != null ? ` · te quedan ${st.iaQuedan} consultas de IA hoy` : ''}`);
   }
 
   /* ----- Detalle de una comida ----- */
@@ -1446,7 +1441,7 @@ export function crearSecciones(ctx) {
           <div class="mlist">${rows}</div>
           <div class="meal-acts2">
             <button type="button" class="chipbtn chip" data-act="n-add" data-v="${i}">${I.plus} Añadir alimento</button>
-            ${esPro() ? `<label class="chipbtn chip iachip"><input type="file" accept="image/*" data-iafoto="${i}" hidden>${ICO.camara} Escanear alimento</label>` : `<button type="button" class="chipbtn chip iachip" data-act="pro-open" data-v="foto">${ICO.camara} Escanear alimento <span class="protag">Pro</span></button>`}
+            ${esPro() ? `<button type="button" class="chipbtn chip iachip" data-act="scan-open" data-v="${i}">${ICO.camara} Escanear alimento</button>` : `<button type="button" class="chipbtn chip iachip" data-act="pro-open" data-v="foto">${ICO.camara} Escanear alimento <span class="protag">Pro</span></button>`}
           </div>
           ${ia}
         </div>
@@ -1688,7 +1683,7 @@ export function crearSecciones(ctx) {
     render(); toast('Objetivo guardado');
   }
 
-  function sheet() { return st.proWelcome ? proWelcomeSheet() : st.pro ? proSheet() : st.iaFoto ? iaFotoSheet() : st.food ? foodSheet() : st.mealDet != null ? mealDetSheet() : st.tl ? tlSheet() : st.meta ? metaSheet() : ''; }
+  function sheet() { return st.proWelcome ? proWelcomeSheet() : st.pro ? proSheet() : st.food ? foodSheet() : st.mealDet != null ? mealDetSheet() : st.tl ? tlSheet() : st.meta ? metaSheet() : ''; }
   function view(tab) {
     if (tab === 'nutricion') return viewNutricion();
     if (tab === 'bici') return viewBici();
