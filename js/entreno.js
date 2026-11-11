@@ -357,6 +357,51 @@ export const ejercicio = (n) => {
 export const img3d = (x) => (x && IMG3D[x.n]) || '';
 // "ch,tr|sh" → { p: ['ch','tr'], s: ['sh'] }
 export const musculosDet = (x) => { const [p = '', s = ''] = String((x && x.mu) || '').split('|'); return { p: p ? p.split(',') : [], s: s ? s.split(',') : [] }; };
+// ── Recuperación muscular ──
+// Grupos del carrusel → músculos del mapa. side: lado de la figura que mejor los muestra.
+export const MUSC_GRUPOS = [
+  { id: 'pecho', n: 'Pecho', m: ['ch'], side: 'front' },
+  { id: 'espalda', n: 'Espalda', m: ['la', 'mb', 'lb', 'tp'], side: 'back' },
+  { id: 'piernas', n: 'Piernas', m: ['qu', 'ha', 'gl', 'ca', 'ad', 'abd'], side: 'front' },
+  { id: 'hombros', n: 'Hombros', m: ['sh'], side: 'front' },
+  { id: 'brazos', n: 'Brazos', m: ['bi', 'tr', 'fo'], side: 'front' },
+];
+// Series efectivas por músculo de un entreno: principal 1/serie, secundario 0,5. La bici carga piernas por minutos.
+export function seriesPorMusculo(w) {
+  const o = {}, add = (k, v) => { o[k] = (o[k] || 0) + v; };
+  for (const e of w.ejercicios || []) {
+    const x = ejercicio(e.n), n = (e.series || []).length;
+    if (!x || !n) continue;
+    let { p, s } = musculosDet(x);
+    if (!p.length && GRUPO_DET[x.m]) p = [GRUPO_DET[x.m]];
+    p.forEach((k) => add(k, n)); s.forEach((k) => add(k, n / 2));
+  }
+  if (w.tipo === 'bici') { const v = Math.min(12, (Number(w.min) || 0) / 10); add('qu', v); add('gl', v); add('ca', v); add('ha', v / 2); }
+  return o;
+}
+const HORAS_REC = 72;
+// % de recuperación por músculo (solo los que aún no están al 100). Sin hora en el entreno → hoy cuenta como ahora; otros días, las 12:00.
+// Baja a 0 % con ≥6 series efectivas (20 % si menos) y sube lineal hasta 100 % a las 72 h (≈33 % cada 24 h).
+export function recuperacion(ws, ahora = new Date()) {
+  const r = {};
+  for (const w of ws || []) {
+    const h = w.fecha === toISO(ahora) ? 0 : Math.max(0, (ahora - new Date(`${w.fecha}T12:00:00`)) / 36e5); // hoy = hace un momento
+    if (!(h < HORAS_REC)) continue;
+    for (const [k, v] of Object.entries(seriesPorMusculo(w))) {
+      const p0 = v >= 6 ? 0 : 20, pct = p0 + (100 - p0) * (h / HORAS_REC);
+      r[k] = Math.min(r[k] ?? 100, pct);
+    }
+  }
+  return r;
+}
+// % de un grupo = el del músculo peor recuperado
+export const recGrupo = (rec, g) => Math.round(Math.min(...g.m.map((k) => rec[k] ?? 100)));
+// Intensidad 0‑1 por músculo con las series efectivas de los últimos 7 días (hoy incluido); 12 series ≈ máximo.
+export function semana(ws, hoy) {
+  const desde = addDays(hoy, -6), tot = {};
+  for (const w of ws || []) if (w.fecha >= desde && w.fecha <= hoy) for (const [k, v] of Object.entries(seriesPorMusculo(w))) tot[k] = (tot[k] || 0) + v;
+  return Object.fromEntries(Object.entries(tot).map(([k, v]) => [k, Math.min(1, v / 12)]));
+}
 // ¿Tiene sentido hacerlo con un lado cada vez? (máquinas, poleas, mancuernas…; no barras ni los que ya son a una mano)
 export function puedeUnilateral(n) {
   const x = ejercicio(n);

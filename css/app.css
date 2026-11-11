@@ -1240,3 +1240,20 @@ details.comp { border: 1px solid var(--bd); border-radius: 2px; }
 .det-hero .ex3d { mix-blend-mode: lighten; }
 .det-body { display: block; }
 .det-body .det-mus { display: grid; gap: 6px; }
+
+/* Recuperación muscular + Esta semana */
+.rcv { min-width: 0; }
+.rcv h2 { font-family: Archivo, sans-serif; text-transform: uppercase; font-size: 1.05rem; margin: 22px 0 2px; }
+.rcv-sub { color: #A0A0A0; font-size: .82rem; margin: 0 0 10px; }
+.rcv-row { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 6px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.rcv-row::-webkit-scrollbar { display: none; }
+.rcv-card { flex: 0 0 104px; scroll-snap-align: start; background: #1A1A1A; border-radius: 8px; padding: 10px 6px 12px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.rcv-card .anat { height: 120px; width: auto; }
+.rcv-card b { font-size: .8rem; color: #fff; }
+.rcv-pill { color: #000; font-weight: 800; font-size: .78rem; padding: 2px 10px; border-radius: 999px; }
+.rcv-leg { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; font-size: .72rem; color: #A0A0A0; margin-top: 6px; }
+.rcv-leg i { width: 8px; height: 8px; border-radius: 50%; margin-left: 8px; }
+.rcv-leg i:first-child { margin-left: 0; }
+.rcv-week { display: flex; justify-content: center; gap: 12px; background: #1A1A1A; border-radius: 8px; padding: 14px 8px; }
+.rcv-week .anat { height: 280px; width: auto; max-width: 46%; }
+.rcv-note { text-align: center; margin-top: 8px; }

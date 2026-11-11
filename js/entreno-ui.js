@@ -579,15 +579,20 @@ const ANATOMIA_DEFS = `<svg width="0" height="0" style="position:absolute" aria-
 document.body.insertAdjacentHTML('beforeend', ANATOMIA_DEFS);
 // Figura anatómica: cuerpo gris con relieve y los músculos del ejercicio en rojo (principal fuerte, secundarios suaves).
 // Es el sustituto hasta conectar imágenes 3D reales (ver IMG3D en ejercicios.js). lado: 'ambos' | 'front' | 'back'.
+// fills: { clave de músculo: [relleno, opacidad?] }. Dibuja la silueta y solo esos músculos.
+function figura(fills, lado, nombres = '') {
+  const part = (parts, dx) => `<use href="#an-sil" x="${dx}" width="60" height="130"/><g transform="translate(${dx} 0)">${parts.filter(([k]) => fills[k]).map(([k, t, a, b, c, d]) => {
+    const f = `fill="${fills[k][0]}"${fills[k][1] != null ? ` fill-opacity="${fills[k][1]}"` : ''}`;
+    return t === 'e' ? `<ellipse ${f} cx="${a}" cy="${b}" rx="${c}" ry="${d}"/>` : t === 'r' ? `<rect ${f} x="${a}" y="${b}" width="${c}" height="${d}" rx="2.5"/>` : `<polygon ${f} points="${a}"/>`; }).join('')}</g>`;
+  const solo = lado === 'ambos' ? null : lado === 'back' ? BODY.back : BODY.front;
+  return `<svg class="anat" viewBox="${solo ? '0 0 64 130' : '0 0 128 130'}" role="img" aria-label="${esc(nombres)}">${solo ? part(solo, 2) : part(BODY.front, 2) + part(BODY.back, 66)}</svg>`;
+}
 function anatomia(x, lado = 'ambos') {
   let { p, s: sec } = E.musculosDet(x);
   if (!p.length && GRUPO_MAP[x.m]) p = [GRUPO_MAP[x.m]];
-  const part = (parts, dx) => `<use href="#an-sil" x="${dx}" width="60" height="130"/><g transform="translate(${dx} 0)">${parts.filter(([k]) => p.includes(k) || sec.includes(k)).map(([k, t, a, b, c, d]) => {
-    const f = `fill="url(#an-${p.includes(k) ? 'mp' : 'ms'})"`;
-    return t === 'e' ? `<ellipse ${f} cx="${a}" cy="${b}" rx="${c}" ry="${d}"/>` : t === 'r' ? `<rect ${f} x="${a}" y="${b}" width="${c}" height="${d}" rx="2.5"/>` : `<polygon ${f} points="${a}"/>`; }).join('')}</g>`;
-  const nombres = [...p, ...sec].map((k) => E.MUSC_DET[k]).filter(Boolean).join(', ');
-  const solo = lado === 'ambos' ? null : lado === 'back' ? BODY.back : BODY.front;
-  return `<svg class="anat" viewBox="${solo ? '0 0 64 130' : '0 0 128 130'}" role="img" aria-label="${esc(nombres)}">${solo ? part(solo, 2) : part(BODY.front, 2) + part(BODY.back, 66)}</svg>`;
+  const fills = {};
+  sec.forEach((k) => { fills[k] = ['url(#an-ms)']; }); p.forEach((k) => { fills[k] = ['url(#an-mp)']; });
+  return figura(fills, lado, [...p, ...sec].map((k) => E.MUSC_DET[k]).filter(Boolean).join(', '));
 }
 const chipIcono = (m) => { const k = GRUPO_MAP[m]; return k ? anatomia({ m, mu: k + '|' }, MUSC_ESPALDA.has(k) ? 'back' : 'front') : ''; };
 // Miniatura cuadrada de un ejercicio: imagen 3D (IMG3D) si existe; si no, la misma figura anatómica de la Biblioteca (un solo lado, el del músculo principal).
@@ -1358,5 +1363,25 @@ root.addEventListener('change', async (e) => {
   }
 });
 
-  return { regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML };
+// ── Recuperación muscular y mapa de la semana (Forma física) ──
+const recColor = (p) => (p >= 100 ? '#3DDC84' : p >= 50 ? '#FFB020' : '#FF453A');
+function recuperacionHTML() {
+  const ws = (st.workouts || []).filter((w) => w.tipo === 'gym' || w.tipo === 'bici');
+  const rec = E.recuperacion(ws, new Date()), sem = E.semana(ws, todayISO());
+  const tarjetas = E.MUSC_GRUPOS.map((g) => {
+    const pct = E.recGrupo(rec, g), c = recColor(pct), fills = {};
+    g.m.forEach((k) => { fills[k] = [c, 0.95]; });
+    return `<div class="rcv-card">${figura(fills, g.side, g.n)}<b>${g.n}</b><span class="rcv-pill" style="background:${c}">${pct}%</span></div>`;
+  }).join('');
+  const heat = {};
+  Object.entries(sem).forEach(([k, v]) => { heat[k] = ['#F2BE1A', (0.25 + 0.75 * v).toFixed(2)]; });
+  const hay = Object.keys(heat).length;
+  return `<section class="rcv"><h2>Recuperación muscular</h2><p class="rcv-sub">Mira qué músculos están listos para entrenar</p>
+    <div class="rcv-row">${tarjetas}</div>
+    <div class="rcv-leg"><i style="background:#3DDC84"></i>Listo <i style="background:#FFB020"></i>Descansando <i style="background:#FF453A"></i>Fatigado</div>
+    <h2>Esta semana</h2><p class="rcv-sub">Mira qué músculos entrenaste</p>
+    <div class="rcv-week">${figura(heat, 'front', 'Frente')}${figura(heat, 'back', 'Espalda')}</div>
+    <p class="rcv-sub rcv-note">${hay ? 'Cuanto más intenso el amarillo, más volumen.' : 'Aún no has entrenado esta semana.'}</p></section>`;
+}
+  return { regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, recuperacionHTML };
 }
