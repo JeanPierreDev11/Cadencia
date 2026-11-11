@@ -1117,3 +1117,33 @@ details.comp { border: 1px solid var(--bd); border-radius: 2px; }
 .crop-modal .cropper-line, .crop-modal .cropper-point { background-color: #F2BE1A; }
 .crop-acts .btn { white-space: nowrap; padding-inline: 8px; }
 .crop-modal .cropper-point { display: none; }
+
+/* Perfil visual: foto grande centrada, "Editar foto" y nombre */
+.perfil-hero { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; padding: 28px 16px 22px; border-bottom: 1px solid var(--line); }
+.perfil-hero .avatar.big { width: 140px; height: 140px; border-radius: 50%; font-size: 56px; display: grid; place-items: center; }
+.perfil-hero .btn { width: auto; padding-inline: 22px; cursor: pointer; }
+.perfil-hero h2 { font-size: clamp(24px, 7vw, 30px); font-stretch: 115%; font-weight: 800; text-transform: uppercase; overflow-wrap: anywhere; }
+.perfil-hero h2::after { display: none; }
+.perfil-hero p { margin: -6px 0 0; }
+
+/* Fuego de racha */
+.flame { position: relative; display: inline-block; width: 40px; height: 50px; flex: none; vertical-align: middle; }
+.flame.lg { width: 64px; height: 80px; }
+.flame svg { width: 100%; height: 100%; display: block; }
+.flame b { position: absolute; left: 0; right: 0; bottom: 14%; text-align: center; font-weight: 900; font-size: 17px; line-height: 1; color: #000; }
+.flame.lg b { font-size: 28px; }
+.flame.off b { color: #8a8a8a; }
+.flame.fire b { color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.45); }
+.flame.fire svg { filter: drop-shadow(0 0 10px rgba(255, 70, 20, .75)); }
+@media (prefers-reduced-motion: no-preference) { .flame.fire svg { animation: flick 1.4s ease-in-out infinite alternate; transform-origin: 50% 90%; } }
+@keyframes flick { from { transform: scale(1) rotate(-1.5deg); } to { transform: scale(1.06) rotate(1.5deg); } }
+.racha-home { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.racha-t { display: grid; gap: 2px; }
+.racha-t b { font-size: 18px; font-stretch: 115%; font-weight: 800; text-transform: uppercase; }
+.racha-card { display: grid; justify-items: center; gap: 10px; text-align: center; }
+
+.live-stats.two { grid-template-columns: repeat(2, 1fr); }
+.ltab.simple .lrow-h, .ltab.simple .lset { grid-template-columns: 34px minmax(58px, 1fr) 1fr 1fr; }
+.lsug { color: #F2BE1A; font-size: 13px; font-weight: 700; text-align: right; margin: -2px 4px 2px; }
+/* Avisos siempre oscuros con borde amarillo (nunca fondo blanco) */
+.toast { background: #1a1a1a; color: #fff; border: 1px solid #F2BE1A; }

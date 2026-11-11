@@ -69,7 +69,7 @@ function render() {
   else if (st.view === 'error') root.innerHTML = viewError();
   document.title = APP_NAME;
   if (M) M.afterRender();
-  document.body.classList.toggle('noscroll', !!(st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.legal || st.del || st.iaFoto || st.pro || st.proWelcome || st.recAsk));
+  document.body.classList.toggle('noscroll', !!(st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.legal || st.del || st.iaFoto || st.pro || st.proWelcome || st.recAsk));
 }
 
 /* ================================================================== */
@@ -149,7 +149,7 @@ async function borrarCuenta() {
     await api.deleteAccount(D.pass);
     // Limpia lo que la app guarda en este móvil (salvo el tema claro u oscuro).
     try { Object.keys(localStorage).filter((k) => k.startsWith('cadencia-') && k !== 'cadencia-theme' && k !== 'cadencia-local-v1').forEach((k) => localStorage.removeItem(k)); } catch (e) { /* nada */ }
-    st.del = null; st.live = null; st.tab = 'inicio'; st.authMode = 'login';
+    st.del = null; st.modoSel = null; st.live = null; st.tab = 'inicio'; st.authMode = 'login';
     st.authMsg = { ok: true, text: 'Tu cuenta y todos tus datos se han borrado.' };
     if (st.user) enter(null); else render();
   } catch (e) {
@@ -367,7 +367,7 @@ function focusFirst() {
 /* ================================================================== */
 // Entreno vive en entreno-ui.js; Nutrición, Rutas, Taller, Progreso y Objetivos en secciones.js.
 const W = crearEntreno({ st, root, get api() { return api; }, render, get M() { return M; }, currentKg: () => currentKg(), goalById: (id) => goalById(id), stravaBtn: () => S.syncBtnHTML() });
-const { rutinaOf, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, regSheetHTML, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML } = W;
+const { rutinaOf, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, regSheetHTML, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML } = W;
 const M = crearSecciones({
   st, get api() { return api; }, render, toast, esc, num, nf, todayISO, fmtDate, lsGet, lsSet, I, E, errorText,
   currentKg: () => currentKg(), rutinaOf: () => rutinaOf(), viewPeso: (sub) => viewPeso(sub),
@@ -379,7 +379,7 @@ let irPendiente = leerIr(); // si venimos de tocar un aviso, aquí queda la pant
 let stravaRet = leerRetorno(); // si venimos de la pantalla de permisos de Strava, aquí queda el código temporal
 
 function viewMain() {
-  const sheet = st.legal ? legalSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.rutDelAsk ? rutDelSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
+  const sheet = st.legal ? legalSheetHTML() : st.modoSel ? modoSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.rutDelAsk ? rutDelSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
   if (st.rw) return viewRutWizard() + sheet;
   if (st.live && !st.liveMin) return viewLive() + sheet;
   if (st.wk) return viewWkForm();
@@ -415,6 +415,8 @@ function viewInicio() {
       <div><h1>Hola, ${esc(name)}</h1><p>${esc(new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }))}</p></div>
       <div class="hello-r">${M.novBell()}${st.profile && st.profile.isPro === true ? '<button class="protag pill" data-act="tab" data-v="perfil" aria-label="Tu plan: Cadencia Pro">Pro</button>' : ''}</div>
     </header>
+
+    <section class="racha-home tap" data-act="tab" data-v="entreno" role="button" tabindex="0" aria-label="Tu racha: abrir Entreno">${fuegoHTML(rachaActual(), true)}<span class="racha-t"><b>${rachaActual() === 1 ? 'Día' : 'Días'} de racha</b><span class="small muted">${rachaActual() ? 'No la rompas hoy' : 'Entrena y enciende el fuego'}</span></span></section>
 
     <section class="card weight-hero tap" data-act="p-peso" role="button" tabindex="0" aria-label="Peso actual: abrir Forma física">
       <h2>Peso actual</h2>
@@ -816,7 +818,7 @@ function planCardHTML() {
 
 const fotoHTML = (big = false) => {
   const p = st.profile || {}, n = (p.nombreCompleto || p.nombre || st.user.name || '?').trim();
-  return `<span class="avatar ${big ? 'big' : ''}">${p.fotoUrl ? `<img src="${esc(p.fotoUrl)}" alt="Tu foto de perfil" width="64" height="64">` : esc(n.charAt(0).toUpperCase())}</span>`;
+  return `<span class="avatar ${big ? 'big' : ''}">${p.fotoUrl ? `<img src="${esc(p.fotoUrl)}" alt="Tu foto de perfil">` : esc(n.charAt(0).toUpperCase())}</span>`;
 };
 const tieneGoogle = () => { try { return api.providers().includes('google.com'); } catch (e) { return false; } };
 const tienePass = () => { try { return api.providers().includes('password'); } catch (e) { return true; } };
@@ -826,7 +828,6 @@ function cuentaHTML() {
   return `<section class="card" id="cuenta-card">
       <h2>Tu cuenta</h2>
       <div class="acc-list">
-        <label class="acc-row ${st.fotoBusy ? 'is-busy' : ''}"><input type="file" accept="image/*" data-foto hidden ${st.fotoBusy ? 'disabled' : ''}><span>Cambiar foto de perfil</span>${st.fotoBusy ? '<span class="spinner"></span>' : I.chev}</label>
         ${tienePass() ? `<button type="button" class="acc-row" data-act="pwd-open"><span>Modificar contraseña</span>${I.chev}</button>` : ''}
         ${g ? `<div class="acc-row is-on"><span>Cuenta de Google vinculada</span><span class="tag ok">Vinculada</span></div>` : `<button type="button" class="acc-row" data-act="google-link" ${st.gBusy ? 'disabled' : ''}><span>Vincular cuenta de Google</span>${st.gBusy ? '<span class="spinner"></span>' : I.chev}</button>`}
       </div>
@@ -838,7 +839,10 @@ function viewPerfil() {
   const goals = st.editGoals || p.objetivos || [];
   const open = !!st.datosOpen;
   return `
-    <header class="hello perfil-h"><div class="who">${fotoHTML(true)}<div><h1>Perfil</h1><p>${esc(st.user.email || '')}</p></div></div></header>
+    <header class="perfil-hero">${fotoHTML(true)}
+      <label class="btn ghost small ${st.fotoBusy ? 'is-busy' : ''}"><input type="file" accept="image/*" data-foto hidden ${st.fotoBusy ? 'disabled' : ''}>${st.fotoBusy ? '<span class="spinner"></span>' : 'Editar foto'}</label>
+      <h2>${esc((p.nombreCompleto || p.nombre || st.user.name || 'Tu perfil').trim())}</h2>
+      <p class="small muted">${esc(st.user.email || '')}</p></header>
     ${planCardHTML()}
     ${cuentaHTML()}
     ${S.integracionesHTML()}

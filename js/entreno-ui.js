@@ -51,6 +51,18 @@ const EQ_ICO = {
 const eqIcon = (eq) => `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${EQ_ICO[eq] || EQ_ICO.corporal}</svg>`;
 
 /* ---------- tarjeta en Inicio ---------- */
+// Racha: días entrenados seguidos (los descansos programados no la rompen). Color según días: 0 gris, 1-3 amarillo, 4-6 naranja, 7+ rojo «On Fire».
+function rachaActual() {
+  const r = rutinaOf();
+  return E.streakDays(st.workouts, todayISO(), r ? (d) => !!dayPlan(d) : undefined);
+}
+function fuegoHTML(n, grande = false) {
+  const nivel = n >= 7 ? 'fire' : n >= 4 ? 'hot' : n >= 1 ? 'on' : 'off';
+  const fill = { off: '#333333', on: '#F2BE1A', hot: '#FF6A00', fire: 'url(#fg-fire)' }[nivel];
+  const svg = `<svg viewBox="0 0 48 60" aria-hidden="true" focusable="false"><defs><linearGradient id="fg-fire" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC21A"/><stop offset=".45" stop-color="#FF5A1F"/><stop offset="1" stop-color="#E0161B"/></linearGradient></defs><path fill="${fill}" d="M24 1c2 13 17 19 17 36 0 12-7 22-17 22S7 49 7 37c0-8 4-13 8-19 1 6 4 8 6 8 0-8-2-17 3-25z"/></svg>`;
+  return `<span class="flame ${nivel} ${grande ? 'lg' : ''}" role="img" aria-label="Racha de ${n} ${n === 1 ? 'día' : 'días'}">${svg}<b class="num">${n}</b></span>`;
+}
+
 function homeTraining() {
   const r = rutinaOf();
   const tarjeta = (titulo, l1, l2) => `<section class="card tap" data-act="tab" data-v="entreno" role="button" tabindex="0" aria-label="${esc(titulo)}: abrir Entreno">
@@ -132,9 +144,8 @@ function wkSemana() {
       ${caja3}
       <section class="stat"><span class="label">Calorías</span><span class="val num">${nf(stt.kcal)}<em>kcal</em></span><span class="hint">Estimadas según tu peso</span></section>
     </div>
-    <section class="card"><h2>Racha</h2>
-      <p class="streak"><b class="num">${streak}</b> ${streak === 1 ? 'día entrenado' : 'días entrenados'}</p>
-      <p class="small muted">Tus días de descanso no suman ni la rompen. Solo vuelve a 0 si faltas a un día con entreno programado.</p></section>
+    <section class="card racha-card"><h2>Racha</h2>${fuegoHTML(streak, true)}
+      <p class="small muted">Los descansos no la rompen. Vuelve a 0 si faltas a un día con entreno.</p></section>
     <section class="card"><h2>Horas por semana</h2>${barsChart(E.weeksSeries(ws, mon, 8))}</section>`;
 }
 
@@ -355,7 +366,7 @@ const RW_MAIN = [
 const RW_EXP = [['nuevo', 'Debutante'], ['meses', 'Unos meses'], ['anio', 'Alrededor de 1 año'], ['anios', 'Años'], ['compite', 'Compito']];
 const RW_DONDE = [['gym', 'Gimnasio', 'Máquinas, poleas y peso libre'], ['casa', 'Casa', 'Con poco o ningún material'], ['parque', 'Parque', 'Barras, paralelas y tu peso']];
 const RW_MAT = [['maquina', 'Máquinas / poleas'], ['mancuernas', 'Mancuernas'], ['barra', 'Barras'], ['banda', 'Bandas elásticas'], ['kettlebell', 'Kettlebells'], ['ninguno', 'Solo peso corporal']];
-const RW_DIV = [['ppl', 'Push · Pull · Legs', 'Empuje, tirón y pierna'], ['tp', 'Torso / Pierna', 'Tren superior e inferior'], ['full', 'Full body', 'Todo el cuerpo cada día'], ['weider', 'Un músculo por día', 'Pecho, espalda, pierna, hombro y brazos'], ['deporte', 'Fuerza para deporte', 'Potencia y core para tu deporte'], ['custom', 'Custom', 'Tú decides qué haces cada día']];
+const RW_DIV = [['ppl', 'Push · Pull · Legs', 'Empuje, tirón y pierna'], ['tp', 'Torso / Pierna', 'Tren superior e inferior'], ['full', 'Full body', 'Todo el cuerpo cada día'], ['weider', 'Un músculo por día', 'Pecho, espalda, pierna, hombro y brazos'], ['deporte', 'Fuerza para deporte', 'Potencia y core para tu deporte'], ['custom', 'Personalizado', 'Tú decides qué haces cada día']];
 const RW_DEPORTES = ['Fútbol', 'Baloncesto', 'Bici', 'Pádel', 'Tenis', 'Natación', 'Running', 'Esquí'];
 const EQ_DEF = { gym: ['maquina', 'mancuernas', 'barra'], casa: ['ninguno'], parque: ['ninguno'] };
 const rwSteps = (o) => {
@@ -737,14 +748,31 @@ function liveCargarSesion(op) {
   L.nombre = op.nombre; L.foco = op.foco || ''; L.custom = false;
   L.ex = ej.map((e) => liveEx(e.n, e.series, `${e.series} × ${e.reps}`));
 }
-function startLive(fecha) {
+// Un entreno de fuerza nuevo pregunta el modo; si ya hay uno en curso, se continúa.
+function empezarFuerza(fecha) {
+  if (st.live) return startLive(fecha);
+  st.modoSel = { fecha }; render();
+}
+function modoSheetHTML() {
+  const opt = (v, ico, t, sub) => `<button type="button" class="regopt" data-act="modo-pick" data-v="${v}">${ico}<span><b>${esc(t)}</b><small class="muted">${esc(sub)}</small></span></button>`;
+  return `<div class="sheet-back" data-act="modo-close"></div>
+    <div class="sheet short" role="dialog" aria-modal="true" aria-label="Cómo quieres entrenar">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><button type="button" class="iconbtn" data-act="modo-close" aria-label="Cerrar">${I.back}</button><h2>¿Cómo quieres entrenar?</h2><span style="width:36px"></span></div>
+      <div class="sheet-list regopts">
+        ${opt('guiado', I.dumb, 'Acompañamiento de entrenamiento', 'Descanso entre series con aviso y vibración, y sugerencias de peso')}
+        ${opt('simple', I.pencil, 'Simple registro', 'Rellena kilos y repeticiones de todo de golpe y guarda')}
+      </div>
+    </div>`;
+}
+function startLive(fecha, modo = 'guiado') {
   if (st.live) {
     st.liveMin = false; st.wk = null; render(); window.scrollTo(0, 0);
     if (st.live.fecha !== fecha) toast('Ya tienes un entrenamiento de fuerza en curso');
     return;
   }
   const dp = dayPlan(fecha), plan = dp && dp.t === 'fuerza' ? dp : null;
-  st.live = { uid: st.user.uid, fecha, start: Date.now(), nombre: plan ? plan.nombre : 'Entrenamiento', foco: (plan && plan.foco) || '', custom: !plan && !liveOpciones().length,
+  st.live = { uid: st.user.uid, fecha, start: Date.now(), nombre: plan ? plan.nombre : 'Entrenamiento', foco: (plan && plan.foco) || '', custom: !plan && !liveOpciones().length, modo,
     ex: plan ? plan.ej.map((e) => liveEx(e.n, e.series, `${e.series} × ${e.reps}`)) : [], msg: '' };
   st.liveMin = false; st.wk = null; liveSave(); render(); window.scrollTo(0, 0);
 }
@@ -755,7 +783,16 @@ function liveTotals() {
   for (const ex of st.live.ex) for (const s of ex.s) if (s.done) { sets++; vol += (num(s.kg) || 0) * (num(s.reps) || 0) * (ex.uni ? 2 : 1); }
   return { vol: Math.round(vol), sets };
 }
-const liveIsToday = () => st.live && st.live.fecha === todayISO();
+const liveIsToday = () => st.live && st.live.fecha === todayISO() && !st.live.edit;
+// Modos sin temporizador: «simple registro» y editar un entreno ya guardado.
+const livePlano = (L) => L.modo === 'simple' || !!L.edit;
+// Guiado: si superas las repeticiones del objetivo → sube peso; si no llegas → baja. (Objetivos en segundos se ignoran.)
+function sugerencia(ex, s) {
+  if (!s.done || !ex.objReps || /\b(s|seg|min)\b/i.test(ex.objReps)) return '';
+  const n = String(ex.objReps).match(/\d+/g), r = Math.round(num(s.reps));
+  if (!n || !(r >= 1)) return '';
+  return r > Number(n[n.length - 1]) ? '↑ Sube el peso' : r < Number(n[0]) ? '↓ Baja el peso' : '';
+}
 
 function liveTitleHTML(L) {
   const ops = liveOpciones();
@@ -771,7 +808,7 @@ function liveTitleHTML(L) {
 }
 
 function viewLive() {
-  const L = st.live, t = liveTotals(), today = liveIsToday();
+  const L = st.live, t = liveTotals(), today = liveIsToday(), plano = livePlano(L);
   const fmtKg = (v) => (v ? String(v).replace('.', ',') : '');
   const blocks = L.ex.map((e, i) => {
     const x = E.ejercicio(e.n), uniOk = E.puedeUnilateral(e.n);
@@ -781,15 +818,15 @@ function viewLive() {
         <button type="button" class="iconbtn" data-act="live-swap" data-v="${i}" aria-label="Cambiar ${esc(e.n)}">${I.swap}</button>
         <button type="button" class="iconbtn" data-act="live-del" data-v="${i}" aria-label="Quitar ${esc(e.n)}">${I.trash}</button></div>
       ${uniOk ? `<div class="seg mini" role="group" aria-label="Lados"><button type="button" data-act="live-uni" data-v="${i}" data-u="0" aria-pressed="${!e.uni}">Ambos lados</button><button type="button" data-act="live-uni" data-v="${i}" data-u="1" aria-pressed="${!!e.uni}">Unilateral</button></div>` : ''}
-      <div class="ltab">
-        <div class="lrow-h"><span>Serie</span><span>Anterior</span><span>kg</span><span>${e.uni ? 'Reps/lado' : 'Reps'}</span><span></span></div>
-        ${e.s.map((s, j) => { const p = e.prev[j]; const phKg = p && p.kg ? fmtKg(p.kg) : '–'; const phR = p ? String(p.reps) : e.objReps || '–'; return `<div class="lset ${s.done ? 'on' : ''}">
+      <div class="ltab ${plano ? 'simple' : ''}">
+        <div class="lrow-h"><span>Serie</span><span>Anterior</span><span>kg</span><span>${e.uni ? 'Reps/lado' : 'Reps'}</span>${plano ? '' : '<span></span>'}</div>
+        ${e.s.map((s, j) => { const p = e.prev[j]; const phKg = p && p.kg ? fmtKg(p.kg) : '–'; const phR = p ? String(p.reps) : e.objReps || '–'; const sug = plano ? '' : sugerencia(e, s); return `<div class="lset ${!plano && s.done ? 'on' : ''}">
           <span class="num sn">${j + 1}</span>
           <span class="prev">${p ? `${p.kg ? fmtKg(p.kg) + ' × ' : ''}${p.reps}${p.uni ? ' /lado' : ''}` : '—'}</span>
           <input class="input" data-lv="${i}.${j}.kg" inputmode="decimal" value="${esc(s.kg)}" placeholder="${esc(phKg)}" aria-label="Kilos serie ${j + 1} de ${esc(e.n)}">
           <input class="input" data-lv="${i}.${j}.reps" inputmode="numeric" value="${esc(s.reps)}" placeholder="${esc(phR)}" aria-label="Repeticiones serie ${j + 1} de ${esc(e.n)}">
-          <button type="button" class="chk" data-act="live-done" data-v="${i}.${j}" aria-pressed="${s.done}" aria-label="Marcar serie ${j + 1} como hecha">${I.check}</button>
-        </div>`; }).join('')}
+          ${plano ? '' : `<button type="button" class="chk" data-act="live-done" data-v="${i}.${j}" aria-pressed="${s.done}" aria-label="Marcar serie ${j + 1} como hecha">${I.check}</button>`}
+        </div>${sug ? `<p class="lsug">${sug}</p>` : ''}`; }).join('')}
       </div>
       <div class="lex-foot"><button type="button" class="btn quiet small" data-act="live-set-add" data-v="${i}">${I.plus} Añadir serie</button>
         ${e.s.length > 1 ? `<button type="button" class="link" data-act="live-set-del" data-v="${i}">Quitar la última</button>` : ''}</div>
@@ -799,19 +836,19 @@ function viewLive() {
     <div class="live-top">
       <button type="button" class="ob-back" data-act="live-min" aria-label="Minimizar">${I.down}</button>
       ${liveTitleHTML(L)}
-      <button type="button" class="btn small" data-act="live-fin">Finalizar</button>
+      <button type="button" class="btn small" data-act="live-fin">${plano ? 'Guardar' : 'Finalizar'}</button>
     </div>
-    <div class="live-stats">
-      <div><span>Duración</span><b class="num" id="live-dur">${today ? fmtClock(Date.now() - L.start) : 'Estimada'}</b></div>
+    <div class="live-stats ${plano ? 'two' : ''}">
+      ${plano ? '' : `<div><span>Duración</span><b class="num" id="live-dur">${today ? fmtClock(Date.now() - L.start) : 'Estimada'}</b></div>`}
       <div><span>Volumen</span><b class="num" id="live-vol">${nf(t.vol)} kg</b></div>
       <div><span>Series</span><b class="num" id="live-sets">${t.sets}</b></div>
     </div>
-    <p class="small muted live-hint">Los números grises son tu referencia (la última vez o el objetivo). Si marcas ✓ sin escribir, se apunta ese valor.</p>
+    <p class="small muted live-hint">${L.edit ? 'Corrige kilos, repeticiones o series y pulsa Guardar: se sobrescribe este entreno.' : L.modo === 'simple' ? 'Escribe kilos y repeticiones de cada serie y pulsa Guardar. Las series vacías no se apuntan.' : 'Los números grises son tu referencia (la última vez o el objetivo). Si marcas ✓ sin escribir, se apunta ese valor.'}</p>
     ${blocks || `<div class="empty"><b>Aún no hay ejercicios</b><span>Elige la sesión arriba o añade los que vayas a hacer.</span></div>`}
     <button type="button" class="btn block" data-act="live-lib">${I.plus} Añadir ejercicios</button>
     ${L.msg ? `<div class="msg" role="alert" id="live-msg">${esc(L.msg)}</div>` : ''}
-    <button type="button" class="link center" data-act="live-discard">Descartar entrenamiento</button>
-    ${restHTML()}
+    <button type="button" class="link center" data-act="live-discard">${L.edit ? 'Cancelar edición' : 'Descartar entrenamiento'}</button>
+    ${plano ? '' : restHTML()}
   </div>`;
 }
 const liveBarHTML = () => `<button type="button" class="livebar" data-act="live-open"><span class="dot"></span><span><b>${esc(st.live.nombre)}</b><span class="small"><span id="live-bar-t">${liveIsToday() ? fmtClock(Date.now() - st.live.start) : 'En curso'}</span><span id="live-bar-rest"></span></span></span><span class="small">Volver</span></button>`;
@@ -916,18 +953,23 @@ async function liveFinish() {
   }
   if (!ejs.length) return fail('Apunta al menos una serie (escribe los kilos o reps, o márcala con ✓) para guardar el entrenamiento.');
   const nSets = ejs.reduce((a, e) => a + e.series.length, 0);
-  const min = liveIsToday() ? Math.max(1, Math.min(600, Math.round((Date.now() - L.start) / 60000))) : Math.max(15, nSets * 3);
-  const o = { id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), fecha: L.fecha, tipo: 'gym', nombre: L.nombre.trim().slice(0, 60), min, esf: 2, ejercicios: ejs };
+  const plano = livePlano(L);
+  const min = L.edit ? L.orig.min : liveIsToday() && !plano ? Math.max(1, Math.min(600, Math.round((Date.now() - L.start) / 60000))) : Math.max(15, nSets * 3);
+  // Al editar se sobrescribe el mismo documento (mismo id) conservando el resto de sus datos.
+  const o = { ...(L.edit ? L.orig : {}), id: L.edit || 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), fecha: L.fecha, tipo: 'gym', nombre: L.nombre.trim().slice(0, 60), min, esf: L.edit ? L.orig.esf || 2 : 2, ejercicios: ejs };
   o.kcal = E.estimateKcal(o, currentKg());
   toast('Guardando…');
   try {
-    const before = E.records(st.workouts), after = E.records([...st.workouts, o]);
+    const resto = L.edit ? st.workouts.filter((w) => w.id !== L.edit) : st.workouts;
+    const before = E.records(resto), after = E.records([...resto, o]);
     await api.saveWorkout(st.user.uid, o);
     st.workouts = await api.listWorkouts(st.user.uid);
+    const editado = !!L.edit;
     st.live = null; st.liveMin = false; liveSave();
-    st.tab = 'entreno'; st.wkTab = 'semana'; lsSet('cadencia-tab', 'entreno'); lsSet('cadencia-wktab', 'semana');
+    st.tab = 'entreno'; lsSet('cadencia-tab', 'entreno');
+    if (editado) st.wkHist = true; else { st.wkTab = 'semana'; lsSet('cadencia-wktab', 'semana'); }
     render(); window.scrollTo(0, 0);
-    toast(E.beatsRecord(before, after) ? '¡Nuevo récord personal!' : `Entrenamiento guardado · ${nSets} series`);
+    toast(editado ? 'Entreno actualizado' : E.beatsRecord(before, after) ? '¡Nuevo récord personal!' : `Entrenamiento guardado · ${nSets} series`);
   } catch (e) { fail(`No se ha podido guardar: ${errorText(e)}`); }
 }
 
@@ -946,7 +988,7 @@ function openRegistro(date, tipo) {
   if (!tipo) { st.regPick = { date: date || todayISO() }; return render(); }
   const t = resolveTipo(date, tipo);
   st.regPick = null;
-  if (t === 'gym') return startLive(date || todayISO());
+  if (t === 'gym') return empezarFuerza(date || todayISO());
   st.wk = newWk(date, t); render(); window.scrollTo(0, 0);
 }
 function regSheetHTML() {
@@ -1162,14 +1204,18 @@ root.addEventListener('click', async (e) => {
     if (act === 'live-uni') { Lv.ex[Number(v)].uni = b.dataset.u === '1'; liveSave(); return render(); }
     if (act === 'live-fin') { st.rest = null; return liveFinish(); }
     if (act === 'live-discard') {
-      if (!window.confirm('¿Descartar este entrenamiento? Se perderán las series apuntadas.')) return;
-      st.live = null; st.liveMin = false; st.rest = null; liveSave(); render(); toast('Entrenamiento descartado'); return;
+      if (!window.confirm(Lv.edit ? '¿Salir sin guardar los cambios?' : '¿Descartar este entrenamiento? Se perderán las series apuntadas.')) return;
+      st.live = null; st.liveMin = false; st.rest = null; liveSave(); render(); toast(Lv.edit ? 'Edición cancelada' : 'Entrenamiento descartado'); return;
     }
   }
 
   // descanso
   if (act === 'rest-mas' || act === 'rest-menos') { restAjustar(act === 'rest-mas' ? 30 : -30); return; }
   if (act === 'rest-saltar') { st.rest = null; restPaint(); return; }
+
+  // modo de entreno de fuerza
+  if (act === 'modo-close') { st.modoSel = null; return render(); }
+  if (act === 'modo-pick' && st.modoSel) { const f = st.modoSel.fecha; st.modoSel = null; st.regPick = null; return startLive(f, v); }
 
   // qué registrar
   if (act === 'reg-close') { st.regPick = null; return render(); }
@@ -1184,6 +1230,12 @@ root.addEventListener('click', async (e) => {
   else if (act === 'wk-mod') { st.wkMod = !st.wkMod; render(); }
   else if (act === 'wk-edit') {
     const x = st.workouts.find((q) => q.id === v); if (!x) return;
+    if (x.tipo === 'gym' && (x.ejercicios || []).length) {
+      if (st.live) { toast('Termina o descarta el entrenamiento en curso antes de editar otro'); return; }
+      st.live = { uid: st.user.uid, fecha: x.fecha, start: Date.now(), edit: x.id, orig: x, modo: 'edit', nombre: x.nombre || 'Entrenamiento', foco: '', custom: true, msg: '',
+        ex: x.ejercicios.map((e) => ({ n: e.n, m: (E.ejercicio(e.n) || {}).m || '', obj: '', objReps: '', uni: !!e.uni, prev: [], s: e.series.map((q) => ({ kg: q.kg ? String(q.kg).replace('.', ',') : '', reps: String(q.reps), done: true })) })) };
+      st.liveMin = false; st.wkHist = false; st.wkMod = false; liveSave(); render(); window.scrollTo(0, 0); return;
+    }
     st.wk = { orig: x, id: x.id, fecha: x.fecha, tipo: x.tipo, nombre: x.nombre || '', min: String(x.min || ''), km: x.km ? String(x.km) : '', elev: x.elev ? String(x.elev) : '', pulso: x.pulso ? String(x.pulso) : '', np: x.np ? String(x.np) : '', bici: x.bici, esf: x.esf || 2, msg: '', saving: false };
     st.wkHist = false; st.wkMod = false; st.wkBack = true; render(); window.scrollTo(0, 0);
   }
@@ -1195,7 +1247,7 @@ root.addEventListener('click', async (e) => {
   }
   else if (act === 'wk-tipo' && w) {
     if (w.tipo === v) return;
-    if (v === 'gym') return startLive(w.fecha);
+    if (v === 'gym') return empezarFuerza(w.fecha);
     const nw = newWk(w.fecha, v); nw.esf = w.esf; if (!nw.min) nw.min = w.min; st.wk = nw; render();
   }
   else if (act === 'wk-esf' && w) { w.esf = Number(v); render(); }
@@ -1266,5 +1318,5 @@ root.addEventListener('change', async (e) => {
   }
 });
 
-  return { regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML };
+  return { regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML };
 }
