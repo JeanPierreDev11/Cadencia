@@ -1230,3 +1230,13 @@ details.comp { border: 1px solid var(--bd); border-radius: 2px; }
 .filters.one { grid-template-columns: 1fr; }
 .filters.one .field > span { display: none; }
 .filters.one .input { padding: 8px 12px; }
+
+/* Miniaturas de ejercicio: cuadradas, oscuras y con la figura anatómica (sin fotos) */
+.thumb { background: #1A1A1A; border: 0; border-radius: 6px; padding: 3px; aspect-ratio: 1; }
+.thumb svg, .thumb img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.thumb img.ex3d { mix-blend-mode: lighten; }
+.det-hero { background: #1A1A1A; border-radius: 8px; height: 220px; padding: 10px; display: grid; place-items: center; }
+.det-hero .anat, .det-hero .ex3d { width: 100%; height: 100%; object-fit: contain; }
+.det-hero .ex3d { mix-blend-mode: lighten; }
+.det-body { display: block; }
+.det-body .det-mus { display: grid; gap: 6px; }
