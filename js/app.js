@@ -924,22 +924,41 @@ function pwdSheetHTML() {
     </div>`;
 }
 
-// Foto de perfil: se recorta en cuadrado, se reduce a 320 px y se sube a Firebase Storage (profile_pictures/{uid}/avatar.jpg).
-async function subirFoto(file) {
+// Foto de perfil: el usuario encuadra y hace zoom en un modal (Cropper.js); se exporta 400×400 JPEG 0.7 y se sube a Firebase Storage (profile_pictures/{uid}/avatar.jpg).
+// El modal vive fuera de #root a propósito: ningún render() puede destruir el recorte a medias.
+function subirFoto(file) {
   if (!file) return;
   if (!/^image\//.test(file.type)) return toast('Elige una imagen');
-  st.fotoBusy = true; render();
-  try {
-    const img = await new Promise((ok, no) => { const i = new Image(), u = URL.createObjectURL(file); i.onload = () => { URL.revokeObjectURL(u); ok(i); }; i.onerror = () => no(new Error('No se ha podido leer la foto.')); i.src = u; });
-    const side = Math.min(img.naturalWidth, img.naturalHeight), c = document.createElement('canvas'); c.width = c.height = 320;
-    c.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 320, 320);
-    const blob = await new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.7));
-    const url = await api.uploadAvatar(st.user.uid, blob);
-    await api.saveProfile(st.user.uid, { fotoUrl: url });
-    st.profile = { ...st.profile, fotoUrl: url };
-    toast('Foto actualizada');
-  } catch (e) { toast(errorText(e)); }
-  st.fotoBusy = false; render();
+  if (!window.Cropper) return toast('No se ha podido cargar el recortador. Comprueba tu conexión.');
+  const url = URL.createObjectURL(file);
+  const m = document.createElement('div');
+  m.className = 'crop-modal';
+  m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-label', 'Recortar foto de perfil');
+  m.innerHTML = `<h2>Encuadra tu foto</h2><p class="small muted">Arrastra para mover y pellizca para hacer zoom.</p>
+    <div class="crop-stage"><img alt="Foto seleccionada"></div>
+    <div class="crop-acts"><button type="button" class="btn ghost" data-crop="no">Cancelar</button><button type="button" class="btn" data-crop="ok">Guardar foto</button></div>`;
+  document.body.appendChild(m);
+  const img = m.querySelector('img'), ok = m.querySelector('[data-crop=ok]'), no = m.querySelector('[data-crop=no]');
+  let cropper = null, cerrado = false;
+  const cerrar = () => { if (cerrado) return; cerrado = true; document.removeEventListener('keydown', tecla); if (cropper) cropper.destroy(); URL.revokeObjectURL(url); m.remove(); };
+  const tecla = (e) => { if (e.key === 'Escape' && !ok.disabled) cerrar(); };
+  document.addEventListener('keydown', tecla);
+  no.onclick = cerrar;
+  img.onload = () => { cropper = new window.Cropper(img, { aspectRatio: 1, viewMode: 1, dragMode: 'move', autoCropArea: 1, cropBoxMovable: false, cropBoxResizable: false, background: false, toggleDragModeOnDblclick: false }); };
+  img.onerror = () => { cerrar(); toast('No se ha podido leer la foto.'); };
+  img.src = url;
+  ok.onclick = async () => {
+    if (!cropper) return;
+    ok.disabled = no.disabled = true; ok.innerHTML = '<span class="spinner"></span>';
+    try {
+      const c = cropper.getCroppedCanvas({ width: 400, height: 400, fillColor: '#fff', imageSmoothingQuality: 'high' });
+      const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.7));
+      const fotoUrl = await api.uploadAvatar(st.user.uid, blob);
+      await api.saveProfile(st.user.uid, { fotoUrl });
+      st.profile = { ...st.profile, fotoUrl };
+      cerrar(); toast('Foto actualizada'); render();
+    } catch (e) { toast(errorText(e)); ok.disabled = no.disabled = false; ok.textContent = 'Guardar foto'; }
+  };
 }
 
 async function guardarPwd(f) {

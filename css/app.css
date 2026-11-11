@@ -1104,3 +1104,16 @@ details.comp { border: 1px solid var(--bd); border-radius: 2px; }
 .main > .stats { padding-left: 0 !important; padding-right: 0 !important; border-left: 0; border-right: 0; }
 .meal-acts.full { display: block; }
 .meal-acts.full .chip { width: 100%; justify-content: center; }
+
+/* Recorte de la foto de perfil (Cropper.js) */
+.crop-modal { position: fixed; inset: 0; z-index: 80; background: #121212; color: #fff; display: flex; flex-direction: column; gap: 10px; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); overscroll-behavior: contain; }
+.crop-modal h2 { font-size: 20px; font-stretch: 115%; font-weight: 800; text-transform: uppercase; }
+.crop-stage { flex: 1; min-height: 0; position: relative; background: #000; touch-action: none; }
+.crop-stage img { display: block; max-width: 100%; }
+.crop-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; flex: none; }
+.crop-acts .btn.ghost { border: 1.5px solid var(--accent, #F2BE1A); background: transparent; color: #fff; }
+.crop-acts .btn:not(.ghost) { background: #F2BE1A; color: #000; }
+.crop-modal .cropper-view-box { outline: 2px solid #F2BE1A; outline-color: #F2BE1A; }
+.crop-modal .cropper-line, .crop-modal .cropper-point { background-color: #F2BE1A; }
+.crop-acts .btn { white-space: nowrap; padding-inline: 8px; }
+.crop-modal .cropper-point { display: none; }
