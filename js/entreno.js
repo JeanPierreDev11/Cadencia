@@ -282,6 +282,62 @@ let PROPIOS = [];
 let INDICE = null;
 export const setPropios = (l) => { PROPIOS = (l || []).filter((x) => x && x.n).map((x) => ({ n: x.n, m: x.m || 'core', p: null, eq: x.eq || 'corporal', img: '', mu: GRUPO_DET[x.m] || '', propio: true })); INDICE = null; };
 export const todosEjercicios = () => [...PROPIOS, ...BIBLIOTECA, ...RESTO];
+
+// ---------- Buscador: sin acentos ni mayúsculas, con erratas y también en inglés ----------
+// El nombre en inglés sale del id de la imagen (p. ej. «Barbell_Deadlift»); estos son los que no tienen imagen y los apodos más comunes.
+const ALIAS_EN = {
+  'jalon con banda': 'band lat pulldown', 'remo pendlay': 'pendlay row', 'remo con banda': 'band row', 'press landmine': 'landmine press',
+  'flexiones en pica': 'pike push up', 'elevaciones laterales en maquina': 'machine lateral raise', 'curl con banda': 'band curl',
+  'curl con kettlebell': 'kettlebell curl', 'sentadilla pendulo': 'pendulum squat', 'peso muerto con banda': 'band deadlift',
+  'hip thrust en maquina': 'machine hip thrust', 'hip thrust con mancuerna': 'dumbbell hip thrust', 'abduccion con banda': 'band hip abduction',
+  'gemelos a una pierna': 'single leg calf raise', 'bird dog': 'bird dog', 'pallof press con banda': 'band pallof press',
+};
+const SINONIMOS = [[/flexion(es)? de biceps/g, 'curl biceps'], [/flexion(es)? de triceps/g, 'extension triceps'], [/deadlift/g, 'deadlift peso muerto'], [/pull ?ups?/g, 'pullup dominadas'], [/push ?ups?/g, 'pushup flexiones'], [/chin ?ups?/g, 'chinup dominadas'], [/lat pull ?down/g, 'pulldown jalon']];
+const dist = (a, b, max) => {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i]; let mn = i;
+    for (let j = 1; j <= b.length; j++) { cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); if (cur[j] < mn) mn = cur[j]; }
+    if (mn > max) return max + 1;
+    prev = cur;
+  }
+  return prev[b.length];
+};
+const palabras = (t) => normTxt(t).replace(/[^a-z0-9ñ]+/g, ' ').split(' ').filter(Boolean);
+export function textoEnIngles(x) {
+  const k = normTxt(x.n);
+  return ALIAS_EN[k] || (x.img ? String(x.img).replace(/[_-]+/g, ' ') : '');
+}
+// Devuelve los ejercicios que encajan con lo escrito, los más parecidos primero.
+export function buscarEjercicios(items, q, extra = () => '') {
+  let nq = normTxt(q).replace(/[^a-z0-9ñ ]+/g, ' ');
+  for (const [re, to] of SINONIMOS) nq = nq.replace(re, to);
+  const qs = nq.split(' ').filter(Boolean);
+  if (!qs.length) return items;
+  const out = [];
+  for (const x of items) {
+    const nombre = palabras(x.n), en = palabras(textoEnIngles(x)), otro = palabras(extra(x));
+    const todas = [...nombre, ...en, ...otro];
+    let score = 0, ok = true;
+    for (const w of qs) {
+      let best = 0;
+      for (const t of todas) {
+        if (t === w) best = Math.max(best, 100);
+        else if (t.startsWith(w)) best = Math.max(best, 80);
+        else if (w.length >= 3 && t.includes(w)) best = Math.max(best, 50);
+        else if (w.length >= 4) { const m = w.length >= 7 ? 2 : 1; if (dist(w, t.slice(0, w.length + 1), m) <= m || dist(w, t, m) <= m) best = Math.max(best, 30); }
+      }
+      if (!best) { ok = false; break; }
+      score += best;
+    }
+    if (!ok) continue;
+    const nm = normTxt(x.n);
+    if (nm === nq) score += 200; else if (nm.startsWith(nq)) score += 60;
+    out.push([score, x]);
+  }
+  return out.sort((a, b) => b[0] - a[0]).map((o) => o[1]);
+}
 export const TODOS_EJERCICIOS = BIBLIOTECA.map((x) => x.n);
 export const normTxt = (s) => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 export const ejercicio = (n) => {

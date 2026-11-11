@@ -69,7 +69,7 @@ function render() {
   else if (st.view === 'error') root.innerHTML = viewError();
   document.title = APP_NAME;
   if (M) M.afterRender();
-  document.body.classList.toggle('noscroll', !!(st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.bill || st.meta || st.regPick || st.legal || st.del || st.iaFoto || st.pro || st.proWelcome || st.recAsk));
+  document.body.classList.toggle('noscroll', !!(st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.bill || st.meta || st.regPick || st.legal || st.del || st.iaFoto || st.pro || st.proWelcome || st.recAsk));
 }
 
 /* ================================================================== */
@@ -367,7 +367,7 @@ function focusFirst() {
 /* ================================================================== */
 // Entreno vive en entreno-ui.js; Nutrición, Rutas, Taller, Progreso y Objetivos en secciones.js.
 const W = crearEntreno({ st, root, get api() { return api; }, render, get M() { return M; }, currentKg: () => currentKg(), goalById: (id) => goalById(id), stravaBtn: () => S.syncBtnHTML() });
-const { rutinaOf, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, regSheetHTML, wkHistSheetHTML, wkDelSheetHTML } = W;
+const { rutinaOf, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, regSheetHTML, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML } = W;
 const M = crearSecciones({
   st, get api() { return api; }, render, toast, esc, num, nf, todayISO, fmtDate, lsGet, lsSet, I, E, errorText,
   currentKg: () => currentKg(), rutinaOf: () => rutinaOf(), viewPeso: (sub) => viewPeso(sub),
@@ -379,7 +379,7 @@ let irPendiente = leerIr(); // si venimos de tocar un aviso, aquí queda la pant
 let stravaRet = leerRetorno(); // si venimos de la pantalla de permisos de Strava, aquí queda el código temporal
 
 function viewMain() {
-  const sheet = st.legal ? legalSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.bill ? billSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
+  const sheet = st.legal ? legalSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.rutDelAsk ? rutDelSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.bill ? billSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
   if (st.rw) return viewRutWizard() + sheet;
   if (st.live && !st.liveMin) return viewLive() + sheet;
   if (st.wk) return viewWkForm();
@@ -420,7 +420,7 @@ function viewInicio() {
       <div class="hello-r">${M.novBell()}${st.profile && st.profile.isPro === true ? '<button class="protag pill" data-act="tab" data-v="perfil" aria-label="Tu plan: Cadencia Pro">Pro</button>' : ''}</div>
     </header>
 
-    <section class="card weight-hero">
+    <section class="card weight-hero tap" data-act="p-peso" role="button" tabindex="0" aria-label="Peso actual: abrir Forma física">
       <h2>Peso actual</h2>
       <div class="big num">${nf(kg, 1)}<em>kg</em></div>
       ${delta != null ? `<div class="delta">${delta > 0 ? '+' : delta < 0 ? '−' : ''}${nf(Math.abs(delta), 1)} kg desde el ${fmtDate(first.fecha, { day: 'numeric', month: 'long' })}</div>` : '<div class="delta">Registra tu peso cada pocos días para ver cómo evoluciona.</div>'}
@@ -1036,6 +1036,7 @@ async function enter(u) {
   }
 }
 
+root.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.tap')) { e.preventDefault(); e.target.click(); } });
 root.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-act]');
   if (!b) return;

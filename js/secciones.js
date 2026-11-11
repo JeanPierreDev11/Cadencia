@@ -30,7 +30,7 @@ const ICO = {
 };
 
 /* Novedades: cambia NOV_V cada vez que publiques algo nuevo: la ventana sale una sola vez al abrir la app. */
-export const NOV_V = '2026-11-11h';
+export const NOV_V = '2026-11-11k';
 
 /* Objetivos de entreno: [id, grupo, texto, unidad, periodo (sem | mes | reto), ejemplo] */
 const META_T = [
@@ -118,7 +118,7 @@ export function crearSecciones(ctx) {
   function tabs() {
     const t = [{ id: 'inicio', t: 'Inicio', ico: I.home }, { id: 'entreno', t: 'Entreno', ico: I.pulse }, { id: 'nutricion', t: 'Nutrición', ico: ICO.food }];
     if (tieneBici()) t.push({ id: 'bici', t: 'Bici', ico: ICO.bici });
-    t.push({ id: 'progreso', t: 'Progreso', ico: ICO.prog });
+    t.push({ id: 'progreso', t: 'Forma física', ico: ICO.prog });
     t.push({ id: 'perfil', t: 'Perfil', ico: I.user });
     return t;
   }
@@ -214,7 +214,7 @@ export function crearSecciones(ctx) {
       ${MEALS.map((name, i) => {
         const arr = it.filter((x) => x.m === i), k = arr.reduce((a, x) => a + x.k, 0), ayer = prev.filter((x) => x.m === i);
         return `<div class="meal">
-          <div class="meal-h"><span class="meal-n"><b>${name}</b>${arr.length ? `<span class="muted small">${nf(k)} kcal</span>` : ''}</span><span class="meal-acts">${esPro() ? `<label class="chipbtn chip iachip" aria-label="Foto con IA para ${name.toLowerCase()}"><input type="file" accept="image/*" capture="environment" data-iafoto="${i}" hidden>${ICO.camara} Foto con IA</label>` : `<button type="button" class="chipbtn chip iachip" data-act="pro-open" data-v="foto" aria-label="Foto con IA para ${name.toLowerCase()} (Cadencia Pro)">${ICO.camara} Foto con IA <span class="protag">Pro</span></button>`}<button type="button" class="chipbtn chip" data-act="n-add" data-v="${i}">${I.plus} Añadir</button></span></div>
+          <div class="meal-h"><span class="meal-n"><b>${name}</b>${arr.length ? `<span class="muted small">${nf(k)} kcal</span>` : ''}</span><span class="meal-acts">${esPro() ? `<label class="chipbtn chip iachip" aria-label="Foto con IA para ${name.toLowerCase()}"><input type="file" accept="image/*" data-iafoto="${i}" hidden>${ICO.camara} Foto con IA</label>` : `<button type="button" class="chipbtn chip iachip" data-act="pro-open" data-v="foto" aria-label="Foto con IA para ${name.toLowerCase()} (Cadencia Pro)">${ICO.camara} Foto con IA <span class="protag">Pro</span></button>`}<button type="button" class="chipbtn chip" data-act="n-add" data-v="${i}">${I.plus} Añadir</button></span></div>
           ${ayer.length ? `<button type="button" class="link repetir" data-act="n-repetir" data-v="${i}">Repetir de ${ayerTxt} · ${ayer.length === 1 ? esc(ayer[0].n.length > 28 ? ayer[0].n.slice(0, 27) + '…' : ayer[0].n) : ayer.length + ' alimentos'} (${nf(ayer.reduce((a, x) => a + x.k, 0))} kcal)</button>` : ''}
           ${arr.map((x) => `<div class="fitem"><span>${esc(x.n)}<small class="muted">${x.g ? nf(x.g) + ' g · ' : ''}P ${nf(x.p, 0)} · H ${nf(x.c, 0)} · G ${nf(x.f, 0)}</small></span><b class="num">${nf(x.k)}</b><button class="iconbtn" data-act="n-del" data-v="${esc(x.id)}" aria-label="Quitar ${esc(x.n)}">${I.trash}</button></div>`).join('')}
         </div>`;
@@ -882,7 +882,7 @@ export function crearSecciones(ctx) {
   }
   function viewProgreso() {
     const sub = st.progSub || 'peso';
-    let h = head('Progreso', 'Peso, cuerpo y forma', true, sub === 'peso' ? `<button class="iconbtn hist-btn" data-act="peso-hist" aria-label="Historial de registros">${I.clock}</button>` : '');
+    let h = head('Forma física', 'Peso, cuerpo y forma', true, sub === 'peso' ? `<button class="iconbtn hist-btn" data-act="peso-hist" aria-label="Historial de registros">${I.clock}</button>` : '');
     h += seg('p-sub', [['peso', 'Peso'], ['cuerpo', 'Cuerpo'], ['forma', 'Forma']], sub, 'Qué ver');
     if (sub === 'cuerpo') return h + subCuerpo();
     if (sub === 'forma') return h + subForma();
@@ -1075,6 +1075,7 @@ export function crearSecciones(ctx) {
       case 'pro-welcome-go': st.proWelcome = false; st.tab = 'nutricion'; st.food = null; st.tl = null; lsSet('cadencia-tab', 'nutricion'); render(); window.scrollTo(0, 0); return true;
       case 'pro-refresh': refrescarPro(true); return true;
       case 'ia-close': if (st.iaFoto && st.iaFoto.fase === 'cargando') { toast('Espera a que termine el análisis'); return true; } st.iaFoto = null; render(); return true;
+      case 'ia-recalc': iaRecalcular(); return true;
       case 'ia-del': st.iaFoto.items = st.iaFoto.items.filter((x) => x.key !== v); render(); return true;
       case 'ia-add-food': { const f = asFood(v); if (!f) return true; const gp = prepOf(f); st.iaFoto.items.push({ key: nid('i'), fid: f.id, n: f.n, g: f.u ? String(f.u.g) : '100', prep: gp ? gp[0].id : null, per100: { k: f.k, p: f.p, c: f.c, f: f.f }, conf: 'alta' }); st.iaFoto.q = ''; render(); return true; }
       case 'ia-guardar': iaGuardar(); return true;
@@ -1130,6 +1131,7 @@ export function crearSecciones(ctx) {
       const tot = document.getElementById('ia-total'); if (tot) tot.textContent = nf(iaTotal());
       return true;
     }
+    if (st.iaFoto && t.dataset.iacorr != null) { st.iaFoto.corr = t.value; return true; }
     if (st.iaFoto && t.dataset.iaq != null) { st.iaFoto.q = t.value; const r = document.getElementById('ia-res'); if (r) r.innerHTML = iaResHTML(); return true; }
     if (t.dataset.body) {
       const B = st.body || (st.body = {}); B[t.dataset.body] = t.value;
@@ -1294,24 +1296,48 @@ export function crearSecciones(ctx) {
     try { foto = await comprimir(file); } catch (e) { st.iaFoto = { ...st.iaFoto, fase: 'error', msg: 'No se ha podido leer la foto. Prueba con otra.' }; render(); return; }
     if (!st.iaFoto) return;
     st.iaFoto.thumb = foto.url; render();
+    st.iaFoto.b64 = foto.b64;
     try {
       const r = await api.ia({ modo: 'plato', imagen: foto.b64, comida: MEALS[meal] });
       if (!st.iaFoto) return;
       if (Number.isFinite(r.quedan)) st.iaQuedan = r.quedan;
-      const items = (r.alimentos || []).slice(0, 15).map((a) => {
-        const food = a.id ? FOODS_BY_ID[a.id] : null, gp = food ? prepOf(food) : null;
-        return {
-          key: nid('i'), fid: food ? food.id : null, n: food ? food.n : String(a.nombre || 'Alimento').slice(0, 60),
-          g: String(Math.max(1, Math.round(Number(a.gramos) || 100))), prep: gp ? (gp.find((m) => m.id === a.prep) || gp[0]).id : null,
-          per100: { k: Number(a.kcal_100g) || 0, p: Number(a.proteina_100g) || 0, c: Number(a.hidratos_100g) || 0, f: Number(a.grasa_100g) || 0 },
-          conf: a.confianza || 'media',
-        };
-      });
-      st.iaFoto = { ...st.iaFoto, fase: 'revisar', items, nota: String(r.nota || '') };
+      st.iaFoto = { ...st.iaFoto, fase: 'revisar', items: iaItems(r), nota: String(r.nota || ''), corr: '' };
     } catch (e) {
       if (!st.iaFoto) return;
       if (noPro(e)) return;
       st.iaFoto = { ...st.iaFoto, fase: 'error', msg: iaErr(e) };
+    }
+    render();
+  }
+  // Respuesta de la IA → filas que se revisan en pantalla.
+  function iaItems(r) {
+    return (r.alimentos || []).slice(0, 15).map((a) => {
+      const food = a.id ? FOODS_BY_ID[a.id] : null, gp = food ? prepOf(food) : null;
+      return {
+        key: nid('i'), fid: food ? food.id : null, n: food ? food.n : String(a.nombre || 'Alimento').slice(0, 60),
+        g: String(Math.max(1, Math.round(Number(a.gramos) || 100))), prep: gp ? (gp.find((m) => m.id === a.prep) || gp[0]).id : null,
+        per100: { k: Number(a.kcal_100g) || 0, p: Number(a.proteina_100g) || 0, c: Number(a.hidratos_100g) || 0, f: Number(a.grasa_100g) || 0 },
+        conf: a.confianza || 'media',
+      };
+    });
+  }
+  // Lo que ve ahora la persona en pantalla, en el mismo formato en que responde la IA.
+  const iaActual = () => st.iaFoto.items.map((it) => ({ id: it.fid || '', nombre: it.n, gramos: Math.round(num(it.g)) || 1, prep: it.prep || '',
+    kcal_100g: it.per100.k, proteina_100g: it.per100.p, hidratos_100g: it.per100.c, grasa_100g: it.per100.f, confianza: it.conf }));
+  async function iaRecalcular() {
+    const F = st.iaFoto, texto = (F.corr || '').trim();
+    if (!texto) { F.corrMsg = 'Escribe qué quieres corregir.'; render(); return; }
+    if (st.iaQuedan === 0) { toast('Ya has usado tus consultas de IA de hoy'); return; }
+    F.corrMsg = ''; F.recalc = true; render();
+    try {
+      const r = await api.ia({ modo: 'plato', comida: MEALS[F.meal], correccion: texto.slice(0, 500), actual: { alimentos: iaActual(), nota: F.nota || '' }, ...(F.b64 ? { imagen: F.b64 } : {}) });
+      if (!st.iaFoto) return;
+      if (Number.isFinite(r.quedan)) st.iaQuedan = r.quedan;
+      st.iaFoto = { ...st.iaFoto, items: iaItems(r), nota: String(r.nota || ''), corr: '', recalc: false, corrOk: true };
+    } catch (e) {
+      if (!st.iaFoto) return;
+      if (noPro(e)) return;
+      st.iaFoto = { ...st.iaFoto, recalc: false, corrMsg: iaErr(e) };
     }
     render();
   }
@@ -1339,7 +1365,7 @@ export function crearSecciones(ctx) {
       body = `<div class="iafoto">${F.thumb ? `<img src="${F.thumb}" alt="Tu foto">` : ''}<p class="iawait"><span class="spinner dark"></span> ${F.thumb ? 'Analizando tu plato…' : 'Preparando la foto…'}</p></div>`;
     } else if (F.fase === 'error') {
       body = `<div class="iafoto">${F.thumb ? `<img src="${F.thumb}" alt="Tu foto">` : ''}</div><div class="msg" role="alert">${esc(F.msg)}</div>`;
-      foot = `<label class="btn block"><input type="file" accept="image/*" capture="environment" data-iafoto="${F.meal}" hidden>${ICO.camara} Hacer otra foto</label>`;
+      foot = `<label class="btn block"><input type="file" accept="image/*" data-iafoto="${F.meal}" hidden>${ICO.camara} Hacer otra foto</label>`;
     } else {
       body = `<div class="iahead">${F.thumb ? `<img src="${F.thumb}" alt="Tu foto">` : ''}<p class="small">${F.items.length ? `La IA ha visto <b>${F.items.length} ${F.items.length === 1 ? 'alimento' : 'alimentos'}</b>. Revisa los gramos y cómo está cocinado antes de guardar.` : 'La IA no ha encontrado comida en la foto.'}${F.nota ? `<br><span class="muted">${esc(F.nota)}</span>` : ''}</p></div>
         <div class="ialist">${F.items.map((it) => {
@@ -1354,6 +1380,11 @@ export function crearSecciones(ctx) {
             </div></div>`;
         }).join('')}</div>
         <div class="iaadd"><input class="input" type="search" data-iaq value="${esc(F.q)}" placeholder="Añadir otro alimento: salsa, pan…" autocomplete="off" aria-label="Añadir otro alimento"><div id="ia-res">${iaResHTML()}</div></div>
+        <div class="iacorr">
+          <label class="field"><span>Corregir a la IA</span><textarea class="input" rows="2" maxlength="500" data-iacorr placeholder="Ej. debajo había queso, son 100 g de pollo, no 80 g" ${F.recalc ? 'disabled' : ''}>${esc(F.corr || '')}</textarea></label>
+          <button type="button" class="btn ghost block" data-act="ia-recalc" ${F.recalc ? 'disabled' : ''}>${F.recalc ? '<span class="spinner dark"></span> Recalculando…' : 'Recalcular'}</button>
+          ${F.corrMsg ? `<div class="msg" role="alert">${esc(F.corrMsg)}</div>` : F.corrOk ? '<p class="small muted">Listo: la IA ha ajustado el plato con tu corrección. Revísalo.</p>' : ''}
+        </div>
         ${st.iaQuedan != null ? `<p class="small muted">IA: ${iaQuedanTxt()}.</p>` : ''}`;
       foot = `<button class="btn block" data-act="ia-guardar" ${F.items.length ? '' : 'disabled'}>Guardar en mi ${meal} · <span id="ia-total">${nf(iaTotal())}</span> kcal</button>`;
     }
@@ -1442,28 +1473,11 @@ export function crearSecciones(ctx) {
   function novItems() {
     const bici = tieneBici();
     return [
-      { t: 'Crear rutina paso a paso', d: 'Un asistente con una pregunta por pantalla: tipo de entreno (Fuerza, Bici, Running u otro deporte), experiencia, dónde entrenas, material, días y cómo quieres la rutina. Te proponemos una al instante o la programas tú, día a día, con los ejercicios exactos o los km y minutos.', como: 'Entreno → Rutinas → Añadir rutina.', act: 'rut-new', v: '', btn: 'Crear mi rutina' },
-      { t: 'Iniciar entreno e Historial', d: 'El botón principal ahora es «Iniciar entreno». Tu historial se ha movido al reloj de arriba a la derecha, y con «Modificar» puedes editar (lápiz) o borrar (papelera roja) cualquier entreno.', como: 'Entreno → icono del reloj.', act: 'wk-hist', v: '', btn: 'Abrir el historial' },
-      { t: 'La pestaña Bici, solo si la usas', d: 'Ya no sale a todo el mundo: aparece si marcaste Bici al registrarte o si tu rutina la incluye. También puedes activarla o quitarla cuando quieras.', como: 'Engranaje → «Mostrar funciones de Ciclismo».', act: 'cfg-open', v: '', btn: 'Abrir Configuración' },
-      { t: 'Configuración y Perfil renovados', d: 'El engranaje de arriba a la derecha abre Configuración: ahí están los recordatorios y el tema (oscuro, claro o el de tu móvil). Perfil pasa a ser la última pestaña de abajo, con tu plan, tu foto, tu contraseña, «Tus datos» plegable y tus objetivos. La recomendación de peso es ahora una línea con «Ignorar».', como: 'Engranaje (arriba a la derecha) y pestaña Perfil.', act: 'tab', v: 'perfil', btn: 'Ir al Perfil' },
-      { t: 'Peso en dial y composición con siluetas', d: 'Tu peso aparece en un dial. Debajo, Agua, Músculo, Grasa y Hueso con su silueta. Toca una y elige verla en kilos, en % o «¿Qué cambió?», que compara con tu registro anterior (verde si mejora, rojo si empeora).', como: 'Progreso → Peso.', act: 'p-peso', btn: 'Ver Progreso' },
-      { t: 'Nuevo diseño: negro y amarillo', d: 'Cadencia estrena imagen: fondo negro, amarillo carretera, letras en mayúsculas y bordes rectos, sin tarjetas flotantes. También tiene logo nuevo.', como: 'Se aplica solo en toda la app.', act: 'tab', v: 'perfil', btn: 'Ver el Perfil' },
-      { t: 'Progreso → Peso, más limpio', d: 'La gráfica es solo de tu peso. Toca Grasa, Músculo, Agua o Hueso para ver su evolución semanal. «Añadir registro» abre un formulario donde puedes escribir la composición en % o en kg, y el reloj de arriba abre tu historial para editar o borrar registros.', como: 'Progreso → Peso.', act: 'p-peso', btn: 'Ver Progreso' },
-      { t: 'Recordatorios', d: 'Activa avisos en tu móvil para pesarte por la mañana, apuntar tus comidas o no saltarte el entreno. Eliges la hora y solo te avisamos si aún no lo has hecho ese día. Son gratis para todos.', como: 'Engranaje → Recordatorios. En iPhone, primero añade Cadencia a la pantalla de inicio.', act: 'tab', v: 'perfil', btn: 'Ir al Perfil' },
-      { t: 'Conecta Strava', d: 'Conecta tu cuenta de Strava y trae tus salidas de bici y tus carreras a Cadencia con un toque, sin teclear los km ni el desnivel. Lo que apuntes a mano sigue funcionando igual.', como: 'Perfil → Integraciones → Conectar con Strava. Después, Entreno → Sincronizar Strava.', act: 'tab', v: 'perfil', btn: 'Ir al Perfil' },
-      { t: 'Mapas interactivos y subida de rutas GPX', d: 'En Rutas ya hay un mapa: elige una salida y verás su recorrido (orientativo). Con «Subir ruta GPX» cargas un archivo de tu móvil: leemos los km y el desnivel en tu propio teléfono, dibujamos la ruta y la guardas en tu cuenta. Es gratis para todos.', como: bici ? 'Bici → Rutas → Mapa → Subir ruta GPX.' : 'Se activa en Engranaje → «Mostrar funciones de Ciclismo».', act: bici ? 'nov-rutas' : 'cfg-open', v: 'rutas', btn: bici ? 'Ver el mapa' : 'Abrir Configuración' },
-      { t: 'Foto del plato con IA', d: 'Haz una foto a tu plato: la IA reconoce los alimentos, estima los gramos y cómo están cocinados, y los busca en la tabla de la app. Tú revisas y corriges antes de guardar.', como: 'Nutrición → «Foto con IA» en cada comida. Tienes 10 consultas de IA al día.', act: 'tab', v: 'nutricion', btn: 'Ir a Nutrición' },
-      { t: 'Recomendación de piezas con IA', d: 'En el Taller, la IA lee tu bici, sus componentes y tu presupuesto, y te propone 3 piezas compatibles con precio orientativo que puedes añadir a tu lista de compra.', como: bici ? 'Bici → Taller → Recomendación con IA.' : 'Se activa en Engranaje → «Mostrar funciones de Ciclismo».', act: bici ? 'tab' : 'cfg-open', v: 'taller', btn: bici ? 'Ir al Taller' : 'Abrir Configuración' },
-      { t: 'Elige qué registras cada día', d: 'Si hoy te tocaba fuerza pero sales en bici o a correr, «Iniciar entreno» te pregunta qué has hecho: fuerza, bici o cardio.', como: 'Inicio → Entreno de hoy, o Entreno → Iniciar entreno. También tocando un día de la semana.', act: 'nov-wk', v: 'semana', btn: 'Ir a Entreno' },
-      { t: 'Descanso entre series', d: 'En el entreno en directo, al marcar una serie empieza una cuenta atrás de 90 segundos con +30s, −30s y Saltar. Suena y vibra al acabar, y recuerda el tiempo que elijas.', como: 'Entreno en directo → marca una serie con ✓.', act: 'nov-wk', v: 'semana', btn: 'Ir a Entreno' },
-      { t: 'Repetir de ayer y código de barras', d: 'Cada comida tiene «Repetir de ayer» para copiar lo que comiste ayer en esa comida. Y en el buscador puedes escanear el código de barras de un producto con la cámara.', como: 'Nutrición → debajo de cada comida, o el icono de código de barras junto al buscador.', act: 'tab', v: 'nutricion', btn: 'Ir a Nutrición' },
-      { t: 'Pestaña Bici', d: 'Rutas y Taller están ahora juntos en una sola pestaña, «Bici», con dos apartados arriba. La barra de abajo queda más despejada.', como: bici ? 'Pestaña Bici, abajo.' : 'Se activa en Engranaje → «Mostrar funciones de Ciclismo».', act: bici ? 'tab' : 'cfg-open', v: 'bici', btn: bici ? 'Ir a Bici' : 'Abrir Configuración' },
-      { t: 'Mis rutinas', d: 'Guarda varias rutinas, ponles nombre y cambia entre ellas cuando quieras.', como: 'Entreno → Rutinas.', act: 'nov-wk', v: 'rutina', btn: 'Ver mis rutinas' },
-      { t: 'Objetivos de bici, cardio y pesos', d: 'Ponte metas como km de bici a la semana, minutos de cardio, entrenos por semana o kilos en un ejercicio, y mira cuánto te falta.', como: 'Entreno → Objetivos → Nuevo.', act: 'nov-wk', v: 'objetivos', btn: 'Crear un objetivo' },
-      { t: 'Nutrición', d: 'Apunta lo que comes con más de 550 alimentos (queso de Burgos incluido), productos de marca y cómo los preparas. Tu objetivo de calorías sube los días que entrenas.', como: 'Pestaña Nutrición → «Añadir» en cada comida.', act: 'tab', v: 'nutricion', btn: 'Apuntar comida' },
-      { t: 'Grasa, músculo, agua y hueso', d: 'Además del peso, apunta tu composición corporal para ver cómo cambias por dentro.', como: 'Inicio → «Añadir grasa, músculo, agua y hueso», o Progreso → Peso → «Añadir registro».', act: 'peso-sheet', v: '', btn: 'Apuntar ahora' },
-      { t: 'Peso objetivo si tienes músculo', d: 'Ya no te limitamos al IMC. Con tu % de grasa calculamos tu peso ideal según tu músculo.', como: 'Perfil → Objetivos → Peso objetivo.', act: 'tab', v: 'perfil', btn: 'Revisar mi objetivo' },
-      { t: 'Progreso', d: 'Calcula tu % de grasa con cinta métrica o plicómetro, y mira tu forma, fatiga y frescura.', como: 'Pestaña Progreso → Cuerpo o Forma.', act: 'tab', v: 'progreso', btn: 'Ver progreso' },
+      { t: 'La pestaña «Progreso» ahora es «Forma física»', d: 'Mismo contenido, nombre nuevo. Además, tocar tu peso actual en Inicio te lleva directo a ella. El engranaje ya no te sigue al bajar: se queda arriba del todo.', como: 'Pestaña «Forma física», abajo.', act: 'p-peso', v: '', btn: 'Ir a Forma física' },
+      { t: 'Mis rutinas en acordeón, con edición', d: 'Verás solo los títulos y, al tocar uno, se despliegan sus días y ejercicios. El lápiz junto a «Nueva» te deja renombrar, editar o borrar rutinas.', como: 'Entreno → Rutinas → lápiz.', act: 'nov-wk', v: 'rutina', btn: 'Ver mis rutinas' },
+      { t: 'Crear rutinas más rápido', d: 'Al meter ejercicios, las series y repeticiones del primero se repiten en los siguientes. «Copiar día de otra rutina» importa un día entero. Y si das a Atrás en el asistente, no pierdes lo que ya habías puesto.', como: 'Entreno → Rutinas → Nueva.', act: 'rut-new', v: '', btn: 'Crear una rutina' },
+      { t: 'Buscador de ejercicios más listo', d: 'Perdona los acentos, las mayúsculas y las erratas, y entiende inglés: prueba «deadlift», «curl» o «squat».', como: 'Al añadir un ejercicio, escribe en el buscador.', act: 'nov-wk', v: 'semana', btn: 'Ir a Entreno' },
+      { t: 'Corrige a la IA sin repetir la foto', d: 'Si la IA se equivoca con tu plato, escríbele qué falló («son 100 g de pollo») y pulsa «Recalcular». La foto se elige entre cámara o galería.', como: 'Nutrición → «Foto con IA» en una comida.', act: 'tab', v: 'nutricion', btn: 'Ir a Nutrición' },
     ];
   }
   let novLS = ''; try { novLS = localStorage.getItem('cadencia-nov') || ''; } catch (e) { /* nada */ }

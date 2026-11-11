@@ -225,10 +225,18 @@ function dayCardHTML(R, d, re) {
   // En fuerza no se pregunta el tiempo: lo mide el cronómetro al entrenar.
   const kmBox = s.t === 'bici' || s.t === 'cardio' ? `<label class="minbox"><input class="input" data-re="${d}.km" inputmode="decimal" value="${esc(s.km || '')}" aria-label="Kilómetros del ${dl}"><span>km</span></label>` : '';
   const minBox = s.t === 'fuerza' ? '' : kmBox + `<label class="minbox"><input class="input" data-re="${d}.min" inputmode="numeric" value="${esc(s.min || '')}" aria-label="Minutos del ${dl}"><span>min</span></label>`;
+  const otras = rutinasList().filter((x) => x.id !== (re.rid || (st.rw && st.rw.rid)));
+  const abierto = re.copy === d;
+  const copiar = otras.length ? `<div class="copyday"><button type="button" class="btn quiet small" data-act="re-copy-open" data-v="${d}" aria-expanded="${abierto}">${I.copy || I.plus} Copiar día de otra rutina</button>
+    ${abierto ? `<div class="alts"><span class="small muted">Elige el día que quieres traer aquí (sustituye este día)</span>${otras.map((r) => [...r.dias].sort((a, b) => a - b).map((dd) => {
+      const ss = r.sesiones[dd], det = ss.t === 'fuerza' ? `${(ss.ej || []).length} ejercicios` : `${ss.min || ''} min`;
+      return `<button type="button" class="altses" data-act="re-copy" data-v="${d}" data-rid="${esc(r.id)}" data-d="${dd}"><b>${esc(r.nombre || 'Rutina')} · ${E.DIAS_LARGO[dd]}</b><span class="small muted">${esc(ss.nombre || RT[ss.t])} · ${esc(det)}</span></button>`;
+    }).join('')).join('')}</div>` : ''}</div>` : '';
   return `<section class="card rday">
     <div class="rd-head"><b>${E.DIAS_LARGO[d]}</b>${sel}</div>
     <div class="rd-name"><input class="input" data-re="${d}.nombre" value="${esc(s.nombre || '')}" maxlength="40" aria-label="Nombre de la sesión del ${dl}">${minBox}</div>
     ${body}
+    ${copiar}
   </section>`;
 }
 const editorHTML = (re) => [...re.draft.dias].sort((a, b) => a - b).map((d) => dayCardHTML(re.draft, d, re)).join('');
@@ -278,18 +286,15 @@ async function saveRutinas(list, activa) {
 
 /* ---------- sección Rutina ---------- */
 function wkRutina() {
-  const list = rutinasList(), act = rutinaOf();
-  const r = list.find((x) => x.id === st.rutSel) || act;
-  if (!st.re || st.re.src !== 'tab' || st.re.rid !== r.id) { st.re = reNew(clone(r), 'tab'); st.re.rid = r.id; }
-  const re = st.re, esActiva = r.id === act.id;
+  const list = rutinasList(), act = rutinaOf(), mod = !!st.rutMod;
+  const abierta = list.find((x) => x.id === st.rutSel) || null;
+  if (abierta && (!st.re || st.re.src !== 'tab' || st.re.rid !== abierta.id)) { st.re = reNew(clone(abierta), 'tab'); st.re.rid = abierta.id; }
+  if (!abierta && st.re && st.re.src === 'tab') st.re = null;
   const resumen = (x) => `${x.dias.map((d) => E.DIAS[d]).join(', ')} · ${x.tipos.map((t) => (t === 'otro' && x.otro ? x.otro : RT[t])).join(', ')}`;
-  const split = r.tipos.includes('fuerza') && r.split && E.SPLITS[r.split] ? ` · ${E.SPLITS[r.split].t}` : '';
-  return `<section class="card">
-      <div class="card-head"><h2>Mis rutinas</h2><button class="chip chipbtn" data-act="rut-new">${I.plus} Nueva</button></div>
-      <div class="rutlist">${list.map((x) => `<button type="button" class="rutrow ${x.id === r.id ? 'on' : ''}" data-act="rut-sel" data-v="${esc(x.id)}">
-        <span><b>${esc(x.nombre || 'Rutina')}</b><small class="muted">${esc(resumen(x))}</small></span>${x.id === act.id ? '<span class="tag ok">En uso</span>' : ''}</button>`).join('')}</div>
-    </section>
-    <section class="card">
+  const cuerpo = (r) => {
+    const re = st.re, esActiva = r.id === act.id;
+    const split = r.tipos.includes('fuerza') && r.split && E.SPLITS[r.split] ? ` · ${E.SPLITS[r.split].t}` : '';
+    return `<div class="rutbody" id="rut-${esc(r.id)}">
       <label class="field"><span>Nombre de la rutina</span><input class="input" data-rutname maxlength="30" value="${esc(r.nombre || '')}"></label>
       <p><b>${r.dias.map((d) => E.DIAS[d]).join(', ')}</b> · ${r.tipos.map((t) => (t === 'otro' && r.otro ? r.otro : RT[t])).join(', ')}${esc(split)}</p>
       <p class="small muted">${r.modo === 'propuesta' ? 'Propuesta de la app según tus objetivos.' : 'Rutina creada por ti.'} Toca «Cambiar» en un ejercicio o sesión para ver alternativas.</p>
@@ -297,12 +302,42 @@ function wkRutina() {
       <div class="rut-acts">
         <button class="btn ghost small" data-act="rw-start" data-rid="${esc(r.id)}">Cambiar días o tipos</button>
         <button class="btn ghost small" data-act="rut-dup">Duplicar</button>
-        ${esActiva ? '' : `<button class="btn ghost small danger" data-act="rut-del">${st.rutDel === r.id ? 'Pulsa otra vez para borrar' : 'Borrar'}</button>`}
       </div>
+      ${editorHTML(re)}
+      ${re.msg ? `<div class="msg" role="alert">${esc(re.msg)}</div>` : ''}
+    </div>`;
+  };
+  return `<section class="card">
+      <div class="card-head"><h2>Mis rutinas</h2><span class="head-acts">
+        <button type="button" class="iconbtn ${mod ? 'on' : ''}" data-act="rut-mod" aria-pressed="${mod}" aria-label="${mod ? 'Terminar de editar rutinas' : 'Editar o borrar rutinas'}">${mod ? I.check : I.pencil}</button>
+        <button class="chip chipbtn" data-act="rut-new">${I.plus} Nueva</button></span></div>
+      <div class="rutacc">${list.map((x) => {
+        const open = abierta && abierta.id === x.id;
+        return `<div class="rutitem ${open ? 'open' : ''}">
+          <div class="rutline">
+            <button type="button" class="rutrow ${open ? 'on' : ''}" data-act="rut-sel" data-v="${esc(x.id)}" aria-expanded="${open}" aria-controls="rut-${esc(x.id)}">
+              <span><b>${esc(x.nombre || 'Rutina')}</b><small class="muted">${esc(resumen(x))}</small></span>${x.id === act.id ? '<span class="tag ok">En uso</span>' : ''}<span class="chev" aria-hidden="true">${I.chev}</span></button>
+            ${mod ? `<button type="button" class="iconbtn" data-act="rut-edit" data-v="${esc(x.id)}" aria-label="Editar ${esc(x.nombre || 'rutina')}">${I.pencil}</button><button type="button" class="iconbtn bad" data-act="rut-del-ask" data-v="${esc(x.id)}" aria-label="Borrar ${esc(x.nombre || 'rutina')}">${I.trash}</button>` : ''}
+          </div>
+          ${open ? cuerpo(x) : ''}
+        </div>`;
+      }).join('')}</div>
     </section>
-    ${editorHTML(re)}
-    ${re.msg ? `<div class="msg" role="alert">${esc(re.msg)}</div>` : ''}
-    <div class="savebar" id="re-savebar" ${re.dirty ? '' : 'hidden'}><button type="button" class="btn block" data-act="re-save">Guardar cambios</button></div>`;
+    ${abierta ? `<div class="savebar" id="re-savebar" ${st.re.dirty ? '' : 'hidden'}><button type="button" class="btn block" data-act="re-save">Guardar cambios</button></div>` : ''}`;
+}
+function rutDelSheetHTML() {
+  const r = rutinasList().find((x) => x.id === st.rutDelAsk), esAct = r && rutinaOf() && r.id === rutinaOf().id, otras = rutinasList().length - 1;
+  return `<div class="sheet-back" data-act="rut-del-no"></div>
+    <div class="sheet short" role="alertdialog" aria-modal="true" aria-label="Borrar rutina">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><button type="button" class="iconbtn" data-act="rut-del-no" aria-label="Cancelar">${I.back}</button><h2>Borrar rutina</h2><span style="width:36px"></span></div>
+      <div class="sheet-list form-grid">
+        <p>¿Borrar la rutina <b>${esc(r ? r.nombre || 'Rutina' : '')}</b>?</p>
+        <p class="small muted">${esAct ? (otras ? 'Es la que usas ahora: pasarás a usar otra de tus rutinas. ' : 'Es tu única rutina: tendrás que crear otra para ver tu semana. ') : ''}No se puede deshacer.</p>
+        <button type="button" class="btn block danger-solid" data-act="rut-del-yes">Borrar rutina</button>
+        <button type="button" class="btn ghost block" data-act="rut-del-no">Cancelar</button>
+      </div>
+    </div>`;
 }
 
 /* ---------- asistente para crear la rutina (una pregunta por pantalla) ---------- */
@@ -312,7 +347,7 @@ const RW_MAIN = [
   { id: 'cardio', t: 'Running', s: 'Correr en calle, cinta o monte', ico: () => I.pulse },
   { id: 'otro', t: 'Otro deporte', s: 'Fútbol, natación…', ico: () => I.ball },
 ];
-const RW_EXP = [['nuevo', 'Nuevo'], ['meses', 'Unos meses'], ['anio', '1 año'], ['anios', 'Años'], ['compite', 'Compito']];
+const RW_EXP = [['nuevo', 'Debutante'], ['meses', 'Unos meses'], ['anio', 'Alrededor de 1 año'], ['anios', 'Años'], ['compite', 'Compito']];
 const RW_DONDE = [['gym', 'Gimnasio', 'Máquinas, poleas y peso libre'], ['casa', 'Casa', 'Con poco o ningún material'], ['parque', 'Parque', 'Barras, paralelas y tu peso']];
 const RW_MAT = [['maquina', 'Máquinas / poleas'], ['mancuernas', 'Mancuernas'], ['barra', 'Barras'], ['banda', 'Bandas elásticas'], ['kettlebell', 'Kettlebells'], ['ninguno', 'Solo peso corporal']];
 const RW_DIV = [['ppl', 'Push · Pull · Legs', 'Empuje, tirón y pierna'], ['tp', 'Torso / Pierna', 'Tren superior e inferior'], ['full', 'Full body', 'Todo el cuerpo cada día'], ['weider', 'Un músculo por día', 'Pecho, espalda, pierna, hombro y brazos'], ['deporte', 'Fuerza para deporte', 'Potencia y core para tu deporte'], ['custom', 'Custom', 'Tú decides qué haces cada día']];
@@ -408,7 +443,8 @@ function viewRutWizard() {
   }
   const msg = s === 'editor' ? st.re.msg : o.msg;
   const anim = o.anim ? ` step-in ${o.anim}` : ''; o.anim = null;
-  const showNext = !(['tipo', 'exp', 'donde', 'modo'].includes(s)) && !(s === 'n') && !(s === 'division' && o.division !== 'deporte');
+  const volvio = (o.maxStep || 0) > o.step; // si ya habías avanzado y has vuelto atrás, hay botón para seguir
+  const showNext = volvio || (!(['tipo', 'exp', 'donde', 'modo'].includes(s)) && !(s === 'n') && !(s === 'division' && o.division !== 'deporte'));
   return `<form class="screen" data-form="rw" novalidate>
     <div class="ob-top">
       <button type="button" class="ob-back" data-act="rw-back" aria-label="${o.step === 0 ? 'Cerrar' : 'Atrás'}">${o.step === 0 ? '✕' : I.back}</button>
@@ -440,12 +476,26 @@ function rwPersonalizada(o) {
   }
   return R;
 }
+// Mismas respuestas del asistente = mismo borrador (así «Atrás» y «Siguiente» no pierden lo que ya programaste).
+const rwKey = (o) => JSON.stringify([o.main, o.exp, o.donde, [...o.eq].sort(), o.n, [...o.dias].sort(), o.flex, o.modo, o.division, o.deporte, o.otro.trim()]);
 function rwGenerar() {
-  const o = st.rw, cfg = rwCfg(o);
+  const o = st.rw, key = rwKey(o), old = st.re && st.re.src === 'rw' ? st.re : null;
+  if (old && old.genKey === key) { o.step = rwSteps(o).length - 1; o.maxStep = Math.max(o.maxStep || 0, o.step); o.anim = 'fwd'; render(); window.scrollTo(0, 0); return; }
+  const cfg = rwCfg(o);
   const R = o.modo === 'propuesta' && o.main !== 'otro' ? E.proponerRutina(cfg, st.profile.objetivos) : rwPersonalizada(o);
   R.eqSel = o.main === 'fuerza' ? [...o.eq] : []; R.donde = o.donde; R.flex = o.flex; R.deporte = o.deporte; R.exp = o.exp;
-  st.re = reNew(R, 'rw');
-  o.step = rwSteps(o).length - 1; o.anim = 'fwd';
+  const nuevo = reNew(R, 'rw'); nuevo.genKey = key;
+  // Cambiaste una respuesta anterior: lo que ya habías programado a mano pasa al nuevo borrador (día a día, en orden) si el tipo de sesión es el mismo.
+  if (old && (old.dirty || old.draft.modo === 'propia')) {
+    const antes = [...old.draft.dias].sort((x, y) => x - y), ahora = [...R.dias].sort((x, y) => x - y);
+    ahora.forEach((d, i) => {
+      const prev = old.draft.sesiones[antes[i]];
+      if (prev && prev.t === R.sesiones[d].t && (prev.t !== 'fuerza' || prev.ej.length)) R.sesiones[d] = clone(prev);
+    });
+    nuevo.ref = old.ref; nuevo.mix = old.mix; nuevo.dirty = true;
+  }
+  st.re = nuevo;
+  o.step = rwSteps(o).length - 1; o.maxStep = Math.max(o.maxStep || 0, o.step); o.anim = 'fwd';
   render(); window.scrollTo(0, 0);
 }
 // Avance automático al tocar una opción de respuesta única (con un instante para ver la selección).
@@ -460,7 +510,7 @@ async function rwNext() {
   o.msg = '';
   const s = rwStep(o);
   if ((s === 'modo' && !(o.modo === 'propia' && o.main === 'fuerza')) || s === 'division' || (s === 'dias' && o.main === 'otro')) return rwGenerar();
-  if (s !== 'editor') { o.step++; o.anim = 'fwd'; render(); window.scrollTo(0, 0); return; }
+  if (s !== 'editor') { o.step++; o.maxStep = Math.max(o.maxStep || 0, o.step); o.anim = 'fwd'; render(); window.scrollTo(0, 0); return; }
   o.saving = true; st.re.msg = ''; render();
   try {
     const err = await saveRutina(st.re.draft, o.nueva ? null : o.rid);
@@ -534,14 +584,14 @@ function libOpen(o) {
 function libItems() {
   const L = st.lib, q = E.normTxt(L.q);
   let items;
-  if (q && L.m !== 'alt') items = E.todosEjercicios().slice().sort((a, b) => M_ORD.indexOf(a.m) - M_ORD.indexOf(b.m)); // al buscar, se busca en todos
+  if (q && L.m !== 'alt') items = E.todosEjercicios().slice(); // al buscar, se busca en todos
   else if (L.m === 'alt') items = E.alternativas({ n: L.from }, [], null, true).map(E.ejercicio).filter(Boolean);
   else if (L.m === 'rec') items = E.todosEjercicios().filter((x) => L.rec.includes(x.m)).sort((a, b) => L.rec.indexOf(a.m) - L.rec.indexOf(b.m));
   else if (L.m === 'todos') items = E.todosEjercicios().slice().sort((a, b) => M_ORD.indexOf(a.m) - M_ORD.indexOf(b.m));
   else items = E.todosEjercicios().filter((x) => x.m === L.m);
   if (L.eqF !== 'todo') items = items.filter((x) => x.eq === L.eqF);
   else if (L.equipo && L.soloEq) items = items.filter((x) => x.eq === 'corporal' || L.equipo.includes(x.eq));
-  if (q) items = items.filter((x) => E.normTxt(x.n).includes(q) || E.normTxt(E.MUSCULOS[x.m]).includes(q) || E.normTxt(E.EQUIPOS[x.eq]).includes(q));
+  if (q) items = E.buscarEjercicios(items, L.q, (x) => `${E.MUSCULOS[x.m] || ''} ${E.EQUIPOS[x.eq] || ''}`);
   return items;
 }
 
@@ -625,7 +675,12 @@ function libApply(names) {
   if (L.ctx === 're') {
     const R = st.re.draft, s = R.sesiones[L.d];
     if (L.mode === 'swap') { const ex = s.ej[L.i], n = names[0], x = E.ejercicio(n); ex.reps = E.repsPara(n, ex.reps, kind); ex.n = n; ex.m = x ? x.m : ''; }
-    else names.forEach((n) => s.ej.push(E.nuevoEjercicio(n, kind, R.exp)));
+    else names.forEach((n) => {
+      const ex = E.nuevoEjercicio(n, kind, R.exp), rf = st.re.ref;
+      // Si ya rellenaste el primer ejercicio (p. ej. 3 × 6-8), los nuevos salen con lo mismo.
+      if (rf && num(rf.series) >= 1 && String(rf.reps || '').trim()) { ex.series = rf.series; ex.reps = String(rf.reps).trim(); }
+      s.ej.push(ex);
+    });
     st.re.dirty = true; st.re.alt = null;
   } else {
     const Lv = st.live;
@@ -1013,14 +1068,29 @@ root.addEventListener('click', async (e) => {
   // asistente
   if (act === 'rw-start') return rwStart(b.dataset.rid);
   if (act === 'rut-new') return rwStart(null, true);
-  if (act === 'rut-sel') { st.rutSel = v; st.rutDel = null; return render(); }
-  if (act === 'rut-use' || act === 'rut-dup' || act === 'rut-del') {
+  if (act === 'rut-sel') { st.rutSel = st.rutSel === v ? null : v; st.re = null; return render(); }
+  if (act === 'rut-mod') { st.rutMod = !st.rutMod; return render(); }
+  if (act === 'rut-edit') { st.rutSel = v; st.re = null; render(); const el = document.getElementById('rut-' + v); if (el) el.scrollIntoView({ block: 'start' }); return; }
+  if (act === 'rut-del-ask') { st.rutDelAsk = v; return render(); }
+  if (act === 'rut-del-no') { st.rutDelAsk = null; return render(); }
+  if (act === 'rut-del-yes') {
+    const id = st.rutDelAsk; st.rutDelAsk = null;
+    try {
+      const list = rutinasList(), rest = list.filter((x) => x.id !== id), act0 = rutinaOf();
+      const data = { rutinas: rest };
+      if (act0 && act0.id === id) data.rutina = rest[0] || null;
+      await api.saveProfile(st.user.uid, data); st.profile = { ...st.profile, ...data };
+      if (st.rutSel === id) st.rutSel = null;
+      if (!rest.length) st.rutMod = false;
+      st.re = null; toast('Rutina borrada');
+    } catch (err) { toast(errorText(err)); }
+    return render();
+  }
+  if (act === 'rut-use' || act === 'rut-dup') {
     const list = rutinasList(), r = list.find((x) => x.id === st.rutSel) || rutinaOf();
     try {
       if (act === 'rut-use') { await saveRutinas(list, r); st.rutSel = null; toast(`Ahora usas «${r.nombre}»`); }
       else if (act === 'rut-dup') { const c = { ...clone(r), id: nidR(), nombre: `${r.nombre || 'Rutina'} (copia)`.slice(0, 30) }; await saveRutinas([...list, c]); st.rutSel = c.id; toast('Rutina duplicada'); }
-      else if (st.rutDel !== r.id) { st.rutDel = r.id; }
-      else { await saveRutinas(list.filter((x) => x.id !== r.id)); st.rutSel = null; st.rutDel = null; toast('Rutina borrada'); }
     } catch (err) { toast(errorText(err)); }
     st.re = null; return render();
   }
@@ -1042,6 +1112,12 @@ root.addEventListener('click', async (e) => {
   if (o && act === 'rw-dep') { o.deporte = v; return render(); }
   if (o && act === 'rw-dep-otro') { o.otro = v; return render(); }
 
+  if (re && act === 're-copy-open') { re.copy = re.copy === Number(v) ? null : Number(v); return render(); }
+  if (re && act === 're-copy') {
+    const r = rutinasList().find((x) => x.id === b.dataset.rid), src = r && r.sesiones[b.dataset.d];
+    if (src) { re.draft.sesiones[Number(v)] = clone(src); re.dirty = true; re.copy = null; re.alt = null; re.ses = null; render(); toast('Día copiado'); }
+    return;
+  }
   if (re && act === 're-mix') { re.mix = !re.mix; return render(); }
   // editor de rutina
   if (re && act.startsWith('re-')) {
@@ -1134,7 +1210,10 @@ root.addEventListener('input', (e) => {
   }
   if (st.re && t.dataset.re) {
     const p = t.dataset.re.split('.'), s = st.re.draft.sesiones[Number(p[0])];
-    if (p[1] === 'ej') s.ej[Number(p[2])][p[3]] = t.value; else s[p[1]] = t.value;
+    if (p[1] === 'ej') {
+      const ex = s.ej[Number(p[2])]; ex[p[3]] = t.value;
+      if (p[2] === '0' && (p[3] === 'series' || p[3] === 'reps')) st.re.ref = { series: ex.series, reps: ex.reps };
+    } else s[p[1]] = t.value;
     st.re.dirty = true;
     const bar = document.getElementById('re-savebar'); if (bar) bar.hidden = false;
     return;
@@ -1182,5 +1261,5 @@ root.addEventListener('change', async (e) => {
   }
 });
 
-  return { regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML };
+  return { regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML };
 }

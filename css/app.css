@@ -1009,7 +1009,7 @@ details.comp { border: 1px solid var(--bd); border-radius: 2px; }
 .main > .seg { margin-left: 16px !important; margin-right: 16px !important; }
 
 /* ---------- engranaje fijo, Configuración y Perfil ---------- */
-.gear { position: fixed; z-index: 8; top: calc(var(--safe-t) + 14px); right: max(14px, calc((100vw - 560px) / 2 + 14px)); width: 44px; height: 44px; display: grid; place-items: center; background: var(--bg); color: var(--ink); border: 1px solid var(--bd); border-radius: 2px; }
+.gear { position: absolute; z-index: 8; top: calc(var(--safe-t) + 14px); right: max(14px, calc((100vw - 560px) / 2 + 14px)); width: 44px; height: 44px; display: grid; place-items: center; background: var(--bg); color: var(--ink); border: 1px solid var(--bd); border-radius: 2px; }
 .gear:active { color: var(--accent-text); border-color: var(--accent); }
 .hello { padding-right: 76px !important; }
 .hello .hello-r { margin-right: 0; }
@@ -1068,3 +1068,18 @@ details.comp { border: 1px solid var(--bd); border-radius: 2px; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes popIn { from { opacity: 0; transform: translate(-50%, -48%) scale(.97); } to { opacity: 1; transform: translate(-50%, -50%); } }
 .ob-title { overflow-wrap: anywhere; hyphens: auto; }
+.tap { cursor: pointer; }
+.tap:active { filter: brightness(.92); }
+.iacorr { display: grid; gap: 10px; border-top: 1px solid var(--bd); padding-top: 14px; }
+.iacorr textarea.input { resize: vertical; min-height: 64px; font: inherit; }
+.head-acts { display: inline-flex; align-items: center; gap: 8px; }
+.iconbtn.on { color: var(--accent-ink); background: var(--accent); }
+.rutacc { display: grid; gap: 8px; }
+.rutitem { display: grid; gap: 0; }
+.rutline { display: flex; align-items: stretch; gap: 6px; }
+.rutline .rutrow { flex: 1; min-width: 0; }
+.rutrow .chev { flex: none; display: grid; place-items: center; transition: transform .15s; color: var(--muted); }
+.rutitem.open .rutrow .chev { transform: rotate(90deg); color: var(--accent-text); }
+.rutbody { display: grid; gap: 12px; padding: 14px 0 6px; border-bottom: 1px solid var(--bd); }
+.copyday { display: grid; gap: 8px; border-top: 1px solid var(--bd); padding-top: 10px; }
+.tabbar button { align-content: start; line-height: 1.15; }
