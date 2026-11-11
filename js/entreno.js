@@ -1,4 +1,4 @@
-import { IMG_BASE, IMG_CUR, EXTRA } from './ejercicios.js';
+import { IMG_BASE, IMG_CUR, EXTRA, IMG3D } from './ejercicios.js';
 // Lógica del entrenamiento: solo cálculos y datos, sin pantalla.
 
 export const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -353,6 +353,8 @@ export const ejercicio = (n) => {
   if (!INDICE) { INDICE = new Map(); for (const x of todosEjercicios()) { const k = normTxt(x.n); if (!INDICE.has(k)) INDICE.set(k, x); } }
   return INDICE.get(normTxt(n)) || null;
 };
+// Imagen anatómica 3D del ejercicio (URL de IMG3D en ejercicios.js) o '' si aún no hay: entonces la tarjeta dibuja la figura propia.
+export const img3d = (x) => (x && IMG3D[x.n]) || '';
 export const imagenes = (x) => (x && x.img ? [0, 1].map((i) => IMG_BASE + x.img.split('/').map(encodeURIComponent).join('/') + `/${i}.jpg`) : []);
 // "ch,tr|sh" → { p: ['ch','tr'], s: ['sh'] }
 export const musculosDet = (x) => { const [p = '', s = ''] = String((x && x.mu) || '').split('|'); return { p: p ? p.split(',') : [], s: s ? s.split(',') : [] }; };

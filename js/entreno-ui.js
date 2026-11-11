@@ -559,6 +559,36 @@ const BODY = {
     ['ca', 'e', 22, 110, 4, 10], ['ca', 'e', 38, 110, 4, 10],
   ],
 };
+// Grupo muscular → músculo concreto del mapa (por si el ejercicio no trae el detalle «mu»).
+const GRUPO_MAP = { pecho: 'ch', espalda: 'la', hombro: 'sh', biceps: 'bi', triceps: 'tr', antebrazo: 'fo', cuadriceps: 'qu', femoral: 'ha', gluteo: 'gl', gemelos: 'ca', core: 'ab', aductores: 'ad', abductores: 'abd' };
+const MUSC_ESPALDA = new Set(['la', 'mb', 'lb', 'tp', 'gl', 'ha', 'tr']);
+// Silueta y degradados, definidos UNA vez en la página: cada tarjeta solo los referencia (<use>), así el scroll va ligero.
+const ANATOMIA_DEFS = `<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+  <linearGradient id="an-body" x1="0" x2="1"><stop offset="0" stop-color="#1f1f1f"/><stop offset=".5" stop-color="#4b4b4b"/><stop offset="1" stop-color="#1f1f1f"/></linearGradient>
+  <radialGradient id="an-mp" cx=".38" cy=".3" r=".9"><stop offset="0" stop-color="#ff6a5c"/><stop offset=".55" stop-color="#e0201a"/><stop offset="1" stop-color="#8e0c08"/></radialGradient>
+  <radialGradient id="an-ms" cx=".38" cy=".3" r=".9"><stop offset="0" stop-color="#ff6a5c" stop-opacity=".6"/><stop offset="1" stop-color="#8e0c08" stop-opacity=".55"/></radialGradient>
+  <symbol id="an-sil" viewBox="0 0 60 130"><g fill="url(#an-body)">
+    <circle cx="30" cy="8" r="6.5"/><rect x="27" y="13" width="6" height="7" rx="2"/>
+    <path d="M16 25C22 20 38 20 44 25L42 45C40 54 39 60 40 70L20 70C21 60 20 54 18 45Z"/>
+    <rect x="8.5" y="25" width="8" height="24" rx="4"/><rect x="43.5" y="25" width="8" height="24" rx="4"/>
+    <rect x="6" y="48" width="7" height="19" rx="3.5"/><rect x="47" y="48" width="7" height="19" rx="3.5"/>
+    <rect x="16.5" y="67" width="11" height="33" rx="5.5"/><rect x="32.5" y="67" width="11" height="33" rx="5.5"/>
+    <rect x="18" y="98" width="8" height="27" rx="4"/><rect x="34" y="98" width="8" height="27" rx="4"/>
+    <ellipse cx="22" cy="125" rx="3.8" ry="2"/><ellipse cx="38" cy="125" rx="3.8" ry="2"/></g></symbol>
+</defs></svg>`;
+// Figura anatómica: cuerpo gris con relieve y los músculos del ejercicio en rojo (principal fuerte, secundarios suaves).
+// Es el sustituto hasta conectar imágenes 3D reales (ver IMG3D en ejercicios.js). lado: 'ambos' | 'front' | 'back'.
+function anatomia(x, lado = 'ambos') {
+  let { p, s: sec } = E.musculosDet(x);
+  if (!p.length && GRUPO_MAP[x.m]) p = [GRUPO_MAP[x.m]];
+  const part = (parts, dx) => `<use href="#an-sil" x="${dx}" width="60" height="130"/><g transform="translate(${dx} 0)">${parts.filter(([k]) => p.includes(k) || sec.includes(k)).map(([k, t, a, b, c, d]) => {
+    const f = `fill="url(#an-${p.includes(k) ? 'mp' : 'ms'})"`;
+    return t === 'e' ? `<ellipse ${f} cx="${a}" cy="${b}" rx="${c}" ry="${d}"/>` : t === 'r' ? `<rect ${f} x="${a}" y="${b}" width="${c}" height="${d}" rx="2.5"/>` : `<polygon ${f} points="${a}"/>`; }).join('')}</g>`;
+  const nombres = [...p, ...sec].map((k) => E.MUSC_DET[k]).filter(Boolean).join(', ');
+  const solo = lado === 'ambos' ? null : lado === 'back' ? BODY.back : BODY.front;
+  return `<svg class="anat" viewBox="${solo ? '0 0 64 130' : '0 0 128 130'}" role="img" aria-label="${esc(nombres)}">${solo ? part(solo, 2) : part(BODY.front, 2) + part(BODY.back, 66)}</svg>`;
+}
+const chipIcono = (m) => { const k = GRUPO_MAP[m]; return k ? anatomia({ m, mu: k + '|' }, MUSC_ESPALDA.has(k) ? 'back' : 'front') : ''; };
 function bodyMap(x, cls = '') {
   const { p, s } = E.musculosDet(x);
   const fill = (k) => (p.includes(k) ? 'mp' : s.includes(k) ? 'ms' : 'm0');
@@ -603,6 +633,7 @@ function libItems() {
   if (q && L.m !== 'alt') items = E.todosEjercicios().slice(); // al buscar, se busca en todos
   else if (L.m === 'alt') items = E.alternativas({ n: L.from }, [], null, true).map(E.ejercicio).filter(Boolean);
   else if (L.m === 'rec') items = E.todosEjercicios().filter((x) => L.rec.includes(x.m)).sort((a, b) => L.rec.indexOf(a.m) - L.rec.indexOf(b.m));
+  else if (L.m === 'fav') items = E.todosEjercicios().filter((x) => favs().includes(x.n));
   else if (L.m === 'todos') items = E.todosEjercicios().slice().sort((a, b) => M_ORD.indexOf(a.m) - M_ORD.indexOf(b.m));
   else items = E.todosEjercicios().filter((x) => x.m === L.m);
   if (L.eqF !== 'todo') items = items.filter((x) => x.eq === L.eqF);
@@ -611,26 +642,34 @@ function libItems() {
   return items;
 }
 
+const BM_ICO = (on) => `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg>`;
+const favs = () => st.profile.ejFavs || [];
 function libListHTML() {
   const L = st.lib, items = libItems();
-  if (!items.length) return `<div class="empty"><b>No hay ejercicios así</b><span>Prueba otro grupo o equipo, o créalo con «Crear».</span></div>`;
+  if (!items.length) return `<div class="empty"><b>${L.m === 'fav' && !L.q ? 'Aún no has guardado ejercicios' : 'No hay ejercicios así'}</b><span>${L.m === 'fav' && !L.q ? 'Toca el marcador de una tarjeta para guardarlo aquí.' : 'Prueba otro grupo o equipo, o créalo con «Crear».'}</span></div>`;
   const grouped = !L.q && (L.m === 'todos' || L.m === 'rec');
-  const used = new Set(L.usados.map(E.normTxt));
+  const used = new Set(L.usados.map(E.normTxt)), fv = favs();
   let prev = '', out = `<p class="small muted lcount">${items.length} ${items.length === 1 ? 'ejercicio' : 'ejercicios'}</p>`;
   for (const x of items) {
     if (grouped && x.m !== prev) { out += `<div class="lgroup">${E.MUSCULOS[x.m]}</div>`; prev = x.m; }
-    const inUse = L.mode === 'add' && used.has(E.normTxt(x.n));
-    const on = L.sel.includes(x.n);
-    const mus = E.musculosDet(x).p.map((k) => E.MUSC_DET[k]).join(', ') || E.MUSCULOS[x.m] || '';
-    out += `<div class="lrow ${on ? 'on' : ''} ${inUse ? 'used' : ''}">
-      <button type="button" class="lrow-main" data-act="lib-pick" data-n="${esc(x.n)}" ${inUse ? 'disabled' : ''}>
-        ${exThumb(x)}
-        <span class="lrow-t"><b>${esc(x.n)}</b><span class="small muted">${esc(mus)} · ${E.EQUIPOS[x.eq] || ''}${x.propio ? ' · Creado por ti' : ''}${inUse ? ' · Ya está en la sesión' : ''}</span></span>
-        ${L.mode === 'add' ? `<span class="lrow-c">${on ? I.check : ''}</span>` : ''}</button>
-      <button type="button" class="iconbtn info" data-act="lib-det" data-n="${esc(x.n)}" aria-label="Ver cómo se hace ${esc(x.n)}">i</button>
+    const inUse = L.mode === 'add' && used.has(E.normTxt(x.n)), on = L.sel.includes(x.n), saved = fv.includes(x.n);
+    const img3d = E.img3d(x);
+    out += `<div class="lcard ${on ? 'on' : ''} ${inUse ? 'used' : ''}">
+      <button type="button" class="lc-main" data-act="lib-pick" data-n="${esc(x.n)}" ${inUse ? 'disabled' : ''} aria-label="${esc(x.n)}${inUse ? ' (ya está en la sesión)' : ''}">
+        <span class="lc-img">${img3d ? `<img class="ex3d" src="${esc(img3d)}" alt="" loading="lazy" decoding="async">` : anatomia(x)}</span>
+        <b class="lc-n">${esc(x.n)}</b><span class="lc-m">${esc(E.MUSCULOS[x.m] || '')}${x.propio ? ' · Tuyo' : ''}</span></button>
+      <button type="button" class="lc-ico lc-bm ${saved ? 'on' : ''}" data-act="lib-fav" data-n="${esc(x.n)}" aria-pressed="${saved}" aria-label="${saved ? 'Quitar de guardados' : 'Guardar'} ${esc(x.n)}">${BM_ICO(saved)}</button>
+      <button type="button" class="lc-ico lc-info" data-act="lib-det" data-n="${esc(x.n)}" aria-label="Ver cómo se hace ${esc(x.n)}">?</button>
+      ${on ? `<span class="lc-ck" aria-hidden="true">${I.check}</span>` : ''}
     </div>`;
   }
-  return out;
+  return `<div class="lgrid">${out}</div>`;
+}
+// Carrusel de grupos musculares: solo cambia el estado de los botones y la lista, sin repintar la hoja (así no se pierde el scroll ni el teclado).
+function libChipsHTML() {
+  const L = st.lib;
+  const chips = [...(L.mode === 'swap' ? [['alt', 'Alternativas', '']] : []), ...(L.rec.length ? [['rec', 'Recomendados', '']] : []), ['fav', 'Guardados', BM_ICO(false)], ['todos', 'Todos', ''], ...Object.entries(E.MUSCULOS).map(([k, v]) => [k, v, chipIcono(k)])];
+  return `<div class="lchips" role="group" aria-label="Grupo muscular">${chips.map(([k, t, ico]) => `<button type="button" class="lchip ${L.m === k ? 'on' : ''}" data-act="lib-m" data-v="${k}" aria-pressed="${L.m === k}">${ico ? `<span class="lchip-i">${ico}</span>` : ''}${esc(t)}</button>`).join('')}</div>`;
 }
 
 function libFootLabel() { const n = st.lib.sel.length; return n ? `Añadir ${n} ${n === 1 ? 'ejercicio' : 'ejercicios'}` : 'Elige ejercicios'; }
@@ -671,13 +710,13 @@ function libSheetHTML() {
   } else {
     const title = L.mode === 'swap' ? 'Cambiar ejercicio' : 'Añadir ejercicios';
     const gOpts = [...(L.mode === 'swap' ? [['alt', 'Alternativas']] : []), ...(L.rec.length ? [['rec', 'Recomendados para esta sesión']] : []), ['todos', 'Todos'], ...Object.entries(E.MUSCULOS)];
-    inner = `<div class="sheet-head"><button type="button" class="iconbtn" data-act="lib-close" aria-label="Cerrar">✕</button><h2>${title}</h2><button type="button" class="btn quiet small" data-act="lib-crear">${I.plus} Crear</button></div>
+    inner = `${ANATOMIA_DEFS}<div class="sheet-head"><button type="button" class="iconbtn" data-act="lib-close" aria-label="Cerrar">✕</button><h2>${title}</h2><button type="button" class="btn quiet small" data-act="lib-crear">${I.plus} Crear</button></div>
       ${L.mode === 'swap' ? `<p class="small muted sheet-sub">En lugar de <b>${esc(L.from)}</b></p>` : ''}
-      <div class="filters">
-        <label class="field"><span>Grupo muscular</span><select class="input" data-libm>${gOpts.map(([k, t]) => `<option value="${k}" ${L.m === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
-        <label class="field"><span>Equipo</span><select class="input" data-libeqf><option value="todo">Todo</option>${Object.entries(E.EQUIPOS).map(([k, v]) => `<option value="${k}" ${L.eqF === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
-      </div>
       <input class="input" type="search" data-libq placeholder="Buscar ejercicio" value="${esc(L.q)}" aria-label="Buscar ejercicio" autocomplete="off">
+      ${libChipsHTML()}
+      <div class="filters one">
+        <label class="field"><span>Equipo</span><select class="input" data-libeqf aria-label="Equipo"><option value="todo">Todo</option>${Object.entries(E.EQUIPOS).map(([k, v]) => `<option value="${k}" ${L.eqF === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+      </div>
       ${L.equipo && L.eqF === 'todo' ? `<label class="eqtoggle"><input type="checkbox" data-libeq ${L.soloEq ? 'checked' : ''}> Solo con mi material</label>` : ''}
       <div class="sheet-list" id="lib-list">${libListHTML()}</div>
       ${L.mode === 'add' ? `<div class="sheet-foot"><button type="button" class="btn block" id="lib-addbtn" data-act="lib-add" ${L.sel.length ? '' : 'disabled'}>${libFootLabel()}</button></div>` : ''}`;
@@ -1094,6 +1133,16 @@ root.addEventListener('click', async (e) => {
   // panel de ejercicios
   if (L && act.startsWith('lib-')) {
     if (act === 'lib-close') { st.lib = null; return render(); }
+    if (act === 'lib-m') {
+      L.m = v; const l = document.getElementById('lib-list');
+      document.querySelectorAll('.lchip').forEach((c) => { const on = c.dataset.v === v; c.classList.toggle('on', on); c.setAttribute('aria-pressed', on); });
+      if (l) { l.innerHTML = libListHTML(); l.scrollTop = 0; } return;
+    }
+    if (act === 'lib-fav') {
+      const n = b.dataset.n, f = favs(), nf2 = f.includes(n) ? f.filter((q) => q !== n) : [...f, n], l = document.getElementById('lib-list'), top = l ? l.scrollTop : 0;
+      st.profile.ejFavs = nf2; api.saveProfile(st.user.uid, { ejFavs: nf2 }).catch((e) => toast(errorText(e)));
+      if (l) { l.innerHTML = libListHTML(); l.scrollTop = top; } return;
+    }
     if (act === 'lib-det') { L.det = b.dataset.n; return render(); }
     if (act === 'lib-det-close') { L.det = null; return render(); }
     if (act === 'lib-det-toggle') { const n = b.dataset.n; L.sel = L.sel.includes(n) ? L.sel.filter((x) => x !== n) : [...L.sel, n]; L.det = null; return render(); }
@@ -1106,7 +1155,7 @@ root.addEventListener('click', async (e) => {
       if (L.mode === 'swap') return libApply([n]);
       L.sel = L.sel.includes(n) ? L.sel.filter((x) => x !== n) : [...L.sel, n];
       const on = L.sel.includes(n);
-      b.parentNode.classList.toggle('on', on); b.querySelector('.lrow-c').innerHTML = on ? I.check : '';
+      const card = b.parentNode; card.classList.toggle('on', on); const ck = card.querySelector('.lc-ck'); if (on && !ck) card.insertAdjacentHTML('beforeend', `<span class="lc-ck" aria-hidden="true">${I.check}</span>`); else if (!on && ck) ck.remove();
       const btn = document.getElementById('lib-addbtn'); if (btn) { btn.disabled = !L.sel.length; btn.textContent = libFootLabel(); }
       return;
     }
@@ -1296,7 +1345,6 @@ root.addEventListener('change', async (e) => {
     try { await saveRutinas(list.map((x) => (x.id === r.id ? nr : x)), r.id === rutinaOf().id ? nr : null); toast('Nombre guardado'); } catch (err) { toast(errorText(err)); }
     return render();
   }
-  if (st.lib && t.dataset.libm != null) { st.lib.m = t.value; return render(); }
   if (st.lib && t.dataset.libeqf != null) { st.lib.eqF = t.value; return render(); }
   if (st.live && t.dataset.livetitle != null) {
     const L = st.live;
