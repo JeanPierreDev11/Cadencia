@@ -5,6 +5,7 @@ import { crearSecciones, NOV_V } from './secciones.js';
 import { crearEntreno } from './entreno-ui.js';
 import { LEGAL_V, legalHTML, CONTACTO } from './legal.js';
 import { PORTAL_LINK } from './pro.js';
+import * as CAL from './calorias.js';
 import { leerRetorno } from './strava.js';
 import { crearRecordatorios, leerIr } from './push.js';
 import { crearStrava } from './strava-ui.js';
@@ -31,7 +32,7 @@ const goalById = (id) => GOALS.find((g) => g.id === id);
 const imc = (kg, cm) => (kg > 0 && cm > 0 ? kg / Math.pow(cm / 100, 2) : NaN);
 const imcLabel = (v) => (!isFinite(v) ? '' : v < 18.5 ? 'Bajo peso' : v < 25 ? 'Normal' : v < 30 ? 'Sobrepeso' : 'Obesidad');
 // Mifflin-St Jeor: calorías que gasta el cuerpo en reposo.
-const bmr = (p) => (p && p.pesoKg && p.alturaCm && p.edad ? Math.round(10 * p.pesoKg + 6.25 * p.alturaCm - 5 * p.edad + (p.sexo === 'mujer' ? -161 : 5)) : NaN);
+const bmr = (p) => Math.round(CAL.tmb(p || {}));
 
 /* ---------- instalación ---------- */
 let installEvt = null;
@@ -361,6 +362,7 @@ async function obNext() {
     const p = obProfile();
     const uid = st.user.uid;
     const data = { ...p, pesoInicial: p.pesoKg, fechaInicio: todayISO(), onboarded: true, novVista: NOV_V };
+    data.calorias = CAL.resumen({ ...(st.profile || {}), ...data }, p.pesoKg);
     await api.saveProfile(uid, data);
     await api.addWeight(uid, todayISO(), p.pesoKg);
     st.profile = { ...(st.profile || {}), ...data };
@@ -800,7 +802,7 @@ async function saveWeight(fecha, raw, comp = {}, unit = 'pct', editando = false,
     if (editando) await api.setWeight(st.user.uid, fecha, v, extra); else await api.addWeight(st.user.uid, fecha, v, extra);
     st.weights = await api.listWeights(st.user.uid);
     const last = latestWeight();
-    if (last) { await api.saveProfile(st.user.uid, { pesoKg: last.kg }); st.profile.pesoKg = last.kg; }
+    if (last) { const d = { pesoKg: last.kg, calorias: CAL.resumen({ ...st.profile, pesoKg: last.kg }, last.kg) }; await api.saveProfile(st.user.uid, d); Object.assign(st.profile, d); }
     st.pesoSheet = false; st.pesoEdit = null; render();
     toast(editando ? 'Registro actualizado' : Object.keys(extra).length ? 'Peso y composición guardados' : 'Peso guardado');
     return true;
@@ -813,7 +815,7 @@ async function delWeight(fecha) {
     await api.deleteWeight(st.user.uid, fecha);
     st.weights = await api.listWeights(st.user.uid);
     const last = latestWeight();
-    if (last) { await api.saveProfile(st.user.uid, { pesoKg: last.kg }); st.profile.pesoKg = last.kg; }
+    if (last) { const d = { pesoKg: last.kg, calorias: CAL.resumen({ ...st.profile, pesoKg: last.kg }, last.kg) }; await api.saveProfile(st.user.uid, d); Object.assign(st.profile, d); }
     st.pesoDel = null; render(); toast('Registro borrado');
   } catch (e) { st.pesoDel = null; toast(errorText(e)); render(); }
 }
@@ -1004,6 +1006,7 @@ async function pfGuardar(kind, f) {
     try {
       if (k1 !== currentKg()) { await api.addWeight(uid, todayISO(), k1); st.weights = await api.listWeights(uid); data.pesoKg = k1; }
     } catch (e) { return toast(errorText(e)); }
+    data.calorias = CAL.resumen({ ...st.profile, ...data }, k1);
   } else { // pf-func
     const texto = f.texto.value.trim();
     if (texto.length < 5) return toast('Cuéntanos un poco más');

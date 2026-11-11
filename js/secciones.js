@@ -3,12 +3,13 @@
 // vienen de la librería de la app «Bilbao Ride» (js/br.js); aquí está la parte visual y los datos de cada persona.
 import { FOODS, FOODS_BY_ID, prepOf, prepVals, prepKcal100, normTxt as normFood } from './alimentos.js';
 import { PRO_LINK, PORTAL_LINK, proUrl } from './pro.js';
+import * as CAL from './calorias.js';
 import { leerGPX, MAX_BYTES } from './gpx.js';
 import { trazado, IDA_Y_VUELTA } from './trazados.js';
 import { crearMapa } from './mapa.js';
 
 const BR = globalThis.BR || {};
-const N = BR.nutrition, T = BR.training, RF = BR.routeFuel, RT = BR.routes, BD = BR.body, GS = BR.groupsets;
+const T = BR.training, RF = BR.routeFuel, RT = BR.routes, BD = BR.body, GS = BR.groupsets;
 
 export const MEALS = ['Desayuno', 'Comida', 'Merienda', 'Cena', 'Otros'];
 const BILBAO = { lat: 43.263, lon: -2.935 };
@@ -157,33 +158,23 @@ export function crearSecciones(ctx) {
   /* ================================================================ */
   const dia = (d) => (st.dias && st.dias[d]) || { fecha: d, items: [] };
   const totales = (d) => dia(d).items.reduce((a, x) => ({ k: a.k + (x.k || 0), p: a.p + (x.p || 0), c: a.c + (x.c || 0), f: a.f + (x.f || 0), n: a.n + 1 }), { k: 0, p: 0, c: 0, f: 0, n: 0 });
-  function exDia(d) {
-    const kg = currentKg() || 70;
-    let gross = 0, net = 0;
-    const items = st.workouts.filter((w) => w.fecha === d);
-    items.forEach((w) => { const k = w.kcal || E.estimateKcal(w, kg); gross += k; net += Math.max(0, k - (kg * (w.min || 0)) / 60); });
-    return { gross: Math.round(gross), net: Math.round(net), items };
-  }
-  const grasaReciente = () => { const lim = E.addDays(todayISO(), -60); const w = st.weights.slice().reverse().find((x) => x.grasa != null && x.fecha >= lim); return w ? w.grasa : null; };
-  // Plan base del día sin entrenar: el ejercicio se suma después, día a día, para no contarlo dos veces.
+  // Plan de calorías: Mifflin-St Jeor × actividad (calorias.js). El nivel sale de tu elección o, en «Auto», de los días de tu rutina.
+  // El ejercicio ya cuenta dentro de ese nivel: no se suma aparte (sería contarlo dos veces).
   function plan() {
-    const p = P(), kg = currentKg();
-    if (!N || !p.edad || !p.alturaCm || !kg) return null;
-    const n = p.nutri || {}, goals = p.objetivos || [];
-    let goal = p.pesoObjetivo || null;
-    if (!goal && !goals.includes('perder')) goal = kg; // sin objetivo de peso y sin querer perder grasa: mantenimiento
-    const inp = { sex: p.sexo === 'mujer' ? 'female' : 'male', age: p.edad, heightCm: p.alturaCm, weightKg: kg, bodyFatPct: grasaReciente(), goalWeightKg: goal, neat: n.neat || 'light', weeklyRideHours: 0, weeklyRunHours: 0, weeklyGymSessions: 0, ratePctPerWeek: n.rate || 0.5 };
-    const tdee = N.formulaTDEE(inp), pl = N.buildPlan(inp, tdee);
-    let surplus = 0;
-    if (pl.mode !== 'deficit' && goals.includes('musculo') && (!p.pesoObjetivo || p.pesoObjetivo > kg + 0.05)) surplus = Math.round((tdee * 0.08) / 10) * 10;
-    const warnings = (pl.warnings || []).map((w) => w.replace(/ Puedes cambiar el suelo en «Suelo de calorías»\./, '')).filter((w) => !/^Pon un peso objetivo/.test(w));
-    return { inp, pl, tdee: Math.round(tdee), surplus, base: Math.round(pl.targetKcal + surplus), warnings };
+    const p = P(), kg = currentKg(), n = p.nutri || {};
+    if (!p.alturaCm || !kg) return null;
+    const c = CAL.calorias(p, { kg, dias: ((rutinaOf() || {}).dias || []).length, actividad: n.actividad || 'auto' });
+    if (!c) return null;
+    const rate = (c.deficit * 7) / 7700, meta = p.pesoObjetivo || null;
+    const pl = { mode: c.modo, bmr: c.tmb, bmrMethod: 'Mifflin-St Jeor', dailyDeficit: c.deficit, rateKgPerWeek: rate, weeksToGoal: c.deficit && meta && meta < kg ? (kg - meta) / rate : undefined,
+      macros: { proteinG: c.protG, fatG: c.fatG, carbsG: c.carbG } };
+    return { c, pl, tdee: c.tdee, surplus: c.superavit, base: c.kcal, warnings: c.aviso };
   }
   function objetivoDia(d) {
     const PL = plan();
     if (!PL) return null;
-    const n = P().nutri || {}, eat = n.eat != null ? n.eat : 0.8, ex = exDia(d), add = Math.round(ex.net * eat), m = PL.pl.macros;
-    return { PL, target: PL.base + add, add, eat, ex, macros: { p: Math.round(m.proteinG), f: Math.round(m.fatG), c: Math.round(m.carbsG + (PL.surplus + add) / 4) } };
+    const m = PL.pl.macros;
+    return { PL, target: PL.base, macros: { p: m.proteinG, f: m.fatG, c: m.carbsG } };
   }
   const mealNow = () => { const h = new Date().getHours(); return h < 11 ? 0 : h < 16 ? 1 : h < 19 ? 2 : 3; };
 
@@ -206,7 +197,7 @@ export function crearSecciones(ctx) {
       <div class="nd-main"><div class="nd-t"><b class="num ${left < 0 ? 'bad' : ''}">${nf(od ? Math.abs(left) : eaten)}</b><span class="nd-l">${od ? (left >= 0 ? 'Calorías restantes' : 'Calorías sobrantes') : 'Calorías tomadas'}</span></div>
         ${ring(od ? eaten / od.target : 0, 112, 10, `<span class="ring-ico">${ICO.llama}</span>`)}</div>
       <div class="nd-macs">${mac('Proteína', '🍗', tot.p, od && od.macros.p)}${mac('Hidratos', '🌾', tot.c, od && od.macros.c)}${mac('Grasas', '🥑', tot.f, od && od.macros.f)}</div>
-      ${od ? `<p class="small muted">Objetivo = ${nf(od.PL.tdee)} de gasto sin entrenar${od.PL.pl.dailyDeficit ? ` − ${nf(od.PL.pl.dailyDeficit)} de déficit` : ''}${od.PL.surplus ? ` + ${nf(od.PL.surplus)} para ganar músculo` : ''}${od.add ? ` + <b>${nf(od.add)} de ejercicio</b>` : ''}.</p>`
+      ${od ? `<p class="small muted">Objetivo = ${nf(od.PL.tdee)} de gasto diario${od.PL.pl.dailyDeficit ? ` − ${nf(od.PL.pl.dailyDeficit)} de déficit` : ''}${od.PL.surplus ? ` + ${nf(od.PL.surplus)} para ganar músculo` : ''}.</p>`
         : `<p class="small">Completa edad y estatura en tu <button class="link" data-act="tab" data-v="perfil">perfil</button> para calcular tu objetivo.</p>`}
     </section>`;
 
@@ -247,13 +238,6 @@ export function crearSecciones(ctx) {
       ${!it.length && prev.length ? `<button class="btn ghost small" data-act="n-copiar">Copiar todo lo de ${ayerTxt} (${prev.length})</button>` : ''}
     </section>`;
 
-    // Ejercicio del día
-    if (od && od.ex.items.length) {
-      h += `<section class="card"><h2>Ejercicio del día</h2>
-        <p>${od.ex.items.map((w) => esc(w.nombre || E.TIPOS[w.tipo] || 'Entreno')).join(' · ')}: <b>${nf(od.ex.gross)} kcal</b> quemadas.</p>
-        <p class="small muted">Por encima del reposo son ${nf(od.ex.net)} kcal; se suman ${nf(od.add)} (${Math.round(od.eat * 100)} %) a lo que puedes comer.</p></section>`;
-    }
-
     // Últimos 7 días
     const rows = [];
     for (let i = 0; i < 7; i++) {
@@ -269,16 +253,13 @@ export function crearSecciones(ctx) {
     const PL = plan(), n = P().nutri || {};
     if (!PL) return '';
     const pl = PL.pl;
-    const modo = pl.mode === 'deficit' ? `Déficit de ${nf(pl.dailyDeficit)} kcal al día: unos ${nf(pl.rateKgPerWeek, 2)} kg menos por semana.` : PL.surplus ? `Superávit ligero de ${nf(PL.surplus)} kcal para ganar músculo con poca grasa.` : 'Mantenimiento: comer lo que gastas.';
+    const modo = pl.mode === 'deficit' ? `Déficit del 20 % (${nf(pl.dailyDeficit)} kcal al día): unos ${nf(pl.rateKgPerWeek, 2)} kg menos por semana.` : PL.surplus ? `Superávit del 15 % (${nf(PL.surplus)} kcal al día) para ganar músculo.` : 'Mantenimiento: comer lo que gastas.';
     return `<details class="card plan"${st.nPlanOpen ? ' open' : ''}>
       <summary><h2>Tu plan de calorías</h2></summary>
       <p>${modo}${pl.weeksToGoal ? ` Llegarías a ${nf(P().pesoObjetivo, 1)} kg en unas <b>${nf(pl.weeksToGoal)} semanas</b>.` : ''}</p>
       ${bul(PL.warnings, 'warn')}
-      <div class="stats">${stat('Metabolismo basal', nf(pl.bmr), 'kcal', esc(pl.bmrMethod || ''))}${stat('Gasto sin entrenar', nf(PL.tdee), 'kcal', 'basal × actividad diaria')}</div>
-      <div class="field"><span>Actividad diaria, sin contar entrenos</span>${seg('n-neat', [['sedentary', 'Sentada'], ['light', 'Ligera'], ['active', 'Activa']], n.neat || 'light', 'Actividad diaria')}<small>${esc((N.NEAT_LABEL || {})[n.neat || 'light'] || '')}</small></div>
-      ${pl.mode === 'deficit' ? `<div class="field"><span>Ritmo de pérdida</span>${seg('n-rate', [[0.5, 'Prudente'], [0.75, 'Medio'], [1, 'Rápido']], n.rate || 0.5, 'Ritmo de pérdida')}<small>${nf((n.rate || 0.5), 2)} % de tu peso por semana. Más rápido cuesta músculo y rendimiento.</small></div>` : ''}
-      <div class="field"><span>Cuánto del ejercicio sumo a tu objetivo</span>${seg('n-eat', [[1, '100 %'], [0.8, '80 %'], [0.6, '60 %']], n.eat != null ? n.eat : 0.8, 'Ejercicio sumado')}<small>Las estimaciones de calorías suelen pasarse un 10–30 %. Si pierdes peso más despacio de lo previsto, baja a 60 %.</small></div>
-      ${grasaReciente() != null ? `<p class="small muted">Usamos tu % de grasa (${nf(grasaReciente(), 1)} %) para afinar el ritmo y la proteína.</p>` : ''}
+      <div class="stats">${stat('Metabolismo basal', nf(pl.bmr), 'kcal', esc(pl.bmrMethod || ''))}${stat('Gasto diario', nf(PL.tdee), 'kcal', `basal × ${nf(PL.c.factor, 3)}`)}</div>
+      <div class="field"><span>Nivel de actividad</span>${seg('n-neat', [['auto', 'Auto'], ['sedentario', 'Sedent.'], ['ligero', 'Ligera'], ['moderado', 'Moder.'], ['activo', 'Activa'], ['muy_activo', 'Muy']], n.actividad || 'auto', 'Nivel de actividad')}<small>${esc(CAL.NIVELES[PL.c.nivel].t)}: ${esc(CAL.NIVELES[PL.c.nivel].d.toLowerCase())}${n.actividad && n.actividad !== 'auto' ? '' : ' (según los días de tu rutina)'}.</small></div>
     </details>`;
   }
 
@@ -1039,10 +1020,10 @@ export function crearSecciones(ctx) {
         return true;
       }
       case 'n-copiar': { const d = st.nDate || todayISO(); const prev = dia(E.addDays(d, -1)).items.map((x) => ({ ...x, id: nid('f') })); guardarDia(d, prev); toast(`${prev.length} alimentos copiados`); return true; }
-      case 'n-neat': case 'n-rate': case 'n-eat': {
-        const key = { 'n-neat': 'neat', 'n-rate': 'rate', 'n-eat': 'eat' }[act];
+      case 'n-neat': {
         st.nPlanOpen = true;
-        await saveProfile({ nutri: { ...(P().nutri || {}), [key]: key === 'neat' ? v : Number(v) } });
+        const nutri = { ...(P().nutri || {}), actividad: v };
+        await saveProfile({ nutri, calorias: CAL.resumen({ ...P(), nutri }, currentKg()) });
         render(); return true;
       }
       // Rutas

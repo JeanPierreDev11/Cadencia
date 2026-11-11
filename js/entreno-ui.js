@@ -3,6 +3,7 @@
 import { esc, num, nf, todayISO, fmtDate, lsSet, lsGet, toast, I } from './util.js';
 import { errorText } from './data.js';
 import * as E from './entreno.js';
+import * as CAL from './calorias.js';
 
 export function crearEntreno(ctx) {
   const { st, root } = ctx;
@@ -280,6 +281,12 @@ function normRutina(R) {
   return { rutina: out };
 }
 
+// Los días de entreno de la rutina activa cambian el nivel de actividad «Auto»: se actualizan las calorías guardadas.
+function recalc(data) {
+  const kg = st.weights.length ? st.weights[st.weights.length - 1].kg : st.profile.pesoKg, c = CAL.resumen({ ...st.profile, ...data }, kg);
+  if (c) data.calorias = c;
+}
+
 // rid: la rutina que estás editando; sin rid se crea una nueva (y pasa a ser la activa).
 async function saveRutina(R, rid) {
   const res = normRutina(R);
@@ -289,6 +296,7 @@ async function saveRutina(R, rid) {
   const data = { rutinas: prev ? list.map((x) => (x.id === id ? rut : x)) : [...list, rut] };
   if (!act || !rid || act.id === id) data.rutina = rut;
   if (rut.tipos.includes('bici') && st.profile.ciclismo !== true) data.ciclismo = true;
+  recalc(data);
   await api.saveProfile(st.user.uid, data);
   st.profile = { ...st.profile, ...data };
   return '';
@@ -296,6 +304,7 @@ async function saveRutina(R, rid) {
 async function saveRutinas(list, activa) {
   const data = { rutinas: list };
   if (activa) data.rutina = activa;
+  recalc(data);
   await api.saveProfile(st.user.uid, data);
   st.profile = { ...st.profile, ...data };
 }

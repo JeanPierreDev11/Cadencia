@@ -1293,3 +1293,4 @@ textarea.input { resize: vertical; min-height: 120px; font: inherit; }
 .pro-badge { color: var(--accent-text); border: 1px solid var(--accent-text); padding: 2px 12px; border-radius: 999px; font-size: 12px; font-weight: 800; letter-spacing: .1em; }
 .share-code { text-align: center; font-size: 40px; font-weight: 800; letter-spacing: .25em; padding: 18px 0 18px .25em; background: var(--surface2); border-radius: 8px; user-select: all; }
 .code-in { text-transform: uppercase; letter-spacing: .2em; text-align: center; font-weight: 800; }
+.plan .seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
