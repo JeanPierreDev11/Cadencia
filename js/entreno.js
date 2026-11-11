@@ -35,11 +35,14 @@ export function estimateKcal(w, kg) {
 
 /* ---------- estadísticas ---------- */
 const inWeek = (w, monday) => w.fecha >= monday && w.fecha <= addDays(monday, 6);
+// Series hechas y kilos movidos (kilos × repeticiones de cada serie; en los ejercicios a un lado, por los dos lados) de un entreno de fuerza.
+export const seriesDe = (w) => (w.ejercicios || []).reduce((a, e) => a + (e.series || []).length, 0);
+export const volumenDe = (w) => (w.ejercicios || []).reduce((a, e) => a + (e.series || []).reduce((b, s) => b + (Number(s.kg) || 0) * (Number(s.reps) || 0) * (e.uni ? 2 : 1), 0), 0);
 export function weekStats(ws, monday) {
   const list = ws.filter((w) => inWeek(w, monday));
   const sum = (k, l = list) => l.reduce((a, w) => a + (w[k] || 0), 0);
   const bici = list.filter((w) => w.tipo === 'bici');
-  return { n: list.length, min: sum('min'), km: sum('km', bici), elev: sum('elev', bici), kcal: sum('kcal') };
+  return { n: list.length, min: sum('min'), km: sum('km', bici), elev: sum('elev', bici), kcal: sum('kcal'), sets: list.reduce((a, w) => a + seriesDe(w), 0), vol: Math.round(list.reduce((a, w) => a + volumenDe(w), 0)) };
 }
 export function weeksSeries(ws, mondayNow, count = 8) {
   const out = [];
@@ -50,12 +53,18 @@ export function weeksSeries(ws, mondayNow, count = 8) {
   }
   return out;
 }
-// Semanas seguidas con al menos un entreno. La semana en curso no rompe la racha si aún no has entrenado.
-export function streakWeeks(ws, mondayNow) {
-  const has = (m) => ws.some((w) => inWeek(w, m));
-  let m = mondayNow, n = 0;
-  if (!has(m)) m = addDays(m, -7);
-  while (has(m) && n < 520) { n++; m = addDays(m, -7); }
+// Racha de días entrenados. Los días de descanso de la rutina no suman ni rompen: solo se reinicia si faltas un día con entreno programado.
+// Hoy no rompe la racha si aún no has entrenado (todavía puedes hacerlo). Si no hay rutina, cuenta como programados todos los días.
+// plan(iso) → true si ese día tocaba entrenar.
+export function streakDays(ws, hoy, plan = () => true) {
+  const hechos = new Set(ws.map((w) => w.fecha));
+  const primero = ws.reduce((m, w) => (m && m < w.fecha ? m : w.fecha), '');
+  let n = 0, d = hoy;
+  for (let i = 0; i < 1500 && primero && d >= primero; i++, d = addDays(d, -1)) {
+    if (hechos.has(d)) n++;
+    else if (d === hoy) continue;
+    else if (plan(d)) break;
+  }
   return n;
 }
 

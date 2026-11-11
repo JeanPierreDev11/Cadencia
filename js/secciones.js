@@ -214,9 +214,8 @@ export function crearSecciones(ctx) {
       ${MEALS.map((name, i) => {
         const arr = it.filter((x) => x.m === i), k = arr.reduce((a, x) => a + x.k, 0), ayer = prev.filter((x) => x.m === i);
         return `<div class="meal">
-          <div class="meal-h"><span class="meal-n"><b>${name}</b>${arr.length ? `<span class="muted small">${nf(k)} kcal</span>` : ''}</span><span class="meal-acts">${esPro() ? `<label class="chipbtn chip iachip" aria-label="Foto con IA para ${name.toLowerCase()}"><input type="file" accept="image/*" data-iafoto="${i}" hidden>${ICO.camara} Foto con IA</label>` : `<button type="button" class="chipbtn chip iachip" data-act="pro-open" data-v="foto" aria-label="Foto con IA para ${name.toLowerCase()} (Cadencia Pro)">${ICO.camara} Foto con IA <span class="protag">Pro</span></button>`}<button type="button" class="chipbtn chip" data-act="n-add" data-v="${i}">${I.plus} Añadir</button></span></div>
-          ${ayer.length ? `<button type="button" class="link repetir" data-act="n-repetir" data-v="${i}">Repetir de ${ayerTxt} · ${ayer.length === 1 ? esc(ayer[0].n.length > 28 ? ayer[0].n.slice(0, 27) + '…' : ayer[0].n) : ayer.length + ' alimentos'} (${nf(ayer.reduce((a, x) => a + x.k, 0))} kcal)</button>` : ''}
-          ${arr.map((x) => `<div class="fitem"><span>${esc(x.n)}<small class="muted">${x.g ? nf(x.g) + ' g · ' : ''}P ${nf(x.p, 0)} · H ${nf(x.c, 0)} · G ${nf(x.f, 0)}</small></span><b class="num">${nf(x.k)}</b><button class="iconbtn" data-act="n-del" data-v="${esc(x.id)}" aria-label="Quitar ${esc(x.n)}">${I.trash}</button></div>`).join('')}
+          <div class="meal-h"><button type="button" class="meal-n meal-open" data-act="meal-open" data-v="${i}" aria-haspopup="dialog" aria-label="${name}: ${arr.length ? nf(k) + ' kcal, ver alimentos' : 'sin alimentos'}"><b>${name}</b>${arr.length ? `<span class="muted small">${nf(k)} kcal</span>` : ''}<span class="chev" aria-hidden="true">${I.chev}</span></button><span class="meal-acts">${esPro() ? `<label class="chipbtn chip iachip" aria-label="Escanear alimento para ${name.toLowerCase()}"><input type="file" accept="image/*" data-iafoto="${i}" hidden>${ICO.camara} Escanear alimento</label>` : `<button type="button" class="chipbtn chip iachip" data-act="pro-open" data-v="foto" aria-label="Escanear alimento para ${name.toLowerCase()} (Cadencia Pro)">${ICO.camara} Escanear alimento <span class="protag">Pro</span></button>`}<button type="button" class="chipbtn chip" data-act="n-add" data-v="${i}">${I.plus} Añadir</button></span></div>
+          ${ayer.length && !arr.length ? `<button type="button" class="link repetir" data-act="n-repetir" data-v="${i}">Repetir de ${ayerTxt} · ${ayer.length === 1 ? esc(ayer[0].n.length > 28 ? ayer[0].n.slice(0, 27) + '…' : ayer[0].n) : ayer.length + ' alimentos'} (${nf(ayer.reduce((a, x) => a + x.k, 0))} kcal)</button>` : ''}
         </div>`;
       }).join('')}
       ${!it.length && prev.length ? `<button class="btn ghost small" data-act="n-copiar">Copiar todo lo de ${ayerTxt} (${prev.length})</button>` : ''}
@@ -1074,7 +1073,10 @@ export function crearSecciones(ctx) {
       case 'pro-welcome-close': st.proWelcome = false; render(); return true;
       case 'pro-welcome-go': st.proWelcome = false; st.tab = 'nutricion'; st.food = null; st.tl = null; lsSet('cadencia-tab', 'nutricion'); render(); window.scrollTo(0, 0); return true;
       case 'pro-refresh': refrescarPro(true); return true;
-      case 'ia-close': if (st.iaFoto && st.iaFoto.fase === 'cargando') { toast('Espera a que termine el análisis'); return true; } st.iaFoto = null; render(); return true;
+      case 'ia-close': if (st.iaFoto && (st.iaFoto.recalc || st.iaFoto.fase === 'cargando')) { toast('Espera a que termine el análisis'); return true; } st.iaFoto = null; render(); return true;
+      case 'meal-open': st.mealDet = Number(v); st.mealMsg = ''; st.mealCorr = ''; render(); return true;
+      case 'meal-close': if (st.mealBusy) return true; st.mealDet = null; render(); return true;
+      case 'meal-recalc': mealRecalc(); return true;
       case 'ia-recalc': iaRecalcular(); return true;
       case 'ia-del': st.iaFoto.items = st.iaFoto.items.filter((x) => x.key !== v); render(); return true;
       case 'ia-add-food': { const f = asFood(v); if (!f) return true; const gp = prepOf(f); st.iaFoto.items.push({ key: nid('i'), fid: f.id, n: f.n, g: f.u ? String(f.u.g) : '100', prep: gp ? gp[0].id : null, per100: { k: f.k, p: f.p, c: f.c, f: f.f }, conf: 'alta' }); st.iaFoto.q = ''; render(); return true; }
@@ -1131,6 +1133,12 @@ export function crearSecciones(ctx) {
       const tot = document.getElementById('ia-total'); if (tot) tot.textContent = nf(iaTotal());
       return true;
     }
+    if (st.mealDet != null && t.dataset.mcorr != null) { st.mealCorr = t.value; return true; }
+    if (st.mealDet != null && t.dataset.mg) {
+      const x = dia(st.nDate || todayISO()).items.find((q) => q.id === t.dataset.mg), g = num(t.value);
+      const kEl = document.getElementById('mk-' + t.dataset.mg); if (x && x.g && kEl && g > 0) kEl.textContent = nf(Math.round(x.k * g / x.g));
+      return true;
+    }
     if (st.iaFoto && t.dataset.iacorr != null) { st.iaFoto.corr = t.value; return true; }
     if (st.iaFoto && t.dataset.iaq != null) { st.iaFoto.q = t.value; const r = document.getElementById('ia-res'); if (r) r.innerHTML = iaResHTML(); return true; }
     if (t.dataset.body) {
@@ -1145,6 +1153,7 @@ export function crearSecciones(ctx) {
     return false;
   }
   async function change(t) {
+    if (st.mealDet != null && t.dataset.mg) { mealGramos(t.dataset.mg, t.value); return true; }
     if (t.dataset.ndate != null) { if (t.value && t.value <= todayISO()) { st.nDate = t.value; render(); } return true; }
     if (t.dataset.gpx != null) { const f = t.files && t.files[0]; t.value = ''; abrirGPX(f); return true; }
     if (t.dataset.iafoto != null) { const f = t.files && t.files[0]; t.value = ''; st.food = null; fotoPlato(f, Number(t.dataset.iafoto)); return true; }
@@ -1220,7 +1229,7 @@ export function crearSecciones(ctx) {
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && st.user && st.profile && !esPro()) refrescarPro(false); });
   function proWelcomeSheet() {
     const ventajas = [
-      [ICO.camara, 'Foto con IA', 'Haz una foto a tu plato y la IA calcula las calorías y los macros. Tú lo revisas y lo guardas.'],
+      [ICO.camara, 'Escanear alimento', 'Haz una foto a tu plato y la IA calcula las calorías y los macros. Tú lo revisas y lo guardas.'],
       [ICO.spark, 'Recomendaciones para tu bici', 'En el Taller, 3 piezas compatibles con tu bici y tu presupuesto, con precio aproximado.'],
       [I.check, '10 consultas de IA al día', 'Se reparten entre fotos y recomendaciones, y se renuevan cada día.'],
     ];
@@ -1232,7 +1241,7 @@ export function crearSecciones(ctx) {
           <h3>¡Bienvenido a Cadencia Pro!</h3>
           <p>Gracias por apoyar Cadencia. Esto es lo que ya tienes desbloqueado:</p>
           <ul class="pw-list">${ventajas.map(([ic, t, d]) => `<li><span class="pw-li-i">${ic}</span><span><b>${t}</b><small>${d}</small></span></li>`).join('')}</ul>
-          <button type="button" class="btn block" data-act="pro-welcome-go">Probar Foto con IA</button>
+          <button type="button" class="btn block" data-act="pro-welcome-go">Probar Escanear alimento</button>
           <button type="button" class="btn ghost block" data-act="pro-welcome-close">Empezar</button>
         </div>
       </div>`;
@@ -1382,32 +1391,96 @@ export function crearSecciones(ctx) {
         <div class="iaadd"><input class="input" type="search" data-iaq value="${esc(F.q)}" placeholder="Añadir otro alimento: salsa, pan…" autocomplete="off" aria-label="Añadir otro alimento"><div id="ia-res">${iaResHTML()}</div></div>
         <div class="iacorr">
           <label class="field"><span>Corregir a la IA</span><textarea class="input" rows="2" maxlength="500" data-iacorr placeholder="Ej. debajo había queso, son 100 g de pollo, no 80 g" ${F.recalc ? 'disabled' : ''}>${esc(F.corr || '')}</textarea></label>
-          <button type="button" class="btn ghost block" data-act="ia-recalc" ${F.recalc ? 'disabled' : ''}>${F.recalc ? '<span class="spinner dark"></span> Recalculando…' : 'Recalcular'}</button>
+          <button type="button" class="btn ghost block" data-act="ia-recalc" ${F.recalc ? 'disabled' : ''}>Recalcular</button>
           ${F.corrMsg ? `<div class="msg" role="alert">${esc(F.corrMsg)}</div>` : F.corrOk ? '<p class="small muted">Listo: la IA ha ajustado el plato con tu corrección. Revísalo.</p>' : ''}
         </div>
         ${st.iaQuedan != null ? `<p class="small muted">IA: ${iaQuedanTxt()}.</p>` : ''}`;
       foot = `<button class="btn block" data-act="ia-guardar" ${F.items.length ? '' : 'disabled'}>Guardar en mi ${meal} · <span id="ia-total">${nf(iaTotal())}</span> kcal</button>`;
     }
     return `<div class="sheet-back" data-act="ia-close"></div>
-      <div class="sheet" role="dialog" aria-modal="true" aria-label="Foto con IA">
+      <div class="sheet" role="dialog" aria-modal="true" aria-label="Escanear alimento">
         <div class="sheet-grab"></div>
-        <div class="sheet-head"><button type="button" class="iconbtn" data-act="ia-close" aria-label="Cerrar">${ICO.close}</button><h2>Foto con IA · ${esc(MEALS[F.meal])}</h2><span style="width:36px"></span></div>
-        <div class="sheet-list form-grid">${body}</div>
-        ${foot ? `<div class="sheet-foot">${foot}</div>` : ''}
+        <div class="sheet-head"><button type="button" class="iconbtn" data-act="ia-close" aria-label="Cerrar">${ICO.close}</button><h2>Escanear alimento · ${esc(MEALS[F.meal])}</h2><span style="width:36px"></span></div>
+        <div class="sheet-list form-grid ${F.recalc ? 'busy' : ''}" ${F.recalc ? 'inert aria-busy="true"' : ''}>${body}</div>
+        ${F.recalc ? `<div class="ia-loading" role="status"><svg class="logo-mark spin-logo" viewBox="0 0 64 64" aria-hidden="true" fill="currentColor"><path d="M12 8H56V22H28V42H56V56H12Z" transform="translate(6.8 0) skewX(-12)"/></svg><p>Recalculando...</p></div>` : ''}
+        ${foot ? `<div class="sheet-foot">${foot.replace('<button class="btn block"', F.recalc ? '<button disabled class="btn block"' : '<button class="btn block"')}</div>` : ''}
       </div>`;
+  }
+  // Fila revisada de la IA → alimento guardado en el día.
+  function iaAItem(it, meal) {
+    const g = num(it.g), v = iaVals(it), food = it.fid ? asFood(it.fid) : null, gp = food ? prepOf(food) : null, pm = gp ? gp.find((m) => m.id === it.prep) || gp[0] : null;
+    return { id: nid('f'), m: meal, n: it.n + (pm && pm.id !== gp[0].id ? ' · ' + pm.n.toLowerCase() : ''), g: Math.round(g), k: v.k, p: v.p, c: v.c, f: v.f, ...(food ? { fid: food.id } : {}), ...(pm ? { prep: pm.id } : {}), ia: true };
   }
   function iaGuardar() {
     const F = st.iaFoto, add = [];
     for (const it of F.items) {
       const g = num(it.g);
       if (!(g > 0 && g <= 3000)) { toast(`Revisa los gramos de ${it.n}`); return; }
-      const v = iaVals(it), food = it.fid ? asFood(it.fid) : null, gp = food ? prepOf(food) : null, pm = gp ? gp.find((m) => m.id === it.prep) || gp[0] : null;
-      add.push({ id: nid('f'), m: F.meal, n: it.n + (pm && pm.id !== gp[0].id ? ' · ' + pm.n.toLowerCase() : ''), g: Math.round(g), k: v.k, p: v.p, c: v.c, f: v.f, ...(food ? { fid: food.id } : {}), ...(pm ? { prep: pm.id } : {}), ia: true });
+      add.push(iaAItem(it, F.meal));
     }
     const d = F.fecha;
     st.iaFoto = null;
     guardarDia(d, [...dia(d).items, ...add]);
     toast(`${add.length} ${add.length === 1 ? 'alimento guardado' : 'alimentos guardados'}${st.iaQuedan != null ? ` · te quedan ${st.iaQuedan} consultas de IA hoy` : ''}`);
+  }
+
+  /* ----- Detalle de una comida ----- */
+  function mealDetSheet() {
+    const i = st.mealDet, d = st.nDate || todayISO(), arr = dia(d).items.filter((x) => x.m === i), k = arr.reduce((a, x) => a + x.k, 0), busy = !!st.mealBusy;
+    const rows = arr.length ? arr.map((x) => `<div class="fitem mrow">
+        <span>${esc(x.n)}<small class="muted">P ${nf(x.p, 0)} · H ${nf(x.c, 0)} · G ${nf(x.f, 0)}</small></span>
+        ${x.g ? `<label class="iag"><input class="input" data-mg="${esc(x.id)}" inputmode="decimal" value="${esc(String(x.g))}" aria-label="Gramos de ${esc(x.n)}"><span>g</span></label>` : '<span></span>'}
+        <b class="num" id="mk-${esc(x.id)}">${nf(x.k)}</b>
+        <button type="button" class="iconbtn bad" data-act="n-del" data-v="${esc(x.id)}" aria-label="Quitar ${esc(x.n)}">${I.trash}</button></div>`).join('')
+      : '<div class="empty"><b>Aún no hay nada aquí</b><span>Añade un alimento o escanea tu plato.</span></div>';
+    const ia = arr.length ? (esPro()
+      ? `<div class="iacorr"><label class="field"><span>Recalcular con IA</span><textarea class="input" rows="2" maxlength="500" data-mcorr placeholder="Ej. debajo había queso, son 100 g de pollo, no 80 g" ${busy ? 'disabled' : ''}>${esc(st.mealCorr || '')}</textarea></label>
+          <button type="button" class="btn ghost block" data-act="meal-recalc" ${busy ? 'disabled' : ''}>Recalcular</button>
+          ${st.mealMsg ? `<div class="msg" role="alert">${esc(st.mealMsg)}</div>` : ''}</div>`
+      : `<button type="button" class="chipbtn chip iachip" data-act="pro-open" data-v="foto">Recalcular con IA <span class="protag">Pro</span></button>`) : '';
+    return `<div class="sheet-back" data-act="meal-close"></div>
+      <div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(MEALS[i])}">
+        <div class="sheet-grab"></div>
+        <div class="sheet-head"><button type="button" class="iconbtn" data-act="meal-close" aria-label="Cerrar">${I.back}</button><h2>${esc(MEALS[i])} · <span id="meal-total">${nf(k)}</span> kcal</h2><span style="width:36px"></span></div>
+        <div class="sheet-list form-grid ${busy ? 'busy' : ''}" ${busy ? 'inert aria-busy="true"' : ''}>
+          <div class="mlist">${rows}</div>
+          <div class="meal-acts2">
+            <button type="button" class="chipbtn chip" data-act="n-add" data-v="${i}">${I.plus} Añadir alimento</button>
+            ${esPro() ? `<label class="chipbtn chip iachip"><input type="file" accept="image/*" data-iafoto="${i}" hidden>${ICO.camara} Escanear alimento</label>` : `<button type="button" class="chipbtn chip iachip" data-act="pro-open" data-v="foto">${ICO.camara} Escanear alimento <span class="protag">Pro</span></button>`}
+          </div>
+          ${ia}
+        </div>
+        ${busy ? `<div class="ia-loading" role="status"><svg class="logo-mark spin-logo" viewBox="0 0 64 64" aria-hidden="true" fill="currentColor"><path d="M12 8H56V22H28V42H56V56H12Z" transform="translate(6.8 0) skewX(-12)"/></svg><p>Recalculando...</p></div>` : ''}
+      </div>`;
+  }
+  // Cambias los gramos de un alimento: kcal y macros se ajustan en proporción.
+  function mealGramos(id, txt) {
+    const d = st.nDate || todayISO(), items = dia(d).items, x = items.find((q) => q.id === id), g = num(txt);
+    if (!x || !x.g) return;
+    if (!(g > 0 && g <= 5000)) { toast('Escribe unos gramos entre 1 y 5000'); render(); return; }
+    if (Math.round(g) === Math.round(x.g)) return;
+    const f = g / x.g;
+    guardarDia(d, items.map((q) => (q.id === id ? { ...q, g: Math.round(g), k: Math.round(q.k * f), p: r1(q.p * f), c: r1(q.c * f), f: r1(q.f * f) } : q)));
+  }
+  async function mealRecalc() {
+    const i = st.mealDet, d = st.nDate || todayISO(), arr = dia(d).items.filter((x) => x.m === i), texto = (st.mealCorr || '').trim();
+    if (!texto) { st.mealMsg = 'Escribe qué quieres corregir.'; render(); return; }
+    if (st.iaQuedan === 0) { toast('Ya has usado tus consultas de IA de hoy'); return; }
+    st.mealMsg = ''; st.mealBusy = true; render();
+    const actual = arr.map((x) => { const g = x.g > 0 ? x.g : 100, f = 100 / g; return { id: x.fid || '', nombre: x.n, gramos: g, prep: x.prep || '', kcal_100g: Math.round(x.k * f), proteina_100g: r1(x.p * f), hidratos_100g: r1(x.c * f), grasa_100g: r1(x.f * f), confianza: 'media' }; });
+    try {
+      const r = await api.ia({ modo: 'plato', comida: MEALS[i], correccion: texto.slice(0, 500), actual: { alimentos: actual, nota: '' } });
+      if (Number.isFinite(r.quedan)) st.iaQuedan = r.quedan;
+      const nuevos = iaItems(r).map((it) => iaAItem(it, i));
+      st.mealBusy = false; st.mealCorr = '';
+      if (!nuevos.length) { st.mealMsg = 'La IA no ha devuelto alimentos. Prueba a explicarlo de otra forma.'; render(); return; }
+      guardarDia(d, [...dia(d).items.filter((x) => x.m !== i), ...nuevos]);
+      toast('Comida recalculada');
+    } catch (e) {
+      st.mealBusy = false;
+      if (noPro(e)) { st.mealDet = null; return; }
+      st.mealMsg = iaErr(e); render();
+    }
   }
 
   /* ----- Taller ----- */
@@ -1477,7 +1550,7 @@ export function crearSecciones(ctx) {
       { t: 'Mis rutinas en acordeón, con edición', d: 'Verás solo los títulos y, al tocar uno, se despliegan sus días y ejercicios. El lápiz junto a «Nueva» te deja renombrar, editar o borrar rutinas.', como: 'Entreno → Rutinas → lápiz.', act: 'nov-wk', v: 'rutina', btn: 'Ver mis rutinas' },
       { t: 'Crear rutinas más rápido', d: 'Al meter ejercicios, las series y repeticiones del primero se repiten en los siguientes. «Copiar día de otra rutina» importa un día entero. Y si das a Atrás en el asistente, no pierdes lo que ya habías puesto.', como: 'Entreno → Rutinas → Nueva.', act: 'rut-new', v: '', btn: 'Crear una rutina' },
       { t: 'Buscador de ejercicios más listo', d: 'Perdona los acentos, las mayúsculas y las erratas, y entiende inglés: prueba «deadlift», «curl» o «squat».', como: 'Al añadir un ejercicio, escribe en el buscador.', act: 'nov-wk', v: 'semana', btn: 'Ir a Entreno' },
-      { t: 'Corrige a la IA sin repetir la foto', d: 'Si la IA se equivoca con tu plato, escríbele qué falló («son 100 g de pollo») y pulsa «Recalcular». La foto se elige entre cámara o galería.', como: 'Nutrición → «Foto con IA» en una comida.', act: 'tab', v: 'nutricion', btn: 'Ir a Nutrición' },
+      { t: 'Corrige a la IA sin repetir la foto', d: 'Si la IA se equivoca con tu plato, escríbele qué falló («son 100 g de pollo») y pulsa «Recalcular». La foto se elige entre cámara o galería.', como: 'Nutrición → «Escanear alimento» en una comida.', act: 'tab', v: 'nutricion', btn: 'Ir a Nutrición' },
     ];
   }
   let novLS = ''; try { novLS = localStorage.getItem('cadencia-nov') || ''; } catch (e) { /* nada */ }
@@ -1615,7 +1688,7 @@ export function crearSecciones(ctx) {
     render(); toast('Objetivo guardado');
   }
 
-  function sheet() { return st.proWelcome ? proWelcomeSheet() : st.pro ? proSheet() : st.iaFoto ? iaFotoSheet() : st.food ? foodSheet() : st.tl ? tlSheet() : st.meta ? metaSheet() : ''; }
+  function sheet() { return st.proWelcome ? proWelcomeSheet() : st.pro ? proSheet() : st.iaFoto ? iaFotoSheet() : st.food ? foodSheet() : st.mealDet != null ? mealDetSheet() : st.tl ? tlSheet() : st.meta ? metaSheet() : ''; }
   function view(tab) {
     if (tab === 'nutricion') return viewNutricion();
     if (tab === 'bici') return viewBici();

@@ -69,7 +69,7 @@ function render() {
   else if (st.view === 'error') root.innerHTML = viewError();
   document.title = APP_NAME;
   if (M) M.afterRender();
-  document.body.classList.toggle('noscroll', !!(st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.bill || st.meta || st.regPick || st.legal || st.del || st.iaFoto || st.pro || st.proWelcome || st.recAsk));
+  document.body.classList.toggle('noscroll', !!(st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.bill || st.meta || st.regPick || st.legal || st.del || st.iaFoto || st.pro || st.proWelcome || st.recAsk));
 }
 
 /* ================================================================== */
@@ -811,13 +811,13 @@ function planCardHTML() {
   const renueva = pro && pr.proRenueva ? (pr.proCancela ? `Tu suscripción está cancelada: sigues con Pro hasta el <b>${dia(pr.proRenueva)}</b>.` : `Próxima renovación: <b>${dia(pr.proRenueva)}</b>.`) : '';
   if (!pro) return `<section class="card" id="plan-card">
       <div class="card-head"><h2>Tu plan</h2><span class="tag" id="plan-tag">Gratuita</span></div>
-      <p class="small muted">El registro manual, las rutinas, las rutas y el resto de la app son gratis. Con Pro desbloqueas la IA: Foto con IA y recomendaciones del Taller.</p>
+      <p class="small muted">El registro manual, las rutinas, las rutas y el resto de la app son gratis. Con Pro desbloqueas la IA: Escanear alimento y recomendaciones del Taller.</p>
       <button class="btn block" data-act="pro-open" data-v="perfil">Hazte Pro · ${esc(PRO_PRECIO)}</button>
     </section>`;
   return `<section class="card" id="plan-card">
       <div class="card-head"><h2>Tu plan</h2><span class="tag ok" id="plan-tag">Pro</span></div>
       <p><b>Cadencia Pro</b> · ${esc(PRO_PRECIO)} · suscripción mensual</p>
-      <p class="small muted">Incluye Foto con IA, recomendaciones del Taller con IA y 10 consultas de IA al día. ${renueva}</p>
+      <p class="small muted">Incluye Escanear alimento, recomendaciones del Taller con IA y 10 consultas de IA al día. ${renueva}</p>
       ${PORTAL_LINK ? `<button type="button" class="btn ghost block" data-act="bill-open">Gestionar facturación</button>` : ''}
     </section>`;
 }
@@ -852,7 +852,7 @@ function viewPerfil() {
     ${S.integracionesHTML()}
     <form class="perfil-form" data-form="profile" novalidate>
       <section class="card acc">
-        <button type="button" class="acc-h" data-act="acc-toggle" aria-expanded="${open}" aria-controls="datos-body"><h2>Tus datos</h2><span class="acc-ch" aria-hidden="true">${I.chev}</span></button>
+        <button type="button" class="acc-h" data-act="acc-toggle" data-v="datos" aria-expanded="${open}" aria-controls="datos-body"><h2>Tus datos</h2><span class="acc-ch" aria-hidden="true">${I.chev}</span></button>
         <div class="acc-b form-grid" id="datos-body" ${open ? '' : 'hidden'}>
           <label class="field"><span>Nombres y apellidos</span><input class="input" name="nombre" value="${esc(p.nombreCompleto || p.nombre || '')}" autocomplete="name"></label>
           <div class="field"><span>Sexo</span>
@@ -868,14 +868,16 @@ function viewPerfil() {
           </div>
         </div>
       </section>
-      <section class="card form-grid">
-        <h2>Objetivos</h2>
-        <div class="choices">${GOALS.map((g) => `<button type="button" class="choice" data-act="pgoal" data-v="${g.id}" aria-pressed="${goals.includes(g.id)}">
-          <span class="ico">${goalIcon(g)}</span><span class="t">${g.t}</span><span class="tick">${goals.includes(g.id) ? I.check : ''}</span></button>`).join('')}</div>
-        <label class="field"><span>Peso objetivo (kg)</span><input class="input" name="pesoObjetivo" inputmode="decimal" value="${p.pesoObjetivo ? esc(nf(p.pesoObjetivo, 1)) : ''}" placeholder="Opcional"></label>
-        ${pesoGuiaHTML(p.alturaCm, p.sexo, goals, 'perfil', grasaActual(), p.pesoObjetivo, p.hideWeightSuggestion === true)}
-        <button class="btn block" type="submit">Guardar cambios</button>
+      <section class="card acc">
+        <button type="button" class="acc-h" data-act="acc-toggle" data-v="obj" aria-expanded="${!!st.objOpen}" aria-controls="obj-body"><h2>Objetivos</h2><span class="acc-ch" aria-hidden="true">${I.chev}</span></button>
+        <div class="acc-b form-grid" id="obj-body" ${st.objOpen ? '' : 'hidden'}>
+          <div class="choices">${GOALS.map((g) => `<button type="button" class="choice" data-act="pgoal" data-v="${g.id}" aria-pressed="${goals.includes(g.id)}">
+            <span class="ico">${goalIcon(g)}</span><span class="t">${g.t}</span><span class="tick">${goals.includes(g.id) ? I.check : ''}</span></button>`).join('')}</div>
+          <label class="field"><span>Peso objetivo (kg)</span><input class="input" name="pesoObjetivo" inputmode="decimal" value="${p.pesoObjetivo ? esc(nf(p.pesoObjetivo, 1)) : ''}" placeholder="Opcional"></label>
+          ${pesoGuiaHTML(p.alturaCm, p.sexo, goals, 'perfil', grasaActual(), p.pesoObjetivo, p.hideWeightSuggestion === true)}
+        </div>
       </section>
+      <div class="savebar" id="perfil-save" ${st.perfilDirty ? '' : 'hidden'}><button class="btn block" type="submit">Guardar cambios</button></div>
     </form>
 
     <section class="card">
@@ -976,6 +978,9 @@ async function guardarPwd(f) {
   catch (e) { P.busy = false; P.ok = false; P.msg = ['auth/invalid-credential', 'auth/wrong-password', 'auth/invalid-login-credentials'].includes(e && e.code) ? 'La contraseña actual no es correcta.' : errorText(e); render(); }
 }
 
+// El botón «Guardar cambios» del perfil solo aparece cuando hay algo que guardar.
+function marcaCambios() { st.perfilDirty = true; const bar = document.getElementById('perfil-save'); if (bar) bar.hidden = false; }
+
 async function saveProfileForm(form) {
   const goals = st.editGoals || st.profile.objetivos || [];
   const edad = num(form.edad.value), alt = num(form.alturaCm.value), obj = form.pesoObjetivo.value.trim() ? num(form.pesoObjetivo.value) : null;
@@ -990,7 +995,7 @@ async function saveProfileForm(form) {
   const data = { nombreCompleto: full, nombre: full === prevFull && st.profile.nombre ? st.profile.nombre : full.split(' ')[0], sexo: form.sexo.value, edad: Math.round(edad), alturaCm: Math.round(alt), pesoObjetivo: obj == null ? null : Math.round(obj * 10) / 10, objetivos: goals };
   try {
     await api.saveProfile(st.user.uid, data);
-    st.profile = { ...st.profile, ...data }; st.editGoals = null;
+    st.profile = { ...st.profile, ...data }; st.editGoals = null; st.perfilDirty = false;
     render(); toast('Cambios guardados');
   } catch (e) { toast(errorText(e)); }
 }
@@ -1056,7 +1061,7 @@ root.addEventListener('click', async (e) => {
   else if (act === 'ent') { const g = st.ob.entrenos; st.ob.entrenos = g.includes(v) ? g.filter((x) => x !== v) : [...g, v]; render(); }
   else if (act === 'sex') { st.ob.sexo = v; render(); }
   else if (act === 'ob-back') { st.ob.step = Math.max(0, st.ob.step - 1); st.ob.msg = ''; render(); }
-  else if (act === 'tab') { st.tab = v; st.editGoals = null; st.food = null; st.tl = null; lsSet('cadencia-tab', v); render(); window.scrollTo(0, 0); }
+  else if (act === 'tab') { st.tab = v; st.editGoals = null; st.perfilDirty = false; st.mealDet = null; st.food = null; st.tl = null; lsSet('cadencia-tab', v); render(); window.scrollTo(0, 0); }
   else if (act === 'install') { if (installEvt) { installEvt.prompt(); const r = await installEvt.userChoice; if (r.outcome === 'accepted') installEvt = null; render(); } }
   else if (act === 'install-hide') { lsSet('cadencia-install-hide', '1'); render(); }
   else if (act === 'peso-sheet') { st.pesoEdit = null; st.pesoSheet = true; render(); }
@@ -1072,8 +1077,9 @@ root.addEventListener('click', async (e) => {
   else if (act === 'comp-ver') { st.pesoComp = v; st.pesoModo = 'kg'; render(); scrollTo(0, 0); }
   else if (act === 'comp-close') { st.pesoComp = null; render(); }
   else if (act === 'comp-modo') { st.pesoModo = v; render(); }
-  else if (act === 'psex') { const f = b.closest('form'); f.sexo.value = v; b.parentElement.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); }
+  else if (act === 'psex') { marcaCambios(); const f = b.closest('form'); f.sexo.value = v; b.parentElement.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); }
   else if (act === 'pgoal') {
+    marcaCambios();
     const g = st.editGoals || [...(st.profile.objetivos || [])];
     st.editGoals = g.includes(v) ? g.filter((x) => x !== v) : [...g, v];
     b.setAttribute('aria-pressed', String(st.editGoals.includes(v)));
@@ -1097,7 +1103,10 @@ root.addEventListener('click', async (e) => {
     try { await api.linkGoogle(); toast('Cuenta de Google vinculada'); } catch (e) { toast(errorText(e)); }
     st.gBusy = false; render();
   }
-  else if (act === 'acc-toggle') { st.datosOpen = !st.datosOpen; b.setAttribute('aria-expanded', String(st.datosOpen)); const body = document.getElementById('datos-body'); if (body) body.hidden = !st.datosOpen; }
+  else if (act === 'acc-toggle') {
+    const k = v === 'obj' ? 'objOpen' : 'datosOpen'; st[k] = !st[k]; b.setAttribute('aria-expanded', String(st[k]));
+    const body = document.getElementById(v === 'obj' ? 'obj-body' : 'datos-body'); if (body) body.hidden = !st[k];
+  }
   else if (act === 'sug-ignorar') {
     const el = document.getElementById('sug'); if (el) el.remove();
     if (b.dataset.ctx === 'ob' && st.ob) st.ob.hideSug = true;
@@ -1114,6 +1123,7 @@ root.addEventListener('input', (e) => {
     return;
   }
   if (e.target.closest && e.target.closest('form[data-form="addweight"]')) { if (e.target.dataset && e.target.dataset.comp) e.target.dataset.tocado = '1'; pesoHints(); return; }
+  if (e.target.closest && e.target.closest('form[data-form="profile"]')) marcaCambios();
   if (st.view === 'main' && M.input(e.target)) return;
   const k = e.target.dataset && e.target.dataset.ob;
   if (!k || !st.ob) return;

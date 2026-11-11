@@ -1,4 +1,4 @@
-// Cadencia Pro: suscripción de 4,99 €/mes con Stripe. La IA (Foto con IA y Recomendación del Taller) es solo para Pro.
+// Cadencia Pro: suscripción de 4,99 €/mes con Stripe. La IA (Escanear alimento y Recomendación del Taller) es solo para Pro.
 // Cuando crees el Payment Link en Stripe, pégalo entre las comillas de PRO_LINK (empieza por https://buy.stripe.com/).
 export const PRO_LINK = 'https://buy.stripe.com/test_bJecN58thc0s1Vx1U74sE00'; // MODO PRUEBA: cambiar por el enlace real (https://buy.stripe.com/...) al pasar a cobrar de verdad
 // Opcional: enlace del portal de clientes de Stripe, para que las personas Pro puedan cancelar o cambiar de tarjeta.
