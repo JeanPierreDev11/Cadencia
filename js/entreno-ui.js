@@ -72,13 +72,14 @@ function viewEntreno() {
     return `${ctx.stravaBtn ? ctx.stravaBtn() : ''}<div class="wk-empty"><button type="button" class="addbig" data-act="rw-start"><span class="addbig-c">${I.plusBig}</span><span>Añadir rutina</span></button></div>`;
   }
   const today = todayISO(), mon = E.mondayOf(today), sun = E.addDays(mon, 6);
-  const sub = ['semana', 'historial', 'rutina', 'objetivos'].includes(st.wkTab) ? st.wkTab : 'semana';
-  const body = sub === 'historial' ? wkHistorial() : sub === 'rutina' ? wkRutina() : sub === 'objetivos' ? M.viewObjetivos() : wkSemana();
+  const sub = ['semana', 'rutina', 'objetivos'].includes(st.wkTab) ? st.wkTab : 'semana';
+  const body = sub === 'rutina' ? wkRutina() : sub === 'objetivos' ? M.viewObjetivos() : wkSemana();
   return `<header class="hello"><div><h1>Entreno</h1><p>Semana del ${esc(fmtDate(mon))} al ${esc(fmtDate(sun))}</p></div>
-      <button class="btn small" data-act="wk-new" data-date="${today}">${I.plus} Registrar</button></header>
+      <button type="button" class="iconbtn hist-btn" data-act="wk-hist" aria-label="Historial de entrenos">${I.clock}</button></header>
+    <div class="cta-row"><button class="btn block" data-act="wk-new" data-date="${today}">Iniciar entreno</button></div>
     ${ctx.stravaBtn ? ctx.stravaBtn() : ''}
     <div class="seg" role="group" aria-label="Secciones de entreno">
-      ${[['semana', 'Semana'], ['historial', 'Historial'], ['rutina', 'Rutinas'], ['objetivos', 'Objetivos']].map(([v, t]) => `<button type="button" data-act="wktab" data-v="${v}" aria-pressed="${sub === v}">${t}</button>`).join('')}
+      ${[['semana', 'Semana'], ['rutina', 'Rutinas'], ['objetivos', 'Objetivos']].map(([v, t]) => `<button type="button" data-act="wktab" data-v="${v}" aria-pressed="${sub === v}">${t}</button>`).join('')}
     </div>
     ${body}`;
 }
@@ -132,7 +133,7 @@ function wkSemana() {
     <section class="card"><h2>Horas por semana</h2>${barsChart(E.weeksSeries(ws, mon, 8))}</section>`;
 }
 
-function wkRow(w) {
+function wkRow(w, mod) {
   const sub = [fmtDate(w.fecha, { weekday: 'short', day: 'numeric', month: 'short' }), fmtDur(w.min)];
   if (w.km) sub.push(`${nf(w.km, 1)} km`);
   if (w.elev) sub.push(`+${nf(w.elev)} m`);
@@ -142,21 +143,43 @@ function wkRow(w) {
   return `<div class="row wrow"><span class="wico">${tipoIcon(icoT)}</span>
     <span class="wtxt"><b>${esc(w.nombre || E.TIPOS[w.tipo] || 'Entreno')}</b><span class="muted small">${esc(sub.join(' · '))}</span></span>
     <span class="wkcal muted small">${w.kcal ? nf(w.kcal) + ' kcal' : ''}</span>
-    <button class="iconbtn" data-act="wk-del" data-v="${esc(w.id)}" aria-label="Borrar entreno">${I.trash}</button></div>`;
+    ${mod ? `<button type="button" class="iconbtn" data-act="wk-edit" data-v="${esc(w.id)}" aria-label="Editar entreno">${I.pencil}</button><button type="button" class="iconbtn bad" data-act="wk-del-ask" data-v="${esc(w.id)}" aria-label="Borrar entreno">${I.trash}</button>` : ''}</div>`;
 }
 
-function wkHistorial() {
-  const ws = st.workouts;
-  if (!ws.length) return `<section class="card"><div class="empty"><b>Todavía no hay entrenos</b><span>Registra tu primera sesión y aquí verás tu historial y tus récords.</span></div></section>`;
-  const r = E.records(ws);
-  const rec = [];
-  if (r.bici.km) rec.push(['Salida más larga', `${nf(r.bici.km.v, 1)} km`, r.bici.km.fecha]);
-  if (r.bici.elev) rec.push(['Más desnivel', `${nf(r.bici.elev.v)} m`, r.bici.elev.fecha]);
-  if (r.bici.min) rec.push(['Más tiempo en bici', fmtDur(r.bici.min.v), r.bici.min.fecha]);
-  r.gym.forEach((e) => rec.push([e.n.charAt(0).toUpperCase() + e.n.slice(1), e.best.kg > 0 ? `${nf(e.best.kg, 1)} kg × ${e.best.reps}` : `${e.best.reps} repeticiones`, e.best.fecha]));
-  return `
-    ${rec.length ? `<section class="card"><h2>Récords personales</h2><div class="list">${rec.map(([t, v, f]) => `<div class="row"><span>${esc(t)}<br><span class="muted small">${esc(fmtDate(f, { day: 'numeric', month: 'short', year: 'numeric' }))}</span></span><b>${esc(v)}</b></div>`).join('')}</div></section>` : ''}
-    <section class="card"><h2>Todos tus entrenos</h2><div class="list">${ws.map(wkRow).join('')}</div></section>`;
+function wkHistSheetHTML() {
+  const ws = st.workouts, mod = !!st.wkMod;
+  let body;
+  if (!ws.length) body = `<div class="empty"><b>Todavía no hay entrenos</b><span>Pulsa «Iniciar entreno» y aquí verás tu historial y tus récords.</span></div>`;
+  else {
+    const r = E.records(ws), rec = [];
+    if (r.bici.km) rec.push(['Salida más larga', `${nf(r.bici.km.v, 1)} km`, r.bici.km.fecha]);
+    if (r.bici.elev) rec.push(['Más desnivel', `${nf(r.bici.elev.v)} m`, r.bici.elev.fecha]);
+    if (r.bici.min) rec.push(['Más tiempo en bici', fmtDur(r.bici.min.v), r.bici.min.fecha]);
+    r.gym.forEach((e) => rec.push([e.n.charAt(0).toUpperCase() + e.n.slice(1), e.best.kg > 0 ? `${nf(e.best.kg, 1)} kg × ${e.best.reps}` : `${e.best.reps} repeticiones`, e.best.fecha]));
+    body = `${rec.length ? `<h3 class="sub-h">Récords personales</h3><div class="list">${rec.map(([t, v, f]) => `<div class="row"><span>${esc(t)}<br><span class="muted small">${esc(fmtDate(f, { day: 'numeric', month: 'short', year: 'numeric' }))}</span></span><b class="nowrap">${esc(v)}</b></div>`).join('')}</div>` : ''}
+      <h3 class="sub-h">Todos tus entrenos</h3><div class="list">${ws.map((w) => wkRow(w, mod)).join('')}</div>`;
+  }
+  return `<div class="sheet-back" data-act="wk-hist-close"></div>
+    <div class="sheet" role="dialog" aria-modal="true" aria-label="Historial de entrenos">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><button type="button" class="iconbtn" data-act="wk-hist-close" aria-label="Cerrar">${I.back}</button><h2>Historial de entrenos</h2>
+        ${ws.length ? `<button type="button" class="link" data-act="wk-mod">${mod ? 'Listo' : 'Modificar'}</button>` : '<span style="width:36px"></span>'}</div>
+      <div class="sheet-list">${body}</div>
+    </div>`;
+}
+function wkDelSheetHTML() {
+  const w = st.workouts.find((x) => x.id === st.wkDel);
+  return `<div class="sheet-back" data-act="wk-del-no"></div>
+    <div class="sheet short" role="alertdialog" aria-modal="true" aria-label="Borrar entreno">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><button type="button" class="iconbtn" data-act="wk-del-no" aria-label="Cancelar">${I.back}</button><h2>Borrar entreno</h2><span style="width:36px"></span></div>
+      <div class="sheet-list form-grid">
+        <p>¿Borrar <b>${esc(w ? w.nombre || E.TIPOS[w.tipo] || 'este entreno' : '')}</b>${w ? ` del ${esc(fmtDate(w.fecha, { weekday: 'long', day: 'numeric', month: 'long' }))}` : ''}?</p>
+        <p class="small muted">Se borra de tu cuenta y de tus récords. No se puede deshacer.</p>
+        <button type="button" class="btn block danger-solid" data-act="wk-del-yes">Borrar entreno</button>
+        <button type="button" class="btn ghost block" data-act="wk-del-no">Cancelar</button>
+      </div>
+    </div>`;
 }
 
 /* ---------- editor de rutina (se usa en el asistente y en la sección Rutina) ---------- */
@@ -180,8 +203,9 @@ function rxHTML(d, i, e, s, re) {
 function dayCardHTML(R, d, re) {
   const s = R.sesiones[d];
   const dl = E.DIAS_LARGO[d].toLowerCase();
-  const sel = R.tipos.length > 1
-    ? `<select class="input sel" data-ret="${d}" aria-label="Tipo de entreno del ${dl}">${R.tipos.map((t) => `<option value="${t}" ${s.t === t ? 'selected' : ''}>${RT[t]}</option>`).join('')}</select>`
+  const tp = re && re.mix ? ['fuerza', 'bici', 'cardio', 'otro'] : R.tipos;
+  const sel = tp.length > 1
+    ? `<select class="input sel" data-ret="${d}" aria-label="Tipo de entreno del ${dl}">${tp.map((t) => `<option value="${t}" ${s.t === t ? 'selected' : ''}>${RT[t]}</option>`).join('')}</select>`
     : `<span class="tag">${RT[s.t]}</span>`;
   let body = '';
   if (s.t === 'fuerza') {
@@ -199,7 +223,8 @@ function dayCardHTML(R, d, re) {
     body = `<label class="field"><span>Notas <span class="muted">(opcional)</span></span><input class="input" data-re="${d}.det" value="${esc(s.det || '')}" maxlength="80" placeholder="Ej. Partido con amigos"></label>`;
   }
   // En fuerza no se pregunta el tiempo: lo mide el cronómetro al entrenar.
-  const minBox = s.t === 'fuerza' ? '' : `<label class="minbox"><input class="input" data-re="${d}.min" inputmode="numeric" value="${esc(s.min || '')}" aria-label="Minutos del ${dl}"><span>min</span></label>`;
+  const kmBox = s.t === 'bici' || s.t === 'cardio' ? `<label class="minbox"><input class="input" data-re="${d}.km" inputmode="decimal" value="${esc(s.km || '')}" aria-label="Kilómetros del ${dl}"><span>km</span></label>` : '';
+  const minBox = s.t === 'fuerza' ? '' : kmBox + `<label class="minbox"><input class="input" data-re="${d}.min" inputmode="numeric" value="${esc(s.min || '')}" aria-label="Minutos del ${dl}"><span>min</span></label>`;
   return `<section class="card rday">
     <div class="rd-head"><b>${E.DIAS_LARGO[d]}</b>${sel}</div>
     <div class="rd-name"><input class="input" data-re="${d}.nombre" value="${esc(s.nombre || '')}" maxlength="40" aria-label="Nombre de la sesión del ${dl}">${minBox}</div>
@@ -210,8 +235,9 @@ const editorHTML = (re) => [...re.draft.dias].sort((a, b) => a - b).map((d) => d
 
 // Limpia y valida la rutina antes de guardarla. Devuelve { rutina } o { error }.
 function normRutina(R) {
-  const out = { tipos: R.tipos, otro: String(R.otro || '').trim().slice(0, 30), dias: [...R.dias].sort((a, b) => a - b), modo: R.modo,
-    split: R.split || 'auto', exp: R.exp || '', equipo: R.equipo || null, eqSel: R.eqSel || [], sesiones: {} };
+  const used = [...new Set(R.dias.map((d) => R.sesiones[d].t))];
+  const out = { tipos: used.length ? used : R.tipos, otro: String(R.otro || '').trim().slice(0, 30), dias: [...R.dias].sort((a, b) => a - b), modo: R.modo,
+    split: R.split || 'auto', exp: R.exp || '', equipo: R.equipo || null, eqSel: R.eqSel || [], donde: R.donde || '', flex: !!R.flex, deporte: R.deporte || '', sesiones: {} };
   for (const d of out.dias) {
     const s = R.sesiones[d];
     const o = { t: s.t, nombre: String(s.nombre || '').trim().slice(0, 40) || RT[s.t] };
@@ -222,7 +248,7 @@ function normRutina(R) {
     } else {
       const m = Math.round(num(s.min));
       o.min = m >= 5 && m <= 600 ? m : 60;
-      if (s.t === 'bici' || s.t === 'cardio') o.ses = s.ses || null;
+      if (s.t === 'bici' || s.t === 'cardio') { o.ses = s.ses || null; const k = num(s.km); if (k > 0 && k <= 500) o.km = Math.round(k * 10) / 10; }
       else o.det = String(s.det || '').trim().slice(0, 80);
     }
     out.sesiones[d] = o;
@@ -238,6 +264,7 @@ async function saveRutina(R, rid) {
   const rut = { ...res.rutina, id, nombre: (prev && prev.nombre) || (list.length ? `Rutina ${list.length + 1}` : 'Mi rutina') };
   const data = { rutinas: prev ? list.map((x) => (x.id === id ? rut : x)) : [...list, rut] };
   if (!act || !rid || act.id === id) data.rutina = rut;
+  if (rut.tipos.includes('bici') && st.profile.ciclismo !== true) data.ciclismo = true;
   await api.saveProfile(st.user.uid, data);
   st.profile = { ...st.profile, ...data };
   return '';
@@ -278,93 +305,153 @@ function wkRutina() {
     <div class="savebar" id="re-savebar" ${re.dirty ? '' : 'hidden'}><button type="button" class="btn block" data-act="re-save">Guardar cambios</button></div>`;
 }
 
-/* ---------- asistente para crear la rutina ---------- */
-const RW_TIPOS = [
-  { id: 'fuerza', t: 'Fuerza', s: 'Gimnasio, pesas o en casa', ico: () => I.dumb },
-  { id: 'bici', t: 'Bici', s: 'Carretera, montaña o rodillo', ico: () => I.bike },
-  { id: 'cardio', t: 'Cardio', s: 'Correr, elíptica, remo, comba…', ico: () => I.heart },
-  { id: 'otro', t: 'Otro', s: 'Pádel, natación, yoga…', ico: () => I.ball },
+/* ---------- asistente para crear la rutina (una pregunta por pantalla) ---------- */
+const RW_MAIN = [
+  { id: 'fuerza', t: 'Fuerza', s: 'Gimnasio, calistenia…', ico: () => I.dumb },
+  { id: 'bici', t: 'Bici', s: 'Carretera, rodillo…', ico: () => I.bike },
+  { id: 'cardio', t: 'Running', s: 'Correr en calle, cinta o monte', ico: () => I.pulse },
+  { id: 'otro', t: 'Otro deporte', s: 'Fútbol, natación…', ico: () => I.ball },
 ];
-const RW_EXP = [['nuevo', 'Soy nuevo en las pesas'], ['meses', 'Llevo unos meses'], ['anio', 'Llevo alrededor de un año'], ['anios', 'Llevo años entrenando'], ['compite', 'Compito']];
-const RW_EQ = [
-  ['gym', 'Gimnasio completo', 'Barras, mancuernas, máquinas y poleas'], ['barra', 'Barras', ''], ['mancuernas', 'Mancuernas', ''],
-  ['kettlebell', 'Kettlebells', 'Pesas rusas'], ['maquina', 'Máquinas y poleas', ''], ['banda', 'Bandas elásticas', ''], ['ninguno', 'Solo mi peso corporal', 'Entreno en casa sin material'],
-];
-const rwSteps = (o) => ['tipos', ...(o.tipos.includes('fuerza') ? ['split', 'exp', 'equipo'] : []), 'n', 'dias', 'modo', 'editor'];
-const rwStep = (o) => rwSteps(o)[o.step];
+const RW_EXP = [['nuevo', 'Nuevo'], ['meses', 'Unos meses'], ['anio', '1 año'], ['anios', 'Años'], ['compite', 'Compito']];
+const RW_DONDE = [['gym', 'Gimnasio', 'Máquinas, poleas y peso libre'], ['casa', 'Casa', 'Con poco o ningún material'], ['parque', 'Parque', 'Barras, paralelas y tu peso']];
+const RW_MAT = [['maquina', 'Máquinas / poleas'], ['mancuernas', 'Mancuernas'], ['barra', 'Barras'], ['banda', 'Bandas elásticas'], ['kettlebell', 'Kettlebells'], ['ninguno', 'Solo peso corporal']];
+const RW_DIV = [['ppl', 'Push · Pull · Legs', 'Empuje, tirón y pierna'], ['tp', 'Torso / Pierna', 'Tren superior e inferior'], ['full', 'Full body', 'Todo el cuerpo cada día'], ['weider', 'Un músculo por día', 'Pecho, espalda, pierna, hombro y brazos'], ['deporte', 'Fuerza para deporte', 'Potencia y core para tu deporte'], ['custom', 'Custom', 'Tú decides qué haces cada día']];
+const RW_DEPORTES = ['Fútbol', 'Baloncesto', 'Bici', 'Pádel', 'Tenis', 'Natación', 'Running', 'Esquí'];
+const EQ_DEF = { gym: ['maquina', 'mancuernas', 'barra'], casa: ['ninguno'], parque: ['ninguno'] };
+const rwSteps = (o) => {
+  if (o.main === 'fuerza') return ['tipo', 'exp', 'donde', 'material', 'n', 'dias', 'modo', ...(o.modo === 'propia' ? ['division'] : []), 'editor'];
+  if (o.main === 'bici' || o.main === 'cardio') return ['tipo', 'exp', 'n', 'dias', 'modo', 'editor'];
+  if (o.main === 'otro') return ['tipo', 'otro', 'n', 'dias', 'editor'];
+  return ['tipo'];
+};
+const rwStep = (o) => rwSteps(o)[o.step] || 'tipo';
 const expBars = (k) => `<span class="bars" aria-hidden="true">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= k ? 'on' : ''}" style="height:${6 + i * 3}px"></i>`).join('')}</span>`;
 
 function rwStart(rid, nueva) {
   const r = nueva ? null : rutinasList().find((x) => x.id === rid) || rutinaOf();
+  const base = { step: 0, main: '', exp: '', donde: '', eq: [], n: 0, dias: [], flex: false, modo: '', division: '', deporte: '', otro: '', msg: '', anim: 'fwd' };
   st.rw = r
-    ? { rid: r.id, step: 0, tipos: [...r.tipos], otro: r.otro || '', n: r.dias.length, dias: [...r.dias], modo: r.modo || '', split: r.split || '', exp: r.exp || '', eq: r.eqSel && r.eqSel.length ? [...r.eqSel] : (r.tipos.includes('fuerza') ? ['gym'] : []), msg: '' }
-    : { nueva: true, step: 0, tipos: [], otro: '', n: 0, dias: [], modo: '', split: '', exp: '', eq: [], msg: '' };
+    ? { ...base, rid: r.id, main: r.tipos[0] || '', otro: r.otro || '', n: r.dias.length, dias: [...r.dias], flex: !!r.flex, exp: r.exp || '', donde: r.donde || '', eq: r.eqSel ? [...r.eqSel] : [], deporte: r.deporte || '' }
+    : { ...base, nueva: true };
   st.re = null;
   render(); window.scrollTo(0, 0);
 }
 
 function rwCanNext() {
   const o = st.rw, s = rwStep(o);
-  if (s === 'tipos') return o.tipos.length > 0;
-  if (s === 'split') return !!o.split;
+  if (s === 'tipo') return !!o.main;
   if (s === 'exp') return !!o.exp;
-  if (s === 'equipo') return o.eq.length > 0;
+  if (s === 'donde') return !!o.donde;
+  if (s === 'material') return o.eq.length > 0;
+  if (s === 'otro') return o.otro.trim().length > 0;
   if (s === 'n') return o.n > 0;
-  if (s === 'dias') return o.dias.length === o.n;
+  if (s === 'dias') return o.flex ? o.n > 0 : o.dias.length === o.n;
   if (s === 'modo') return !!o.modo;
+  if (s === 'division') return !!o.division && (o.division !== 'deporte' || !!o.deporte);
   return true;
 }
 
 function viewRutWizard() {
-  const o = st.rw, s = rwStep(o), total = rwSteps(o).length - 1;
-  const pct = Math.min(100, ((o.step + 1) / (total + 1)) * 100);
+  const o = st.rw, s = rwStep(o), steps = rwSteps(o), total = steps.length;
+  const pct = o.main ? Math.min(100, ((o.step + 1) / total) * 100) : 8;
   const tick = (on) => `<span class="tick">${on ? I.check : ''}</span>`;
-  let body = '', next = 'Siguiente';
-  if (s === 'tipos') {
-    body = `<h1 class="ob-title">¿Qué sueles entrenar?</h1><p class="ob-sub">Elige todo lo que hagas.</p>
-      <div class="choices">${RW_TIPOS.map((x) => `<button type="button" class="choice" data-act="rw-tipo" data-v="${x.id}" aria-pressed="${o.tipos.includes(x.id)}">
-        <span class="ico">${x.ico()}</span><span class="t">${x.t}<small>${x.s}</small></span>${tick(o.tipos.includes(x.id))}</button>`).join('')}</div>
-      ${o.tipos.includes('otro') ? `<label class="field"><span>¿Qué otro deporte?</span><input class="input" data-rw="otro" value="${esc(o.otro)}" maxlength="30" placeholder="Ej. Pádel"></label>` : ''}`;
-  } else if (s === 'split') {
-    body = `<h1 class="ob-title">¿Qué tipo de entrenamiento de fuerza sigues?</h1><p class="ob-sub">Así organizamos tus días de fuerza.</p>
-      <div class="choices">${Object.entries(E.SPLITS).map(([k, v]) => `<button type="button" class="choice" data-act="rw-split" data-v="${k}" aria-pressed="${o.split === k}"><span class="t">${v.t}<small>${v.s}</small></span>${tick(o.split === k)}</button>`).join('')}</div>`;
+  const ch = (act, v, on, inner, extra = '') => `<button type="button" class="choice" data-act="${act}" data-v="${esc(v)}" aria-pressed="${on}" ${extra}>${inner}</button>`;
+  let body = '', next = 'Siguiente', hint = '';
+  if (s === 'tipo') {
+    body = `<h1 class="ob-title">¿Qué tipo de entreno haces?</h1>
+      <div class="choices big">${RW_MAIN.map((x) => ch('rw-main', x.id, o.main === x.id, `<span class="ico">${x.ico()}</span><span class="t">${x.t}<small>${x.s}</small></span>${tick(o.main === x.id)}`)).join('')}</div>`;
+    hint = 'Toca una opción para continuar.';
   } else if (s === 'exp') {
-    body = `<h1 class="ob-title">¿Cuánta experiencia tienes con las pesas?</h1><p class="ob-sub">Ajusta el número de ejercicios y de series.</p>
-      <div class="choices">${RW_EXP.map(([k, t], i) => `<button type="button" class="choice" data-act="rw-exp" data-v="${k}" aria-pressed="${o.exp === k}"><span class="t">${t}</span>${expBars(i + 1)}</button>`).join('')}</div>`;
-  } else if (s === 'equipo') {
-    body = `<h1 class="ob-title">¿Qué material tienes?</h1><p class="ob-sub">Solo te propondremos ejercicios que puedas hacer.</p>
-      <div class="choices">${RW_EQ.map(([k, t, sub]) => `<button type="button" class="choice" data-act="rw-eq" data-v="${k}" aria-pressed="${o.eq.includes(k)}"><span class="ico">${eqIcon(k === 'gym' ? 'maquina' : k === 'ninguno' ? 'corporal' : k)}</span><span class="t">${t}${sub ? `<small>${sub}</small>` : ''}</span>${tick(o.eq.includes(k))}</button>`).join('')}</div>`;
+    body = `<h1 class="ob-title">¿Cuánta experiencia tienes${o.main === 'fuerza' ? ' con las pesas' : o.main === 'bici' ? ' en bici' : ''}?</h1>
+      <div class="choices big">${RW_EXP.map(([k, t], i) => ch('rw-exp', k, o.exp === k, `<span class="t">${t}</span>${expBars(i + 1)}`)).join('')}</div>`;
+  } else if (s === 'donde') {
+    body = `<h1 class="ob-title">¿Dónde entrenas?</h1>
+      <div class="choices big">${RW_DONDE.map(([k, t, sub]) => ch('rw-donde', k, o.donde === k, `<span class="t">${t}<small>${sub}</small></span>${tick(o.donde === k)}`)).join('')}</div>`;
+  } else if (s === 'material') {
+    body = `<h1 class="ob-title">¿Qué material tienes?</h1><p class="ob-sub">Marca todo lo que puedas usar. Solo te propondremos ejercicios con eso.</p>
+      <div class="choices">${RW_MAT.map(([k, t]) => ch('rw-eq', k, o.eq.includes(k), `<span class="ico">${eqIcon(k === 'ninguno' ? 'corporal' : k)}</span><span class="t">${t}</span>${tick(o.eq.includes(k))}`)).join('')}</div>`;
+  } else if (s === 'otro') {
+    body = `<h1 class="ob-title">¿Qué deporte practicas?</h1>
+      <label class="field"><span>Deporte</span><input class="input" data-rw="otro" value="${esc(o.otro)}" maxlength="30" placeholder="Ej. Fútbol, natación…" autocomplete="off"></label>
+      <div class="chips">${RW_DEPORTES.map((d) => `<button type="button" class="chip chipbtn ${o.otro === d ? 'on' : ''}" data-act="rw-dep-otro" data-v="${esc(d)}">${esc(d)}</button>`).join('')}</div>`;
   } else if (s === 'n') {
-    body = `<h1 class="ob-title">¿Cuántos días a la semana sueles entrenar?</h1>
-      <div class="numgrid">${[1, 2, 3, 4, 5, 6, 7].map((n) => `<button type="button" class="numbtn num" data-act="rw-n" data-v="${n}" aria-pressed="${o.n === n}">${n}</button>`).join('')}</div>`;
+    body = `<h1 class="ob-title">¿Cuántos días a la semana?</h1>
+      <div class="numgrid big">${[1, 2, 3, 4, 5, 6, 7].map((n) => `<button type="button" class="numbtn num" data-act="rw-n" data-v="${n}" aria-pressed="${o.n === n}">${n}</button>`).join('')}</div>`;
   } else if (s === 'dias') {
     const k = o.dias.length, diff = o.n - k;
-    body = `<h1 class="ob-title">¿Qué días entrenas?</h1><p class="ob-sub">Elige ${o.n} ${o.n === 1 ? 'día' : 'días'}.</p>
-      <div class="choices daylist">${E.DIAS_LARGO.map((d, i) => `<button type="button" class="choice" data-act="rw-dia" data-v="${i}" aria-pressed="${o.dias.includes(i)}"><span class="t">${d}</span>${tick(o.dias.includes(i))}</button>`).join('')}</div>
-      <p class="small ${diff ? 'muted' : ''}" role="status">${diff === 0 ? `Perfecto: ${o.n} ${o.n === 1 ? 'día' : 'días'}.` : diff > 0 ? `Te ${diff === 1 ? 'falta' : 'faltan'} ${diff}.` : `Te ${-diff === 1 ? 'sobra' : 'sobran'} ${-diff}. Quita alguno o vuelve atrás para cambiar el número de días.`}</p>`;
+    body = `<h1 class="ob-title">¿Qué días?</h1><p class="ob-sub">Elige ${o.n} ${o.n === 1 ? 'día' : 'días'}, o dinos que sueles variar.</p>
+      <div class="choices daylist">${E.DIAS_LARGO.map((d, i) => ch('rw-dia', i, !o.flex && o.dias.includes(i), `<span class="t">${d}</span>${tick(!o.flex && o.dias.includes(i))}`)).join('')}
+        ${ch('rw-flex', 'flex', o.flex, `<span class="t">Suelo variar<small>Pondremos días orientativos y tú decides cada semana</small></span>${tick(o.flex)}`, 'style="margin-top:6px"')}</div>
+      <p class="small ${o.flex || !diff ? '' : 'muted'}" role="status">${o.flex ? 'Sin días fijos: te sugerimos unos y cambias cuando quieras.' : diff === 0 ? `Perfecto: ${o.n} ${o.n === 1 ? 'día' : 'días'}.` : diff > 0 ? `Te ${diff === 1 ? 'falta' : 'faltan'} ${diff}.` : `Te ${-diff === 1 ? 'sobra' : 'sobran'} ${-diff}.`}</p>`;
+    if (o.main === 'otro') next = 'Crear rutina';
   } else if (s === 'modo') {
     const goals = (st.profile.objetivos || []).map(goalById).filter(Boolean).map((g) => g.t.toLowerCase());
-    body = `<h1 class="ob-title">¿Cómo quieres montar tu rutina?</h1>
-      <div class="choices">
-        <button type="button" class="choice" data-act="rw-modo" data-v="propuesta" aria-pressed="${o.modo === 'propuesta'}"><span class="ico">${I.spark}</span><span class="t">Que la app me proponga una<small>Adaptada a tus objetivos${goals.length ? ': ' + esc(goals.join(', ')) : ''}. Luego puedes cambiar cualquier ejercicio.</small></span>${tick(o.modo === 'propuesta')}</button>
-        <button type="button" class="choice" data-act="rw-modo" data-v="propia" aria-pressed="${o.modo === 'propia'}"><span class="ico">${I.pencil}</span><span class="t">La hago yo<small>Eliges los ejercicios y sesiones de cada día.</small></span>${tick(o.modo === 'propia')}</button>
+    const prop = o.main === 'cardio' ? 'Plan de running con rodajes suaves, series y tirada larga' : o.main === 'bici' ? 'Base aeróbica en zona 2, series y salida larga' : `Adaptada a tus objetivos${goals.length ? ': ' + goals.join(', ') : ''}`;
+    body = `<h1 class="ob-title">¿Cómo quieres tu rutina?</h1>
+      <div class="choices big">
+        ${ch('rw-modo', 'propuesta', o.modo === 'propuesta', `<span class="ico">${I.spark}</span><span class="t">Te proponemos una<small>${esc(prop)}</small></span>${tick(o.modo === 'propuesta')}`)}
+        ${ch('rw-modo', 'propia', o.modo === 'propia', `<span class="ico">${I.pencil}</span><span class="t">Personalizada<small>${o.main === 'fuerza' ? 'Eliges la división y los ejercicios de cada día' : 'Pones tú los km o el tiempo de cada día'}</small></span>${tick(o.modo === 'propia')}`)}
       </div>`;
+  } else if (s === 'division') {
+    body = `<h1 class="ob-title">Elige tu división</h1>
+      <div class="choices big">${RW_DIV.map(([k, t, sub]) => ch('rw-div', k, o.division === k, `<span class="t">${t}<small>${sub}</small></span>${tick(o.division === k)}`)).join('')}</div>
+      ${o.division === 'deporte' ? `<div class="field"><span>¿Para qué deporte?</span><div class="chips">${RW_DEPORTES.map((d) => `<button type="button" class="chip chipbtn ${o.deporte === d ? 'on' : ''}" data-act="rw-dep" data-v="${esc(d)}">${esc(d)}</button>`).join('')}</div></div>` : ''}`;
+    if (o.division === 'deporte') next = 'Crear rutina';
   } else {
-    body = `<h1 class="ob-title">${o.modo === 'propuesta' ? 'Tu rutina propuesta' : 'Monta tu rutina'}</h1>
-      <p class="ob-sub">${o.modo === 'propuesta' ? esc(E.KIND_TEXT[goalsKind()]) + ' Toca «Cambiar» para ver alternativas.' : 'Elige el tipo de cada día y añade los ejercicios o la sesión.'}</p>
-      ${editorHTML(st.re)}`;
+    const km = o.main === 'bici' || o.main === 'cardio';
+    body = `<h1 class="ob-title">${o.modo === 'propuesta' ? 'Tu rutina propuesta' : 'Programa tus días'}</h1>
+      <p class="ob-sub">${o.modo === 'propuesta' ? 'Toca «Cambiar» para ver alternativas y ajusta ' + (km ? 'los km o el tiempo' : 'lo que quieras') + '.' : km ? 'Elige la sesión de cada día y pon su objetivo de km o de tiempo.' : o.main === 'fuerza' ? 'Añade los ejercicios exactos de cada día.' : 'Pon el tiempo y una nota en cada día.'}</p>
+      ${o.flex ? '<p class="small muted">Los días son orientativos: puedes entrenar otro día y registrarlo igual.</p>' : ''}
+      ${editorHTML(st.re)}
+      ${o.main !== 'otro' ? `<button type="button" class="btn quiet small" data-act="re-mix" aria-pressed="${!!st.re.mix}">${st.re.mix ? 'Un solo tipo de entreno' : 'Mezclar tipos de entreno'}</button>` : ''}`;
     next = 'Guardar rutina';
   }
   const msg = s === 'editor' ? st.re.msg : o.msg;
+  const anim = o.anim ? ` step-in ${o.anim}` : ''; o.anim = null;
+  const showNext = !(['tipo', 'exp', 'donde', 'modo'].includes(s)) && !(s === 'n') && !(s === 'division' && o.division !== 'deporte');
   return `<form class="screen" data-form="rw" novalidate>
     <div class="ob-top">
       <button type="button" class="ob-back" data-act="rw-back" aria-label="${o.step === 0 ? 'Cerrar' : 'Atrás'}">${o.step === 0 ? '✕' : I.back}</button>
-      <div class="ob-track" aria-hidden="true"><i style="width:${pct}%"></i></div>
-      <span class="ob-count">${s !== 'editor' ? `${o.step + 1} de ${total}` : ''}</span>
+      <div class="ob-track" aria-hidden="true" role="progressbar" aria-valuenow="${Math.round(pct)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>
+      <span class="ob-count">${s !== 'editor' && o.main ? `${o.step + 1} de ${total}` : ''}</span>
     </div>
-    <div class="ob-body">${body}${msg ? `<div class="msg" role="alert">${esc(msg)}</div>` : ''}</div>
-    <div class="ob-foot"><button class="btn block" type="submit" data-rwnext ${rwCanNext() && !o.saving ? '' : 'disabled'}>${o.saving ? '<span class="spinner"></span>' : next}</button></div>
+    <div class="ob-body${anim}">${body}${hint ? `<p class="small muted">${hint}</p>` : ''}${msg ? `<div class="msg" role="alert">${esc(msg)}</div>` : ''}</div>
+    <div class="ob-foot">${showNext || s === 'editor' ? `<button class="btn block" type="submit" data-rwnext ${rwCanNext() && !o.saving ? '' : 'disabled'}>${o.saving ? '<span class="spinner"></span>' : next}</button>` : ''}</div>
   </form>`;
+}
+
+// Lo que has respondido → configuración para el motor de rutinas.
+function rwCfg(o) {
+  const fuerza = o.main === 'fuerza';
+  const gymCompleto = o.donde === 'gym' && ['maquina', 'mancuernas', 'barra'].every((x) => o.eq.includes(x)) && !o.eq.includes('ninguno');
+  return { tipos: [o.main], dias: o.flex ? [...E.DIAS_DEF[o.n]] : [...o.dias], otro: o.main === 'otro' ? o.otro.trim() : '',
+    split: 'auto', exp: o.exp, equipo: fuerza ? E.expandirEquipo(gymCompleto ? ['gym'] : o.eq) : null, run: o.main === 'cardio', escalar: o.main === 'bici' || o.main === 'cardio' };
+}
+// Rutina personalizada de fuerza: los días ya traen su enfoque (Push, Pierna…) pero sin ejercicios.
+function rwPersonalizada(o) {
+  const cfg = rwCfg(o), R = E.rutinaVacia(cfg, st.profile.objetivos);
+  if (o.main === 'fuerza') {
+    const split = o.division === 'deporte' ? (o.deporte === 'Bici' ? 'cicl' : 'dep') : o.division === 'custom' ? 'auto' : o.division;
+    R.split = split;
+    if (o.division !== 'custom') {
+      const ord = E.splitOrden(split, R.dias.length, goalsKind());
+      R.dias.forEach((d, i) => { const key = ord[i % ord.length]; R.sesiones[d] = { t: 'fuerza', nombre: E.SES_FUERZA[key].n, foco: key, ej: [] }; });
+    }
+  }
+  return R;
+}
+function rwGenerar() {
+  const o = st.rw, cfg = rwCfg(o);
+  const R = o.modo === 'propuesta' && o.main !== 'otro' ? E.proponerRutina(cfg, st.profile.objetivos) : rwPersonalizada(o);
+  R.eqSel = o.main === 'fuerza' ? [...o.eq] : []; R.donde = o.donde; R.flex = o.flex; R.deporte = o.deporte; R.exp = o.exp;
+  st.re = reNew(R, 'rw');
+  o.step = rwSteps(o).length - 1; o.anim = 'fwd';
+  render(); window.scrollTo(0, 0);
+}
+// Avance automático al tocar una opción de respuesta única (con un instante para ver la selección).
+function rwAuto() {
+  const o = st.rw, step = o.step;
+  setTimeout(() => { if (st.rw === o && o.step === step && rwCanNext()) rwNext(); }, 170);
 }
 
 async function rwNext() {
@@ -372,16 +459,8 @@ async function rwNext() {
   if (!rwCanNext()) return;
   o.msg = '';
   const s = rwStep(o);
-  if (s === 'modo') {
-    const fuerza = o.tipos.includes('fuerza');
-    const cfg = { tipos: RW_TIPOS.map((x) => x.id).filter((t) => o.tipos.includes(t)), dias: o.dias, otro: o.otro.trim(),
-      split: fuerza ? o.split : 'auto', exp: fuerza ? o.exp : '', equipo: fuerza ? E.expandirEquipo(o.eq) : null };
-    const R = o.modo === 'propuesta' ? E.proponerRutina(cfg, st.profile.objetivos) : E.rutinaVacia(cfg, st.profile.objetivos);
-    R.eqSel = fuerza ? [...o.eq] : [];
-    st.re = reNew(R, 'rw');
-    o.step++; render(); window.scrollTo(0, 0); return;
-  }
-  if (s !== 'editor') { o.step++; render(); window.scrollTo(0, 0); return; }
+  if ((s === 'modo' && !(o.modo === 'propia' && o.main === 'fuerza')) || s === 'division' || (s === 'dias' && o.main === 'otro')) return rwGenerar();
+  if (s !== 'editor') { o.step++; o.anim = 'fwd'; render(); window.scrollTo(0, 0); return; }
   o.saving = true; st.re.msg = ''; render();
   try {
     const err = await saveRutina(st.re.draft, o.nueva ? null : o.rid);
@@ -840,11 +919,11 @@ function viewWkForm() {
   const kc = wkKcal();
   const ph = { bici: 'Ej. Salida por Artxanda', cardio: 'Ej. Carrera suave', otro: 'Ej. Pádel' }[t];
   return `<form class="screen" data-form="wk" novalidate>
-    <div class="ob-top"><button type="button" class="ob-back" data-act="wk-cancel" aria-label="Volver">${I.back}</button><h1 class="form-title">Registrar entreno</h1></div>
+    <div class="ob-top"><button type="button" class="ob-back" data-act="wk-cancel" aria-label="Volver">${I.back}</button><h1 class="form-title">${w.id ? 'Editar entreno' : 'Registrar entreno'}</h1></div>
     <div class="form-grid" style="padding-top:20px;flex:1;align-content:start">
-      <div class="seg" role="group" aria-label="Tipo de entreno">
+      ${w.id ? `<p class="small muted">${esc(E.TIPOS[t] || 'Entreno')}</p>` : `<div class="seg" role="group" aria-label="Tipo de entreno">
         ${[['gym', 'Fuerza'], ['bici', 'Bici'], ['cardio', 'Cardio'], ['otro', 'Otro']].map(([v, l]) => `<button type="button" data-act="wk-tipo" data-v="${v}" aria-pressed="${t === v}">${l}</button>`).join('')}
-      </div>
+      </div>`}
       <div class="two">
         <label class="field"><span>Fecha</span><input class="input" type="date" data-wk="fecha" value="${esc(w.fecha)}" max="${todayISO()}"></label>
         <label class="field"><span>Duración (min)</span><input class="input" data-wk="min" inputmode="numeric" value="${esc(w.min)}" placeholder="60"></label>
@@ -862,7 +941,7 @@ function viewWkForm() {
       <p class="small muted">Calorías estimadas: <b id="wk-kcal">${kc ? '≈ ' + nf(kc) + ' kcal' : '–'}</b></p>
       ${w.msg ? `<div class="msg" role="alert">${esc(w.msg)}</div>` : ''}
     </div>
-    <div class="ob-foot"><button class="btn block" type="submit" ${w.saving ? 'disabled' : ''}>${w.saving ? '<span class="spinner"></span>' : 'Guardar entreno'}</button></div>
+    <div class="ob-foot"><button class="btn block" type="submit" ${w.saving ? 'disabled' : ''}>${w.saving ? '<span class="spinner"></span>' : w.id ? 'Guardar cambios' : 'Guardar entreno'}</button></div>
   </form>`;
 }
 
@@ -872,7 +951,8 @@ async function wkSave() {
   const min = num(w.min);
   if (!(min >= 5 && min <= 1440)) return fail('Escribe la duración en minutos, entre 5 y 1440.');
   if (!w.fecha || w.fecha > todayISO()) return fail('Elige una fecha de hoy o anterior.');
-  const o = { id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), fecha: w.fecha, tipo: w.tipo, min: Math.round(min), esf: w.esf };
+  const o = { ...(w.orig || {}), id: w.id || 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), fecha: w.fecha, tipo: w.tipo, min: Math.round(min), esf: w.esf };
+  if (!w.nombre.trim()) delete o.nombre;
   if (w.nombre.trim()) o.nombre = w.nombre.trim().slice(0, 60);
   const opt = (raw, lo, hi, msg) => { if (!String(raw).trim()) return null; const v = num(raw); if (!(v >= lo && v <= hi)) throw new Error(msg); return v; };
   try {
@@ -894,9 +974,11 @@ async function wkSave() {
     const before = E.records(st.workouts), after = E.records([...st.workouts, o]);
     await api.saveWorkout(st.user.uid, o);
     st.workouts = await api.listWorkouts(st.user.uid);
-    st.wk = null; st.tab = 'entreno'; st.wkTab = 'semana'; lsSet('cadencia-tab', 'entreno'); lsSet('cadencia-wktab', 'semana');
+    const editado = !!w.id;
+    st.wk = null; st.tab = 'entreno'; if (!editado) { st.wkTab = 'semana'; lsSet('cadencia-wktab', 'semana'); } lsSet('cadencia-tab', 'entreno');
+    if (st.wkBack) { st.wkHist = true; st.wkBack = false; }
     render(); window.scrollTo(0, 0);
-    toast(E.beatsRecord(before, after) ? '¡Nuevo récord personal!' : 'Entreno guardado');
+    toast(editado ? 'Entreno actualizado' : E.beatsRecord(before, after) ? '¡Nuevo récord personal!' : 'Entreno guardado');
   } catch (e) { w.saving = false; w.msg = errorText(e); render(); }
 }
 
@@ -942,20 +1024,25 @@ root.addEventListener('click', async (e) => {
     } catch (err) { toast(errorText(err)); }
     st.re = null; return render();
   }
-  if (act === 'nov-bici') { st.tab = 'entreno'; lsSet('cadencia-tab', 'entreno'); rwStart(); if (st.rw && !st.rw.tipos.includes('bici')) st.rw.tipos.push('bici'); return render(); }
-  if (o && act === 'rw-back') { if (o.step === 0) { st.rw = null; st.re = null; } else { o.step--; o.msg = ''; } render(); return window.scrollTo(0, 0); }
-  if (o && act === 'rw-tipo') { o.tipos = o.tipos.includes(v) ? o.tipos.filter((x) => x !== v) : [...o.tipos, v]; if (o.tipos.includes('fuerza') && !o.eq.length) o.eq = ['gym']; return render(); }
-  if (o && act === 'rw-split') { o.split = v; return render(); }
-  if (o && act === 'rw-exp') { o.exp = v; return render(); }
+  if (act === 'nov-bici') { st.tab = 'entreno'; lsSet('cadencia-tab', 'entreno'); rwStart(null, true); return render(); }
+  if (o && act === 'rw-back') { if (o.step === 0) { st.rw = null; st.re = null; } else { o.step--; o.msg = ''; o.anim = 'back'; } render(); return window.scrollTo(0, 0); }
+  if (o && act === 'rw-main') { if (o.main !== v) { o.main = v; o.modo = ''; o.division = ''; o.eq = []; o.donde = ''; } render(); return rwAuto(); }
+  if (o && act === 'rw-exp') { o.exp = v; render(); return rwAuto(); }
+  if (o && act === 'rw-donde') { o.donde = v; o.eq = [...EQ_DEF[v]]; render(); return rwAuto(); }
   if (o && act === 'rw-eq') {
-    if (v === 'gym' || v === 'ninguno') o.eq = o.eq.includes(v) ? [] : [v];
-    else { const rest = o.eq.filter((x) => x !== 'gym' && x !== 'ninguno'); o.eq = rest.includes(v) ? rest.filter((x) => x !== v) : [...rest, v]; }
+    if (v === 'ninguno') o.eq = o.eq.includes(v) ? [] : [v];
+    else { const rest = o.eq.filter((x) => x !== 'ninguno'); o.eq = rest.includes(v) ? rest.filter((x) => x !== v) : [...rest, v]; }
     return render();
   }
-  if (o && act === 'rw-n') { o.n = Number(v); if (o.dias.length !== o.n) o.dias = [...E.DIAS_DEF[o.n]]; return render(); }
-  if (o && act === 'rw-dia') { const d = Number(v); o.dias = o.dias.includes(d) ? o.dias.filter((x) => x !== d) : [...o.dias, d].sort((a, c) => a - c); return render(); }
-  if (o && act === 'rw-modo') { o.modo = v; return render(); }
+  if (o && act === 'rw-n') { o.n = Number(v); if (!o.flex && o.dias.length > o.n) o.dias = o.dias.slice(0, o.n); render(); return rwAuto(); }
+  if (o && act === 'rw-dia') { const d = Number(v); o.flex = false; o.dias = o.dias.includes(d) ? o.dias.filter((x) => x !== d) : [...o.dias, d].sort((a, c) => a - c); return render(); }
+  if (o && act === 'rw-flex') { o.flex = !o.flex; if (o.flex) o.dias = []; return render(); }
+  if (o && act === 'rw-modo') { o.modo = v; render(); return rwAuto(); }
+  if (o && act === 'rw-div') { o.division = v; render(); if (v !== 'deporte') rwAuto(); return; }
+  if (o && act === 'rw-dep') { o.deporte = v; return render(); }
+  if (o && act === 'rw-dep-otro') { o.otro = v; return render(); }
 
+  if (re && act === 're-mix') { re.mix = !re.mix; return render(); }
   // editor de rutina
   if (re && act.startsWith('re-')) {
     const R = re.draft, kind = goalsKind();
@@ -967,7 +1054,7 @@ root.addEventListener('click', async (e) => {
     else if (act === 're-del') { const [d, i] = v.split('.').map(Number); R.sesiones[d].ej.splice(i, 1); re.alt = null; touch(); }
     else if (act === 're-ses-open') re.ses = Number(v);
     else if (act === 're-ses-close') re.ses = null;
-    else if (act === 're-ses') { const s = R.sesiones[Number(v)], x = E.sesionPorId(b.dataset.id); s.ses = x.id; s.nombre = x.n; s.min = x.min; re.ses = null; touch(); }
+    else if (act === 're-ses') { const s = R.sesiones[Number(v)], x = E.sesionPorId(b.dataset.id); s.ses = x.id; s.nombre = x.n; s.min = x.min; s.km = x.km || ''; re.ses = null; touch(); }
     else if (act === 're-save') {
       try { const err = await saveRutina(R, re.rid); if (err) { re.msg = err; return render(); } st.re = null; render(); toast('Rutina guardada'); } catch (err) { re.msg = errorText(err); render(); }
       return;
@@ -1010,24 +1097,35 @@ root.addEventListener('click', async (e) => {
   // registro
   if (act === 'wktab') { st.wkTab = v; lsSet('cadencia-wktab', v); render(); }
   else if (act === 'wk-new') openRegistro(b.dataset.date, b.dataset.tipo);
-  else if (act === 'wk-cancel') { st.wk = null; render(); }
+  else if (act === 'wk-cancel') { st.wk = null; if (st.wkBack) { st.wkHist = true; st.wkBack = false; } render(); }
+  else if (act === 'wk-hist') { st.wkHist = true; st.wkMod = false; render(); }
+  else if (act === 'wk-hist-close') { st.wkHist = false; st.wkMod = false; render(); }
+  else if (act === 'wk-mod') { st.wkMod = !st.wkMod; render(); }
+  else if (act === 'wk-edit') {
+    const x = st.workouts.find((q) => q.id === v); if (!x) return;
+    st.wk = { orig: x, id: x.id, fecha: x.fecha, tipo: x.tipo, nombre: x.nombre || '', min: String(x.min || ''), km: x.km ? String(x.km) : '', elev: x.elev ? String(x.elev) : '', pulso: x.pulso ? String(x.pulso) : '', np: x.np ? String(x.np) : '', bici: x.bici, esf: x.esf || 2, msg: '', saving: false };
+    st.wkHist = false; st.wkMod = false; st.wkBack = true; render(); window.scrollTo(0, 0);
+  }
+  else if (act === 'wk-del-ask') { st.wkDel = v; render(); }
+  else if (act === 'wk-del-no') { st.wkDel = null; render(); }
+  else if (act === 'wk-del-yes') {
+    const id = st.wkDel; st.wkDel = null;
+    try { await api.deleteWorkout(st.user.uid, id); st.workouts = await api.listWorkouts(st.user.uid); if (!st.workouts.length) st.wkMod = false; render(); toast('Entreno borrado'); } catch (err) { toast(errorText(err)); }
+  }
   else if (act === 'wk-tipo' && w) {
     if (w.tipo === v) return;
     if (v === 'gym') return startLive(w.fecha);
     const nw = newWk(w.fecha, v); nw.esf = w.esf; if (!nw.min) nw.min = w.min; st.wk = nw; render();
   }
   else if (act === 'wk-esf' && w) { w.esf = Number(v); render(); }
-  else if (act === 'wk-del') {
-    if (!window.confirm('¿Borrar este entreno?')) return;
-    try { await api.deleteWorkout(st.user.uid, v); st.workouts = await api.listWorkouts(st.user.uid); render(); toast('Entreno borrado'); } catch (err) { toast(errorText(err)); }
-  }
+
 });
 
 root.addEventListener('input', (e) => {
   const t = e.target;
   if (st.lib && t.dataset.libq != null) { st.lib.q = t.value; const l = document.getElementById('lib-list'); if (l) { l.innerHTML = libListHTML(); l.scrollTop = 0; } return; }
   if (st.lib && st.lib.crear && t.dataset.libc) { st.lib.crear[t.dataset.libc] = t.value; return; }
-  if (st.rw && t.dataset.rw) { st.rw[t.dataset.rw] = t.value; return; }
+  if (st.rw && t.dataset.rw) { st.rw[t.dataset.rw] = t.value; const nb = document.querySelector('[data-rwnext]'); if (nb) nb.disabled = !rwCanNext(); const chs = document.querySelectorAll('[data-act=rw-dep-otro]'); chs.forEach((c) => c.classList.toggle('on', c.dataset.v === t.value)); return; }
   if (st.live && t.dataset.livename != null) { st.live.nombre = t.value; st.live.custom = true; liveSave(); return; }
   if (st.live && t.dataset.lv) {
     const [i, j, k] = t.dataset.lv.split('.'); st.live.ex[Number(i)].s[Number(j)][k] = t.value; liveSave();
@@ -1084,5 +1182,5 @@ root.addEventListener('change', async (e) => {
   }
 });
 
-  return { regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro };
+  return { regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML };
 }

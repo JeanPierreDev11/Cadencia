@@ -1,7 +1,7 @@
 import { createBackend, errorText } from './data.js';
 import { APP_NAME } from './config.js';
 import * as E from './entreno.js';
-import { crearSecciones } from './secciones.js';
+import { crearSecciones, NOV_V } from './secciones.js';
 import { crearEntreno } from './entreno-ui.js';
 import { LEGAL_V, legalHTML } from './legal.js';
 import { PORTAL_LINK, PRO_PRECIO } from './pro.js';
@@ -69,7 +69,7 @@ function render() {
   else if (st.view === 'error') root.innerHTML = viewError();
   document.title = APP_NAME;
   if (M) M.afterRender();
-  document.body.classList.toggle('noscroll', !!(st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.bill || st.meta || st.regPick || st.legal || st.del || st.iaFoto || st.pro || st.proWelcome || st.recAsk));
+  document.body.classList.toggle('noscroll', !!(st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.bill || st.meta || st.regPick || st.legal || st.del || st.iaFoto || st.pro || st.proWelcome || st.recAsk));
 }
 
 /* ================================================================== */
@@ -202,13 +202,15 @@ async function onForgot() {
 /* ================================================================== */
 /* Cuestionario inicial                                                */
 /* ================================================================== */
-const OB_STEPS = 4; // objetivos, sobre ti, estatura, peso (+ resumen)
+const OB_STEPS = 5; // objetivos, qué entrenas, sobre ti, estatura, peso (+ resumen)
+const OB_ENTRENOS = [['fuerza', 'Fuerza', 'Gimnasio, calistenia…', () => I.dumb], ['bici', 'Bici', 'Carretera, rodillo…', () => I.bike], ['cardio', 'Running', 'Correr en calle, cinta o monte', () => I.pulse], ['otro', 'Otro deporte', 'Fútbol, natación…', () => I.ball]];
 
 function startOnboarding() {
   const p = st.profile || {};
   st.ob = {
     step: 0,
     objetivos: p.objetivos || [],
+    entrenos: Array.isArray(p.entrenos) ? p.entrenos : [],
     sexo: p.sexo || '', edad: p.edad ? String(p.edad) : '',
     alturaCm: p.alturaCm ? String(p.alturaCm) : '', pesoKg: p.pesoKg ? nf(p.pesoKg, 1) : '',
     pesoObjetivo: p.pesoObjetivo ? nf(p.pesoObjetivo, 1) : '',
@@ -231,6 +233,12 @@ function viewOnboarding() {
         <span class="ico">${goalIcon(g)}</span><span class="t">${g.t}<small>${g.s}</small></span><span class="tick">${o.objetivos.includes(g.id) ? I.check : ''}</span></button>`).join('')}</div>`;
     canNext = o.objetivos.length > 0;
   } else if (s === 1) {
+    body = `<h1 class="ob-title">¿Qué entrenas?</h1>
+      <p class="ob-sub">Elige todo lo que haces. Si marcas Bici, activamos la pestaña de ciclismo (rutas y taller).</p>
+      <div class="choices">${OB_ENTRENOS.map(([id, t, sub, ico]) => `<button type="button" class="choice" data-act="ent" data-v="${id}" aria-pressed="${o.entrenos.includes(id)}">
+        <span class="ico">${ico()}</span><span class="t">${t}<small>${sub}</small></span><span class="tick">${o.entrenos.includes(id) ? I.check : ''}</span></button>`).join('')}</div>
+      <p class="small muted">Puedes saltarte esta pregunta y cambiarlo luego en Configuración.</p>`;
+  } else if (s === 2) {
     body = `<h1 class="ob-title">Cuéntanos sobre ti</h1>
       <p class="ob-sub">Con esto calculamos cuánta energía gasta tu cuerpo.</p>
       <div class="field"><span>Sexo</span>
@@ -243,14 +251,14 @@ function viewOnboarding() {
         <div class="big-input"><input name="edad" inputmode="numeric" pattern="[0-9]*" maxlength="3" value="${esc(o.edad)}" placeholder="30" data-ob="edad"><em>años</em></div>
       </label>`;
     canNext = !!o.sexo && !!o.edad;
-  } else if (s === 2) {
+  } else if (s === 3) {
     body = `<h1 class="ob-title">¿Cuánto mides?</h1>
       <label class="field"><span class="sr">Estatura</span>
         <div class="big-input"><input name="alturaCm" inputmode="decimal" maxlength="4" value="${esc(o.alturaCm)}" placeholder="175" data-ob="alturaCm" autofocus><em>cm</em></div>
         <small>En centímetros. Por ejemplo, 1,75 m son 175 cm.</small>
       </label>`;
     canNext = !!o.alturaCm;
-  } else if (s === 3) {
+  } else if (s === 4) {
     const wantsTarget = o.objetivos.some((g) => g === 'perder' || g === 'musculo');
     body = `<h1 class="ob-title">¿Cuánto pesas hoy?</h1>
       <label class="field">
@@ -299,7 +307,7 @@ function obProfile() {
   const o = st.ob;
   const obj = num(o.pesoObjetivo);
   return {
-    objetivos: o.objetivos, sexo: o.sexo, edad: Math.round(num(o.edad)),
+    objetivos: o.objetivos, entrenos: o.entrenos, ciclismo: o.entrenos.includes('bici'), sexo: o.sexo, edad: Math.round(num(o.edad)),
     alturaCm: Math.round(num(o.alturaCm)), pesoKg: Math.round(num(o.pesoKg) * 10) / 10,
     pesoObjetivo: isFinite(obj) ? Math.round(obj * 10) / 10 : null,
     ...(o.hideSug ? { hideWeightSuggestion: true } : {}),
@@ -308,13 +316,13 @@ function obProfile() {
 
 function obValidate() {
   const o = st.ob, s = o.step;
-  if (s === 1) { const e = num(o.edad); if (!(e >= 14 && e <= 100)) return 'Escribe una edad entre 14 y 100 años.'; }
-  if (s === 2) {
+  if (s === 2) { const e = num(o.edad); if (!(e >= 14 && e <= 100)) return 'Escribe una edad entre 14 y 100 años.'; }
+  if (s === 3) {
     const h = num(o.alturaCm);
     if (h > 1 && h < 2.5) { o.alturaCm = String(Math.round(h * 100)); return ''; } // escribió metros
     if (!(h >= 120 && h <= 230)) return 'Escribe tu estatura en centímetros, entre 120 y 230.';
   }
-  if (s === 3) {
+  if (s === 4) {
     const w = num(o.pesoKg); if (!(w >= 30 && w <= 250)) return 'Escribe un peso entre 30 y 250 kg.';
     if (o.pesoObjetivo.trim()) { const err = objetivoInvalido(num(o.pesoObjetivo), num(o.alturaCm), o.sexo, o.objetivos); if (err) return err; }
   }
@@ -332,13 +340,13 @@ async function obNext() {
   try {
     const p = obProfile();
     const uid = st.user.uid;
-    const data = { ...p, pesoInicial: p.pesoKg, fechaInicio: todayISO(), onboarded: true };
+    const data = { ...p, pesoInicial: p.pesoKg, fechaInicio: todayISO(), onboarded: true, novVista: NOV_V };
     if (!st.profile || !st.profile.nombre) data.nombre = st.user.name || '';
     await api.saveProfile(uid, data);
     await api.addWeight(uid, todayISO(), p.pesoKg);
     st.profile = { ...(st.profile || {}), ...data };
     st.weights = await api.listWeights(uid);
-    st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.dias = {};
+    st.workouts = []; st.wk = null; st.wkHist = st.wkMod = st.wkDel = st.wkBack = false; st.rw = null; st.re = null; st.dias = {};
     st.tab = 'inicio';
     st.view = 'main';
     render();
@@ -359,7 +367,7 @@ function focusFirst() {
 /* ================================================================== */
 // Entreno vive en entreno-ui.js; Nutrición, Rutas, Taller, Progreso y Objetivos en secciones.js.
 const W = crearEntreno({ st, root, get api() { return api; }, render, get M() { return M; }, currentKg: () => currentKg(), goalById: (id) => goalById(id), stravaBtn: () => S.syncBtnHTML() });
-const { rutinaOf, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, regSheetHTML } = W;
+const { rutinaOf, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, regSheetHTML, wkHistSheetHTML, wkDelSheetHTML } = W;
 const M = crearSecciones({
   st, get api() { return api; }, render, toast, esc, num, nf, todayISO, fmtDate, lsGet, lsSet, I, E, errorText,
   currentKg: () => currentKg(), rutinaOf: () => rutinaOf(), viewPeso: (sub) => viewPeso(sub),
@@ -371,13 +379,13 @@ let irPendiente = leerIr(); // si venimos de tocar un aviso, aquí queda la pant
 let stravaRet = leerRetorno(); // si venimos de la pantalla de permisos de Strava, aquí queda el código temporal
 
 function viewMain() {
-  const sheet = st.legal ? legalSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.bill ? billSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
+  const sheet = st.legal ? legalSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.bill ? billSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
   if (st.rw) return viewRutWizard() + sheet;
   if (st.live && !st.liveMin) return viewLive() + sheet;
   if (st.wk) return viewWkForm();
   const tab = M.tabActual(), tabs = M.tabs();
   const body = tab === 'perfil' ? viewPerfil() : tab === 'entreno' ? viewEntreno() : tab === 'inicio' ? viewInicio() : M.view(tab);
-  return `<button type="button" class="gear" data-act="cfg-open" aria-label="Configuración">${I.gear}</button><main class="main ${st.live ? 'has-live' : ''}">${body}</main>${st.live ? liveBarHTML() : ''}${sheet}
+  return `<button type="button" class="gear" data-act="cfg-open" aria-label="Configuración">${I.gear}</button><main class="main ${st.live ? 'has-live' : ''}">${body}</main>${st.live ? liveBarHTML() : ''}${sheet}${M.novModalHTML()}
   <div class="tabbar"><nav aria-label="Secciones" class="n${tabs.length}">${tabs.map((t) => `<button type="button" data-act="tab" data-v="${t.id}" ${tab === t.id ? 'aria-current="page"' : ''}>${t.ico}<span>${t.t}</span></button>`).join('')}</nav></div>`;
 }
 
@@ -411,7 +419,6 @@ function viewInicio() {
       <div><h1>Hola, ${esc(name)}</h1><p>${esc(new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }))}</p></div>
       <div class="hello-r">${M.novBell()}${st.profile && st.profile.isPro === true ? '<button class="protag pill" data-act="tab" data-v="perfil" aria-label="Tu plan: Cadencia Pro">Pro</button>' : ''}</div>
     </header>
-    ${M.novedadesHTML()}
 
     <section class="card weight-hero">
       <h2>Peso actual</h2>
@@ -897,6 +904,10 @@ function cfgSheetHTML() {
           <div class="seg" role="group" aria-label="Tema">${[['dark', 'Oscuro'], ['light', 'Claro'], ['system', 'Sistema']].map(([v, l]) => `<button type="button" data-act="theme" data-v="${v}" aria-pressed="${t === v}">${l}</button>`).join('')}</div>
           <p class="small muted">${t === 'system' ? 'Sigue el modo claro u oscuro de tu móvil.' : t === 'light' ? 'Fondo claro con el mismo amarillo.' : 'Negro y amarillo, el estilo de Cadencia.'}</p>
         </section>
+        <section class="card"><h2>Funciones</h2>
+          <div class="rec-row"><div class="rec-t"><b id="cfg-cic">Mostrar funciones de Ciclismo</b><span class="small muted">Pestaña Bici con rutas, mapa y taller de tu bici.</span></div>
+            <button type="button" class="switch" role="switch" aria-checked="${M.tieneBici()}" aria-labelledby="cfg-cic" data-act="cfg-cic"><i></i></button></div>
+        </section>
         ${R.cardHTML()}
         ${installCard(false)}
       </div>
@@ -1029,6 +1040,7 @@ root.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-act]');
   if (!b) return;
   const act = b.dataset.act, v = b.dataset.v;
+  if (b.closest('.nov-modal') && act !== 'nov-ok') M.novCerrar();
   if (R.click(act, v)) return; // sin esperar a nada: el permiso de notificaciones debe pedirse al instante del toque
   if (await S.click(act, v)) return;
   if (await M.click(act, v, b)) return;
@@ -1040,6 +1052,7 @@ root.addEventListener('click', async (e) => {
   else if (act === 'peek') { const i = b.previousElementSibling; i.type = i.type === 'password' ? 'text' : 'password'; b.textContent = i.type === 'password' ? 'Ver' : 'Ocultar'; }
   else if (act === 'forgot') onForgot();
   else if (act === 'goal') { const g = st.ob.objetivos; st.ob.objetivos = g.includes(v) ? g.filter((x) => x !== v) : [...g, v]; render(); }
+  else if (act === 'ent') { const g = st.ob.entrenos; st.ob.entrenos = g.includes(v) ? g.filter((x) => x !== v) : [...g, v]; render(); }
   else if (act === 'sex') { st.ob.sexo = v; render(); }
   else if (act === 'ob-back') { st.ob.step = Math.max(0, st.ob.step - 1); st.ob.msg = ''; render(); }
   else if (act === 'tab') { st.tab = v; st.editGoals = null; st.food = null; st.tl = null; lsSet('cadencia-tab', v); render(); window.scrollTo(0, 0); }
@@ -1064,6 +1077,12 @@ root.addEventListener('click', async (e) => {
     st.editGoals = g.includes(v) ? g.filter((x) => x !== v) : [...g, v];
     b.setAttribute('aria-pressed', String(st.editGoals.includes(v)));
     b.querySelector('.tick').innerHTML = st.editGoals.includes(v) ? I.check : '';
+  }
+  else if (act === 'cfg-cic') {
+    const on = !M.tieneBici(); st.profile.ciclismo = on;
+    if (!on && st.tab === 'bici') { st.tab = 'inicio'; lsSet('cadencia-tab', 'inicio'); }
+    render();
+    try { await api.saveProfile(st.user.uid, { ciclismo: on }); } catch (e) { toast(errorText(e)); }
   }
   else if (act === 'theme') { lsSet('cadencia-theme', THEMES.includes(v) ? v : 'dark'); applyTheme(); render(); }
   else if (act === 'cfg-open') { st.cfg = true; render(); }
@@ -1100,7 +1119,7 @@ root.addEventListener('input', (e) => {
   st.ob[k] = e.target.value;
   // activar/desactivar «Siguiente» sin redibujar (para no perder el foco del teclado)
   const o = st.ob, next = root.querySelector('[data-next]');
-  const ok = o.step === 1 ? !!o.sexo && !!o.edad : o.step === 2 ? !!o.alturaCm : o.step === 3 ? !!o.pesoKg : true;
+  const ok = o.step === 2 ? !!o.sexo && !!o.edad : o.step === 3 ? !!o.alturaCm : o.step === 4 ? !!o.pesoKg : true;
   if (next) next.disabled = !ok;
 });
 

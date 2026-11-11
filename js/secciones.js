@@ -29,8 +29,8 @@ const ICO = {
   bell: svg('<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>', 22),
 };
 
-/* Novedades: cambia NOV_V cada vez que publiques algo nuevo para que salga la nota en Inicio. */
-const NOV_V = '2026-11-11g';
+/* Novedades: cambia NOV_V cada vez que publiques algo nuevo: la ventana sale una sola vez al abrir la app. */
+export const NOV_V = '2026-11-11h';
 
 /* Objetivos de entreno: [id, grupo, texto, unidad, periodo (sem | mes | reto), ejemplo] */
 const META_T = [
@@ -109,8 +109,11 @@ export function crearSecciones(ctx) {
   /* Pestañas                                                          */
   /* ================================================================ */
   function tieneBici() {
+    // Interruptor manual (Configuración / Tus datos) y, si no lo has tocado, lo que elegiste al registrarte o en tu rutina.
+    const pf = P();
+    if (typeof pf.ciclismo === 'boolean') return pf.ciclismo;
     const r = rutinaOf();
-    return !!(r && (r.tipos || []).includes('bici')) || (P().objetivos || []).includes('rendimiento');
+    return !!(r && (r.tipos || []).includes('bici'));
   }
   function tabs() {
     const t = [{ id: 'inicio', t: 'Inicio', ico: I.home }, { id: 'entreno', t: 'Entreno', ico: I.pulse }, { id: 'nutricion', t: 'Nutrición', ico: ICO.food }];
@@ -1084,8 +1087,8 @@ export function crearSecciones(ctx) {
       }
       case 'n-scan': st.food.scan = { msg: '' }; render(); return true;
       // Novedades
-      case 'nov-open': st.novOpen = true; render(); { const n = document.getElementById('novedades'); if (n) n.scrollIntoView({ block: 'start' }); } return true;
-      case 'nov-ok': st.novOpen = false; if (novNueva()) await saveProfile({ novVista: NOV_V }); render(); return true;
+      case 'nov-open': st.novOpen = true; render(); return true;
+      case 'nov-ok': novCerrar(); render(); return true;
       case 'nov-rutas': st.tab = 'bici'; st.biciSub = 'rutas'; lsSet('cadencia-tab', 'bici'); lsSet('cadencia-bicisub', 'rutas'); render(); window.scrollTo(0, 0); return true;
       case 'nov-wk': st.tab = 'entreno'; st.wkTab = v; lsSet('cadencia-tab', 'entreno'); lsSet('cadencia-wktab', v); render(); window.scrollTo(0, 0); return true;
       // Objetivos
@@ -1439,19 +1442,22 @@ export function crearSecciones(ctx) {
   function novItems() {
     const bici = tieneBici();
     return [
+      { t: 'Crear rutina paso a paso', d: 'Un asistente con una pregunta por pantalla: tipo de entreno (Fuerza, Bici, Running u otro deporte), experiencia, dónde entrenas, material, días y cómo quieres la rutina. Te proponemos una al instante o la programas tú, día a día, con los ejercicios exactos o los km y minutos.', como: 'Entreno → Rutinas → Añadir rutina.', act: 'rut-new', v: '', btn: 'Crear mi rutina' },
+      { t: 'Iniciar entreno e Historial', d: 'El botón principal ahora es «Iniciar entreno». Tu historial se ha movido al reloj de arriba a la derecha, y con «Modificar» puedes editar (lápiz) o borrar (papelera roja) cualquier entreno.', como: 'Entreno → icono del reloj.', act: 'wk-hist', v: '', btn: 'Abrir el historial' },
+      { t: 'La pestaña Bici, solo si la usas', d: 'Ya no sale a todo el mundo: aparece si marcaste Bici al registrarte o si tu rutina la incluye. También puedes activarla o quitarla cuando quieras.', como: 'Engranaje → «Mostrar funciones de Ciclismo».', act: 'cfg-open', v: '', btn: 'Abrir Configuración' },
       { t: 'Configuración y Perfil renovados', d: 'El engranaje de arriba a la derecha abre Configuración: ahí están los recordatorios y el tema (oscuro, claro o el de tu móvil). Perfil pasa a ser la última pestaña de abajo, con tu plan, tu foto, tu contraseña, «Tus datos» plegable y tus objetivos. La recomendación de peso es ahora una línea con «Ignorar».', como: 'Engranaje (arriba a la derecha) y pestaña Perfil.', act: 'tab', v: 'perfil', btn: 'Ir al Perfil' },
       { t: 'Peso en dial y composición con siluetas', d: 'Tu peso aparece en un dial. Debajo, Agua, Músculo, Grasa y Hueso con su silueta. Toca una y elige verla en kilos, en % o «¿Qué cambió?», que compara con tu registro anterior (verde si mejora, rojo si empeora).', como: 'Progreso → Peso.', act: 'p-peso', btn: 'Ver Progreso' },
       { t: 'Nuevo diseño: negro y amarillo', d: 'Cadencia estrena imagen: fondo negro, amarillo carretera, letras en mayúsculas y bordes rectos, sin tarjetas flotantes. También tiene logo nuevo.', como: 'Se aplica solo en toda la app.', act: 'tab', v: 'perfil', btn: 'Ver el Perfil' },
       { t: 'Progreso → Peso, más limpio', d: 'La gráfica es solo de tu peso. Toca Grasa, Músculo, Agua o Hueso para ver su evolución semanal. «Añadir registro» abre un formulario donde puedes escribir la composición en % o en kg, y el reloj de arriba abre tu historial para editar o borrar registros.', como: 'Progreso → Peso.', act: 'p-peso', btn: 'Ver Progreso' },
       { t: 'Recordatorios', d: 'Activa avisos en tu móvil para pesarte por la mañana, apuntar tus comidas o no saltarte el entreno. Eliges la hora y solo te avisamos si aún no lo has hecho ese día. Son gratis para todos.', como: 'Engranaje → Recordatorios. En iPhone, primero añade Cadencia a la pantalla de inicio.', act: 'tab', v: 'perfil', btn: 'Ir al Perfil' },
       { t: 'Conecta Strava', d: 'Conecta tu cuenta de Strava y trae tus salidas de bici y tus carreras a Cadencia con un toque, sin teclear los km ni el desnivel. Lo que apuntes a mano sigue funcionando igual.', como: 'Perfil → Integraciones → Conectar con Strava. Después, Entreno → Sincronizar Strava.', act: 'tab', v: 'perfil', btn: 'Ir al Perfil' },
-      { t: 'Mapas interactivos y subida de rutas GPX', d: 'En Rutas ya hay un mapa: elige una salida y verás su recorrido (orientativo). Con «Subir ruta GPX» cargas un archivo de tu móvil: leemos los km y el desnivel en tu propio teléfono, dibujamos la ruta y la guardas en tu cuenta. Es gratis para todos.', como: bici ? 'Bici → Rutas → Mapa → Subir ruta GPX.' : 'Aparece cuando tu rutina incluye bici: Entreno → Rutinas → Cambiar días o tipos → marca Bici.', act: bici ? 'nov-rutas' : 'nov-bici', v: 'rutas', btn: bici ? 'Ver el mapa' : 'Añadir bici a mi rutina' },
+      { t: 'Mapas interactivos y subida de rutas GPX', d: 'En Rutas ya hay un mapa: elige una salida y verás su recorrido (orientativo). Con «Subir ruta GPX» cargas un archivo de tu móvil: leemos los km y el desnivel en tu propio teléfono, dibujamos la ruta y la guardas en tu cuenta. Es gratis para todos.', como: bici ? 'Bici → Rutas → Mapa → Subir ruta GPX.' : 'Se activa en Engranaje → «Mostrar funciones de Ciclismo».', act: bici ? 'nov-rutas' : 'cfg-open', v: 'rutas', btn: bici ? 'Ver el mapa' : 'Abrir Configuración' },
       { t: 'Foto del plato con IA', d: 'Haz una foto a tu plato: la IA reconoce los alimentos, estima los gramos y cómo están cocinados, y los busca en la tabla de la app. Tú revisas y corriges antes de guardar.', como: 'Nutrición → «Foto con IA» en cada comida. Tienes 10 consultas de IA al día.', act: 'tab', v: 'nutricion', btn: 'Ir a Nutrición' },
-      { t: 'Recomendación de piezas con IA', d: 'En el Taller, la IA lee tu bici, sus componentes y tu presupuesto, y te propone 3 piezas compatibles con precio orientativo que puedes añadir a tu lista de compra.', como: bici ? 'Bici → Taller → Recomendación con IA.' : 'Aparece cuando tu rutina incluye bici: Entreno → Rutinas → Cambiar días o tipos → marca Bici.', act: bici ? 'tab' : 'nov-bici', v: 'taller', btn: bici ? 'Ir al Taller' : 'Añadir bici a mi rutina' },
-      { t: 'Elige qué registras cada día', d: 'Si hoy te tocaba fuerza pero sales en bici o a correr, «Registrar» te pregunta qué has hecho: fuerza, bici o cardio.', como: 'Inicio → Entreno de hoy → Registrar, o Entreno → Registrar. También tocando un día de la semana.', act: 'nov-wk', v: 'semana', btn: 'Ir a Entreno' },
+      { t: 'Recomendación de piezas con IA', d: 'En el Taller, la IA lee tu bici, sus componentes y tu presupuesto, y te propone 3 piezas compatibles con precio orientativo que puedes añadir a tu lista de compra.', como: bici ? 'Bici → Taller → Recomendación con IA.' : 'Se activa en Engranaje → «Mostrar funciones de Ciclismo».', act: bici ? 'tab' : 'cfg-open', v: 'taller', btn: bici ? 'Ir al Taller' : 'Abrir Configuración' },
+      { t: 'Elige qué registras cada día', d: 'Si hoy te tocaba fuerza pero sales en bici o a correr, «Iniciar entreno» te pregunta qué has hecho: fuerza, bici o cardio.', como: 'Inicio → Entreno de hoy, o Entreno → Iniciar entreno. También tocando un día de la semana.', act: 'nov-wk', v: 'semana', btn: 'Ir a Entreno' },
       { t: 'Descanso entre series', d: 'En el entreno en directo, al marcar una serie empieza una cuenta atrás de 90 segundos con +30s, −30s y Saltar. Suena y vibra al acabar, y recuerda el tiempo que elijas.', como: 'Entreno en directo → marca una serie con ✓.', act: 'nov-wk', v: 'semana', btn: 'Ir a Entreno' },
       { t: 'Repetir de ayer y código de barras', d: 'Cada comida tiene «Repetir de ayer» para copiar lo que comiste ayer en esa comida. Y en el buscador puedes escanear el código de barras de un producto con la cámara.', como: 'Nutrición → debajo de cada comida, o el icono de código de barras junto al buscador.', act: 'tab', v: 'nutricion', btn: 'Ir a Nutrición' },
-      { t: 'Pestaña Bici', d: 'Rutas y Taller están ahora juntos en una sola pestaña, «Bici», con dos apartados arriba. La barra de abajo queda más despejada.', como: bici ? 'Pestaña Bici, abajo.' : 'Aparece cuando tu rutina incluye bici: Entreno → Rutinas → Cambiar días o tipos → marca Bici.', act: bici ? 'tab' : 'nov-bici', v: 'bici', btn: bici ? 'Ir a Bici' : 'Añadir bici a mi rutina' },
+      { t: 'Pestaña Bici', d: 'Rutas y Taller están ahora juntos en una sola pestaña, «Bici», con dos apartados arriba. La barra de abajo queda más despejada.', como: bici ? 'Pestaña Bici, abajo.' : 'Se activa en Engranaje → «Mostrar funciones de Ciclismo».', act: bici ? 'tab' : 'cfg-open', v: 'bici', btn: bici ? 'Ir a Bici' : 'Abrir Configuración' },
       { t: 'Mis rutinas', d: 'Guarda varias rutinas, ponles nombre y cambia entre ellas cuando quieras.', como: 'Entreno → Rutinas.', act: 'nov-wk', v: 'rutina', btn: 'Ver mis rutinas' },
       { t: 'Objetivos de bici, cardio y pesos', d: 'Ponte metas como km de bici a la semana, minutos de cardio, entrenos por semana o kilos en un ejercicio, y mira cuánto te falta.', como: 'Entreno → Objetivos → Nuevo.', act: 'nov-wk', v: 'objetivos', btn: 'Crear un objetivo' },
       { t: 'Nutrición', d: 'Apunta lo que comes con más de 550 alimentos (queso de Burgos incluido), productos de marca y cómo los preparas. Tu objetivo de calorías sube los días que entrenas.', como: 'Pestaña Nutrición → «Añadir» en cada comida.', act: 'tab', v: 'nutricion', btn: 'Apuntar comida' },
@@ -1460,18 +1466,28 @@ export function crearSecciones(ctx) {
       { t: 'Progreso', d: 'Calcula tu % de grasa con cinta métrica o plicómetro, y mira tu forma, fatiga y frescura.', como: 'Pestaña Progreso → Cuerpo o Forma.', act: 'tab', v: 'progreso', btn: 'Ver progreso' },
     ];
   }
-  const novNueva = () => P().novVista !== NOV_V;
+  let novLS = ''; try { novLS = localStorage.getItem('cadencia-nov') || ''; } catch (e) { /* nada */ }
+  const novNueva = () => P().novVista !== NOV_V && novLS !== NOV_V;
   const novBell = () => `<button type="button" class="iconbtn bell" data-act="nov-open" aria-label="Novedades${novNueva() ? ' (hay nuevas)' : ''}">${ICO.bell}${novNueva() ? '<i></i>' : ''}</button>`;
-  function novedadesHTML() {
-    if (!novNueva() && !st.novOpen) return '';
-    return `<section class="card nov" id="novedades">
-      <div class="card-head"><h2>${ICO.spark} Novedades</h2><button class="iconbtn" data-act="nov-ok" aria-label="Cerrar">${ICO.close}</button></div>
-      <p class="small muted">Lo nuevo en Cadencia y dónde encontrarlo.</p>
-      <div class="nov-list">${novItems().map((x, i) => `<details class="nov-i"${i === 0 ? ' open' : ''}><summary>${esc(x.t)}</summary>
-        <p>${esc(x.d)}</p><p class="small"><b>Cómo:</b> ${esc(x.como)}</p>
-        <button class="btn small" data-act="${x.act}" data-v="${x.v}">${esc(x.btn)}</button></details>`).join('')}</div>
-      <button class="btn ghost block" data-act="nov-ok">Entendido</button>
-    </section>`;
+  // Cierra la ventana y recuerda la versión vista (en el móvil y en tu perfil) para no volver a mostrarla hasta la próxima actualización.
+  function novCerrar() {
+    st.novOpen = false; st.novDone = true; novLS = NOV_V;
+    try { localStorage.setItem('cadencia-nov', NOV_V); } catch (e) { /* nada */ }
+    if (P().novVista !== NOV_V) saveProfile({ novVista: NOV_V });
+  }
+  function novModalHTML() {
+    if (!(st.novOpen || (novNueva() && !st.novDone))) return '';
+    return `<div class="modal-back" data-act="nov-ok"></div>
+      <div class="modal nov-modal" role="dialog" aria-modal="true" aria-labelledby="nov-t">
+        <div class="modal-head"><h2 id="nov-t">${ICO.spark} Novedades</h2><button type="button" class="iconbtn" data-act="nov-ok" aria-label="Cerrar">${ICO.close}</button></div>
+        <div class="modal-body">
+          <p class="small muted">Lo nuevo en Cadencia y dónde encontrarlo.</p>
+          <div class="nov-list">${novItems().map((x, i) => `<details class="nov-i"${i === 0 ? ' open' : ''}><summary>${esc(x.t)}</summary>
+            <p>${esc(x.d)}</p><p class="small"><b>Cómo:</b> ${esc(x.como)}</p>
+            <button class="btn small" data-act="${x.act}" data-v="${x.v}">${esc(x.btn)}</button></details>`).join('')}</div>
+        </div>
+        <div class="modal-foot"><button class="btn block" data-act="nov-ok">Entendido</button></div>
+      </div>`;
   }
 
   /* ================================================================ */
@@ -1593,5 +1609,5 @@ export function crearSecciones(ctx) {
     return '';
   }
 
-  return { pararPro, afterRender, tabs, tabActual, tieneBici, cargar, view, sheet, homeCards, wkBiciHTML, click, input, change, submit, novBell, novedadesHTML, viewObjetivos };
+  return { pararPro, afterRender, tabs, tabActual, tieneBici, cargar, view, sheet, homeCards, wkBiciHTML, click, input, change, submit, novBell, novModalHTML, novCerrar, viewObjetivos };
 }

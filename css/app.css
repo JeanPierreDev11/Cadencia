@@ -1036,3 +1036,35 @@ details.comp { border: 1px solid var(--bd); border-radius: 2px; }
 .tabbar nav.n6 button, .tabbar nav.n5 button { font-size: 9.5px; letter-spacing: .02em; }
 .btn.block[href] { text-decoration: none; display: flex; align-items: center; justify-content: center; }
 .main > .perfil-form { padding-left: 0 !important; padding-right: 0 !important; }
+
+/* ---------- Asistente de rutinas, Entreno y Novedades (v27) ---------- */
+.ob-track { height: 3px; }
+.ob-track i { transition: width .25s ease-out; }
+.choices.big .choice { padding: 18px 16px; min-height: 68px; font-size: 17px; }
+.choices.big .choice .t small { font-weight: 400; }
+.numgrid.big { grid-template-columns: repeat(4, 1fr); }
+.numgrid.big .numbtn { font-size: 32px; font-weight: 800; }
+.numgrid.big .numbtn:nth-child(n+5) { grid-column: auto; }
+.choice[aria-pressed="false"]:active { border-color: var(--accent-text); }
+@keyframes stepFwd { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+@keyframes stepBack { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+.step-in.fwd { animation: stepFwd .18s ease-out; }
+.step-in.back { animation: stepBack .18s ease-out; }
+@media (prefers-reduced-motion: reduce) { .step-in { animation: none !important; } }
+.minbox + .minbox { margin-left: 6px; }
+.cta-row { padding: 4px 0 14px; }
+.cta-row .btn { min-height: 52px; font-size: 16px; }
+.sub-h { margin: 18px 0 8px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 800; }
+.sub-h:first-child { margin-top: 4px; }
+.wrow .iconbtn + .iconbtn { margin-left: 2px; }
+
+/* ventana de novedades (pop-up central) */
+.modal-back { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.72); animation: fadeIn .15s ease-out; }
+.modal { position: fixed; z-index: 41; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 64px); display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--bd2); border-radius: 2px; animation: popIn .18s ease-out; }
+.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 12px 12px 18px; border-bottom: 1px solid var(--bd); }
+.modal-head h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 18px; text-transform: uppercase; font-weight: 900; }
+.modal-body { padding: 14px 18px; overflow-y: auto; -webkit-overflow-scrolling: touch; display: grid; gap: 10px; }
+.modal-foot { padding: 12px 18px calc(14px + var(--safe-b)); border-top: 1px solid var(--bd); }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes popIn { from { opacity: 0; transform: translate(-50%, -48%) scale(.97); } to { opacity: 1; transform: translate(-50%, -50%); } }
+.ob-title { overflow-wrap: anywhere; hyphens: auto; }

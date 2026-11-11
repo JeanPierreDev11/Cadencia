@@ -341,6 +341,7 @@ export const SPLITS = {
   full: { t: 'Cuerpo completo', s: 'Todo el cuerpo en cada sesión' },
   weider: { t: 'Un músculo por día', s: 'Pecho, espalda, pierna, hombro y brazos (Weider)' },
   cicl: { t: 'Fuerza para ciclistas', s: 'Pierna, glúteo y core para pedalear con más fuerza' },
+  dep: { t: 'Fuerza para deporte', s: 'Pierna, potencia y core para rendir en tu deporte' },
   auto: { t: 'No lo sé, elige tú', s: 'La app decide según tus días y objetivos' },
 };
 export const SES_FUERZA = {
@@ -364,6 +365,7 @@ export function splitOrden(split, nF, kind) {
   if (split === 'full') return ['full', 'fullB', 'fullC'];
   if (split === 'weider') return ['pecho', 'espalda', 'legs', 'hombro', 'brazos'];
   if (split === 'cicl') return ['cicl', 'fullB'];
+  if (split === 'dep') return ['pierna', 'fullB', 'torso'];
   if (kind === 'rend') return ['cicl', 'fullB', 'torso'];
   if (nF <= 2) return ['full', 'fullB'];
   if (nF === 3) return kind === 'fuerza' ? ['push', 'pull', 'legs'] : ['full', 'fullB', 'fullC'];
@@ -407,24 +409,28 @@ export const musculosDe = (foco) => (SES_FUERZA[foco] ? SES_FUERZA[foco].m : [])
 
 /* ---------- sesiones de bici y cardio ---------- */
 export const SES_BICI = [
-  { id: 'b-int-sub', n: 'Intervalos en subida', d: 'Calienta 15 min. 5 × 4 min fuerte subiendo, con 3 min suaves entre medias. Vuelta a la calma 10 min.', min: 70, cat: 'calidad' },
-  { id: 'b-tempo', n: 'Tempo sostenido', d: 'Calienta 15 min. 2 × 20 min a ritmo exigente pero constante, con 5 min suaves entre bloques.', min: 75, cat: 'calidad' },
-  { id: 'b-sprint', n: 'Sprints cortos', d: 'Calienta 20 min. 8 × 30 s a tope con 4 min muy suaves. Termina suave.', min: 60, cat: 'calidad' },
+  { id: 'b-int-sub', n: 'Intervalos en subida', d: 'Calienta 15 min. 5 × 4 min fuerte subiendo, con 3 min suaves entre medias. Vuelta a la calma 10 min.', min: 70, km: 28, cat: 'calidad' },
+  { id: 'b-tempo', n: 'Tempo sostenido', d: 'Calienta 15 min. 2 × 20 min a ritmo exigente pero constante, con 5 min suaves entre bloques.', min: 75, km: 32, cat: 'calidad' },
+  { id: 'b-sprint', n: 'Sprints cortos', d: 'Calienta 20 min. 8 × 30 s a tope con 4 min muy suaves. Termina suave.', min: 60, km: 25, cat: 'calidad' },
   { id: 'b-rodillo', n: 'Intervalos en rodillo', d: 'Calienta 10 min. 6 × 3 min fuerte con 2 min suaves. Ideal si llueve.', min: 50, cat: 'calidad' },
-  { id: 'b-z2', n: 'Zona 2 constante', d: 'Ritmo en el que puedes hablar sin ahogarte. Mejor por terreno llano o con poca pendiente.', min: 75, cat: 'base' },
-  { id: 'b-cadencia', n: 'Técnica de cadencia', d: 'Rodaje suave con 6 × 2 min a cadencia alta (más de 100 pedaladas por minuto).', min: 60, cat: 'base' },
-  { id: 'b-recup', n: 'Recuperación', d: 'Muy suave, piernas sueltas. Si te cuesta hablar, vas demasiado rápido.', min: 45, cat: 'base' },
-  { id: 'b-fondo', n: 'Fondo largo', d: 'Salida larga a ritmo cómodo. Come algo cada 45 min y bebe a menudo.', min: 150, cat: 'fondo' },
-  { id: 'b-fondo-puertos', n: 'Fondo con puertos', d: 'Salida larga enlazando subidas a ritmo controlado, sin cebarte en ninguna.', min: 180, cat: 'fondo' },
+  { id: 'b-z2', n: 'Zona 2 constante', d: 'Ritmo en el que puedes hablar sin ahogarte. Mejor por terreno llano o con poca pendiente.', min: 75, km: 35, cat: 'base' },
+  { id: 'b-cadencia', n: 'Técnica de cadencia', d: 'Rodaje suave con 6 × 2 min a cadencia alta (más de 100 pedaladas por minuto).', min: 60, km: 28, cat: 'base' },
+  { id: 'b-recup', n: 'Recuperación', d: 'Muy suave, piernas sueltas. Si te cuesta hablar, vas demasiado rápido.', min: 45, km: 20, cat: 'base' },
+  { id: 'b-fondo', n: 'Fondo largo', d: 'Salida larga a ritmo cómodo. Come algo cada 45 min y bebe a menudo.', min: 150, km: 90, cat: 'fondo' },
+  { id: 'b-fondo-puertos', n: 'Fondo con puertos', d: 'Salida larga enlazando subidas a ritmo controlado, sin cebarte en ninguna.', min: 180, km: 85, cat: 'fondo' },
 ];
 export const SES_CARDIO = [
-  { id: 'c-correr', n: 'Carrera suave', d: 'Ritmo cómodo: puedes hablar mientras corres.', min: 40, cat: 'base' },
+  { id: 'c-correr', n: 'Carrera suave', d: 'Ritmo cómodo: puedes hablar mientras corres.', min: 40, km: 6, cat: 'base' },
   { id: 'c-eliptica', n: 'Elíptica continua', d: 'Ritmo moderado y constante.', min: 40, cat: 'base' },
   { id: 'c-remo', n: 'Remo continuo', d: 'Ritmo constante, espalda recta y empujando con las piernas.', min: 30, cat: 'base' },
   { id: 'c-caminata', n: 'Caminata en cuesta', d: 'Cinta inclinada al 8-12 % a paso rápido.', min: 45, cat: 'base' },
-  { id: 'c-series', n: 'Series de carrera', d: 'Calienta 10 min. 6 × 2 min rápido con 2 min trotando.', min: 40, cat: 'calidad' },
+  { id: 'c-series', n: 'Series de carrera', d: 'Calienta 10 min. 6 × 2 min rápido con 2 min trotando.', min: 40, km: 5, cat: 'calidad' },
   { id: 'c-hiit-remo', n: 'Intervalos de remo', d: 'Calienta 5 min. 8 × 1 min fuerte con 1 min suave.', min: 30, cat: 'calidad' },
   { id: 'c-hiit-eliptica', n: 'Intervalos en elíptica', d: 'Calienta 5 min. 10 × 1 min fuerte con 1 min suave.', min: 35, cat: 'calidad' },
+  { id: 'c-largo', n: 'Tirada larga', d: 'Rodaje largo a ritmo cómodo. Hidrátate y no te pases de ritmo: tienes que poder hablar.', min: 70, km: 12, cat: 'fondo' },
+  { id: 'c-tempo-run', n: 'Tempo run', d: 'Calienta 10 min. 20 min a ritmo exigente pero constante. Vuelta a la calma 10 min.', min: 45, km: 8, cat: 'calidad' },
+  { id: 'c-cuestas', n: 'Cuestas', d: 'Calienta 15 min. 8 × 45 s cuesta arriba fuerte, bajando trotando. Vuelta a la calma 10 min.', min: 45, km: 6, cat: 'calidad' },
+  { id: 'c-recup-run', n: 'Trote de recuperación', d: 'Muy suave, en conversación. Piernas sueltas.', min: 30, km: 4, cat: 'base' },
   { id: 'c-comba', n: 'Comba por intervalos', d: '10 × 1 min de comba con 1 min de descanso.', min: 25, cat: 'calidad' },
 ];
 const BICI_ORDEN = {
@@ -433,6 +439,9 @@ const BICI_ORDEN = {
   fuerza: ['b-z2', 'b-recup', 'b-fondo', 'b-cadencia', 'b-z2', 'b-recup', 'b-z2'],
   general: ['b-fondo', 'b-z2', 'b-cadencia', 'b-tempo', 'b-recup', 'b-z2', 'b-z2'],
 };
+// Si lo que entrenas es correr, las sesiones de cardio son de carrera.
+const RUN_ORDEN = ['c-correr', 'c-series', 'c-largo', 'c-recup-run', 'c-tempo-run', 'c-cuestas', 'c-correr'];
+const ESCALA_EXP = { nuevo: 0.7, meses: 0.85, anio: 1, anios: 1.1, compite: 1.25 };
 const CARDIO_ORDEN = {
   rend: ['c-correr', 'c-series', 'c-eliptica', 'c-hiit-remo', 'c-remo', 'c-comba', 'c-caminata'],
   grasa: ['c-correr', 'c-hiit-eliptica', 'c-caminata', 'c-series', 'c-remo', 'c-comba', 'c-eliptica'],
@@ -446,7 +455,14 @@ export function alternativasSesion(t, id) {
   const cur = lib.find((s) => s.id === id);
   return lib.filter((s) => s.id !== id).sort((a, b) => (cur ? (b.cat === cur.cat) - (a.cat === cur.cat) : 0));
 }
-function sesionLib(t, id) { const s = sesionPorId(id); return { t, nombre: s.n, min: s.min, ses: s.id }; }
+function sesionLib(t, id) { const s = sesionPorId(id); const o = { t, nombre: s.n, min: s.min, ses: s.id }; if (s.km) o.km = s.km; return o; }
+// Ajusta tiempo y km de una sesión de bici o cardio a tu experiencia (múltiplos de 5 min y de 1 km).
+function escalarSesion(o, exp) {
+  const f = ESCALA_EXP[exp] || 1;
+  if (o.min) o.min = Math.max(20, Math.round((o.min * f) / 5) * 5);
+  if (o.km) o.km = Math.max(2, Math.round(o.km * f));
+  return o;
+}
 
 /* ---------- reparto de días según lo que entrenas y tus objetivos ---------- */
 const PESOS = {
@@ -516,7 +532,7 @@ export function proponerRutina(cfg, goals) {
   const seq = repartir(cfg.tipos, dias.length, kind);
   const nB = seq.filter((t) => t === 'bici').length;
   const bici = BICI_ORDEN[kind].slice(0, nB).sort((a, b) => (sesionPorId(a).cat === 'fondo') - (sesionPorId(b).cat === 'fondo'));
-  const cardio = CARDIO_ORDEN[kind];
+  const cardio = cfg.run ? RUN_ORDEN : CARDIO_ORDEN[kind];
   const nF = seq.filter((t) => t === 'fuerza').length;
   const fOrd = splitOrden(cfg.split, nF, kind);
   let fi = 0, bi = 0, ci = 0;
@@ -530,8 +546,8 @@ export function proponerRutina(cfg, goals) {
       previas[key] = [...(previas[key] || []), ...ses.ej.map((e) => e.n)];
       sesiones[d] = ses;
     }
-    else if (t === 'bici') sesiones[d] = sesionLib('bici', bici[bi++ % bici.length]);
-    else if (t === 'cardio') sesiones[d] = sesionLib('cardio', cardio[ci++ % cardio.length]);
+    else if (t === 'bici') sesiones[d] = cfg.escalar ? escalarSesion(sesionLib('bici', bici[bi++ % bici.length]), cfg.exp) : sesionLib('bici', bici[bi++ % bici.length]);
+    else if (t === 'cardio') sesiones[d] = cfg.escalar ? escalarSesion(sesionLib('cardio', cardio[ci++ % cardio.length]), cfg.exp) : sesionLib('cardio', cardio[ci++ % cardio.length]);
     else sesiones[d] = sesionVacia('otro', cfg.otro);
   });
   return { tipos: cfg.tipos, otro: cfg.otro || '', dias, modo: 'propuesta', split: cfg.split || 'auto', exp: cfg.exp || '', equipo: cfg.equipo || null, sesiones };

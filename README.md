@@ -94,7 +94,11 @@ Al crear la cuenta hay que aceptar los términos (se guarda `legal {v, fecha}` e
 
 ## Novedades
 
-Cuando publiques algo nuevo, cambia `NOV_V` y la lista de `novItems()` en `js/secciones.js`: a cada persona le saldrá la nota en Inicio hasta que pulse «Entendido».
+Cuando publiques algo nuevo, cambia `NOV_V` y la lista de `novItems()` en `js/secciones.js`: a cada persona le saldrá una ventana central al abrir la app tras la actualización; al cerrarla con la X se guarda la versión vista (en el móvil y en su perfil) y no vuelve hasta el siguiente cambio de `NOV_V`. La campana de Inicio la reabre.
+
+## Pestaña Bici y asistente de rutinas
+
+La pestaña Bici solo aparece si el perfil tiene `ciclismo: true` (se marca al registrarse eligiendo Bici, al crear una rutina de bici o con el interruptor «Mostrar funciones de Ciclismo» en Configuración). Sin ese campo, se mira si la rutina incluye bici. Las rutinas se crean con un asistente paso a paso (`js/entreno-ui.js`) que usa el motor de `js/entreno.js`; no hay `science_db.json`: los ejercicios y sesiones salen de las tablas de ese archivo.
 
 ## Productos de marca
 
