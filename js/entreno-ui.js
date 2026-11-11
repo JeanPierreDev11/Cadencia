@@ -77,7 +77,7 @@ function homeTraining() {
 /* ---------- pestaña Entreno ---------- */
 function viewEntreno() {
   if (!rutinaOf()) {
-    return `${ctx.stravaBtn ? ctx.stravaBtn() : ''}<div class="wk-empty"><button type="button" class="addbig" data-act="rw-start"><span class="addbig-c">${I.plusBig}</span><span>Añadir rutina</span></button></div>`;
+    return `${ctx.stravaBtn ? ctx.stravaBtn() : ''}<div class="wk-empty"><button type="button" class="addbig" data-act="rw-start"><span class="addbig-c">${I.plusBig}</span><span>Añadir rutina</span></button><button type="button" class="btn ghost" data-act="rut-imp">Importar rutina con un código</button></div>`;
   }
   const today = todayISO(), mon = E.mondayOf(today), sun = E.addDays(mon, 6);
   const sub = ['semana', 'rutina', 'objetivos'].includes(st.wkTab) ? st.wkTab : 'semana';
@@ -285,7 +285,7 @@ async function saveRutina(R, rid) {
   const res = normRutina(R);
   if (res.error) return res.error;
   const list = rutinasList(), act = rutinaOf(), id = rid || nidR(), prev = list.find((x) => x.id === id);
-  const rut = { ...res.rutina, id, nombre: (prev && prev.nombre) || (list.length ? `Rutina ${list.length + 1}` : 'Mi rutina') };
+  const rut = { ...res.rutina, id, nombre: (prev && prev.nombre) || (list.length ? `Rutina ${list.length + 1}` : 'Mi rutina'), ...(prev && prev.shareCode ? { shareCode: prev.shareCode } : {}) };
   const data = { rutinas: prev ? list.map((x) => (x.id === id ? rut : x)) : [...list, rut] };
   if (!act || !rid || act.id === id) data.rutina = rut;
   if (rut.tipos.includes('bici') && st.profile.ciclismo !== true) data.ciclismo = true;
@@ -318,6 +318,7 @@ function wkRutina() {
       <div class="rut-acts">
         <button class="btn ghost small" data-act="rw-start" data-rid="${esc(r.id)}">Cambiar días o tipos</button>
         <button class="btn ghost small" data-act="rut-dup">Duplicar</button>
+        <button class="btn ghost small" data-act="rut-share">${I.share} Compartir</button>
       </div>
       ${editorHTML(re)}
       ${re.msg ? `<div class="msg" role="alert">${esc(re.msg)}</div>` : ''}
@@ -326,7 +327,7 @@ function wkRutina() {
   return `<section class="card">
       <div class="card-head"><h2>Mis rutinas</h2><span class="head-acts">
         <button type="button" class="iconbtn ${mod ? 'on' : ''}" data-act="rut-mod" aria-pressed="${mod}" aria-label="${mod ? 'Terminar de editar rutinas' : 'Editar o borrar rutinas'}">${mod ? I.check : I.pencil}</button>
-        <button class="chip chipbtn" data-act="rut-new">${I.plus} Nueva</button></span></div>
+        <button class="chip chipbtn" data-act="rut-imp">Importar</button><button class="chip chipbtn" data-act="rut-new">${I.plus} Nueva</button></span></div>
       <div class="rutacc">${list.map((x) => {
         const open = abierta && abierta.id === x.id;
         return `<div class="rutitem ${open ? 'open' : ''}">
@@ -340,6 +341,26 @@ function wkRutina() {
       }).join('')}</div>
     </section>
     ${abierta ? `<div class="savebar" id="re-savebar" ${st.re.dirty ? '' : 'hidden'}><button type="button" class="btn block" data-act="re-save">Guardar cambios</button></div>` : ''}`;
+}
+// Compartir: muestra el código; Importar: pide un código y copia la rutina a tu cuenta.
+function rutShareSheetHTML() {
+  const S = st.rutShare, imp = S.mode === 'import';
+  return `<div class="sheet-back" data-act="rut-share-close"></div>
+    <div class="sheet short" role="dialog" aria-modal="true" aria-label="${imp ? 'Importar rutina' : 'Compartir rutina'}">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><button type="button" class="iconbtn" data-act="rut-share-close" aria-label="Cerrar">${I.back}</button><h2>${imp ? 'Importar rutina' : 'Compartir rutina'}</h2><span style="width:36px"></span></div>
+      <div class="sheet-list form-grid">${imp ? `
+        <p class="small muted">Escribe el código de 6 caracteres que te han pasado. Se añadirá una copia a tus rutinas.</p>
+        <label class="field"><span>Código</span><input class="input code-in" id="rut-code" maxlength="6" autocapitalize="characters" autocomplete="off" placeholder="ABC123"></label>
+        ${S.msg ? `<div class="msg" role="alert">${esc(S.msg)}</div>` : ''}
+        <button type="button" class="btn block" data-act="rut-imp-go" ${S.busy ? 'disabled' : ''}>${S.busy ? '<span class="spinner"></span>' : 'Importar'}</button>`
+      : S.code ? `
+        <p class="small muted">Pásale este código a quien quieras. Podrá importar «${esc(S.nombre || 'tu rutina')}» desde Entreno → Importar.</p>
+        <div class="share-code" aria-label="Código de la rutina">${esc(S.code)}</div>
+        <button type="button" class="btn block" data-act="rut-copy" data-v="${esc(S.code)}">Copiar código</button>
+        <p class="small muted">Si cambias la rutina, vuelve a pulsar Compartir para actualizar lo que verán.</p>`
+      : '<p><span class="spinner"></span> Generando código…</p>'}</div>
+    </div>`;
 }
 function rutDelSheetHTML() {
   const r = rutinasList().find((x) => x.id === st.rutDelAsk), esAct = r && rutinaOf() && r.id === rutinaOf().id, otras = rutinasList().length - 1;
@@ -564,7 +585,7 @@ const GRUPO_MAP = { pecho: 'ch', espalda: 'la', hombro: 'sh', biceps: 'bi', tric
 const MUSC_ESPALDA = new Set(['la', 'mb', 'lb', 'tp', 'gl', 'ha', 'tr']);
 // Silueta y degradados, definidos UNA vez en la página: cada tarjeta solo los referencia (<use>), así el scroll va ligero.
 const ANATOMIA_DEFS = `<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
-  <linearGradient id="an-body" x1="0" x2="1"><stop offset="0" stop-color="#1f1f1f"/><stop offset=".5" stop-color="#4b4b4b"/><stop offset="1" stop-color="#1f1f1f"/></linearGradient>
+  <linearGradient id="an-body" x1="0" x2="1"><stop offset="0" style="stop-color:var(--an-b1)"/><stop offset=".5" style="stop-color:var(--an-b2)"/><stop offset="1" style="stop-color:var(--an-b1)"/></linearGradient>
   <radialGradient id="an-mp" cx=".38" cy=".3" r=".9"><stop offset="0" stop-color="#ff6a5c"/><stop offset=".55" stop-color="#e0201a"/><stop offset="1" stop-color="#8e0c08"/></radialGradient>
   <radialGradient id="an-ms" cx=".38" cy=".3" r=".9"><stop offset="0" stop-color="#ff6a5c" stop-opacity=".6"/><stop offset="1" stop-color="#8e0c08" stop-opacity=".55"/></radialGradient>
   <symbol id="an-sil" viewBox="0 0 60 130"><g fill="url(#an-body)">
@@ -1161,6 +1182,37 @@ root.addEventListener('click', async (e) => {
   // asistente
   if (act === 'rw-start') return rwStart(b.dataset.rid);
   if (act === 'rut-new') return rwStart(null, true);
+  if (act === 'rut-imp') { st.rutShare = { mode: 'import', msg: '', busy: false }; return render(); }
+  if (act === 'rut-share-close') { st.rutShare = null; return render(); }
+  if (act === 'rut-copy') { try { await navigator.clipboard.writeText(v); toast('Código copiado'); } catch (e) { toast(`Tu código es ${v}`); } return; }
+  if (act === 'rut-share') {
+    const list = rutinasList(), r = list.find((x) => x.id === st.rutSel) || rutinaOf();
+    st.rutShare = { mode: 'share', code: '', nombre: r.nombre }; render();
+    try {
+      const code = await api.shareRutina(st.user.uid, r);
+      if (r.shareCode !== code) await saveRutinas(list.map((x) => (x.id === r.id ? { ...x, shareCode: code } : x)), rutinaOf() && rutinaOf().id === r.id ? { ...r, shareCode: code } : null);
+      st.rutShare = { mode: 'share', code, nombre: r.nombre };
+    } catch (err) { st.rutShare = null; toast(errorText(err)); }
+    return render();
+  }
+  if (act === 'rut-imp-go') {
+    const S = st.rutShare, code = ((document.getElementById('rut-code') || {}).value || '').trim().toUpperCase();
+    const fail = (m) => { S.busy = false; S.msg = m; render(); };
+    if (!/^[A-Z0-9]{6}$/.test(code)) return fail('El código tiene 6 letras o números.');
+    S.busy = true; S.msg = ''; render();
+    try {
+      const src = await api.getSharedRutina(code);
+      if (!src || !Array.isArray(src.dias) || !Array.isArray(src.tipos) || !src.sesiones) return fail('No hay ninguna rutina con ese código.');
+      const c = clone(src); delete c.shareCode; delete c.compartida;
+      c.id = nidR(); c.userId = st.user.uid; c.nombre = String(c.nombre || 'Rutina importada').slice(0, 30);
+      const list = rutinasList(), data = { rutinas: [...list, c] };
+      if (!rutinaOf()) data.rutina = c;
+      if (c.tipos.includes('bici') && st.profile.ciclismo !== true) data.ciclismo = true;
+      await api.saveProfile(st.user.uid, data); st.profile = { ...st.profile, ...data };
+      st.rutShare = null; st.rutSel = c.id; st.re = null; st.wkTab = 'rutina'; toast(`Rutina «${c.nombre}» importada`);
+    } catch (err) { return fail(errorText(err)); }
+    return render();
+  }
   if (act === 'rut-sel') { st.rutSel = st.rutSel === v ? null : v; st.re = null; return render(); }
   if (act === 'rut-mod') { st.rutMod = !st.rutMod; return render(); }
   if (act === 'rut-edit') { st.rutSel = v; st.re = null; render(); const el = document.getElementById('rut-' + v); if (el) el.scrollIntoView({ block: 'start' }); return; }
@@ -1183,7 +1235,7 @@ root.addEventListener('click', async (e) => {
     const list = rutinasList(), r = list.find((x) => x.id === st.rutSel) || rutinaOf();
     try {
       if (act === 'rut-use') { await saveRutinas(list, r); st.rutSel = null; toast(`Ahora usas «${r.nombre}»`); }
-      else if (act === 'rut-dup') { const c = { ...clone(r), id: nidR(), nombre: `${r.nombre || 'Rutina'} (copia)`.slice(0, 30) }; await saveRutinas([...list, c]); st.rutSel = c.id; toast('Rutina duplicada'); }
+      else if (act === 'rut-dup') { const c = { ...clone(r), id: nidR(), nombre: `${r.nombre || 'Rutina'} (copia)`.slice(0, 30) }; delete c.shareCode; await saveRutinas([...list, c]); st.rutSel = c.id; toast('Rutina duplicada'); }
     } catch (err) { toast(errorText(err)); }
     st.re = null; return render();
   }
@@ -1383,5 +1435,5 @@ function recuperacionHTML() {
     <div class="rcv-week">${figura(heat, 'front', 'Frente')}${figura(heat, 'back', 'Espalda')}</div>
     <p class="rcv-sub rcv-note">${hay ? 'Cuanto más intenso el amarillo, más volumen.' : 'Aún no has entrenado esta semana.'}</p></section>`;
 }
-  return { regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, recuperacionHTML };
+  return { regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, recuperacionHTML, rutShareSheetHTML };
 }

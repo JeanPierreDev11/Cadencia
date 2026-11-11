@@ -10,6 +10,13 @@ service cloud.firestore {
       allow create: if request.auth != null && request.resource.data.uid == request.auth.uid
         && request.resource.data.texto is string && request.resource.data.texto.size() <= 1000;
     }
+    // Rutinas compartidas por código: el id del documento es el código. Cualquiera con sesión puede leer UNA si sabe el código
+    // (get), pero no listarlas; solo su autor la crea, actualiza o borra.
+    match /shared_routines/{code} {
+      allow get: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid && code.size() == 6;
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
     match /users/{uid} {
       allow read, delete: if request.auth != null && request.auth.uid == uid;
       allow create: if request.auth != null && request.auth.uid == uid

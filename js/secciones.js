@@ -2,7 +2,7 @@
 // Los cálculos (calorías, carga de entreno, nutrición en ruta, ropa, presión de ruedas, % graso)
 // vienen de la librería de la app «Bilbao Ride» (js/br.js); aquí está la parte visual y los datos de cada persona.
 import { FOODS, FOODS_BY_ID, prepOf, prepVals, prepKcal100, normTxt as normFood } from './alimentos.js';
-import { PRO_LINK, PORTAL_LINK, PRO_PRECIO, proUrl } from './pro.js';
+import { PRO_LINK, PORTAL_LINK, proUrl } from './pro.js';
 import { leerGPX, MAX_BYTES } from './gpx.js';
 import { trazado, IDA_Y_VUELTA } from './trazados.js';
 import { crearMapa } from './mapa.js';
@@ -194,7 +194,7 @@ export function crearSecciones(ctx) {
     const eaten = Math.round(tot.k), left = od ? od.target - eaten : 0;
     // Anillo de progreso (SVG con stroke): pista gris y arco amarillo que se completa con frac (0–1).
     const ring = (frac, size, sw, inner) => { const r = (size - sw) / 2, c = 2 * Math.PI * r, f = Math.max(0, Math.min(1, frac || 0)), m = size / 2;
-      return `<span class="ring" style="width:${size}px;height:${size}px"><svg viewBox="0 0 ${size} ${size}" aria-hidden="true"><circle cx="${m}" cy="${m}" r="${r}" fill="none" stroke="#333" stroke-width="${sw}"/><circle class="arc" cx="${m}" cy="${m}" r="${r}" fill="none" stroke="#F2BE1A" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${(c * (1 - f)).toFixed(1)}" style="--c:${c.toFixed(1)}" transform="rotate(-90 ${m} ${m})"/></svg>${inner ? `<span class="ring-in">${inner}</span>` : ''}</span>`; };
+      return `<span class="ring" style="width:${size}px;height:${size}px"><svg viewBox="0 0 ${size} ${size}" aria-hidden="true"><circle cx="${m}" cy="${m}" r="${r}" fill="none" class="trk" stroke-width="${sw}"/><circle class="arc" cx="${m}" cy="${m}" r="${r}" fill="none" stroke="#F2BE1A" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${(c * (1 - f)).toFixed(1)}" style="--c:${c.toFixed(1)}" transform="rotate(-90 ${m} ${m})"/></svg>${inner ? `<span class="ring-in">${inner}</span>` : ''}</span>`; };
     const mac = (nom, ico, v, obj) => { const left = obj != null ? obj - Math.round(v) : null;
       return `<div class="nd-mac"><b class="num">${nf(left != null ? Math.abs(left) : Math.round(v))}g</b><span class="nd-l">${nom} ${left == null ? (nom === 'Proteína' ? 'tomada' : 'tomados') : left >= 0 ? (nom === 'Proteína' ? 'restante' : 'restantes') : 'de más'}</span>${ring(obj ? v / obj : 0, 52, 5, ico)}</div>`; };
     h += `<div class="daynav nd-nav">
@@ -1240,12 +1240,13 @@ export function crearSecciones(ctx) {
     sondeo = setInterval(() => { if (esPro() || ++n > 60) { clearInterval(sondeo); sondeo = null; return; } refrescarPro(false); }, 5000);
   }
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && st.user && st.profile && !esPro()) refrescarPro(false); });
-  function proWelcomeSheet() {
-    const ventajas = [
+  const proVentajas = () => [
       [ICO.camara, 'Escanear alimento', 'Haz una foto a tu plato y la IA calcula las calorías y los macros. Tú lo revisas y lo guardas.'],
       [ICO.spark, 'Recomendaciones para tu bici', 'En el Taller, 3 piezas compatibles con tu bici y tu presupuesto, con precio aproximado.'],
       [I.check, '10 consultas de IA al día', 'Se reparten entre fotos y recomendaciones, y se renuevan cada día.'],
-    ];
+  ];
+  function proWelcomeSheet() {
+    const ventajas = proVentajas();
     return `<div class="sheet-back" data-act="pro-welcome-close"></div>
       <div class="sheet short paywall" role="dialog" aria-modal="true" aria-label="Bienvenida a Cadencia Pro">
         <div class="sheet-grab"></div>
@@ -1268,11 +1269,7 @@ export function crearSecciones(ctx) {
         <div class="sheet-grab"></div>
         <div class="sheet-head"><button type="button" class="iconbtn" data-act="pro-close" aria-label="Cerrar">${I.back}</button><h2>Cadencia Pro</h2><span style="width:36px"></span></div>
         <div class="sheet-list pw">
-          <div class="pw-ico">${ICO.spark}</div>
-          <h3>Cadencia Pro</h3>
-          <p>Desbloquea la IA para escanear tus platos al instante y recibir recomendaciones personalizadas para tu bici.</p>
-          <div class="pw-price"><b>${esc(PRO_PRECIO.split('/')[0])}</b><span>/mes</span></div>
-          <p class="small muted">Cancela cuando quieras.</p>
+          <ul class="pw-list">${proVentajas().map(([ic, t, d]) => `<li><span class="pw-li-i">${ic}</span><span><b>${t}</b><small>${d}</small></span></li>`).join('')}</ul>
           ${go}
           ${PRO_LINK ? '<p class="small muted">Paga con el mismo email de tu cuenta de Cadencia. Al volver a la app, tu cuenta se actualiza sola.</p>' : ''}
           <button type="button" class="btn ghost block" data-act="pro-refresh">Ya he pagado: actualizar</button>

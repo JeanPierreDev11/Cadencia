@@ -4,7 +4,7 @@ import * as E from './entreno.js';
 import { crearSecciones, NOV_V } from './secciones.js';
 import { crearEntreno } from './entreno-ui.js';
 import { LEGAL_V, legalHTML, CONTACTO } from './legal.js';
-import { PORTAL_LINK, PRO_PRECIO } from './pro.js';
+import { PORTAL_LINK } from './pro.js';
 import { leerRetorno } from './strava.js';
 import { crearRecordatorios, leerIr } from './push.js';
 import { crearStrava } from './strava-ui.js';
@@ -20,7 +20,7 @@ const GOALS = [
   { id: 'perder', t: 'Perder grasa', s: 'Bajar peso sin perder fuerza', ico: '<path d="M12 4v14M6 12l6 6 6-6"/>' },
   { id: 'musculo', t: 'Ganar músculo', s: 'Más fuerza en piernas y tronco', ico: '<path d="M4 10v4M7 7v10M17 7v10M20 10v4M7 12h10"/>' },
   { id: 'rendimiento', t: 'Rendir más en la bici', s: 'Más potencia y fondo en las subidas', ico: '<path d="M3 18l6-8 4 5 3-4 5 7"/>' },
-  { id: 'prueba', t: 'Preparar una marcha', s: 'Llegar en forma a una fecha concreta', ico: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>' },
+  { id: 'prueba', t: 'Preparar un maratón', s: 'Llegar en forma a una fecha concreta', ico: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>' },
   { id: 'mantener', t: 'Mantener mi peso', s: 'Estable y con energía', ico: '<path d="M4 12h16M8 8l-4 4 4 4M16 8l4 4-4 4"/>' },
   { id: 'salud', t: 'Ganar salud', s: 'Dormir mejor, menos estrés, más vitalidad', ico: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>' },
 ];
@@ -69,7 +69,7 @@ function render() {
   else if (st.view === 'error') root.innerHTML = viewError();
   document.title = APP_NAME;
   if (M) M.afterRender();
-  document.body.classList.toggle('noscroll', !!(st.pf || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.legal || st.del || st.pro || st.proWelcome || st.recAsk));
+  document.body.classList.toggle('noscroll', !!(st.pf || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.legal || st.del || st.pro || st.proWelcome || st.recAsk));
 }
 
 /* ================================================================== */
@@ -205,12 +205,22 @@ async function onForgot() {
 const OB_STEPS = 5; // objetivos, qué entrenas, sobre ti, estatura, peso (+ resumen)
 const OB_ENTRENOS = [['fuerza', 'Fuerza', 'Gimnasio, calistenia…', () => I.dumb], ['bici', 'Bici', 'Carretera, rodillo…', () => I.bike], ['cardio', 'Running', 'Correr en calle, cinta o monte', () => I.pulse], ['otro', 'Otro deporte', 'Fútbol, natación…', () => I.ball]];
 
+// Nombre de usuario: solo letras, números, _ y -, sin espacios (3–20).
+const USER_RE = /^[a-zA-Z0-9_-]+$/;
+const userErr = (u) => (!u ? 'Escribe tu nombre de usuario.' : u.length < 3 || u.length > 20 ? 'El nombre de usuario tiene de 3 a 20 caracteres.' : !USER_RE.test(u) ? 'El usuario solo admite letras, números, guion bajo (_) y guion medio (-), sin espacios.' : '');
+// «Nombre» y «Apellidos» a partir de lo guardado (o del nombre completo con el que se registró).
+function nomApe(p, fallback = '') {
+  const full = (p.nombreCompleto || p.nombre || fallback || '').trim().replace(/\s+/g, ' '), nom = p.nombre || full.split(' ')[0] || '';
+  return [nom, p.apellidos != null ? p.apellidos : (full.startsWith(nom) ? full.slice(nom.length).trim() : '')];
+}
+
 function startOnboarding() {
   const p = st.profile || {};
   st.ob = {
     step: 0,
     objetivos: p.objetivos || [],
     entrenos: Array.isArray(p.entrenos) ? p.entrenos : [],
+    nombre: nomApe(p, st.user && st.user.name)[0], apellidos: nomApe(p, st.user && st.user.name)[1], usuario: p.usuario || '',
     sexo: p.sexo || '', edad: p.edad ? String(p.edad) : '',
     alturaCm: p.alturaCm ? String(p.alturaCm) : '', pesoKg: p.pesoKg ? nf(p.pesoKg, 1) : '',
     pesoObjetivo: p.pesoObjetivo ? nf(p.pesoObjetivo, 1) : '',
@@ -241,6 +251,9 @@ function viewOnboarding() {
   } else if (s === 2) {
     body = `<h1 class="ob-title">Cuéntanos sobre ti</h1>
       <p class="ob-sub">Con esto calculamos cuánta energía gasta tu cuerpo.</p>
+      <label class="field"><span>Nombre</span><input class="input" data-ob="nombre" value="${esc(o.nombre)}" maxlength="40" autocomplete="given-name" required></label>
+      <label class="field"><span>Apellidos</span><input class="input" data-ob="apellidos" value="${esc(o.apellidos)}" maxlength="60" autocomplete="family-name" required></label>
+      <label class="field"><span>Nombre de usuario</span><input class="input" data-ob="usuario" value="${esc(o.usuario)}" maxlength="20" autocapitalize="none" autocomplete="username" placeholder="ej. jean_ramirez" required><small>Letras, números, _ y -, sin espacios.</small></label>
       <div class="field"><span>Sexo</span>
         <div class="pair">
           <button type="button" class="choice" data-act="sex" data-v="hombre" aria-pressed="${o.sexo === 'hombre'}"><span class="ico">${I.male}</span>Hombre</button>
@@ -250,7 +263,7 @@ function viewOnboarding() {
       <label class="field"><span>Edad</span>
         <div class="big-input"><input name="edad" inputmode="numeric" pattern="[0-9]*" maxlength="3" value="${esc(o.edad)}" placeholder="30" data-ob="edad"><em>años</em></div>
       </label>`;
-    canNext = !!o.sexo && !!o.edad;
+    canNext = !!o.sexo && !!o.edad && !!o.nombre.trim() && !!o.apellidos.trim() && !!o.usuario;
   } else if (s === 3) {
     body = `<h1 class="ob-title">¿Cuánto mides?</h1>
       <label class="field"><span class="sr">Estatura</span>
@@ -306,7 +319,9 @@ function viewOnboarding() {
 function obProfile() {
   const o = st.ob;
   const obj = num(o.pesoObjetivo);
+  const nombre = o.nombre.trim().replace(/\s+/g, ' '), apellidos = o.apellidos.trim().replace(/\s+/g, ' ');
   return {
+    nombre, apellidos, nombreCompleto: `${nombre} ${apellidos}`, usuario: o.usuario.trim(),
     objetivos: o.objetivos, entrenos: o.entrenos, ciclismo: o.entrenos.includes('bici'), sexo: o.sexo, edad: Math.round(num(o.edad)),
     alturaCm: Math.round(num(o.alturaCm)), pesoKg: Math.round(num(o.pesoKg) * 10) / 10,
     pesoObjetivo: isFinite(obj) ? Math.round(obj * 10) / 10 : null,
@@ -316,7 +331,12 @@ function obProfile() {
 
 function obValidate() {
   const o = st.ob, s = o.step;
-  if (s === 2) { const e = num(o.edad); if (!(e >= 14 && e <= 100)) return 'Escribe una edad entre 14 y 100 años.'; }
+  if (s === 2) {
+    if (!o.nombre.trim()) return 'Escribe tu nombre.';
+    if (!o.apellidos.trim()) return 'Escribe tus apellidos.';
+    const ue = userErr(o.usuario.trim()); if (ue) return ue;
+    const e = num(o.edad); if (!(e >= 14 && e <= 100)) return 'Escribe una edad entre 14 y 100 años.';
+  }
   if (s === 3) {
     const h = num(o.alturaCm);
     if (h > 1 && h < 2.5) { o.alturaCm = String(Math.round(h * 100)); return ''; } // escribió metros
@@ -341,7 +361,6 @@ async function obNext() {
     const p = obProfile();
     const uid = st.user.uid;
     const data = { ...p, pesoInicial: p.pesoKg, fechaInicio: todayISO(), onboarded: true, novVista: NOV_V };
-    if (!st.profile || !st.profile.nombre) data.nombre = st.user.name || '';
     await api.saveProfile(uid, data);
     await api.addWeight(uid, todayISO(), p.pesoKg);
     st.profile = { ...(st.profile || {}), ...data };
@@ -367,7 +386,7 @@ function focusFirst() {
 /* ================================================================== */
 // Entreno vive en entreno-ui.js; Nutrición, Rutas, Taller, Progreso y Objetivos en secciones.js.
 const W = crearEntreno({ st, root, get api() { return api; }, render, get M() { return M; }, currentKg: () => currentKg(), goalById: (id) => goalById(id), stravaBtn: () => S.syncBtnHTML() });
-const { rutinaOf, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, regSheetHTML, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, recuperacionHTML } = W;
+const { rutinaOf, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, regSheetHTML, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, recuperacionHTML, rutShareSheetHTML } = W;
 const M = crearSecciones({
   st, get api() { return api; }, render, toast, esc, num, nf, todayISO, fmtDate, lsGet, lsSet, I, E, errorText,
   currentKg: () => currentKg(), rutinaOf: () => rutinaOf(), viewPeso: (sub) => viewPeso(sub),
@@ -379,7 +398,7 @@ let irPendiente = leerIr(); // si venimos de tocar un aviso, aquí queda la pant
 let stravaRet = leerRetorno(); // si venimos de la pantalla de permisos de Strava, aquí queda el código temporal
 
 function viewMain() {
-  const sheet = st.legal ? legalSheetHTML() : st.pf ? pfSheetHTML() : st.modoSel ? modoSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.rutDelAsk ? rutDelSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
+  const sheet = st.legal ? legalSheetHTML() : st.pf ? pfSheetHTML() : st.rutShare ? rutShareSheetHTML() : st.modoSel ? modoSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.rutDelAsk ? rutDelSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
   if (st.rw) return viewRutWizard() + sheet;
   if (st.live && !st.liveMin) return viewLive() + sheet;
   if (st.wk) return viewWkForm();
@@ -807,11 +826,11 @@ function planCardHTML() {
   if (!pro) return `<section class="card" id="plan-card">
       <div class="card-head"><h2>Tu plan</h2><span class="tag" id="plan-tag">Gratuita</span></div>
       <p class="small muted">El registro manual, las rutinas, las rutas y el resto de la app son gratis. Con Pro desbloqueas la IA: Escanear alimento y recomendaciones del Taller.</p>
-      <button class="btn block" data-act="pro-open" data-v="perfil">Hazte Pro · ${esc(PRO_PRECIO)}</button>
+      <button class="btn block" data-act="pro-open" data-v="perfil">Hazte Pro</button>
     </section>`;
   return `<section class="card" id="plan-card">
       <div class="card-head"><h2>Tu plan</h2><span class="tag ok" id="plan-tag">Pro</span></div>
-      <p><b>Cadencia Pro</b> · ${esc(PRO_PRECIO)} · suscripción mensual</p>
+      <p><b>Cadencia Pro</b></p>
       <p class="small muted">Incluye Escanear alimento, recomendaciones del Taller con IA y 10 consultas de IA al día. ${renueva}</p>
       <button type="button" class="btn ghost block" data-act="bill-open">Gestionar suscripción</button>
     </section>`;
@@ -854,9 +873,10 @@ function viewPerfil() {
   const idioma = p.idioma === 'en' ? 'English' : 'Español', tema = { dark: 'Oscuro', light: 'Claro', system: 'Sistema' }[themePref()];
   return `
     <header class="perfil-hero">${fotoHTML(true)}
-      <button type="button" class="btn ghost small" data-act="pf-open" data-v="editar">Editar perfil</button>
-      <h2>${esc((p.nombreCompleto || p.nombre || st.user.name || 'Tu perfil').trim())}</h2>
-      <p class="small muted">${p.usuario ? `@${esc(p.usuario)} · ` : ''}${esc(st.user.email || '')}</p></header>
+      <h2 class="pf-user">${p.usuario ? `@${esc(p.usuario)}` : esc((p.nombreCompleto || p.nombre || st.user.name || 'Tu perfil').trim())}</h2>
+      ${p.isPro === true ? '<span class="pro-badge">👑 PRO</span>' : ''}
+      <p class="small muted">${esc(st.user.email || '')}</p>
+      <button type="button" class="btn ghost small" data-act="pf-open" data-v="editar">Editar perfil</button></header>
     ${planCardHTML()}
     ${S.integracionesHTML()}
     ${pfGrupo('Cuenta', [
@@ -885,20 +905,26 @@ const pfV = (k, d) => (st.pf.f && k in st.pf.f ? st.pf.f[k] : d); // lo escrito 
 // El texto legal es uno solo (legal.js); cada vista toma las secciones que le tocan.
 const pfLegal = (re) => `<div class="sheet-list legal">${legalHTML().split(/(?=<h3>)/).filter((x) => re.test(x.slice(0, 60))).join('')}</div>`;
 
+// «Guardar» solo se activa cuando algún valor es distinto del que había al abrir la hoja.
+const pfCambios = () => { const P = st.pf, g = (x) => JSON.stringify([...(x || [])].sort()); return !!P.ini && (Object.keys(P.f).some((k) => k in P.ini && P.f[k] !== P.ini[k]) || (P.v === 'detalles' && !!st.editGoals && g(st.editGoals) !== g(st.profile.objetivos))); };
+const pfGuardarBtn = () => `<button class="btn block" type="submit" id="pf-save" ${st.pf.busy ? 'disabled' : pfCambios() ? '' : 'disabled'}>${st.pf.busy ? '<span class="spinner"></span>' : 'Guardar'}</button>`;
+const pfBtn = () => { const b = document.getElementById('pf-save'); if (b && st.pf && !st.pf.busy) b.disabled = !pfCambios(); };
+
 function pfCuerpo(v) {
   const p = st.profile;
   if (v === 'editar') {
-    const full = (p.nombreCompleto || p.nombre || '').trim(), nom = p.nombre || full.split(' ')[0] || '';
-    const ape = p.apellidos != null ? p.apellidos : (full.startsWith(nom) ? full.slice(nom.length).trim() : '');
+    const [nom, ape] = nomApe(p);
+    st.pf.ini = { nombre: nom, apellidos: ape, usuario: p.usuario || '' };
     return `<form class="sheet-list form-grid" data-form="pf-editar" novalidate>
       <div class="pf-foto">${fotoHTML(true)}<label class="btn ghost small"><input type="file" accept="image/*" data-foto hidden>Cambiar foto</label></div>
       <label class="field"><span>Nombre</span><input class="input" name="nombre" value="${esc(pfV('nombre', nom))}" autocomplete="given-name" maxlength="40"></label>
       <label class="field"><span>Apellidos</span><input class="input" name="apellidos" value="${esc(pfV('apellidos', ape))}" autocomplete="family-name" maxlength="60"></label>
-      <label class="field"><span>Nombre de usuario</span><input class="input" name="usuario" value="${esc(pfV('usuario', p.usuario || ''))}" autocapitalize="none" autocomplete="username" maxlength="20" placeholder="ej. jean_ramirez"></label>
-      <button class="btn block" type="submit">Guardar</button></form>`;
+      <label class="field"><span>Nombre de usuario</span><input class="input" name="usuario" value="${esc(pfV('usuario', p.usuario || ''))}" autocapitalize="none" autocomplete="username" maxlength="20" placeholder="ej. jean_ramirez"><small>Letras, números, _ y -, sin espacios.</small></label>
+      ${pfGuardarBtn()}</form>`;
   }
   if (v === 'detalles') {
     const goals = st.editGoals || p.objetivos || [], sexo = pfV('sexo', p.sexo === 'mujer' ? 'mujer' : 'hombre'), kg = currentKg();
+    st.pf.ini = { alturaCm: String(p.alturaCm || ''), pesoKg: kg ? nf(kg, 1) : '', fechaNac: p.fechaNac || '', sexo: p.sexo === 'mujer' ? 'mujer' : 'hombre', pesoObjetivo: p.pesoObjetivo ? nf(p.pesoObjetivo, 1) : '' };
     return `<form class="sheet-list form-grid" data-form="pf-det" novalidate>
       <div class="two">
         <label class="field"><span>Estatura (cm)</span><input class="input" name="alturaCm" inputmode="numeric" value="${esc(pfV('alturaCm', p.alturaCm || ''))}"></label>
@@ -915,7 +941,7 @@ function pfCuerpo(v) {
       <div class="field"><span>Objetivos</span><div class="choices">${GOALS.map((g) => `<button type="button" class="choice" data-act="pgoal" data-v="${g.id}" aria-pressed="${goals.includes(g.id)}">
         <span class="ico">${goalIcon(g)}</span><span class="t">${g.t}</span><span class="tick">${goals.includes(g.id) ? I.check : ''}</span></button>`).join('')}</div></div>
       ${pesoGuiaHTML(p.alturaCm, p.sexo, goals, 'perfil', grasaActual(), p.pesoObjetivo, p.hideWeightSuggestion === true)}
-      <button class="btn block" type="submit">Guardar</button></form>`;
+      ${pfGuardarBtn()}</form>`;
   }
   if (v === 'prefs') {
     const t = themePref();
@@ -957,10 +983,11 @@ async function pfGuardar(kind, f) {
   const uid = st.user.uid;
   let data;
   if (kind === 'pf-editar') {
-    const nom = f.nombre.value.trim().replace(/\s+/g, ' '), ape = f.apellidos.value.trim().replace(/\s+/g, ' '), us = f.usuario.value.trim().replace(/^@/, '');
+    const nom = f.nombre.value.trim().replace(/\s+/g, ' '), ape = f.apellidos.value.trim().replace(/\s+/g, ' '), us = f.usuario.value.trim();
     if (!nom) return toast('Escribe tu nombre');
-    if (us && !/^[a-z0-9_.]{3,20}$/i.test(us)) return toast('El usuario: de 3 a 20 letras, números, punto o guion bajo');
-    data = { nombre: nom, apellidos: ape, nombreCompleto: `${nom} ${ape}`.trim(), usuario: us.toLowerCase() };
+    if (!ape) return toast('Escribe tus apellidos');
+    const ue = userErr(us); if (ue) return toast(ue);
+    data = { nombre: nom, apellidos: ape, nombreCompleto: `${nom} ${ape}`, usuario: us };
   } else if (kind === 'pf-det') {
     const goals = st.editGoals || st.profile.objetivos || [], alt = num(f.alturaCm.value), kg = num(f.pesoKg.value), fn = f.fechaNac.value;
     const obj = f.pesoObjetivo.value.trim() ? num(f.pesoObjetivo.value) : null;
@@ -985,11 +1012,12 @@ async function pfGuardar(kind, f) {
     catch (e) { st.pf.busy = false; st.pf.f = { texto }; render(); toast(errorText(e)); }
     return;
   }
+  st.pf.busy = true; render();
   try {
     await api.saveProfile(uid, data);
     st.profile = { ...st.profile, ...data }; st.pf = null; st.editGoals = null;
     render(); toast('Cambios guardados');
-  } catch (e) { toast(errorText(e)); }
+  } catch (e) { st.pf.busy = false; render(); toast(errorText(e)); }
 }
 
 /* ---------- Configuración (engranaje): apariencia y recordatorios ---------- */
@@ -1098,7 +1126,7 @@ function viewError() {
 async function enter(u) {
   st.user = u; st.busy = false;
   if (!u && M) M.pararPro();
-  if (!u) { st.cfg = st.pwd = st.pf = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = 'auth'; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
+  if (!u) { st.cfg = st.pwd = st.pf = st.rutShare = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = 'auth'; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
   try {
     st.profile = await api.getProfile(u.uid);
     if (!st.profile || !st.profile.onboarded) return startOnboarding();
@@ -1159,12 +1187,13 @@ root.addEventListener('click', async (e) => {
   else if (act === 'comp-ver') { st.pesoComp = v; st.pesoModo = 'kg'; render(); scrollTo(0, 0); }
   else if (act === 'comp-close') { st.pesoComp = null; render(); }
   else if (act === 'comp-modo') { st.pesoModo = v; render(); }
-  else if (act === 'psex') { const f = b.closest('form'); f.sexo.value = v; if (st.pf) st.pf.f.sexo = v; b.parentElement.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); }
+  else if (act === 'psex') { const f = b.closest('form'); f.sexo.value = v; if (st.pf) { st.pf.f.sexo = v; pfBtn(); } b.parentElement.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); }
   else if (act === 'pgoal') {
     const g = st.editGoals || [...(st.profile.objetivos || [])];
     st.editGoals = g.includes(v) ? g.filter((x) => x !== v) : [...g, v];
     b.setAttribute('aria-pressed', String(st.editGoals.includes(v)));
     b.querySelector('.tick').innerHTML = st.editGoals.includes(v) ? I.check : '';
+    if (st.pf) pfBtn();
   }
   else if (act === 'cfg-cic') {
     const on = !M.tieneBici(); st.profile.ciclismo = on;
@@ -1204,14 +1233,14 @@ root.addEventListener('input', (e) => {
     return;
   }
   if (e.target.closest && e.target.closest('form[data-form="addweight"]')) { if (e.target.dataset && e.target.dataset.comp) e.target.dataset.tocado = '1'; pesoHints(); return; }
-  if (st.pf && e.target.name && e.target.closest('form[data-form^="pf-"]')) st.pf.f[e.target.name] = e.target.value;
+  if (st.pf && e.target.name && e.target.closest('form[data-form^="pf-"]')) { st.pf.f[e.target.name] = e.target.value; pfBtn(); }
   if (st.view === 'main' && M.input(e.target)) return;
   const k = e.target.dataset && e.target.dataset.ob;
   if (!k || !st.ob) return;
   st.ob[k] = e.target.value;
   // activar/desactivar «Siguiente» sin redibujar (para no perder el foco del teclado)
   const o = st.ob, next = root.querySelector('[data-next]');
-  const ok = o.step === 2 ? !!o.sexo && !!o.edad : o.step === 3 ? !!o.alturaCm : o.step === 4 ? !!o.pesoKg : true;
+  const ok = o.step === 2 ? !!o.sexo && !!o.edad && !!o.nombre.trim() && !!o.apellidos.trim() && !!o.usuario : o.step === 3 ? !!o.alturaCm : o.step === 4 ? !!o.pesoKg : true;
   if (next) next.disabled = !ok;
 });
 

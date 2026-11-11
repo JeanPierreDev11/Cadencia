@@ -2,6 +2,8 @@
 import { FIREBASE_CONFIG } from './config.js';
 
 const FB = 'https://www.gstatic.com/firebasejs/10.14.1/';
+// Código corto para compartir rutinas: 6 caracteres sin letras que se confunden (I, O) ni 0/1.
+const nuevoCodigo = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]).join('');
 
 /* ------------------------------------------------------------------ */
 /* Firebase                                                           */
@@ -57,6 +59,15 @@ async function firebaseBackend(config) {
       return `${await S.getDownloadURL(r)}&v=${Date.now()}`;
     },
     async addFeatureRequest(uid, email, texto) { await F.addDoc(F.collection(db, 'feature_requests'), { uid, email: email || '', texto, creado: F.serverTimestamp() }); },
+    // Rutinas compartidas: colección «shared_routines», el id del documento es el código.
+    async shareRutina(uid, rut) {
+      let code = rut.shareCode;
+      for (let i = 0; !code && i < 8; i++) { const c = nuevoCodigo(); if (!(await F.getDoc(F.doc(db, 'shared_routines', c))).exists()) code = c; }
+      if (!code) throw err('share/codigo');
+      await F.setDoc(F.doc(db, 'shared_routines', code), { ...JSON.parse(JSON.stringify(rut)), shareCode: code, userId: uid, compartida: F.serverTimestamp() });
+      return code;
+    },
+    async getSharedRutina(code) { const s = await F.getDoc(F.doc(db, 'shared_routines', code)); return s.exists() ? s.data() : null; },
     async resetPassword(email) { await A.sendPasswordResetEmail(auth, email); },
     async getProfile(uid) {
       const s = await F.getDoc(userRef(uid));
@@ -209,6 +220,12 @@ function localBackend() {
       return new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => no(err('local/foto')); r.readAsDataURL(blob); });
     },
     async addFeatureRequest(uid, email, texto) { const s = read(); (s.requests = s.requests || []).push({ uid, email, texto, creado: Date.now() }); write(s); },
+    async shareRutina(uid, rut) {
+      const s = read(); s.shared = s.shared || {};
+      let code = rut.shareCode; while (!code || (s.shared[code] && s.shared[code].userId !== uid)) code = nuevoCodigo();
+      s.shared[code] = { ...JSON.parse(JSON.stringify(rut)), shareCode: code, userId: uid }; write(s); return code;
+    },
+    async getSharedRutina(code) { const r = (read().shared || {})[code]; return r ? JSON.parse(JSON.stringify(r)) : null; },
     async resetPassword() { throw err('local/no-reset'); },
     async getProfile(uid) { const u = byUid(read(), uid); return u ? u.profile : null; },
     watchProfile(uid, cb) { const t = setInterval(() => { const u = byUid(read(), uid); if (u) cb(u.profile); }, 1500); return () => clearInterval(t); },
