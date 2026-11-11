@@ -62,7 +62,7 @@ function render() {
   else if (st.view === 'error') root.innerHTML = viewError();
   document.title = APP_NAME;
   if (M) M.afterRender();
-  document.body.classList.toggle('noscroll', !!(st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoComp || st.pesoDel || st.meta || st.regPick || st.legal || st.del || st.iaFoto || st.pro || st.proWelcome || st.recAsk));
+  document.body.classList.toggle('noscroll', !!(st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.meta || st.regPick || st.legal || st.del || st.iaFoto || st.pro || st.proWelcome || st.recAsk));
 }
 
 /* ================================================================== */
@@ -363,7 +363,7 @@ let irPendiente = leerIr(); // si venimos de tocar un aviso, aquí queda la pant
 let stravaRet = leerRetorno(); // si venimos de la pantalla de permisos de Strava, aquí queda el código temporal
 
 function viewMain() {
-  const sheet = st.legal ? legalSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.pesoComp ? pesoCompSheetHTML() : st.recAsk ? R.askHTML() : M.sheet();
+  const sheet = st.legal ? legalSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : M.sheet();
   if (st.rw) return viewRutWizard() + sheet;
   if (st.live && !st.liveMin) return viewLive() + sheet;
   if (st.wk) return viewWkForm();
@@ -659,56 +659,88 @@ function chart(points, target, label = 'Evolución del peso', dec = 0) {
   </svg>`;
 }
 
-// Las 4 tarjetas de composición: muestran el último registro y se pueden tocar para ver su evolución semanal.
+// ---------- Progreso → Peso: dial, rejilla 2×2 con siluetas y vista de detalle ----------
+const sgn = (d) => (d > 0 ? '+' : d < 0 ? '−' : '±');
+const pctOf = (c, w) => (c.u === '%' ? w[c.k] : w.kg ? (w[c.k] / w.kg) * 100 : null);
+const kgOf = (c, w) => (c.u === 'kg' ? w[c.k] : w.kg ? (w.kg * w[c.k]) / 100 : null);
+
+// Silueta humana de puntos: se rellena de abajo arriba con el % indicado.
+function silueta(fill, id, cls = '') {
+  const f = Math.max(0, Math.min(100, fill == null ? 0 : fill)), y0 = 200 - (f / 100) * 200;
+  return `<svg class="sil ${cls}" viewBox="0 0 100 200" role="img" aria-hidden="true">
+    <defs><pattern id="d-${id}" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="4" height="4" x="1" y="1" fill="#2e2e2e"/></pattern><pattern id="y-${id}" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="4" height="4" x="1" y="1" fill="#F2BE1A"/></pattern>
+      <clipPath id="c-${id}"><circle cx="50" cy="20" r="14"/><path d="M30 42H70L88 50L95 112L84 114L78 70L74 70L72 112L74 198H54L50 130L46 198H26L28 112L26 70L22 70L16 114L5 112L12 50Z"/></clipPath></defs>
+    <g clip-path="url(#c-${id})"><rect width="100" height="200" fill="url(#d-${id})"/><rect y="${y0.toFixed(1)}" width="100" height="${(200 - y0).toFixed(1)}" fill="url(#y-${id})"/></g>
+  </svg>`;
+}
+
+// Dial semicircular con el peso actual en el centro.
+function dialPeso(ws, objetivo) {
+  const cur = ws.length ? ws[ws.length - 1].kg : null, prev = ws.length > 1 ? ws[ws.length - 2].kg : null;
+  const vals = ws.map((w) => w.kg).concat(objetivo ? [objetivo] : []);
+  let lo = vals.length ? Math.floor(Math.min(...vals)) - 2 : 60, hi = vals.length ? Math.ceil(Math.max(...vals)) + 2 : 100;
+  if (hi - lo < 8) { const m = (hi + lo) / 2; lo = Math.floor(m - 4); hi = lo + 8; }
+  const fr = (v) => Math.max(0, Math.min(1, (v - lo) / (hi - lo)));
+  const pt = (f, r) => [(120 - r * Math.cos(Math.PI * f)).toFixed(1), (120 - r * Math.sin(Math.PI * f)).toFixed(1)];
+  const ticks = Array.from({ length: 21 }, (_, i) => { const a = pt(i / 20, i % 5 ? 82 : 78), b = pt(i / 20, 88); return `<line class="${i % 5 ? 'tk' : 'tk big'}" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"/>`; }).join('');
+  const g = objetivo ? (() => { const a = pt(fr(objetivo), 90), b = pt(fr(objetivo), 118); return `<line class="goal" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"/>`; })() : '';
+  const dd = cur != null && prev != null ? cur - prev : null;
+  return `<section class="dial" aria-label="Peso actual">
+    <svg viewBox="0 0 240 150" role="img" aria-label="${cur != null ? `Peso actual ${nf(cur, 1)} kilos` : 'Sin peso registrado'}">
+      <defs><linearGradient id="dialg" gradientUnits="userSpaceOnUse" x1="20" y1="0" x2="220" y2="0"><stop offset="0" stop-color="#3a3a3a"/><stop offset="1" stop-color="#F2BE1A"/></linearGradient></defs>
+      <path class="trk" d="M20 120A100 100 0 0 1 220 120" pathLength="100"/>
+      ${cur != null ? `<path class="val-arc" d="M20 120A100 100 0 0 1 220 120" pathLength="100" stroke-dasharray="${(fr(cur) * 100).toFixed(1)} 100"/>` : ''}
+      ${ticks}${g}
+      <text class="sc" x="20" y="142" text-anchor="middle">${lo}</text><text class="sc" x="220" y="142" text-anchor="middle">${hi}</text>
+    </svg>
+    <div class="dial-c"><span class="lbl">Peso actual</span><b class="num">${cur != null ? nf(cur, 1) : '—'}<em>kg</em></b>
+      <span class="sub">${dd != null ? `${sgn(dd)}${nf(Math.abs(dd), 1)} kg vs. anterior` : cur != null ? 'Primer registro' : 'Apunta tu primer peso'}${objetivo ? ` · <i>objetivo ${nf(objetivo, 1)} kg</i>` : ''}</span></div>
+  </section>`;
+}
+
+// Rejilla 2×2: cada celda es un botón que abre el detalle.
 function compCardHTML(ws) {
-  return `<div class="stats">${COMP.slice(1).map((c) => {
+  const ord = ['agua', 'musculo', 'grasa', 'hueso'].map((k) => COMP.find((c) => c.k === k));
+  return `<div class="cgrid">${ord.map((c) => {
     const con = ws.filter((w) => w[c.k] != null);
-    if (!con.length) return `<button type="button" class="stat stat-btn" data-act="comp-ver" data-v="${c.k}"><span class="label">${c.t}</span><span class="val num">—</span><span class="hint">Sin datos todavía</span><span class="stat-go">Ver evolución ›</span></button>`;
-    const last = con[con.length - 1], first = con[0], dd = con.length > 1 ? last[c.k] - first[c.k] : null;
-    const extra = c.k === 'grasa' && last.kg ? `≈ ${nf((last.kg * last.grasa) / 100, 1)} kg de grasa` : c.k === 'agua' && last.kg ? `≈ ${nf((last.kg * last.agua) / 100, 1)} kg de agua` : '';
-    return `<button type="button" class="stat stat-btn" data-act="comp-ver" data-v="${c.k}"><span class="label">${c.t}</span><span class="val num">${nf(last[c.k], 1)}<em>${c.u}</em></span>
-      <span class="hint">${dd != null ? `${dd > 0 ? '+' : dd < 0 ? '−' : '±'}${nf(Math.abs(dd), 1)} ${c.u} desde el ${esc(fmtDate(first.fecha))}` : 'Primer registro'}${extra ? `<br>${extra}` : ''}</span><span class="stat-go">Ver evolución ›</span></button>`;
+    if (!con.length) return `<button type="button" class="cg" data-act="comp-ver" data-v="${c.k}"><span class="label">${c.t}</span>${silueta(0, 'g' + c.k)}<span class="val num">—</span><span class="hint">Sin datos todavía</span></button>`;
+    const last = con[con.length - 1], p = pctOf(c, last), k = kgOf(c, last);
+    const sec = c.u === '%' ? (k != null ? `≈ ${nf(k, 1)} kg` : '') : (p != null ? `${nf(p, 1)} % del peso` : '');
+    return `<button type="button" class="cg" data-act="comp-ver" data-v="${c.k}"><span class="label">${c.t}</span>${silueta(p == null ? 0 : Math.max(p, 6), 'g' + c.k)}
+      <span class="val num">${nf(last[c.k], 1)}<em>${c.u}</em></span><span class="hint">${sec}</span></button>`;
   }).join('')}</div>`;
 }
 
-// Evolución semanal de una métrica: media de cada semana (de lunes a domingo), últimas 26 semanas.
-function semanal(k) {
-  const por = {};
-  st.weights.forEach((w) => { if (w[k] != null) (por[E.mondayOf(w.fecha)] = por[E.mondayOf(w.fecha)] || []).push(w[k]); });
-  return Object.keys(por).sort().slice(-26).map((m) => ({ fecha: m, kg: por[m].reduce((a, b) => a + b, 0) / por[m].length, n: por[m].length }));
-}
-function pesoCompSheetHTML() {
-  const c = COMP.find((x) => x.k === st.pesoComp) || COMP[1], pts = semanal(c.k);
-  const last = pts[pts.length - 1], first = pts[0];
-  const dd = pts.length > 1 ? last.kg - first.kg : null;
-  const lista = pts.slice().reverse().slice(0, 10);
-  return `<div class="sheet-back" data-act="comp-close"></div>
-    <div class="sheet" role="dialog" aria-modal="true" aria-label="Evolución semanal de ${esc(c.t.toLowerCase())}">
-      <div class="sheet-grab"></div>
-      <div class="sheet-head"><button type="button" class="iconbtn" data-act="comp-close" aria-label="Cerrar">${I.back}</button><h2>${esc(c.t)}</h2><span style="width:36px"></span></div>
-      <div class="sheet-list">
-        ${last ? `<section class="card"><div class="comp-now"><span class="val num">${nf(last.kg, 1)}<em>${c.u}</em></span><span class="muted small">${dd != null ? `${dd > 0 ? '+' : dd < 0 ? '−' : '±'}${nf(Math.abs(dd), 1)} ${c.u} desde la semana del ${esc(fmtDate(first.fecha))}` : 'Media de la semana del ' + esc(fmtDate(last.fecha))}</span></div>
-          <h3 class="comp-h">Evolución semanal</h3>
-          ${pts.length >= 2 ? chart(pts, null, `Evolución semanal de ${c.t.toLowerCase()}`, 1) : '<div class="empty"><b>Aún no hay gráfica</b><span>Con datos de dos semanas distintas verás aquí cómo cambia.</span></div>'}
-          <p class="small muted">Cada punto es la media de la semana (de lunes a domingo).</p></section>
-          <section class="card"><h3 class="comp-h">Últimas semanas</h3><div class="list">${lista.map((x, i) => {
-            const pv = lista[i + 1], d = pv ? x.kg - pv.kg : null;
-            return `<div class="row"><span>Semana del ${esc(fmtDate(x.fecha, { day: 'numeric', month: 'short' }))}</span><span class="hrow-r"><span class="muted small">${d == null ? '' : (d > 0 ? '+' : d < 0 ? '−' : '±') + nf(Math.abs(d), 1)}</span><b class="nowrap">${nf(x.kg, 1)} ${c.u}</b></span></div>`;
-          }).join('')}</div></section>`
-        : `<section class="card"><div class="empty"><b>Aún no hay datos de ${esc(c.t.toLowerCase())}</b><span>Apúntalos con «Añadir registro» y verás aquí su evolución semana a semana.</span></div></section>`}
-      </div>
-    </div>`;
+// Vista de detalle de una métrica: silueta grande y selector kg / % / qué cambió.
+function pesoDetalleHTML() {
+  const c = COMP.find((x) => x.k === st.pesoComp) || COMP[1], modo = st.pesoModo || 'kg';
+  const con = st.weights.filter((w) => w[c.k] != null), last = con[con.length - 1], prev = con.length > 1 ? con[con.length - 2] : null;
+  const back = `<div class="det-top"><button type="button" class="iconbtn" data-act="comp-close" aria-label="Volver">${I.back}</button><h2>${esc(c.t)}</h2><span style="width:36px"></span></div>`;
+  if (!last) return `<section class="det">${back}<div class="empty"><b>Aún no hay datos de ${esc(c.t.toLowerCase())}</b><span>Apúntalos con «Añadir registro» y verás aquí el detalle.</span></div></section>`;
+  const p = pctOf(c, last), k = kgOf(c, last);
+  const dk = prev && kgOf(c, prev) != null && k != null ? k - kgOf(c, prev) : null, dp = prev && pctOf(c, prev) != null && p != null ? p - pctOf(c, prev) : null;
+  const dir = (d) => (d == null || Math.abs(d) < 0.05 ? 'neu' : (c.k === 'grasa' ? d < 0 : d > 0) ? 'up' : 'down'); // verde = bien, rojo = mal
+  let top = '', sub = '';
+  if (modo === 'kg') { top = `${k != null ? nf(k, 1) : '—'}<em>kg</em>`; sub = `${esc(c.t)} · ${esc(fmtDate(last.fecha, { day: 'numeric', month: 'long' }))}`; }
+  else if (modo === 'pct') { top = `${p != null ? nf(p, 1) : '—'}<em>%</em>`; sub = `del peso total de ese día (${nf(last.kg, 1)} kg)`; }
+  else if (dk == null && dp == null) { top = '—'; sub = 'Aún no hay un registro anterior con este dato para comparar.'; }
+  else {
+    top = `<span class="chg ${dir(dk != null ? dk : dp)}">${dk != null ? `${sgn(dk)}${nf(Math.abs(dk), 1)}<em>kg</em>` : ''}</span>`;
+    sub = `<span class="chg ${dir(dp != null ? dp : dk)} small">${dp != null ? `${sgn(dp)}${nf(Math.abs(dp), 1)} %` : ''}</span> desde el ${esc(fmtDate(prev.fecha, { day: 'numeric', month: 'long' }))}`;
+  }
+  return `<section class="det">${back}
+    <div class="det-val num">${top}</div><p class="det-sub">${sub}</p>
+    <div class="det-sil">${silueta(p == null ? 0 : Math.max(p, 4), 'det', 'big')}</div>
+    <div class="seg" role="group" aria-label="Forma de verlo">${[['kg', 'En kilogramos'], ['pct', 'Como porcentaje'], ['cambio', '¿Qué cambió?']].map(([v, t]) => `<button type="button" data-act="comp-modo" data-v="${v}" aria-pressed="${modo === v}">${t}</button>`).join('')}</div>
+  </section>`;
 }
 
 function viewPeso(sub = false) {
   const ws = st.weights, p = st.profile;
-  const pts = ws.slice(-90).map((w) => ({ fecha: w.fecha, kg: w.kg }));
+  if (st.pesoComp) return pesoDetalleHTML();
   return `
     ${sub ? '' : `<header class="hello"><div><h1>Peso</h1><p>${ws.length} ${ws.length === 1 ? 'registro' : 'registros'}${p.pesoObjetivo ? ` · objetivo ${nf(p.pesoObjetivo, 1)} kg` : ''}</p></div></header>`}
-    <section class="card">
-      <h2>Evolución</h2>
-      ${pts.length >= 2 ? chart(pts, p.pesoObjetivo, 'Evolución del peso') : '<div class="empty"><b>Aún no hay gráfica</b><span>Con dos registros verás aquí cómo cambia tu peso.</span></div>'}
-    </section>
+    ${dialPeso(ws, p.pesoObjetivo)}
     ${compCardHTML(ws)}
     <div class="fab-space" aria-hidden="true"></div>
     <button type="button" class="fab" data-act="peso-sheet">${I.plus} Añadir registro</button>`;
@@ -912,8 +944,9 @@ root.addEventListener('click', async (e) => {
   else if (act === 'w-del-ask') { if (st.weights.length <= 1) toast('Necesitas al menos un registro de peso'); else { st.pesoDel = v; render(); } }
   else if (act === 'w-del-no') { st.pesoDel = null; render(); }
   else if (act === 'w-del-yes') { const f = st.pesoDel; if (f) delWeight(f); }
-  else if (act === 'comp-ver') { st.pesoComp = v; render(); }
+  else if (act === 'comp-ver') { st.pesoComp = v; st.pesoModo = 'kg'; render(); scrollTo(0, 0); }
   else if (act === 'comp-close') { st.pesoComp = null; render(); }
+  else if (act === 'comp-modo') { st.pesoModo = v; render(); }
   else if (act === 'peso-ideal') {
     const val = nf(Number(v), 1);
     if (b.dataset.ctx === 'ob' && st.ob) { st.ob.pesoObjetivo = val; st.ob.msg = ''; render(); }

@@ -30,7 +30,7 @@ const ICO = {
 };
 
 /* Novedades: cambia NOV_V cada vez que publiques algo nuevo para que salga la nota en Inicio. */
-const NOV_V = '2026-11-11e';
+const NOV_V = '2026-11-11f';
 
 /* Objetivos de entreno: [id, grupo, texto, unidad, periodo (sem | mes | reto), ejemplo] */
 const META_T = [
@@ -1438,6 +1438,7 @@ export function crearSecciones(ctx) {
   function novItems() {
     const bici = tieneBici();
     return [
+      { t: 'Peso en dial y composición con siluetas', d: 'Tu peso aparece en un dial. Debajo, Agua, Músculo, Grasa y Hueso con su silueta. Toca una y elige verla en kilos, en % o «¿Qué cambió?», que compara con tu registro anterior (verde si mejora, rojo si empeora).', como: 'Progreso → Peso.', act: 'p-peso', btn: 'Ver Progreso' },
       { t: 'Nuevo diseño: negro y amarillo', d: 'Cadencia estrena imagen: fondo negro, amarillo carretera, letras en mayúsculas y bordes rectos, sin tarjetas flotantes. Hay un solo tema (oscuro), así que ya no hace falta el selector de apariencia. También tiene logo nuevo.', como: 'Se aplica solo en toda la app.', act: 'tab', v: 'perfil', btn: 'Ver el Perfil' },
       { t: 'Progreso → Peso, más limpio', d: 'La gráfica es solo de tu peso. Toca Grasa, Músculo, Agua o Hueso para ver su evolución semanal. «Añadir registro» abre un formulario donde puedes escribir la composición en % o en kg, y el reloj de arriba abre tu historial para editar o borrar registros.', como: 'Progreso → Peso.', act: 'p-peso', btn: 'Ver Progreso' },
       { t: 'Recordatorios', d: 'Activa avisos en tu móvil para pesarte por la mañana, apuntar tus comidas o no saltarte el entreno. Eliges la hora y solo te avisamos si aún no lo has hecho ese día. Son gratis para todos.', como: 'Perfil → Recordatorios. En iPhone, primero añade Cadencia a la pantalla de inicio.', act: 'tab', v: 'perfil', btn: 'Ir al Perfil' },

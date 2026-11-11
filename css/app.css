@@ -943,3 +943,46 @@ details.comp { border: 1px solid #2c2c2c; border-radius: 2px; }
 .meal-h .meal-n { flex: 1 1 100%; }
 .meal-h .meal-acts { margin-left: 0; flex: 1 1 100%; display: flex; gap: 8px; }
 .meal-h .meal-acts .chip { flex: 1 1 0; justify-content: center; letter-spacing: .03em; font-size: 12px; padding: 9px 8px; white-space: nowrap; }
+
+/* ---------- Progreso → Peso: dial, rejilla de composición y detalle ---------- */
+:root { --up: #22E57B; --down: #FF4538; }
+.dial { position: relative; padding: 18px 16px 6px; border-bottom: 1px solid var(--line); max-width: 560px; }
+.dial svg { display: block; width: 100%; height: auto; max-height: 230px; }
+.dial .trk, .dial .val-arc { fill: none; stroke-width: 14; }
+.dial .trk { stroke: #1d1d1d; }
+.dial .val-arc { stroke: url(#dialg); }
+.dial .tk { stroke: #444; stroke-width: 1.2; }
+.dial .tk.big { stroke: #777; stroke-width: 2; }
+.dial .goal { stroke: #fff; stroke-width: 2.5; }
+.dial .sc { fill: var(--muted); font-size: 11px; font-weight: 700; }
+.dial-c { position: absolute; left: 0; right: 0; top: 38%; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.dial-c .lbl { font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.dial-c b { font-size: clamp(46px, 15vw, 64px); font-weight: 900; line-height: 1; color: #fff; }
+.dial-c b em { font-size: .32em; font-style: normal; color: var(--accent); margin-left: 4px; text-transform: none; }
+.dial-c .sub { font-size: 12.5px; color: var(--muted); padding: 0 24px; }
+.dial-c .sub i { font-style: normal; color: var(--accent); }
+.cgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border-bottom: 1px solid var(--line); }
+.cg { background: var(--bg); border: 0; border-radius: 0; color: #fff; text-align: left; padding: 16px; display: grid; grid-template-columns: 1fr auto; grid-template-areas: "l s" "v s" "h s"; align-items: end; column-gap: 8px; min-height: 150px; cursor: pointer; font: inherit; }
+.cg:active { background: #0c0c0c; }
+.cg .label { grid-area: l; align-self: start; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.cg .sil { grid-area: s; width: 44px; height: 88px; align-self: center; }
+.cg .val { grid-area: v; font-size: 30px; font-weight: 900; line-height: 1; }
+.cg .val em { font-size: .45em; font-style: normal; color: var(--accent); margin-left: 3px; }
+.cg .hint { grid-area: h; font-size: 12px; color: var(--muted); margin-top: 4px; }
+.det { padding: 8px 16px 28px; }
+.det-top { display: flex; align-items: center; justify-content: space-between; padding: 6px 0 4px; }
+.det-top h2 { font-size: 15px; letter-spacing: .14em; }
+.det-top h2::after { display: none; }
+.det-val { text-align: center; font-size: clamp(56px, 19vw, 84px); font-weight: 900; line-height: 1.05; margin-top: 10px; color: #fff; }
+.det-val em { font-size: .3em; font-style: normal; color: var(--accent); margin-left: 6px; text-transform: none; }
+.det-sub { text-align: center; color: var(--muted); margin: 2px 0 6px; font-size: 14px; }
+.det-sil { display: flex; justify-content: center; padding: 14px 0 22px; }
+.sil.big { width: 150px; height: 300px; }
+.chg.up { color: var(--up); } .chg.down { color: var(--down); } .chg.neu { color: var(--muted); }
+.chg.small { font-weight: 800; font-size: 16px; }
+.det .seg button { font-size: 12px; padding: 13px 4px; }
+.main > .cgrid { padding-left: 0; padding-right: 0; }
+.main > .seg { box-sizing: border-box; margin: 14px 16px; width: auto; max-width: calc(100% - 32px); }
+.main > .seg + * { margin-top: 0; }
+.main > .cgrid, .main > .seg { padding-left: 0 !important; padding-right: 0 !important; }
+.main > .seg { margin-left: 16px !important; margin-right: 16px !important; }
