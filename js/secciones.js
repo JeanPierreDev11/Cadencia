@@ -30,7 +30,7 @@ const ICO = {
 };
 
 /* Novedades: cambia NOV_V cada vez que publiques algo nuevo para que salga la nota en Inicio. */
-const NOV_V = '2026-11-11c';
+const NOV_V = '2026-11-11d';
 
 /* Objetivos de entreno: [id, grupo, texto, unidad, periodo (sem | mes | reto), ejemplo] */
 const META_T = [
@@ -99,9 +99,10 @@ export function crearSecciones(ctx) {
   const stat = (label, val, unit, hint, cls = '') => `<section class="stat ${cls}"><span class="label">${label}</span><span class="val num">${val}${unit ? `<em>${unit}</em>` : ''}</span>${hint ? `<span class="hint">${hint}</span>` : ''}</section>`;
   const seg = (act, opts, cur, label) => `<div class="seg" role="group" aria-label="${esc(label)}">${opts.map(([v, l]) => `<button type="button" data-act="${act}" data-v="${v}" aria-pressed="${String(cur) === String(v)}">${l}</button>`).join('')}</div>`;
   const bul = (arr, cls = '') => (arr && arr.length ? `<ul class="bul ${cls}">${arr.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '');
-  const head = (t, sub, avatar = false) => {
+  const head = (t, sub, avatar = false, extra = '') => {
     const name = P().nombre || st.user.name || '';
-    return `<header class="hello"><div><h1>${t}</h1>${sub ? `<p>${sub}</p>` : ''}</div>${avatar ? `<button class="avatar" data-act="tab" data-v="perfil" aria-label="Tu perfil">${esc((name || '?').trim().charAt(0).toUpperCase())}</button>` : ''}</header>`;
+    const av = avatar ? `<button class="avatar" data-act="tab" data-v="perfil" aria-label="Tu perfil">${esc((name || '?').trim().charAt(0).toUpperCase())}</button>` : '';
+    return `<header class="hello"><div><h1>${t}</h1>${sub ? `<p>${sub}</p>` : ''}</div>${extra ? `<div class="hello-r">${extra}${av}</div>` : av}</header>`;
   };
 
   /* ================================================================ */
@@ -877,7 +878,7 @@ export function crearSecciones(ctx) {
   }
   function viewProgreso() {
     const sub = st.progSub || 'peso';
-    let h = head('Progreso', 'Peso, cuerpo y forma', true);
+    let h = head('Progreso', 'Peso, cuerpo y forma', true, sub === 'peso' ? `<button class="iconbtn hist-btn" data-act="peso-hist" aria-label="Historial de registros">${I.clock}</button>` : '');
     h += seg('p-sub', [['peso', 'Peso'], ['cuerpo', 'Cuerpo'], ['forma', 'Forma']], sub, 'Qué ver');
     if (sub === 'cuerpo') return h + subCuerpo();
     if (sub === 'forma') return h + subForma();
@@ -1050,6 +1051,7 @@ export function crearSecciones(ctx) {
       case 'tl-deseo-del': { const g = garaje(); g.mejora.deseos = g.mejora.deseos.filter((x) => x.id !== v); await saveGaraje(g); return true; }
       // Progreso
       case 'p-sub': st.progSub = v; render(); return true;
+      case 'p-peso': st.progSub = 'peso'; st.tab = 'progreso'; lsSet('cadencia-tab', 'progreso'); st.novOpen = false; render(); window.scrollTo(0, 0); return true;
       case 'p-forma': st.progSub = 'forma'; st.tab = 'progreso'; lsSet('cadencia-tab', 'progreso'); render(); window.scrollTo(0, 0); return true;
       case 'b-save': {
         const pct = Number(v), t = todayISO(), hoy = st.weights.find((w) => w.fecha === t), kg = hoy ? hoy.kg : currentKg();
@@ -1436,6 +1438,7 @@ export function crearSecciones(ctx) {
   function novItems() {
     const bici = tieneBici();
     return [
+      { t: 'Progreso → Peso, más limpio', d: 'La gráfica es solo de tu peso. Toca Grasa, Músculo, Agua o Hueso para ver su evolución semanal. «Añadir registro» abre un formulario donde puedes escribir la composición en % o en kg, y el reloj de arriba abre tu historial para editar o borrar registros.', como: 'Progreso → Peso.', act: 'p-peso', btn: 'Ver Progreso' },
       { t: 'Recordatorios', d: 'Activa avisos en tu móvil para pesarte por la mañana, apuntar tus comidas o no saltarte el entreno. Eliges la hora y solo te avisamos si aún no lo has hecho ese día. Son gratis para todos.', como: 'Perfil → Recordatorios. En iPhone, primero añade Cadencia a la pantalla de inicio.', act: 'tab', v: 'perfil', btn: 'Ir al Perfil' },
       { t: 'Conecta Strava', d: 'Conecta tu cuenta de Strava y trae tus salidas de bici y tus carreras a Cadencia con un toque, sin teclear los km ni el desnivel. Lo que apuntes a mano sigue funcionando igual.', como: 'Perfil → Integraciones → Conectar con Strava. Después, Entreno → Sincronizar Strava.', act: 'tab', v: 'perfil', btn: 'Ir al Perfil' },
       { t: 'Mapas interactivos y subida de rutas GPX', d: 'En Rutas ya hay un mapa: elige una salida y verás su recorrido (orientativo). Con «Subir ruta GPX» cargas un archivo de tu móvil: leemos los km y el desnivel en tu propio teléfono, dibujamos la ruta y la guardas en tu cuenta. Es gratis para todos.', como: bici ? 'Bici → Rutas → Mapa → Subir ruta GPX.' : 'Aparece cuando tu rutina incluye bici: Entreno → Rutinas → Cambiar días o tipos → marca Bici.', act: bici ? 'nov-rutas' : 'nov-bici', v: 'rutas', btn: bici ? 'Ver el mapa' : 'Añadir bici a mi rutina' },
@@ -1448,7 +1451,7 @@ export function crearSecciones(ctx) {
       { t: 'Mis rutinas', d: 'Guarda varias rutinas, ponles nombre y cambia entre ellas cuando quieras.', como: 'Entreno → Rutinas.', act: 'nov-wk', v: 'rutina', btn: 'Ver mis rutinas' },
       { t: 'Objetivos de bici, cardio y pesos', d: 'Ponte metas como km de bici a la semana, minutos de cardio, entrenos por semana o kilos en un ejercicio, y mira cuánto te falta.', como: 'Entreno → Objetivos → Nuevo.', act: 'nov-wk', v: 'objetivos', btn: 'Crear un objetivo' },
       { t: 'Nutrición', d: 'Apunta lo que comes con más de 550 alimentos (queso de Burgos incluido), productos de marca y cómo los preparas. Tu objetivo de calorías sube los días que entrenas.', como: 'Pestaña Nutrición → «Añadir» en cada comida.', act: 'tab', v: 'nutricion', btn: 'Apuntar comida' },
-      { t: 'Grasa, músculo, agua y hueso', d: 'Además del peso, apunta tu composición corporal para ver cómo cambias por dentro.', como: 'Inicio → «Añadir grasa, músculo, agua y hueso», o Progreso → Peso.', act: 'peso-sheet', v: '', btn: 'Apuntar ahora' },
+      { t: 'Grasa, músculo, agua y hueso', d: 'Además del peso, apunta tu composición corporal para ver cómo cambias por dentro.', como: 'Inicio → «Añadir grasa, músculo, agua y hueso», o Progreso → Peso → «Añadir registro».', act: 'peso-sheet', v: '', btn: 'Apuntar ahora' },
       { t: 'Peso objetivo si tienes músculo', d: 'Ya no te limitamos al IMC. Con tu % de grasa calculamos tu peso ideal según tu músculo.', como: 'Perfil → Peso objetivo.', act: 'tab', v: 'perfil', btn: 'Revisar mi objetivo' },
       { t: 'Progreso', d: 'Calcula tu % de grasa con cinta métrica o plicómetro, y mira tu forma, fatiga y frescura.', como: 'Pestaña Progreso → Cuerpo o Forma.', act: 'tab', v: 'progreso', btn: 'Ver progreso' },
     ];

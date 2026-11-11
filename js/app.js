@@ -62,7 +62,7 @@ function render() {
   else if (st.view === 'error') root.innerHTML = viewError();
   document.title = APP_NAME;
   if (M) M.afterRender();
-  document.body.classList.toggle('noscroll', !!(st.lib || st.food || st.tl || st.pesoSheet || st.meta || st.regPick || st.legal || st.del || st.iaFoto || st.pro || st.proWelcome || st.recAsk));
+  document.body.classList.toggle('noscroll', !!(st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoComp || st.pesoDel || st.meta || st.regPick || st.legal || st.del || st.iaFoto || st.pro || st.proWelcome || st.recAsk));
 }
 
 /* ================================================================== */
@@ -362,7 +362,7 @@ let irPendiente = leerIr(); // si venimos de tocar un aviso, aquí queda la pant
 let stravaRet = leerRetorno(); // si venimos de la pantalla de permisos de Strava, aquí queda el código temporal
 
 function viewMain() {
-  const sheet = st.legal ? legalSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.regPick ? regSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.recAsk ? R.askHTML() : M.sheet();
+  const sheet = st.legal ? legalSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.pesoComp ? pesoCompSheetHTML() : st.recAsk ? R.askHTML() : M.sheet();
   if (st.rw) return viewRutWizard() + sheet;
   if (st.live && !st.liveMin) return viewLive() + sheet;
   if (st.wk) return viewWkForm();
@@ -512,31 +512,118 @@ function pesoGuiaHTML(cm, sexo, objetivos, ctx, comp) {
   </div>`;
 }
 
-function pesoFormHTML(open) {
-  return `<form class="form-grid" data-form="addweight" novalidate>
+// Unidad en la que se escribe la composición (grasa, músculo, agua y hueso): '%' del peso o kilos. Se guarda igual que siempre:
+// grasa y agua en %, músculo y hueso en kg, así que aquí se convierte según el peso del registro.
+const pesoUnit = () => (st.pesoUnit === 'kg' || st.pesoUnit === 'pct' ? st.pesoUnit : (lsGet('cadencia-peso-unit') === 'kg' ? 'kg' : 'pct'));
+const r2 = (n) => String(Math.round(n * 100) / 100).replace('.', ',');
+const PH = { pct: { grasa: 'Ej. 18,5', musculo: 'Ej. 45', agua: 'Ej. 55', hueso: 'Ej. 4' }, kg: { grasa: 'Ej. 14', musculo: 'Ej. 58', agua: 'Ej. 44', hueso: 'Ej. 3,1' } };
+const uTxt = (u) => (u === 'pct' ? '%' : 'kg');
+// valor guardado → lo que se muestra en la unidad elegida
+function aUnidad(c, val, kg, u) {
+  if (val == null || !(kg > 0)) return '';
+  if (u === 'pct') return r2(c.u === '%' ? val : (val / kg) * 100);
+  return r2(c.u === 'kg' ? val : (val / 100) * kg);
+}
+// lo escrito (en la unidad elegida) → valor que se guarda (grasa/agua en %, músculo/hueso en kg)
+function aGuardado(c, n, kg, u) {
+  if (u === 'kg' && c.u === '%') return (n / kg) * 100;
+  if (u === 'pct' && c.u === 'kg') return (n / 100) * kg;
+  return n;
+}
+function pesoFormHTML(ed) {
+  const u = pesoUnit(), kgBase = ed ? ed.kg : currentKg();
+  return `<form class="form-grid" data-form="addweight" data-kgbase="${kgBase || ''}" ${ed ? `data-edit="${esc(ed.fecha)}"` : ''} novalidate>
         <div class="two">
-          <label class="field"><span>Fecha</span><input class="input" type="date" name="fecha" value="${todayISO()}" max="${todayISO()}"></label>
-          <label class="field"><span>Peso (kg)</span><input class="input" name="kg" inputmode="decimal" placeholder="${nf(currentKg(), 1)}"></label>
+          <label class="field"><span>Fecha${ed ? ' <span class="muted">(no se cambia al editar)</span>' : ''}</span><input class="input" type="date" name="fecha" value="${ed ? esc(ed.fecha) : todayISO()}" max="${todayISO()}" ${ed ? 'readonly' : ''}></label>
+          <label class="field"><span>Peso (kg)</span><input class="input" name="kg" inputmode="decimal" value="${ed ? esc(nf(ed.kg, 1)) : ''}" placeholder="${nf(currentKg(), 1)}"></label>
         </div>
-        <details class="comp"${open ? ' open' : ''}>
-          <summary>Composición corporal <span class="muted">(opcional)</span></summary>
-          <p class="small muted">Si tu báscula o tu centro deportivo te dan estos datos, apúntalos para ver cómo cambias por dentro.</p>
-          <div class="two">
-            <label class="field"><span>Grasa (%)</span><input class="input" name="grasa" inputmode="decimal" placeholder="Ej. 18,5"></label>
-            <label class="field"><span>Músculo (kg)</span><input class="input" name="musculo" inputmode="decimal" placeholder="Ej. 58"></label>
-            <label class="field"><span>Agua (%)</span><input class="input" name="agua" inputmode="decimal" placeholder="Ej. 55"></label>
-            <label class="field"><span>Hueso (kg)</span><input class="input" name="hueso" inputmode="decimal" placeholder="Ej. 3,1"></label>
+        <div class="comp-box">
+          <div class="comp-head"><b>Composición corporal</b> <span class="muted small">(opcional)</span></div>
+          <p class="small muted">Si tu báscula o tu centro deportivo te dan estos datos, apúntalos. Elige si los tienes en % del peso o en kilos: nosotros hacemos la conversión.</p>
+          <div class="seg" role="group" aria-label="Unidad de la composición">
+            <button type="button" data-act="peso-unit" data-v="pct" aria-pressed="${u === 'pct'}">En % del peso</button>
+            <button type="button" data-act="peso-unit" data-v="kg" aria-pressed="${u === 'kg'}">En kilos (kg)</button>
           </div>
-        </details>
-        <button class="btn block" type="submit">Guardar registro</button>
+          <div class="two">
+            ${COMP.slice(1).map((c) => `<label class="field"><span>${c.t} (<span data-ulbl>${uTxt(u)}</span>)</span><input class="input" name="${c.k}" inputmode="decimal" data-comp="${c.k}" value="${ed ? esc(aUnidad(c, ed[c.k], ed.kg, u)) : ''}" ${ed && ed[c.k] != null ? `data-orig="${ed[c.k]}"` : ''} placeholder="${PH[u][c.k]}"><small class="muted conv" data-conv="${c.k}"></small></label>`).join('')}
+          </div>
+        </div>
+        <button class="btn block" type="submit">${ed ? 'Guardar cambios' : 'Guardar registro'}</button>
       </form>`;
 }
+// Texto «≈ …» bajo cada campo con el valor en la otra unidad.
+function pesoHints() {
+  const f = document.querySelector('form[data-form="addweight"]'); if (!f) return;
+  const u = pesoUnit(), kg = num(f.kg.value) || Number(f.dataset.kgbase) || 0;
+  for (const c of COMP.slice(1)) {
+    const el = f.querySelector(`[data-conv="${c.k}"]`), n = num(f[c.k].value);
+    if (!el) continue;
+    el.textContent = n > 0 && kg > 0 ? (u === 'pct' ? `≈ ${nf((n / 100) * kg, 1)} kg` : `≈ ${nf((n / kg) * 100, 1)} % de tu peso`) : '';
+  }
+}
+// Cambia % ↔ kg sin perder lo ya escrito: convierte los valores del formulario con el peso que haya puesto.
+function cambiarUnidad(u) {
+  const prev = pesoUnit(); if (u === prev) return;
+  const f = document.querySelector('form[data-form="addweight"]');
+  if (f) {
+    const kg = num(f.kg.value) || Number(f.dataset.kgbase) || 0;
+    for (const c of COMP.slice(1)) {
+      const inp = f[c.k], n = num(inp.value);
+      if (inp.dataset.orig !== undefined && !inp.dataset.tocado) inp.value = aUnidad(c, Number(inp.dataset.orig), Number(f.dataset.kgbase), u); // sin tocar: se muestra desde lo guardado
+      else if (inp.value.trim() && n > 0 && kg > 0) inp.value = r2(prev === 'pct' ? (n / 100) * kg : (n / kg) * 100);
+      inp.placeholder = PH[u][c.k];
+    }
+    f.querySelectorAll('[data-ulbl]').forEach((el) => { el.textContent = uTxt(u); });
+    f.querySelectorAll('[data-act="peso-unit"]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === u)));
+  }
+  st.pesoUnit = u; lsSet('cadencia-peso-unit', u);
+  pesoHints();
+}
+// Al editar, los datos de composición que no has tocado se conservan exactamente como estaban guardados.
+function keepEdit(f) {
+  const keep = {};
+  if (f.dataset.edit) for (const c of COMP.slice(1)) { const i = f[c.k]; if (i && i.dataset.orig !== undefined && !i.dataset.tocado) keep[c.k] = Number(i.dataset.orig); }
+  return keep;
+}
 function pesoSheetHTML() {
+  const ed = st.pesoEdit ? st.weights.find((w) => w.fecha === st.pesoEdit) : null;
   return `<div class="sheet-back" data-act="peso-sheet-close"></div>
-    <div class="sheet short" role="dialog" aria-modal="true" aria-label="Registrar peso y composición">
+    <div class="sheet" role="dialog" aria-modal="true" aria-label="${ed ? 'Editar registro' : 'Añadir registro'}">
       <div class="sheet-grab"></div>
-      <div class="sheet-head"><button type="button" class="iconbtn" data-act="peso-sheet-close" aria-label="Cerrar">${I.back}</button><h2>Peso y composición</h2><span style="width:36px"></span></div>
-      <div class="sheet-list">${pesoFormHTML(true)}</div>
+      <div class="sheet-head"><button type="button" class="iconbtn" data-act="peso-sheet-close" aria-label="Cerrar">${I.back}</button><h2>${ed ? 'Editar registro' : 'Añadir registro'}</h2><span style="width:36px"></span></div>
+      <div class="sheet-list">${pesoFormHTML(ed)}</div>
+    </div>`;
+}
+
+/* ---------- historial de registros (se abre con el icono de arriba a la derecha) ---------- */
+const compTxt = (w) => COMP.slice(1).filter((c) => w[c.k] != null).map((c) => `${c.t} ${nf(w[c.k], 1)} ${c.u}`).join(' · ');
+function pesoHistSheetHTML() {
+  const rows = st.weights.slice().reverse(), mod = !!st.pesoMod;
+  return `<div class="sheet-back" data-act="peso-hist-close"></div>
+    <div class="sheet" role="dialog" aria-modal="true" aria-label="Historial de registros">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><button type="button" class="iconbtn" data-act="peso-hist-close" aria-label="Cerrar">${I.back}</button><h2>Historial de registros</h2>
+        ${rows.length ? `<button type="button" class="link" data-act="peso-hist-mod">${mod ? 'Listo' : 'Modificar'}</button>` : '<span style="width:36px"></span>'}</div>
+      <div class="sheet-list">${rows.length ? `<div class="list">${rows.map((w, i) => {
+        const prev = rows[i + 1], dd = prev ? w.kg - prev.kg : null, ct = compTxt(w);
+        return `<div class="row"><span>${esc(fmtDate(w.fecha, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }))}${ct ? `<br><span class="muted small">${esc(ct)}</span>` : ''}</span>
+          <span class="hrow-r"><span class="muted small">${dd == null ? '' : (dd > 0 ? '+' : dd < 0 ? '−' : '±') + nf(Math.abs(dd), 1)}</span><b class="nowrap">${nf(w.kg, 1)} kg</b>
+          ${mod ? `<button type="button" class="iconbtn" data-act="w-edit" data-v="${esc(w.fecha)}" aria-label="Editar el registro del ${esc(w.fecha)}">${I.pencil}</button><button type="button" class="iconbtn bad" data-act="w-del-ask" data-v="${esc(w.fecha)}" aria-label="Borrar el registro del ${esc(w.fecha)}">${I.trash}</button>` : ''}</span></div>`;
+      }).join('')}</div>` : '<div class="empty">Sin registros todavía.</div>'}</div>
+    </div>`;
+}
+function pesoDelSheetHTML() {
+  const w = st.weights.find((x) => x.fecha === st.pesoDel);
+  return `<div class="sheet-back" data-act="w-del-no"></div>
+    <div class="sheet short" role="alertdialog" aria-modal="true" aria-label="Borrar registro">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><button type="button" class="iconbtn" data-act="w-del-no" aria-label="Cancelar">${I.back}</button><h2>Borrar registro</h2><span style="width:36px"></span></div>
+      <div class="sheet-list form-grid">
+        <p>¿Borrar el registro del <b>${esc(w ? fmtDate(w.fecha, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '')}</b>${w ? ` (${nf(w.kg, 1)} kg)` : ''}?</p>
+        <p class="small muted">Se borra de tu cuenta, con su composición corporal. No se puede deshacer.</p>
+        <button type="button" class="btn block danger-solid" data-act="w-del-yes">Borrar registro</button>
+        <button type="button" class="btn ghost block" data-act="w-del-no">Cancelar</button>
+      </div>
     </div>`;
 }
 
@@ -548,7 +635,7 @@ const COMP = [
   { k: 'agua', t: 'Agua', u: '%', d: 1, lo: 30, hi: 75 },
   { k: 'hueso', t: 'Hueso', u: 'kg', d: 1, lo: 1, hi: 6 },
 ];
-function chart(points, target, label = 'Evolución del peso') {
+function chart(points, target, label = 'Evolución del peso', dec = 0) {
   if (points.length < 2) return '';
   const W = 340, H = 150, P = { l: 30, r: 8, t: 10, b: 22 };
   const ys = points.map((p) => p.kg).concat(target ? [target] : []);
@@ -562,7 +649,7 @@ function chart(points, target, label = 'Evolución del peso') {
   const area = `${d} L${x(points[points.length - 1].fecha).toFixed(1)} ${H - P.b} L${P.l} ${H - P.b} Z`;
   const ticks = [lo, (lo + hi) / 2, hi];
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">
-    ${ticks.map((t) => `<line class="gl" x1="${P.l}" x2="${W - P.r}" y1="${y(t)}" y2="${y(t)}"/><text x="${P.l - 6}" y="${y(t) + 4}" text-anchor="end">${nf(t, 0)}</text>`).join('')}
+    ${ticks.map((t) => `<line class="gl" x1="${P.l}" x2="${W - P.r}" y1="${y(t)}" y2="${y(t)}"/><text x="${P.l - 6}" y="${y(t) + 4}" text-anchor="end">${nf(t, dec)}</text>`).join('')}
     ${target ? `<line class="tg" x1="${P.l}" x2="${W - P.r}" y1="${y(target)}" y2="${y(target)}"/>` : ''}
     <path class="ar" d="${area}"/><path class="ln" d="${d}"/>
     ${points.length <= 40 ? points.map((p) => `<circle class="dot" r="3.5" cx="${x(p.fecha)}" cy="${y(p.kg)}"/>`).join('') : ''}
@@ -571,52 +658,64 @@ function chart(points, target, label = 'Evolución del peso') {
   </svg>`;
 }
 
+// Las 4 tarjetas de composición: muestran el último registro y se pueden tocar para ver su evolución semanal.
 function compCardHTML(ws) {
-  const items = COMP.slice(1).map((c) => {
+  return `<div class="stats">${COMP.slice(1).map((c) => {
     const con = ws.filter((w) => w[c.k] != null);
-    if (!con.length) return '';
+    if (!con.length) return `<button type="button" class="stat stat-btn" data-act="comp-ver" data-v="${c.k}"><span class="label">${c.t}</span><span class="val num">—</span><span class="hint">Sin datos todavía</span><span class="stat-go">Ver evolución ›</span></button>`;
     const last = con[con.length - 1], first = con[0], dd = con.length > 1 ? last[c.k] - first[c.k] : null;
     const extra = c.k === 'grasa' && last.kg ? `≈ ${nf((last.kg * last.grasa) / 100, 1)} kg de grasa` : c.k === 'agua' && last.kg ? `≈ ${nf((last.kg * last.agua) / 100, 1)} kg de agua` : '';
-    return `<section class="stat"><span class="label">${c.t}</span><span class="val num">${nf(last[c.k], 1)}<em>${c.u}</em></span>
-      <span class="hint">${dd != null ? `${dd > 0 ? '+' : dd < 0 ? '−' : '±'}${nf(Math.abs(dd), 1)} ${c.u} desde el ${esc(fmtDate(first.fecha))}` : 'Primer registro'}${extra ? `<br>${extra}` : ''}</span></section>`;
-  }).join('');
-  return items ? `<div class="stats">${items}</div>` : '';
+    return `<button type="button" class="stat stat-btn" data-act="comp-ver" data-v="${c.k}"><span class="label">${c.t}</span><span class="val num">${nf(last[c.k], 1)}<em>${c.u}</em></span>
+      <span class="hint">${dd != null ? `${dd > 0 ? '+' : dd < 0 ? '−' : '±'}${nf(Math.abs(dd), 1)} ${c.u} desde el ${esc(fmtDate(first.fecha))}` : 'Primer registro'}${extra ? `<br>${extra}` : ''}</span><span class="stat-go">Ver evolución ›</span></button>`;
+  }).join('')}</div>`;
+}
+
+// Evolución semanal de una métrica: media de cada semana (de lunes a domingo), últimas 26 semanas.
+function semanal(k) {
+  const por = {};
+  st.weights.forEach((w) => { if (w[k] != null) (por[E.mondayOf(w.fecha)] = por[E.mondayOf(w.fecha)] || []).push(w[k]); });
+  return Object.keys(por).sort().slice(-26).map((m) => ({ fecha: m, kg: por[m].reduce((a, b) => a + b, 0) / por[m].length, n: por[m].length }));
+}
+function pesoCompSheetHTML() {
+  const c = COMP.find((x) => x.k === st.pesoComp) || COMP[1], pts = semanal(c.k);
+  const last = pts[pts.length - 1], first = pts[0];
+  const dd = pts.length > 1 ? last.kg - first.kg : null;
+  const lista = pts.slice().reverse().slice(0, 10);
+  return `<div class="sheet-back" data-act="comp-close"></div>
+    <div class="sheet" role="dialog" aria-modal="true" aria-label="Evolución semanal de ${esc(c.t.toLowerCase())}">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><button type="button" class="iconbtn" data-act="comp-close" aria-label="Cerrar">${I.back}</button><h2>${esc(c.t)}</h2><span style="width:36px"></span></div>
+      <div class="sheet-list">
+        ${last ? `<section class="card"><div class="comp-now"><span class="val num">${nf(last.kg, 1)}<em>${c.u}</em></span><span class="muted small">${dd != null ? `${dd > 0 ? '+' : dd < 0 ? '−' : '±'}${nf(Math.abs(dd), 1)} ${c.u} desde la semana del ${esc(fmtDate(first.fecha))}` : 'Media de la semana del ' + esc(fmtDate(last.fecha))}</span></div>
+          <h3 class="comp-h">Evolución semanal</h3>
+          ${pts.length >= 2 ? chart(pts, null, `Evolución semanal de ${c.t.toLowerCase()}`, 1) : '<div class="empty"><b>Aún no hay gráfica</b><span>Con datos de dos semanas distintas verás aquí cómo cambia.</span></div>'}
+          <p class="small muted">Cada punto es la media de la semana (de lunes a domingo).</p></section>
+          <section class="card"><h3 class="comp-h">Últimas semanas</h3><div class="list">${lista.map((x, i) => {
+            const pv = lista[i + 1], d = pv ? x.kg - pv.kg : null;
+            return `<div class="row"><span>Semana del ${esc(fmtDate(x.fecha, { day: 'numeric', month: 'short' }))}</span><span class="hrow-r"><span class="muted small">${d == null ? '' : (d > 0 ? '+' : d < 0 ? '−' : '±') + nf(Math.abs(d), 1)}</span><b class="nowrap">${nf(x.kg, 1)} ${c.u}</b></span></div>`;
+          }).join('')}</div></section>`
+        : `<section class="card"><div class="empty"><b>Aún no hay datos de ${esc(c.t.toLowerCase())}</b><span>Apúntalos con «Añadir registro» y verás aquí su evolución semana a semana.</span></div></section>`}
+      </div>
+    </div>`;
 }
 
 function viewPeso(sub = false) {
   const ws = st.weights, p = st.profile;
-  const rows = ws.slice().reverse();
-  const disp = COMP.filter((c) => c.k === 'kg' || ws.some((w) => w[c.k] != null));
-  const met = disp.find((c) => c.k === st.pesoMet) || COMP[0];
-  const pts = ws.filter((w) => w[met.k] != null).slice(-90).map((w) => ({ fecha: w.fecha, kg: w[met.k] }));
-  const compTxt = (w) => COMP.slice(1).filter((c) => w[c.k] != null).map((c) => `${c.t} ${nf(w[c.k], 1)} ${c.u}`).join(' · ');
+  const pts = ws.slice(-90).map((w) => ({ fecha: w.fecha, kg: w.kg }));
   return `
     ${sub ? '' : `<header class="hello"><div><h1>Peso</h1><p>${ws.length} ${ws.length === 1 ? 'registro' : 'registros'}${p.pesoObjetivo ? ` · objetivo ${nf(p.pesoObjetivo, 1)} kg` : ''}</p></div></header>`}
     <section class="card">
       <h2>Evolución</h2>
-      ${disp.length > 1 ? `<div class="seg" role="group" aria-label="Qué ver">${disp.map((c) => `<button type="button" data-act="pesomet" data-v="${c.k}" aria-pressed="${met.k === c.k}">${c.t}</button>`).join('')}</div>` : ''}
-      ${pts.length >= 2 ? chart(pts, met.k === 'kg' ? p.pesoObjetivo : null, `Evolución de ${met.t.toLowerCase()}`) : `<div class="empty"><b>Aún no hay gráfica</b><span>Con dos registros verás aquí cómo cambia ${met.k === 'kg' ? 'tu peso' : 'tu ' + met.t.toLowerCase()}.</span></div>`}
+      ${pts.length >= 2 ? chart(pts, p.pesoObjetivo, 'Evolución del peso') : '<div class="empty"><b>Aún no hay gráfica</b><span>Con dos registros verás aquí cómo cambia tu peso.</span></div>'}
     </section>
     ${compCardHTML(ws)}
-    <section class="card">
-      <h2>Añadir registro</h2>
-      ${pesoFormHTML(true)}
-    </section>
-    <section class="card">
-      <h2>Historial</h2>
-      ${rows.length ? `<div class="list">${rows.map((w, i) => {
-        const prev = rows[i + 1];
-        const dd = prev ? w.kg - prev.kg : null;
-        const ct = compTxt(w);
-        return `<div class="row"><span>${esc(fmtDate(w.fecha, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }))}${ct ? `<br><span class="muted small">${esc(ct)}</span>` : ''}</span>
-          <span style="display:flex;align-items:center;gap:10px"><span class="muted small">${dd == null ? '' : (dd > 0 ? '+' : dd < 0 ? '−' : '±') + nf(Math.abs(dd), 1)}</span><b class="nowrap">${nf(w.kg, 1)} kg</b>
-          <button class="iconbtn" data-act="delweight" data-v="${esc(w.fecha)}" aria-label="Borrar registro del ${esc(w.fecha)}">${I.trash}</button></span></div>`;
-      }).join('')}</div>` : '<div class="empty">Sin registros todavía.</div>'}
-    </section>`;
+    <div class="fab-space" aria-hidden="true"></div>
+    <button type="button" class="fab" data-act="peso-sheet">${I.plus} Añadir registro</button>`;
 }
 
-// comp: { grasa, musculo, agua, hueso } como texto (opcionales)
-async function saveWeight(fecha, raw, comp = {}) {
+// comp: { grasa, musculo, agua, hueso } como texto (opcionales), escritos en la unidad `unit` ('pct' o 'kg').
+// Se convierten con el peso del registro y se guardan como siempre: grasa y agua en %, músculo y hueso en kg.
+async function saveWeight(fecha, raw, comp = {}, unit = 'pct', editando = false, keep = {}) {
   const kg = num(raw);
   if (!(kg >= 30 && kg <= 250)) { toast('Escribe un peso entre 30 y 250 kg'); return false; }
   if (!fecha || fecha > todayISO()) { toast('Elige una fecha de hoy o anterior'); return false; }
@@ -625,18 +724,25 @@ async function saveWeight(fecha, raw, comp = {}) {
   for (const c of COMP.slice(1)) {
     const t = String(comp[c.k] || '').trim();
     if (!t) continue;
+    if (editando && keep[c.k] != null) { extra[c.k] = keep[c.k]; continue; } // no lo has tocado: se queda tal cual estaba guardado
     const n = num(t);
-    if (!(n >= c.lo && n <= c.hi)) { toast(`${c.t}: escribe un valor entre ${c.lo} y ${c.hi} ${c.u}`); return false; }
-    extra[c.k] = Math.round(n * 10) / 10;
+    if (!(n > 0)) { toast(`${c.t}: escribe un número`); return false; }
+    const val = Math.round(aGuardado(c, n, v, unit) * 10) / 10;
+    if (!(val >= c.lo && val <= c.hi)) {
+      const mismaUnidad = (unit === 'pct') === (c.u === '%');
+      toast(mismaUnidad ? `${c.t}: escribe un valor entre ${c.lo} y ${c.hi} ${c.u}` : `${c.t}: ${nf(n, 1)} ${uTxt(unit)} con ${nf(v, 1)} kg son ${nf(val, 1)} ${c.u}; tiene que estar entre ${c.lo} y ${c.hi} ${c.u}`);
+      return false;
+    }
+    extra[c.k] = val;
   }
   if (extra.musculo && extra.musculo >= v) { toast('El músculo tiene que ser menor que tu peso'); return false; }
   try {
-    await api.addWeight(st.user.uid, fecha, v, extra);
+    if (editando) await api.setWeight(st.user.uid, fecha, v, extra); else await api.addWeight(st.user.uid, fecha, v, extra);
     st.weights = await api.listWeights(st.user.uid);
     const last = latestWeight();
     if (last) { await api.saveProfile(st.user.uid, { pesoKg: last.kg }); st.profile.pesoKg = last.kg; }
-    st.pesoSheet = false; render();
-    toast(Object.keys(extra).length ? 'Peso y composición guardados' : 'Peso guardado');
+    st.pesoSheet = false; st.pesoEdit = null; render();
+    toast(editando ? 'Registro actualizado' : Object.keys(extra).length ? 'Peso y composición guardados' : 'Peso guardado');
     return true;
   } catch (e) { toast(errorText(e)); return false; }
 }
@@ -648,8 +754,8 @@ async function delWeight(fecha) {
     st.weights = await api.listWeights(st.user.uid);
     const last = latestWeight();
     if (last) { await api.saveProfile(st.user.uid, { pesoKg: last.kg }); st.profile.pesoKg = last.kg; }
-    render(); toast('Registro borrado');
-  } catch (e) { toast(errorText(e)); }
+    st.pesoDel = null; render(); toast('Registro borrado');
+  } catch (e) { st.pesoDel = null; toast(errorText(e)); render(); }
 }
 
 /* ---------- pestaña Perfil ---------- */
@@ -760,7 +866,7 @@ function viewError() {
 async function enter(u) {
   st.user = u; st.busy = false;
   if (!u && M) M.pararPro();
-  if (!u) { st.recAsk = null; st.del = null; st.legal = false; st.view = 'auth'; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
+  if (!u) { st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = 'auth'; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
   try {
     st.profile = await api.getProfile(u.uid);
     if (!st.profile || !st.profile.onboarded) return startOnboarding();
@@ -802,10 +908,18 @@ root.addEventListener('click', async (e) => {
   else if (act === 'tab') { st.tab = v; st.editGoals = null; st.food = null; st.tl = null; lsSet('cadencia-tab', v); render(); window.scrollTo(0, 0); }
   else if (act === 'install') { if (installEvt) { installEvt.prompt(); const r = await installEvt.userChoice; if (r.outcome === 'accepted') installEvt = null; render(); } }
   else if (act === 'install-hide') { lsSet('cadencia-install-hide', '1'); render(); }
-  else if (act === 'delweight') delWeight(v);
-  else if (act === 'peso-sheet') { st.pesoSheet = true; render(); }
-  else if (act === 'peso-sheet-close') { st.pesoSheet = false; render(); }
-  else if (act === 'pesomet') { st.pesoMet = v; render(); }
+  else if (act === 'peso-sheet') { st.pesoEdit = null; st.pesoSheet = true; render(); }
+  else if (act === 'peso-sheet-close') { st.pesoSheet = false; st.pesoEdit = null; render(); }
+  else if (act === 'peso-unit') cambiarUnidad(v);
+  else if (act === 'peso-hist') { st.pesoHist = true; st.pesoMod = false; render(); }
+  else if (act === 'peso-hist-close') { st.pesoHist = false; st.pesoMod = false; render(); }
+  else if (act === 'peso-hist-mod') { st.pesoMod = !st.pesoMod; render(); }
+  else if (act === 'w-edit') { st.pesoEdit = v; st.pesoSheet = true; render(); }
+  else if (act === 'w-del-ask') { if (st.weights.length <= 1) toast('Necesitas al menos un registro de peso'); else { st.pesoDel = v; render(); } }
+  else if (act === 'w-del-no') { st.pesoDel = null; render(); }
+  else if (act === 'w-del-yes') { const f = st.pesoDel; if (f) delWeight(f); }
+  else if (act === 'comp-ver') { st.pesoComp = v; render(); }
+  else if (act === 'comp-close') { st.pesoComp = null; render(); }
   else if (act === 'peso-ideal') {
     const val = nf(Number(v), 1);
     if (b.dataset.ctx === 'ob' && st.ob) { st.ob.pesoObjetivo = val; st.ob.msg = ''; render(); }
@@ -830,6 +944,7 @@ root.addEventListener('input', (e) => {
     const go = document.getElementById('del-go'); if (go) go.disabled = !(st.del.txt.trim().toUpperCase() === 'BORRAR' && st.del.pass) || st.del.busy;
     return;
   }
+  if (e.target.closest && e.target.closest('form[data-form="addweight"]')) { if (e.target.dataset && e.target.dataset.comp) e.target.dataset.tocado = '1'; pesoHints(); return; }
   if (st.view === 'main' && M.input(e.target)) return;
   const k = e.target.dataset && e.target.dataset.ob;
   if (!k || !st.ob) return;
@@ -850,7 +965,7 @@ root.addEventListener('submit', async (e) => {
   else if (kind === 'register') onRegister(f);
   else if (kind === 'ob') obNext();
   else if (kind === 'quickweight') { const ok = await saveWeight(todayISO(), f.kg.value); if (!ok) return; }
-  else if (kind === 'addweight') saveWeight(f.fecha.value, f.kg.value, { grasa: f.grasa.value, musculo: f.musculo.value, agua: f.agua.value, hueso: f.hueso.value });
+  else if (kind === 'addweight') saveWeight(f.fecha.value, f.kg.value, { grasa: f.grasa.value, musculo: f.musculo.value, agua: f.agua.value, hueso: f.hueso.value }, pesoUnit(), !!f.dataset.edit, keepEdit(f));
   else if (kind === 'profile') saveProfileForm(f);
   else if (kind === 'delacc') borrarCuenta();
   else if (kind === 'wk') wkSave();

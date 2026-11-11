@@ -55,6 +55,8 @@ async function firebaseBackend(config) {
     async addWeight(uid, date, kg, extra = {}) {
       await F.setDoc(weightRef(uid, date), { fecha: date, kg, ...extra }, { merge: true });
     },
+    // Sustituye el registro de ese día (misma estructura {fecha, kg, grasa?, musculo?, agua?, hueso?}); sirve para editar y poder quitar un dato.
+    async setWeight(uid, date, kg, extra = {}) { await F.setDoc(weightRef(uid, date), { fecha: date, kg, ...extra }); },
     async deleteWeight(uid, date) { await F.deleteDoc(weightRef(uid, date)); },
     async listWeights(uid, n = 120) {
       const q = F.query(F.collection(db, 'users', uid, 'pesos'), F.orderBy('fecha', 'desc'), F.limit(n));
@@ -181,6 +183,7 @@ function localBackend() {
       u.profile = { ...u.profile, ...data, actualizado: Date.now() }; write(s);
     },
     async addWeight(uid, date, kg, extra = {}) { const s = read(); const u = byUid(s, uid); if (!u) return; u.pesos[date] = { ...(u.pesos[date] || {}), fecha: date, kg, ...extra }; write(s); },
+    async setWeight(uid, date, kg, extra = {}) { const s = read(); const u = byUid(s, uid); if (!u) return; u.pesos[date] = { fecha: date, kg, ...extra }; write(s); },
     async deleteWeight(uid, date) { const s = read(); const u = byUid(s, uid); if (!u) return; delete u.pesos[date]; write(s); },
     async listWeights(uid, n = 120) {
       const u = byUid(read(), uid); if (!u) return [];

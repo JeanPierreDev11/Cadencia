@@ -139,3 +139,9 @@ La previsión de Rutas viene de [Open-Meteo](https://open-meteo.com/) (sin clave
 - **Cloud Function `recordatorios`** (`onSchedule`, `0,30 * * * *`, Cloud Scheduler): busca `recActivo == true`, calcula el tramo de 30 min en la zona horaria de cada persona y manda con `sendEach` un mensaje solo de datos. No avisa si ya está hecho (peso de hoy, esa comida, entreno de hoy), ni en días de descanso (entreno), ni dos veces el mismo aviso el mismo día. Borra los tokens caducados.
 - iPhone: las notificaciones web solo funcionan con la app añadida a la pantalla de inicio (iOS 16.4 o superior).
 - Escala: cada 30 min lee los usuarios con avisos activos; con muchos miles habrá que filtrar por tramo en la consulta.
+
+## Progreso → Peso
+- **Evolución** muestra solo la gráfica del peso. Las 4 tarjetas de composición (Grasa, Músculo, Agua, Hueso) enseñan el último registro y, al tocarlas, abren su **evolución semanal** (media de cada semana, lunes a domingo, últimas 26 semanas).
+- **«Añadir registro»** (botón flotante) abre el formulario en una ventana. Selector **% del peso / kilos**: se convierte con el peso del registro y se guarda como siempre (`users/{uid}/pesos/{fecha}` = `{fecha, kg, grasa % , musculo kg, agua %, hueso kg}`). La última unidad elegida se recuerda en el dispositivo.
+- **Historial** (icono de reloj arriba a la derecha): lista de registros; «Modificar» muestra lápiz (editar ese día; los datos que no toques se conservan tal cual, la fecha no se cambia) y papelera roja (pide confirmación). Editar usa `setWeight` (sustituye el documento del día con la misma estructura, así se puede quitar un dato); añadir sigue usando `addWeight` (merge).
+

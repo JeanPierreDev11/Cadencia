@@ -700,3 +700,24 @@ a.btn { text-decoration: none; display: block; text-align: center; box-sizing: b
 .switch[aria-checked="true"] i { transform: translateX(20px); background: var(--accent-ink); }
 .switch[disabled] { opacity: .6; }
 .switch[aria-disabled="true"] { opacity: .5; }
+
+/* Progreso → Peso: tarjetas clicables, botón flotante, historial y modales */
+.stat-btn { border: 0; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; position: relative; }
+.stat-btn:active { transform: scale(.98); }
+.stat-btn .val { color: var(--ink); }
+.stat-go { font-size: 13px; font-weight: 700; color: var(--accent); margin-top: 2px; }
+.fab { position: fixed; z-index: 9; right: max(16px, calc((100vw - 520px) / 2 + 16px)); bottom: calc(var(--safe-b) + 76px); display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 999px; padding: 14px 20px; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 16px; box-shadow: 0 8px 22px rgba(0,0,0,.28); }
+.fab:active { transform: scale(.97); }
+.hist-btn { width: 44px; height: 44px; color: var(--ink); }
+.hrow-r { display: flex; align-items: center; gap: 10px; }
+.iconbtn.bad { color: var(--bad); }
+.comp-box { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface2); }
+.comp-box .seg { background: var(--surface); }
+.comp-box .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); box-shadow: none; }
+.comp-head { font-size: 16px; }
+.conv { min-height: 1.2em; font-size: 12px; }
+.comp-now { display: grid; gap: 2px; margin-bottom: 8px; }
+.comp-now .val { font-size: 40px; line-height: 1.05; }
+.comp-now .val em { font-style: normal; font-size: 16px; color: var(--muted); font-weight: 600; margin-left: 4px; }
+.comp-h { font-size: 16px; font-weight: 700; margin: 6px 0; }
+.fab-space { height: 52px; }
