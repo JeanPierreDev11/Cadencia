@@ -41,8 +41,15 @@ window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); inst
 window.addEventListener('appinstalled', () => { installEvt = null; toast('App instalada'); if (st.view === 'main') render(); });
 
 /* ---------- tema ---------- */
-const applyTheme = () => { delete document.documentElement.dataset.theme; }; // la app tiene un único tema: negro y amarillo
+// Tema: «dark» (por defecto), «light» o «system» (lee prefers-color-scheme del móvil).
+const THEMES = ['dark', 'light', 'system'];
+const themePref = () => { const t = lsGet('cadencia-theme'); return THEMES.includes(t) ? t : 'dark'; };
+const applyTheme = () => {
+  document.documentElement.dataset.theme = themePref();
+  try { const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#000000'; } catch (e) { /* nada */ }
+};
 applyTheme();
+try { matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if (themePref() === 'system') applyTheme(); }); } catch (e) { /* navegador antiguo */ }
 
 /* ================================================================== */
 /* Estado                                                              */
@@ -62,7 +69,7 @@ function render() {
   else if (st.view === 'error') root.innerHTML = viewError();
   document.title = APP_NAME;
   if (M) M.afterRender();
-  document.body.classList.toggle('noscroll', !!(st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.meta || st.regPick || st.legal || st.del || st.iaFoto || st.pro || st.proWelcome || st.recAsk));
+  document.body.classList.toggle('noscroll', !!(st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.bill || st.meta || st.regPick || st.legal || st.del || st.iaFoto || st.pro || st.proWelcome || st.recAsk));
 }
 
 /* ================================================================== */
@@ -92,7 +99,7 @@ function viewAuth() {
         <button type="button" data-act="mode" data-v="register" aria-pressed="${reg}">Crear cuenta</button>
       </div>
       <form data-form="${reg ? 'register' : 'login'}" class="form-grid" novalidate>
-        ${reg ? `<label class="field"><span>Nombre</span><input class="input" name="name" autocomplete="given-name" required placeholder="Cómo quieres que te llamemos"></label>` : ''}
+        ${reg ? `<label class="field"><span>Nombres y apellidos</span><input class="input" name="name" autocomplete="name" required placeholder="Tu nombre y tus apellidos"></label>` : ''}
         <label class="field"><span>Email</span><input class="input" type="email" name="email" autocomplete="email" inputmode="email" autocapitalize="off" required placeholder="tu@email.com"></label>
         <label class="field"><span>Contraseña</span>
           <div class="pass-wrap"><input class="input" type="password" name="pass" autocomplete="${reg ? 'new-password' : 'current-password'}" required minlength="6" placeholder="${reg ? 'Mínimo 6 caracteres' : ''}"><button type="button" data-act="peek">Ver</button></div>
@@ -161,7 +168,7 @@ async function onLogin(form) {
 
 async function onRegister(form) {
   const name = form.name.value.trim(), email = form.email.value.trim(), pass = form.pass.value;
-  if (!name) { st.authMsg = { text: 'Escribe tu nombre.' }; render(); return keepForm({ email }); }
+  if (name.split(/\s+/).filter(Boolean).length < 2) { st.authMsg = { text: 'Escribe tus nombres y apellidos.' }; render(); return keepForm({ name, email }); }
   if (!email) { st.authMsg = { text: 'Escribe tu email.' }; render(); return keepForm({ name }); }
   if (pass.length < 6) { st.authMsg = { text: 'La contraseña necesita al menos 6 caracteres.' }; render(); return keepForm({ name, email }); }
   if (!form.acepto.checked) { st.authMsg = { text: 'Para crear la cuenta tienes que aceptar los Términos de Uso, la Política de Privacidad y el aviso de salud.' }; render(); return keepForm({ name, email, pass }); }
@@ -253,7 +260,7 @@ function viewOnboarding() {
       <label class="field"><span>Peso objetivo ${wantsTarget ? '' : '<span class="muted">(opcional)</span>'}</span>
         <div class="big-input"><input name="pesoObjetivo" inputmode="decimal" maxlength="5" value="${esc(o.pesoObjetivo)}" placeholder="${wantsTarget ? 'Ej. 70' : 'Déjalo vacío si no tienes'}" data-ob="pesoObjetivo"><em>kg</em></div>
       </label>
-      ${pesoGuiaHTML(num(o.alturaCm), o.sexo, o.objetivos, 'ob')}`;
+      ${pesoGuiaHTML(num(o.alturaCm), o.sexo, o.objetivos, 'ob', null, o.pesoObjetivo.trim() ? num(o.pesoObjetivo) : null, o.hideSug)}`;
     canNext = !!o.pesoKg;
   } else {
     const p = obProfile();
@@ -295,6 +302,7 @@ function obProfile() {
     objetivos: o.objetivos, sexo: o.sexo, edad: Math.round(num(o.edad)),
     alturaCm: Math.round(num(o.alturaCm)), pesoKg: Math.round(num(o.pesoKg) * 10) / 10,
     pesoObjetivo: isFinite(obj) ? Math.round(obj * 10) / 10 : null,
+    ...(o.hideSug ? { hideWeightSuggestion: true } : {}),
   };
 }
 
@@ -363,13 +371,13 @@ let irPendiente = leerIr(); // si venimos de tocar un aviso, aquí queda la pant
 let stravaRet = leerRetorno(); // si venimos de la pantalla de permisos de Strava, aquí queda el código temporal
 
 function viewMain() {
-  const sheet = st.legal ? legalSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : M.sheet();
+  const sheet = st.legal ? legalSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.bill ? billSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
   if (st.rw) return viewRutWizard() + sheet;
   if (st.live && !st.liveMin) return viewLive() + sheet;
   if (st.wk) return viewWkForm();
   const tab = M.tabActual(), tabs = M.tabs();
   const body = tab === 'perfil' ? viewPerfil() : tab === 'entreno' ? viewEntreno() : tab === 'inicio' ? viewInicio() : M.view(tab);
-  return `<main class="main ${st.live ? 'has-live' : ''}">${body}</main>${st.live ? liveBarHTML() : ''}${sheet}
+  return `<button type="button" class="gear" data-act="cfg-open" aria-label="Configuración">${I.gear}</button><main class="main ${st.live ? 'has-live' : ''}">${body}</main>${st.live ? liveBarHTML() : ''}${sheet}
   <div class="tabbar"><nav aria-label="Secciones" class="n${tabs.length}">${tabs.map((t) => `<button type="button" data-act="tab" data-v="${t.id}" ${tab === t.id ? 'aria-current="page"' : ''}>${t.ico}<span>${t.t}</span></button>`).join('')}</nav></div>`;
 }
 
@@ -401,7 +409,7 @@ function viewInicio() {
   return `
     <header class="hello">
       <div><h1>Hola, ${esc(name)}</h1><p>${esc(new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }))}</p></div>
-      <div class="hello-r">${M.novBell()}${st.profile && st.profile.isPro === true ? '<button class="protag pill" data-act="tab" data-v="perfil" aria-label="Tu plan: Cadencia Pro">Pro</button>' : ''}<button class="avatar" data-act="tab" data-v="perfil" aria-label="Tu perfil">${esc((name || '?').trim().charAt(0).toUpperCase())}</button></div>
+      <div class="hello-r">${M.novBell()}${st.profile && st.profile.isPro === true ? '<button class="protag pill" data-act="tab" data-v="perfil" aria-label="Tu plan: Cadencia Pro">Pro</button>' : ''}</div>
     </header>
     ${M.novedadesHTML()}
 
@@ -502,15 +510,13 @@ function objetivoInvalido(t, cm, sexo, objetivos, comp) {
   if (t > r.tope) return `Con ${nf(cm / 100, 2)} m, ${nf(t, 1)} kg está muy por encima de un peso saludable, incluso con mucho músculo. Elige como mucho ${nf(r.tope, 1)} kg.`;
   return '';
 }
-function pesoGuiaHTML(cm, sexo, objetivos, ctx, comp) {
+// Recomendación discreta de peso objetivo: una sola línea con «Ignorar». Se oculta si ya usas ese peso o si la ignoraste (hideWeightSuggestion).
+function pesoGuiaHTML(cm, sexo, objetivos, ctx, comp, actual, oculto) {
+  if (oculto) return '';
   const r = rangoPeso(cm, sexo, objetivos, comp);
   if (!r) return '';
-  const m = r.magra;
-  return `<div class="guia">
-    <p><b>${m ? 'Peso ideal según tu músculo' : 'Peso ideal orientativo'}: ${nf(r.ideal, 1)} kg</b> <button type="button" class="link" data-act="peso-ideal" data-ctx="${ctx}" data-v="${r.ideal}">Usar este</button></p>
-    ${m ? `<p class="small muted">Con tu ${nf(m.pct, 1)} % de grasa actual, a un ${nf(m.mid)} % pesarías unos ${nf(m.ideal, 1)} kg. Definido (${nf(m.rango[0])}–${nf(m.rango[1])} % de grasa) estarías entre ${nf(m.lo, 1)} y ${nf(m.hi, 1)} kg sin perder músculo.</p>`
-      : `<p class="small muted">Por IMC, para ${nf(cm / 100, 2)} m lo habitual es entre ${nf(r.min, 1)} y ${nf(r.max, 1)} kg. <b>Si tienes mucha masa muscular puedes estar sano y definido por encima</b>: puedes poner hasta ${nf(r.tope, 1)} kg. Para calcular tu peso ideal según tu músculo, apunta tu % de grasa al pesarte o en Progreso → Cuerpo.</p>`}
-  </div>`;
+  if (isFinite(actual) && actual != null && Math.abs(actual - r.ideal) < 0.05) return '';
+  return `<p class="sug small muted" id="sug">Recomendado para ti: <b>${nf(r.ideal, 1)} kg</b> ${r.magra ? '(según tu músculo)' : '(orientativo)'} · <button type="button" class="link" data-act="sug-ignorar" data-ctx="${ctx}">Ignorar</button></p>`;
 }
 
 // Unidad en la que se escribe la composición (grasa, músculo, agua y hueso): '%' del peso o kilos. Se guarda igual que siempre:
@@ -668,7 +674,7 @@ const kgOf = (c, w) => (c.u === 'kg' ? w[c.k] : w.kg ? (w.kg * w[c.k]) / 100 : n
 function silueta(fill, id, cls = '') {
   const f = Math.max(0, Math.min(100, fill == null ? 0 : fill)), y0 = 200 - (f / 100) * 200;
   return `<svg class="sil ${cls}" viewBox="0 0 100 200" role="img" aria-hidden="true">
-    <defs><pattern id="d-${id}" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="4" height="4" x="1" y="1" fill="#2e2e2e"/></pattern><pattern id="y-${id}" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="4" height="4" x="1" y="1" fill="#F2BE1A"/></pattern>
+    <defs><pattern id="d-${id}" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="4" height="4" x="1" y="1" style="fill:var(--sil-off)"/></pattern><pattern id="y-${id}" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="4" height="4" x="1" y="1" fill="#F2BE1A"/></pattern>
       <clipPath id="c-${id}"><circle cx="50" cy="20" r="14"/><path d="M30 42H70L88 50L95 112L84 114L78 70L74 70L72 112L74 198H54L50 130L46 198H26L28 112L26 70L22 70L16 114L5 112L12 50Z"/></clipPath></defs>
     <g clip-path="url(#c-${id})"><rect width="100" height="200" fill="url(#d-${id})"/><rect y="${y0.toFixed(1)}" width="100" height="${(200 - y0).toFixed(1)}" fill="url(#y-${id})"/></g>
   </svg>`;
@@ -805,67 +811,172 @@ function planCardHTML() {
       <div class="card-head"><h2>Tu plan</h2><span class="tag ok" id="plan-tag">Pro</span></div>
       <p><b>Cadencia Pro</b> · ${esc(PRO_PRECIO)} · suscripción mensual</p>
       <p class="small muted">Incluye Foto con IA, recomendaciones del Taller con IA y 10 consultas de IA al día. ${renueva}</p>
-      ${PORTAL_LINK ? `<a class="btn ghost block" href="${esc(PORTAL_LINK)}" target="_blank" rel="noopener">Gestionar o cancelar mi suscripción</a><p class="small muted">Se abre Stripe: ahí puedes cancelar, cambiar la tarjeta o ver tus recibos.</p>` : ''}
+      ${PORTAL_LINK ? `<button type="button" class="btn ghost block" data-act="bill-open">Gestionar facturación</button>` : ''}
+    </section>`;
+}
+
+const fotoHTML = (big = false) => {
+  const p = st.profile || {}, n = (p.nombreCompleto || p.nombre || st.user.name || '?').trim();
+  return `<span class="avatar ${big ? 'big' : ''}">${p.fotoUrl ? `<img src="${esc(p.fotoUrl)}" alt="Tu foto de perfil" width="64" height="64">` : esc(n.charAt(0).toUpperCase())}</span>`;
+};
+const tieneGoogle = () => { try { return api.providers().includes('google.com'); } catch (e) { return false; } };
+const tienePass = () => { try { return api.providers().includes('password'); } catch (e) { return true; } };
+
+function cuentaHTML() {
+  const g = tieneGoogle();
+  return `<section class="card" id="cuenta-card">
+      <h2>Tu cuenta</h2>
+      <div class="acc-list">
+        <label class="acc-row ${st.fotoBusy ? 'is-busy' : ''}"><input type="file" accept="image/*" data-foto hidden ${st.fotoBusy ? 'disabled' : ''}><span>Cambiar foto de perfil</span>${st.fotoBusy ? '<span class="spinner"></span>' : I.chev}</label>
+        ${tienePass() ? `<button type="button" class="acc-row" data-act="pwd-open"><span>Modificar contraseña</span>${I.chev}</button>` : ''}
+        ${g ? `<div class="acc-row is-on"><span>Cuenta de Google vinculada</span><span class="tag ok">Vinculada</span></div>` : `<button type="button" class="acc-row" data-act="google-link" ${st.gBusy ? 'disabled' : ''}><span>Vincular cuenta de Google</span>${st.gBusy ? '<span class="spinner"></span>' : I.chev}</button>`}
+      </div>
     </section>`;
 }
 
 function viewPerfil() {
   const p = st.profile;
   const goals = st.editGoals || p.objetivos || [];
-  const theme = lsGet('cadencia-theme') || 'auto';
+  const open = !!st.datosOpen;
   return `
-    <header class="hello"><div><h1>Perfil</h1><p>${esc(st.user.email || '')}</p></div></header>
+    <header class="hello perfil-h"><div class="who">${fotoHTML(true)}<div><h1>Perfil</h1><p>${esc(st.user.email || '')}</p></div></div></header>
     ${planCardHTML()}
-    ${R.cardHTML()}
+    ${cuentaHTML()}
     ${S.integracionesHTML()}
-    <form class="card form-grid" data-form="profile" novalidate>
-      <h2>Tus datos</h2>
-      <label class="field"><span>Nombre</span><input class="input" name="nombre" value="${esc(p.nombre || '')}" autocomplete="given-name"></label>
-      <div class="field"><span>Sexo</span>
-        <div class="seg" role="group" aria-label="Sexo">
-          <button type="button" data-act="psex" data-v="hombre" aria-pressed="${p.sexo !== 'mujer'}">Hombre</button>
-          <button type="button" data-act="psex" data-v="mujer" aria-pressed="${p.sexo === 'mujer'}">Mujer</button>
+    <form class="perfil-form" data-form="profile" novalidate>
+      <section class="card acc">
+        <button type="button" class="acc-h" data-act="acc-toggle" aria-expanded="${open}" aria-controls="datos-body"><h2>Tus datos</h2><span class="acc-ch" aria-hidden="true">${I.chev}</span></button>
+        <div class="acc-b form-grid" id="datos-body" ${open ? '' : 'hidden'}>
+          <label class="field"><span>Nombres y apellidos</span><input class="input" name="nombre" value="${esc(p.nombreCompleto || p.nombre || '')}" autocomplete="name"></label>
+          <div class="field"><span>Sexo</span>
+            <div class="seg" role="group" aria-label="Sexo">
+              <button type="button" data-act="psex" data-v="hombre" aria-pressed="${p.sexo !== 'mujer'}">Hombre</button>
+              <button type="button" data-act="psex" data-v="mujer" aria-pressed="${p.sexo === 'mujer'}">Mujer</button>
+            </div>
+            <input type="hidden" name="sexo" value="${p.sexo === 'mujer' ? 'mujer' : 'hombre'}">
+          </div>
+          <div class="two">
+            <label class="field"><span>Edad</span><input class="input" name="edad" inputmode="numeric" value="${esc(p.edad || '')}"></label>
+            <label class="field"><span>Estatura (cm)</span><input class="input" name="alturaCm" inputmode="numeric" value="${esc(p.alturaCm || '')}"></label>
+          </div>
         </div>
-        <input type="hidden" name="sexo" value="${p.sexo === 'mujer' ? 'mujer' : 'hombre'}">
-      </div>
-      <div class="two">
-        <label class="field"><span>Edad</span><input class="input" name="edad" inputmode="numeric" value="${esc(p.edad || '')}"></label>
-        <label class="field"><span>Estatura (cm)</span><input class="input" name="alturaCm" inputmode="numeric" value="${esc(p.alturaCm || '')}"></label>
-      </div>
-      <label class="field"><span>Peso objetivo (kg)</span><input class="input" name="pesoObjetivo" inputmode="decimal" value="${p.pesoObjetivo ? esc(nf(p.pesoObjetivo, 1)) : ''}" placeholder="Opcional"></label>
-      ${pesoGuiaHTML(p.alturaCm, p.sexo, goals, 'perfil', grasaActual())}
-      <div class="field"><span>Objetivos</span>
+      </section>
+      <section class="card form-grid">
+        <h2>Objetivos</h2>
         <div class="choices">${GOALS.map((g) => `<button type="button" class="choice" data-act="pgoal" data-v="${g.id}" aria-pressed="${goals.includes(g.id)}">
           <span class="ico">${goalIcon(g)}</span><span class="t">${g.t}</span><span class="tick">${goals.includes(g.id) ? I.check : ''}</span></button>`).join('')}</div>
-      </div>
-      <button class="btn block" type="submit">Guardar cambios</button>
+        <label class="field"><span>Peso objetivo (kg)</span><input class="input" name="pesoObjetivo" inputmode="decimal" value="${p.pesoObjetivo ? esc(nf(p.pesoObjetivo, 1)) : ''}" placeholder="Opcional"></label>
+        ${pesoGuiaHTML(p.alturaCm, p.sexo, goals, 'perfil', grasaActual(), p.pesoObjetivo, p.hideWeightSuggestion === true)}
+        <button class="btn block" type="submit">Guardar cambios</button>
+      </section>
     </form>
 
-    ${installCard(false)}
-
     <section class="card">
-      <h2>Cuenta</h2>
+      <h2>Sesión</h2>
       <p class="small muted">${api.mode === 'firebase' ? 'Tus datos se guardan en la nube y los verás en cualquier dispositivo donde inicies sesión.' : 'Modo prueba: tus datos se guardan solo en este dispositivo.'}</p>
       <button class="btn ghost block" data-act="logout">Cerrar sesión</button>
     </section>
 
     <section class="card">
-      <h2>Privacidad y cuenta</h2>
+      <h2>Privacidad</h2>
       <p class="small muted">Tus datos son privados y solo se usan para calcular tus métricas en Cadencia.</p>
       <button class="btn ghost block" data-act="legal-open">Leer Términos y Privacidad</button>
       <button class="btn block danger-solid" data-act="del-open">Borrar mi cuenta y todos mis datos</button>
     </section>`;
 }
 
+/* ---------- Configuración (engranaje): apariencia y recordatorios ---------- */
+function cfgSheetHTML() {
+  const t = themePref();
+  return `<div class="sheet-back" data-act="cfg-close"></div>
+    <div class="sheet" role="dialog" aria-modal="true" aria-label="Configuración">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><button type="button" class="iconbtn" data-act="cfg-close" aria-label="Cerrar">${I.back}</button><h2>Configuración</h2><span style="width:36px"></span></div>
+      <div class="sheet-list">
+        <section class="card"><h2>Apariencia</h2>
+          <div class="seg" role="group" aria-label="Tema">${[['dark', 'Oscuro'], ['light', 'Claro'], ['system', 'Sistema']].map(([v, l]) => `<button type="button" data-act="theme" data-v="${v}" aria-pressed="${t === v}">${l}</button>`).join('')}</div>
+          <p class="small muted">${t === 'system' ? 'Sigue el modo claro u oscuro de tu móvil.' : t === 'light' ? 'Fondo claro con el mismo amarillo.' : 'Negro y amarillo, el estilo de Cadencia.'}</p>
+        </section>
+        ${R.cardHTML()}
+        ${installCard(false)}
+      </div>
+    </div>`;
+}
+
+function pwdSheetHTML() {
+  const P = st.pwd;
+  return `<div class="sheet-back" data-act="pwd-close"></div>
+    <div class="sheet short" role="dialog" aria-modal="true" aria-label="Modificar contraseña">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><button type="button" class="iconbtn" data-act="pwd-close" aria-label="Cerrar">${I.back}</button><h2>Modificar contraseña</h2><span style="width:36px"></span></div>
+      <form class="sheet-list form-grid" data-form="pwd" novalidate>
+        <label class="field"><span>Contraseña actual</span><input class="input" type="password" name="actual" autocomplete="current-password"></label>
+        <label class="field"><span>Contraseña nueva</span><input class="input" type="password" name="nueva" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></label>
+        <label class="field"><span>Repite la contraseña nueva</span><input class="input" type="password" name="repite" autocomplete="new-password"></label>
+        ${P.msg ? `<div class="msg ${P.ok ? 'ok' : ''}" role="alert">${esc(P.msg)}</div>` : ''}
+        <button class="btn block" type="submit" ${P.busy ? 'disabled' : ''}>${P.busy ? '<span class="spinner"></span>' : 'Guardar contraseña'}</button>
+      </form>
+    </div>`;
+}
+
+// La baja de la suscripción vive aquí dentro, no a la vista en Perfil.
+function billSheetHTML() {
+  return `<div class="sheet-back" data-act="bill-close"></div>
+    <div class="sheet short" role="dialog" aria-modal="true" aria-label="Gestionar facturación">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><button type="button" class="iconbtn" data-act="bill-close" aria-label="Cerrar">${I.back}</button><h2>Facturación</h2><span style="width:36px"></span></div>
+      <div class="sheet-list form-grid">
+        <p class="small muted">Se abre el portal seguro de Stripe: ahí ves tus recibos y cambias la tarjeta.</p>
+        <a class="btn block" href="${esc(PORTAL_LINK)}" target="_blank" rel="noopener">Abrir el portal de facturación</a>
+        <hr class="sep">
+        <p class="small muted">¿Quieres dejar Pro? Se hace en el mismo portal y sigues con Pro hasta el final del periodo ya pagado.</p>
+        <a class="btn ghost block" href="${esc(PORTAL_LINK)}" target="_blank" rel="noopener">Cancelar suscripción</a>
+      </div>
+    </div>`;
+}
+
+// Foto de perfil: se recorta en cuadrado, se reduce a 320 px y se sube a Firebase Storage (avatars/{uid}/perfil.jpg).
+async function subirFoto(file) {
+  if (!file) return;
+  if (!/^image\//.test(file.type)) return toast('Elige una imagen');
+  st.fotoBusy = true; render();
+  try {
+    const img = await new Promise((ok, no) => { const i = new Image(), u = URL.createObjectURL(file); i.onload = () => { URL.revokeObjectURL(u); ok(i); }; i.onerror = () => no(new Error('No se ha podido leer la foto.')); i.src = u; });
+    const side = Math.min(img.naturalWidth, img.naturalHeight), c = document.createElement('canvas'); c.width = c.height = 320;
+    c.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 320, 320);
+    const blob = await new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.85));
+    const url = await api.uploadAvatar(st.user.uid, blob);
+    await api.saveProfile(st.user.uid, { fotoUrl: url });
+    st.profile = { ...st.profile, fotoUrl: url };
+    toast('Foto actualizada');
+  } catch (e) { toast(errorText(e)); }
+  st.fotoBusy = false; render();
+}
+
+async function guardarPwd(f) {
+  const P = st.pwd, a = f.actual.value, n = f.nueva.value, r = f.repite.value;
+  const err = (m) => { P.msg = m; P.ok = false; render(); };
+  if (!a) return err('Escribe tu contraseña actual.');
+  if (n.length < 6) return err('La contraseña nueva necesita al menos 6 caracteres.');
+  if (n !== r) return err('Las contraseñas nuevas no coinciden.');
+  if (n === a) return err('La nueva tiene que ser distinta de la actual.');
+  P.busy = true; P.msg = ''; render();
+  try { await api.changePassword(a, n); st.pwd = null; render(); toast('Contraseña cambiada'); }
+  catch (e) { P.busy = false; P.ok = false; P.msg = ['auth/invalid-credential', 'auth/wrong-password', 'auth/invalid-login-credentials'].includes(e && e.code) ? 'La contraseña actual no es correcta.' : errorText(e); render(); }
+}
+
 async function saveProfileForm(form) {
   const goals = st.editGoals || st.profile.objetivos || [];
   const edad = num(form.edad.value), alt = num(form.alturaCm.value), obj = form.pesoObjetivo.value.trim() ? num(form.pesoObjetivo.value) : null;
-  if (!form.nombre.value.trim()) return toast('Escribe tu nombre');
+  const full = form.nombre.value.trim().replace(/\s+/g, ' ');
+  if (!full) return toast('Escribe tus nombres y apellidos');
   if (!(edad >= 14 && edad <= 100)) return toast('La edad tiene que estar entre 14 y 100');
   if (!(alt >= 120 && alt <= 230)) return toast('La estatura tiene que estar entre 120 y 230 cm');
   if (obj != null) { const err = objetivoInvalido(obj, alt, form.sexo.value, goals, grasaActual()); if (err) return toast(err); }
   if (!goals.length) return toast('Elige al menos un objetivo');
-  const data = { nombre: form.nombre.value.trim(), sexo: form.sexo.value, edad: Math.round(edad), alturaCm: Math.round(alt), pesoObjetivo: obj == null ? null : Math.round(obj * 10) / 10, objetivos: goals };
+  const prevFull = st.profile.nombreCompleto || st.profile.nombre || '';
+  // «nombre» (el de los saludos) solo cambia si has cambiado el nombre completo
+  const data = { nombreCompleto: full, nombre: full === prevFull && st.profile.nombre ? st.profile.nombre : full.split(' ')[0], sexo: form.sexo.value, edad: Math.round(edad), alturaCm: Math.round(alt), pesoObjetivo: obj == null ? null : Math.round(obj * 10) / 10, objetivos: goals };
   try {
     await api.saveProfile(st.user.uid, data);
     st.profile = { ...st.profile, ...data }; st.editGoals = null;
@@ -892,7 +1003,7 @@ function viewError() {
 async function enter(u) {
   st.user = u; st.busy = false;
   if (!u && M) M.pararPro();
-  if (!u) { st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = 'auth'; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
+  if (!u) { st.cfg = st.pwd = st.bill = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = 'auth'; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
   try {
     st.profile = await api.getProfile(u.uid);
     if (!st.profile || !st.profile.onboarded) return startOnboarding();
@@ -947,12 +1058,6 @@ root.addEventListener('click', async (e) => {
   else if (act === 'comp-ver') { st.pesoComp = v; st.pesoModo = 'kg'; render(); scrollTo(0, 0); }
   else if (act === 'comp-close') { st.pesoComp = null; render(); }
   else if (act === 'comp-modo') { st.pesoModo = v; render(); }
-  else if (act === 'peso-ideal') {
-    const val = nf(Number(v), 1);
-    if (b.dataset.ctx === 'ob' && st.ob) { st.ob.pesoObjetivo = val; st.ob.msg = ''; render(); }
-    else { const i = root.querySelector('form[data-form="profile"] [name="pesoObjetivo"]'); if (i) i.value = val; }
-    toast(`Objetivo: ${val} kg`);
-  }
   else if (act === 'psex') { const f = b.closest('form'); f.sexo.value = v; b.parentElement.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); }
   else if (act === 'pgoal') {
     const g = st.editGoals || [...(st.profile.objetivos || [])];
@@ -960,7 +1065,24 @@ root.addEventListener('click', async (e) => {
     b.setAttribute('aria-pressed', String(st.editGoals.includes(v)));
     b.querySelector('.tick').innerHTML = st.editGoals.includes(v) ? I.check : '';
   }
-  else if (act === 'theme') { lsSet('cadencia-theme', v === 'auto' ? null : v); applyTheme(); render(); }
+  else if (act === 'theme') { lsSet('cadencia-theme', THEMES.includes(v) ? v : 'dark'); applyTheme(); render(); }
+  else if (act === 'cfg-open') { st.cfg = true; render(); }
+  else if (act === 'cfg-close') { st.cfg = null; render(); }
+  else if (act === 'pwd-open') { st.pwd = { msg: '', busy: false }; render(); }
+  else if (act === 'pwd-close') { st.pwd = null; render(); }
+  else if (act === 'bill-open') { st.bill = true; render(); }
+  else if (act === 'bill-close') { st.bill = null; render(); }
+  else if (act === 'google-link') {
+    st.gBusy = true; render();
+    try { await api.linkGoogle(); toast('Cuenta de Google vinculada'); } catch (e) { toast(errorText(e)); }
+    st.gBusy = false; render();
+  }
+  else if (act === 'acc-toggle') { st.datosOpen = !st.datosOpen; b.setAttribute('aria-expanded', String(st.datosOpen)); const body = document.getElementById('datos-body'); if (body) body.hidden = !st.datosOpen; }
+  else if (act === 'sug-ignorar') {
+    const el = document.getElementById('sug'); if (el) el.remove();
+    if (b.dataset.ctx === 'ob' && st.ob) st.ob.hideSug = true;
+    else { try { await api.saveProfile(st.user.uid, { hideWeightSuggestion: true }); st.profile.hideWeightSuggestion = true; } catch (e) { toast(errorText(e)); } }
+  }
   else if (act === 'logout') { st.tab = 'inicio'; st.authMode = 'login'; st.authMsg = null; lsSet('cadencia-tab', null); await api.logout(); }
   else if (act === 'retry') { st.view = 'boot'; enter(st.user); }
 });
@@ -982,7 +1104,7 @@ root.addEventListener('input', (e) => {
   if (next) next.disabled = !ok;
 });
 
-root.addEventListener('change', async (e) => { if (st.view === 'main') { if (R.change(e.target)) return; await M.change(e.target); } });
+root.addEventListener('change', async (e) => { if (st.view === 'main') { if (e.target.matches && e.target.matches('input[data-foto]')) { const f = e.target.files && e.target.files[0]; e.target.value = ''; return subirFoto(f); } if (R.change(e.target)) return; await M.change(e.target); } });
 
 root.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -995,6 +1117,7 @@ root.addEventListener('submit', async (e) => {
   else if (kind === 'addweight') saveWeight(f.fecha.value, f.kg.value, { grasa: f.grasa.value, musculo: f.musculo.value, agua: f.agua.value, hueso: f.hueso.value }, pesoUnit(), !!f.dataset.edit, keepEdit(f));
   else if (kind === 'profile') saveProfileForm(f);
   else if (kind === 'delacc') borrarCuenta();
+  else if (kind === 'pwd') guardarPwd(f);
   else if (kind === 'wk') wkSave();
   else if (kind === 'rw') rwNext();
 });

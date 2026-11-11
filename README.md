@@ -149,3 +149,12 @@ La previsión de Rutas viene de [Open-Meteo](https://open-meteo.com/) (sin clave
 ## Diseño «negro y amarillo»
 
 Toda la interfaz usa un único tema oscuro industrial: fondo #000000, superficies #121212/#1A1A1A, acento amarillo carretera #F2BE1A, líneas #222222, tipografía Archivo en mayúsculas pesadas para los títulos, esquinas rectas (0–2 px) y modales que suben desde abajo con 8 px arriba. Los colores salen de las variables de la cabecera de `css/app.css`; la capa final «MODO INDUSTRIAL» del mismo archivo quita las tarjetas flotantes. El logo (una «C» cuadrada e inclinada) está en `icons/icon.svg` y en `index.html`/`js/app.js`.
+
+## Configuración, Perfil y tema
+
+- **Engranaje** fijo arriba a la derecha en todas las pantallas principales → Configuración: tema (**Oscuro** por defecto, **Claro**, **Sistema** que sigue `prefers-color-scheme`) y Recordatorios. El tema se guarda en el móvil (`cadencia-theme`).
+- **Perfil** es siempre la última pestaña. Orden: Tu plan (la baja de la suscripción solo está dentro de «Gestionar facturación»), Tu cuenta (foto, contraseña, vincular Google), Integraciones (Strava), Tus datos (plegable, cerrado), Objetivos.
+- **Foto de perfil**: se sube a Firebase Storage en `avatars/{uid}/perfil.jpg` (reglas en `storage.rules`; el flujo de GitHub las publica en un paso aparte). Hay que activar **Storage** una vez en la consola de Firebase.
+- **Vincular Google**: hay que activar el proveedor **Google** en Firebase → Authentication → Sign-in method.
+- **Peso objetivo**: la recomendación es una línea con «Ignorar»; al ignorarla se guarda `hideWeightSuggestion: true` en `users/{uid}`.
+- **Registro**: «Nombres y apellidos» es obligatorio (mínimo dos palabras). Se guarda `nombreCompleto` y `nombre` (el primero, para los saludos) en `users/{uid}`.

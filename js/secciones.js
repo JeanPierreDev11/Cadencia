@@ -30,7 +30,7 @@ const ICO = {
 };
 
 /* Novedades: cambia NOV_V cada vez que publiques algo nuevo para que salga la nota en Inicio. */
-const NOV_V = '2026-11-11f';
+const NOV_V = '2026-11-11g';
 
 /* Objetivos de entreno: [id, grupo, texto, unidad, periodo (sem | mes | reto), ejemplo] */
 const META_T = [
@@ -101,7 +101,7 @@ export function crearSecciones(ctx) {
   const bul = (arr, cls = '') => (arr && arr.length ? `<ul class="bul ${cls}">${arr.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '');
   const head = (t, sub, avatar = false, extra = '') => {
     const name = P().nombre || st.user.name || '';
-    const av = avatar ? `<button class="avatar" data-act="tab" data-v="perfil" aria-label="Tu perfil">${esc((name || '?').trim().charAt(0).toUpperCase())}</button>` : '';
+    const av = ''; // el perfil está en la barra de abajo y los ajustes en el engranaje fijo
     return `<header class="hello"><div><h1>${t}</h1>${sub ? `<p>${sub}</p>` : ''}</div>${extra ? `<div class="hello-r">${extra}${av}</div>` : av}</header>`;
   };
 
@@ -116,6 +116,7 @@ export function crearSecciones(ctx) {
     const t = [{ id: 'inicio', t: 'Inicio', ico: I.home }, { id: 'entreno', t: 'Entreno', ico: I.pulse }, { id: 'nutricion', t: 'Nutrición', ico: ICO.food }];
     if (tieneBici()) t.push({ id: 'bici', t: 'Bici', ico: ICO.bici });
     t.push({ id: 'progreso', t: 'Progreso', ico: ICO.prog });
+    t.push({ id: 'perfil', t: 'Perfil', ico: I.user });
     return t;
   }
   function tabActual() {
@@ -1438,10 +1439,11 @@ export function crearSecciones(ctx) {
   function novItems() {
     const bici = tieneBici();
     return [
+      { t: 'Configuración y Perfil renovados', d: 'El engranaje de arriba a la derecha abre Configuración: ahí están los recordatorios y el tema (oscuro, claro o el de tu móvil). Perfil pasa a ser la última pestaña de abajo, con tu plan, tu foto, tu contraseña, «Tus datos» plegable y tus objetivos. La recomendación de peso es ahora una línea con «Ignorar».', como: 'Engranaje (arriba a la derecha) y pestaña Perfil.', act: 'tab', v: 'perfil', btn: 'Ir al Perfil' },
       { t: 'Peso en dial y composición con siluetas', d: 'Tu peso aparece en un dial. Debajo, Agua, Músculo, Grasa y Hueso con su silueta. Toca una y elige verla en kilos, en % o «¿Qué cambió?», que compara con tu registro anterior (verde si mejora, rojo si empeora).', como: 'Progreso → Peso.', act: 'p-peso', btn: 'Ver Progreso' },
-      { t: 'Nuevo diseño: negro y amarillo', d: 'Cadencia estrena imagen: fondo negro, amarillo carretera, letras en mayúsculas y bordes rectos, sin tarjetas flotantes. Hay un solo tema (oscuro), así que ya no hace falta el selector de apariencia. También tiene logo nuevo.', como: 'Se aplica solo en toda la app.', act: 'tab', v: 'perfil', btn: 'Ver el Perfil' },
+      { t: 'Nuevo diseño: negro y amarillo', d: 'Cadencia estrena imagen: fondo negro, amarillo carretera, letras en mayúsculas y bordes rectos, sin tarjetas flotantes. También tiene logo nuevo.', como: 'Se aplica solo en toda la app.', act: 'tab', v: 'perfil', btn: 'Ver el Perfil' },
       { t: 'Progreso → Peso, más limpio', d: 'La gráfica es solo de tu peso. Toca Grasa, Músculo, Agua o Hueso para ver su evolución semanal. «Añadir registro» abre un formulario donde puedes escribir la composición en % o en kg, y el reloj de arriba abre tu historial para editar o borrar registros.', como: 'Progreso → Peso.', act: 'p-peso', btn: 'Ver Progreso' },
-      { t: 'Recordatorios', d: 'Activa avisos en tu móvil para pesarte por la mañana, apuntar tus comidas o no saltarte el entreno. Eliges la hora y solo te avisamos si aún no lo has hecho ese día. Son gratis para todos.', como: 'Perfil → Recordatorios. En iPhone, primero añade Cadencia a la pantalla de inicio.', act: 'tab', v: 'perfil', btn: 'Ir al Perfil' },
+      { t: 'Recordatorios', d: 'Activa avisos en tu móvil para pesarte por la mañana, apuntar tus comidas o no saltarte el entreno. Eliges la hora y solo te avisamos si aún no lo has hecho ese día. Son gratis para todos.', como: 'Engranaje → Recordatorios. En iPhone, primero añade Cadencia a la pantalla de inicio.', act: 'tab', v: 'perfil', btn: 'Ir al Perfil' },
       { t: 'Conecta Strava', d: 'Conecta tu cuenta de Strava y trae tus salidas de bici y tus carreras a Cadencia con un toque, sin teclear los km ni el desnivel. Lo que apuntes a mano sigue funcionando igual.', como: 'Perfil → Integraciones → Conectar con Strava. Después, Entreno → Sincronizar Strava.', act: 'tab', v: 'perfil', btn: 'Ir al Perfil' },
       { t: 'Mapas interactivos y subida de rutas GPX', d: 'En Rutas ya hay un mapa: elige una salida y verás su recorrido (orientativo). Con «Subir ruta GPX» cargas un archivo de tu móvil: leemos los km y el desnivel en tu propio teléfono, dibujamos la ruta y la guardas en tu cuenta. Es gratis para todos.', como: bici ? 'Bici → Rutas → Mapa → Subir ruta GPX.' : 'Aparece cuando tu rutina incluye bici: Entreno → Rutinas → Cambiar días o tipos → marca Bici.', act: bici ? 'nov-rutas' : 'nov-bici', v: 'rutas', btn: bici ? 'Ver el mapa' : 'Añadir bici a mi rutina' },
       { t: 'Foto del plato con IA', d: 'Haz una foto a tu plato: la IA reconoce los alimentos, estima los gramos y cómo están cocinados, y los busca en la tabla de la app. Tú revisas y corriges antes de guardar.', como: 'Nutrición → «Foto con IA» en cada comida. Tienes 10 consultas de IA al día.', act: 'tab', v: 'nutricion', btn: 'Ir a Nutrición' },
@@ -1454,7 +1456,7 @@ export function crearSecciones(ctx) {
       { t: 'Objetivos de bici, cardio y pesos', d: 'Ponte metas como km de bici a la semana, minutos de cardio, entrenos por semana o kilos en un ejercicio, y mira cuánto te falta.', como: 'Entreno → Objetivos → Nuevo.', act: 'nov-wk', v: 'objetivos', btn: 'Crear un objetivo' },
       { t: 'Nutrición', d: 'Apunta lo que comes con más de 550 alimentos (queso de Burgos incluido), productos de marca y cómo los preparas. Tu objetivo de calorías sube los días que entrenas.', como: 'Pestaña Nutrición → «Añadir» en cada comida.', act: 'tab', v: 'nutricion', btn: 'Apuntar comida' },
       { t: 'Grasa, músculo, agua y hueso', d: 'Además del peso, apunta tu composición corporal para ver cómo cambias por dentro.', como: 'Inicio → «Añadir grasa, músculo, agua y hueso», o Progreso → Peso → «Añadir registro».', act: 'peso-sheet', v: '', btn: 'Apuntar ahora' },
-      { t: 'Peso objetivo si tienes músculo', d: 'Ya no te limitamos al IMC. Con tu % de grasa calculamos tu peso ideal según tu músculo.', como: 'Perfil → Peso objetivo.', act: 'tab', v: 'perfil', btn: 'Revisar mi objetivo' },
+      { t: 'Peso objetivo si tienes músculo', d: 'Ya no te limitamos al IMC. Con tu % de grasa calculamos tu peso ideal según tu músculo.', como: 'Perfil → Objetivos → Peso objetivo.', act: 'tab', v: 'perfil', btn: 'Revisar mi objetivo' },
       { t: 'Progreso', d: 'Calcula tu % de grasa con cinta métrica o plicómetro, y mira tu forma, fatiga y frescura.', como: 'Pestaña Progreso → Cuerpo o Forma.', act: 'tab', v: 'progreso', btn: 'Ver progreso' },
     ];
   }

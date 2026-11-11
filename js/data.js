@@ -35,11 +35,27 @@ async function firebaseBackend(config) {
     async register(name, email, pass) {
       const cred = await A.createUserWithEmailAndPassword(auth, email, pass);
       if (name) await A.updateProfile(cred.user, { displayName: name });
-      await F.setDoc(userRef(cred.user.uid), { nombre: name, email, creado: F.serverTimestamp(), onboarded: false, isPro: false }, { merge: true });
+      const nombre = (name || '').trim().split(/\s+/)[0] || '';
+      await F.setDoc(userRef(cred.user.uid), { nombre, nombreCompleto: (name || '').trim(), email, creado: F.serverTimestamp(), onboarded: false, isPro: false }, { merge: true });
       return toUser(cred.user);
     },
     async login(email, pass) { return toUser((await A.signInWithEmailAndPassword(auth, email, pass)).user); },
     async logout() { await A.signOut(auth); },
+    // Cuenta: proveedores de acceso, contraseña, Google y foto de perfil (Firebase Storage).
+    providers() { return ((auth.currentUser && auth.currentUser.providerData) || []).map((p) => p.providerId); },
+    async changePassword(actual, nueva) {
+      const u = auth.currentUser;
+      if (!u || !u.email) throw err('auth/no-current-user');
+      await A.reauthenticateWithCredential(u, A.EmailAuthProvider.credential(u.email, actual));
+      await A.updatePassword(u, nueva);
+    },
+    async linkGoogle() { await A.linkWithPopup(auth.currentUser, new A.GoogleAuthProvider()); },
+    async uploadAvatar(uid, blob) {
+      const S = await import(FB + 'firebase-storage.js');
+      const r = S.ref(S.getStorage(app), `avatars/${uid}/perfil.jpg`);
+      await S.uploadBytes(r, blob, { contentType: 'image/jpeg', cacheControl: 'public,max-age=3600' });
+      return `${await S.getDownloadURL(r)}&v=${Date.now()}`;
+    },
     async resetPassword(email) { await A.sendPasswordResetEmail(auth, email); },
     async getProfile(uid) {
       const s = await F.getDoc(userRef(uid));
@@ -161,7 +177,7 @@ function localBackend() {
       const s = read();
       if (s.users[email]) throw err('auth/email-already-in-use');
       const uid = 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-      s.users[email] = { uid, email, pass: await hash(pass), profile: { nombre: name, email, onboarded: false, creado: Date.now(), isPro: false }, pesos: {} };
+      s.users[email] = { uid, email, pass: await hash(pass), profile: { nombre: (name || '').trim().split(/\s+/)[0] || '', nombreCompleto: (name || '').trim(), email, onboarded: false, creado: Date.now(), isPro: false }, pesos: {} };
       s.session = email;
       write(s); emit();
       return current();
@@ -175,6 +191,16 @@ function localBackend() {
       return current();
     },
     async logout() { const s = read(); s.session = null; write(s); emit(); },
+    providers() { return ['password']; },
+    async changePassword(actual, nueva) {
+      const s = read(), u = s.session && s.users[s.session];
+      if (!u || u.pass !== (await hash(actual))) throw err('auth/invalid-credential');
+      u.pass = await hash(nueva); write(s);
+    },
+    async linkGoogle() { throw err('local/no-google'); },
+    async uploadAvatar(uid, blob) {
+      return new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => no(err('local/foto')); r.readAsDataURL(blob); });
+    },
     async resetPassword() { throw err('local/no-reset'); },
     async getProfile(uid) { const u = byUid(read(), uid); return u ? u.profile : null; },
     watchProfile(uid, cb) { const t = setInterval(() => { const u = byUid(read(), uid); if (u) cb(u.profile); }, 1500); return () => clearInterval(t); },
@@ -242,12 +268,22 @@ const MESSAGES = {
   'auth/missing-password': 'Escribe tu contraseña.',
   'auth/too-many-requests': 'Demasiados intentos seguidos. Espera unos minutos y vuelve a probar.',
   'auth/network-request-failed': 'Sin conexión. Comprueba internet y vuelve a probar.',
-  'auth/operation-not-allowed': 'El acceso con email no está activado en Firebase (Authentication → Sign-in method).',
+  'auth/operation-not-allowed': 'Ese método de acceso no está activado en Firebase (Authentication → Sign-in method).',
   'auth/unauthorized-domain': 'Esta dirección web no está autorizada en Firebase (Authentication → Settings → Authorized domains).',
   'permission-denied': 'La base de datos ha rechazado la operación. Revisa las reglas de Firestore.',
   'unavailable': 'Sin conexión con la base de datos. Se guardará al volver la conexión.',
   'auth/no-current-user': 'No hay ninguna sesión iniciada.',
   'auth/requires-recent-login': 'Por seguridad, vuelve a escribir tu contraseña.',
+  'local/no-google': 'Vincular Google solo funciona con la app conectada a Firebase.',
+  'local/foto': 'No se ha podido leer la foto.',
+  'auth/credential-already-in-use': 'Esa cuenta de Google ya está vinculada a otra cuenta de Cadencia.',
+  'auth/provider-already-linked': 'Tu cuenta ya está vinculada con Google.',
+  'auth/popup-blocked': 'El navegador ha bloqueado la ventana de Google. Permite las ventanas emergentes y vuelve a probar.',
+  'auth/popup-closed-by-user': 'Has cerrado la ventana de Google antes de terminar.',
+  'auth/cancelled-popup-request': 'Has cerrado la ventana de Google antes de terminar.',
+  'storage/unauthorized': 'Firebase Storage ha rechazado la foto. Revisa que Storage esté activado y sus reglas publicadas.',
+  'storage/unknown': 'No se ha podido subir la foto. Comprueba que Firebase Storage está activado.',
+  'storage/bucket-not-found': 'Firebase Storage todavía no está activado en el proyecto.',
   'local/no-push': 'Las notificaciones solo funcionan con la app conectada a Firebase.',
   'push/no-soportado': 'Este navegador no permite notificaciones push.',
   'local/no-strava': 'En el modo de prueba no se puede conectar Strava.',

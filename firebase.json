@@ -4,10 +4,18 @@
       "source": "functions",
       "codebase": "default",
       "runtime": "nodejs22",
-      "ignore": ["node_modules", ".git", "generar-catalogo.mjs", "*.log"]
+      "ignore": [
+        "node_modules",
+        ".git",
+        "generar-catalogo.mjs",
+        "*.log"
+      ]
     }
   ],
   "firestore": {
     "rules": "firestore.rules"
+  },
+  "storage": {
+    "rules": "storage.rules"
   }
 }
