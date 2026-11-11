@@ -145,3 +145,7 @@ La previsión de Rutas viene de [Open-Meteo](https://open-meteo.com/) (sin clave
 - **«Añadir registro»** (botón flotante) abre el formulario en una ventana. Selector **% del peso / kilos**: se convierte con el peso del registro y se guarda como siempre (`users/{uid}/pesos/{fecha}` = `{fecha, kg, grasa % , musculo kg, agua %, hueso kg}`). La última unidad elegida se recuerda en el dispositivo.
 - **Historial** (icono de reloj arriba a la derecha): lista de registros; «Modificar» muestra lápiz (editar ese día; los datos que no toques se conservan tal cual, la fecha no se cambia) y papelera roja (pide confirmación). Editar usa `setWeight` (sustituye el documento del día con la misma estructura, así se puede quitar un dato); añadir sigue usando `addWeight` (merge).
 
+
+## Diseño «negro y amarillo»
+
+Toda la interfaz usa un único tema oscuro industrial: fondo #000000, superficies #121212/#1A1A1A, acento amarillo carretera #F2BE1A, líneas #222222, tipografía Archivo en mayúsculas pesadas para los títulos, esquinas rectas (0–2 px) y modales que suben desde abajo con 8 px arriba. Los colores salen de las variables de la cabecera de `css/app.css`; la capa final «MODO INDUSTRIAL» del mismo archivo quita las tarjetas flotantes. El logo (una «C» cuadrada e inclinada) está en `icons/icon.svg` y en `index.html`/`js/app.js`.

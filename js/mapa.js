@@ -2,7 +2,7 @@
 // La app vuelve a pintar toda la pantalla en cada cambio, así que el mapa vive en un <div> propio
 // que se vuelve a colgar del hueco #rutamap después de cada pintado: no se recarga ni parpadea.
 const hayLeaflet = () => typeof window !== 'undefined' && !!window.L;
-const AZUL = '#2B3BD6';
+const AMARILLO = '#F2BE1A'; // el amarillo de la marca
 
 export function crearMapa() {
   let el = null, map = null, capa = null, clave = '';
@@ -31,8 +31,8 @@ export function crearMapa() {
     const L = window.L;
     if (k === clave) return;
     clave = k; capa.clearLayers();
-    L.polyline(pts, { color: '#ffffff', weight: 9, opacity: 0.85, lineCap: 'round', lineJoin: 'round' }).addTo(capa); // borde blanco para que se vea sobre cualquier fondo
-    const linea = L.polyline(pts, { color: AZUL, weight: 5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }).addTo(capa);
+    L.polyline(pts, { color: '#000000', weight: 9, opacity: 0.85, lineCap: 'round', lineJoin: 'round' }).addTo(capa); // borde negro para que el amarillo se vea sobre cualquier fondo
+    const linea = L.polyline(pts, { color: AMARILLO, weight: 5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }).addTo(capa);
     L.circleMarker(pts[0], { radius: 8, color: '#fff', weight: 3, fillColor: '#16a34a', fillOpacity: 1 }).addTo(capa).bindTooltip('Salida');
     L.circleMarker(pts[pts.length - 1], { radius: 8, color: '#fff', weight: 3, fillColor: '#dc2626', fillOpacity: 1 }).addTo(capa).bindTooltip('Llegada');
     map.fitBounds(linea.getBounds(), { padding: [24, 24], maxZoom: 15, animate: false });

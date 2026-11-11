@@ -41,7 +41,7 @@ window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); inst
 window.addEventListener('appinstalled', () => { installEvt = null; toast('App instalada'); if (st.view === 'main') render(); });
 
 /* ---------- tema ---------- */
-const applyTheme = () => { const t = lsGet('cadencia-theme'); if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; };
+const applyTheme = () => { delete document.documentElement.dataset.theme; }; // la app tiene un único tema: negro y amarillo
 applyTheme();
 
 /* ================================================================== */
@@ -81,6 +81,7 @@ function viewAuth() {
   const m = st.authMsg;
   return `<div class="screen">
     <div class="auth-hero">
+      <svg class="logo-mark" viewBox="0 0 64 64" aria-hidden="true" fill="currentColor"><path d="M12 8H56V22H28V42H56V56H12Z" transform="translate(6.8 0) skewX(-12)"/></svg>
       <h1 class="wordmark">${esc(APP_NAME)}</h1>
       <p class="tagline">Tu peso, tus objetivos y tu bici, en un mismo sitio.</p>
       ${heroProfile()}
@@ -809,13 +810,6 @@ function viewPerfil() {
     </form>
 
     ${installCard(false)}
-
-    <section class="card">
-      <h2>Apariencia</h2>
-      <div class="seg" role="group" aria-label="Tema">
-        ${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([v, t]) => `<button type="button" data-act="theme" data-v="${v}" aria-pressed="${theme === v}">${t}</button>`).join('')}
-      </div>
-    </section>
 
     <section class="card">
       <h2>Cuenta</h2>
