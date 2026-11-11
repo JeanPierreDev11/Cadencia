@@ -158,7 +158,7 @@ Toda la interfaz usa un único tema oscuro industrial: fondo #000000, superficie
 
 - **Engranaje** fijo arriba a la derecha en todas las pantallas principales → Configuración: tema (**Oscuro** por defecto, **Claro**, **Sistema** que sigue `prefers-color-scheme`) y Recordatorios. El tema se guarda en el móvil (`cadencia-theme`).
 - **Perfil** es siempre la última pestaña. Orden: Tu plan (cambiar tarjeta y baja: botón «Gestionar suscripción», abre el portal de Stripe), Tu cuenta (foto, contraseña, vincular Google), Integraciones (Strava), Tus datos (plegable, cerrado), Objetivos.
-- **Foto de perfil**: se sube a Firebase Storage en `avatars/{uid}/perfil.jpg` (reglas en `storage.rules`; el flujo de GitHub las publica en un paso aparte). Hay que activar **Storage** una vez en la consola de Firebase.
+- **Foto de perfil**: se sube a Firebase Storage en `profile_pictures/{uid}/avatar.jpg` (reglas en `storage.rules`; el flujo de GitHub las publica en un paso aparte). Hay que activar **Storage** una vez en la consola de Firebase.
 - **Vincular Google**: hay que activar el proveedor **Google** en Firebase → Authentication → Sign-in method.
 - **Peso objetivo**: la recomendación es una línea con «Ignorar»; al ignorarla se guarda `hideWeightSuggestion: true` en `users/{uid}`.
 - **Registro**: «Nombres y apellidos» es obligatorio (mínimo dos palabras). Se guarda `nombreCompleto` y `nombre` (el primero, para los saludos) en `users/{uid}`.

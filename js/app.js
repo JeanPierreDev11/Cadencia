@@ -924,7 +924,7 @@ function pwdSheetHTML() {
     </div>`;
 }
 
-// Foto de perfil: se recorta en cuadrado, se reduce a 320 px y se sube a Firebase Storage (avatars/{uid}/perfil.jpg).
+// Foto de perfil: se recorta en cuadrado, se reduce a 320 px y se sube a Firebase Storage (profile_pictures/{uid}/avatar.jpg).
 async function subirFoto(file) {
   if (!file) return;
   if (!/^image\//.test(file.type)) return toast('Elige una imagen');
@@ -933,7 +933,7 @@ async function subirFoto(file) {
     const img = await new Promise((ok, no) => { const i = new Image(), u = URL.createObjectURL(file); i.onload = () => { URL.revokeObjectURL(u); ok(i); }; i.onerror = () => no(new Error('No se ha podido leer la foto.')); i.src = u; });
     const side = Math.min(img.naturalWidth, img.naturalHeight), c = document.createElement('canvas'); c.width = c.height = 320;
     c.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 320, 320);
-    const blob = await new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.85));
+    const blob = await new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.7));
     const url = await api.uploadAvatar(st.user.uid, blob);
     await api.saveProfile(st.user.uid, { fotoUrl: url });
     st.profile = { ...st.profile, fotoUrl: url };

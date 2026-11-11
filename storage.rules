@@ -1,11 +1,11 @@
 rules_version = '2';
-// Foto de perfil: cada persona solo puede subir y ver la suya (avatars/{uid}/perfil.jpg), una imagen de menos de 2 MB.
+// Foto de perfil: cada persona solo puede subir y ver la suya (profile_pictures/{uid}/{archivo}), una imagen de menos de 5 MB.
 service firebase.storage {
   match /b/{bucket}/o {
-    match /avatars/{uid}/{archivo} {
+    match /profile_pictures/{uid}/{archivo} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if request.auth != null && request.auth.uid == uid
-        && request.resource.size < 2 * 1024 * 1024
+        && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
     }
   }

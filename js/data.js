@@ -52,7 +52,7 @@ async function firebaseBackend(config) {
     async linkGoogle() { await A.linkWithPopup(auth.currentUser, new A.GoogleAuthProvider()); },
     async uploadAvatar(uid, blob) {
       const S = await import(FB + 'firebase-storage.js');
-      const r = S.ref(S.getStorage(app), `avatars/${uid}/perfil.jpg`);
+      const r = S.ref(S.getStorage(app), `profile_pictures/${uid}/avatar.jpg`);
       await S.uploadBytes(r, blob, { contentType: 'image/jpeg', cacheControl: 'public,max-age=3600' });
       return `${await S.getDownloadURL(r)}&v=${Date.now()}`;
     },
