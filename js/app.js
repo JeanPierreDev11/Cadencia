@@ -69,7 +69,7 @@ function render() {
   else if (st.view === 'error') root.innerHTML = viewError();
   document.title = APP_NAME;
   if (M) M.afterRender();
-  document.body.classList.toggle('noscroll', !!(st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.bill || st.meta || st.regPick || st.legal || st.del || st.iaFoto || st.pro || st.proWelcome || st.recAsk));
+  document.body.classList.toggle('noscroll', !!(st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.legal || st.del || st.iaFoto || st.pro || st.proWelcome || st.recAsk));
 }
 
 /* ================================================================== */
@@ -379,7 +379,7 @@ let irPendiente = leerIr(); // si venimos de tocar un aviso, aquí queda la pant
 let stravaRet = leerRetorno(); // si venimos de la pantalla de permisos de Strava, aquí queda el código temporal
 
 function viewMain() {
-  const sheet = st.legal ? legalSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.rutDelAsk ? rutDelSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.bill ? billSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
+  const sheet = st.legal ? legalSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.rutDelAsk ? rutDelSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
   if (st.rw) return viewRutWizard() + sheet;
   if (st.live && !st.liveMin) return viewLive() + sheet;
   if (st.wk) return viewWkForm();
@@ -397,10 +397,6 @@ function viewInicio() {
   const name = p.nombre || st.user.name || '';
   const first = st.weights[0];
   const delta = first && st.weights.length > 1 ? kg - first.kg : null;
-  const v = imc(kg, p.alturaCm);
-  const b = bmr({ ...p, pesoKg: kg });
-  const todayLogged = latestWeight() && latestWeight().fecha === todayISO();
-
   let goal = '';
   const start = first ? first.kg : p.pesoInicial; // el registro más antiguo es el punto de partida
   if (p.pesoObjetivo && start && p.pesoObjetivo !== start) {
@@ -427,31 +423,9 @@ function viewInicio() {
       ${goal}
     </section>
 
-    <section class="card">
-      <div class="card-head"><h2>${todayLogged ? 'Peso de hoy registrado' : '¿Te has pesado hoy?'}</h2></div>
-      <form class="quick" data-form="quickweight" novalidate>
-        <input class="input" name="kg" inputmode="decimal" placeholder="${todayLogged ? 'Corregir: ' + nf(latestWeight().kg, 1) : 'Peso en kg'}" aria-label="Peso de hoy en kg">
-        <button class="btn" type="submit">Guardar</button>
-      </form>
-      <button type="button" class="link" data-act="peso-sheet">${I.plus} Añadir grasa, músculo, agua y hueso</button>
-    </section>
-
     ${homeTraining()}
 
     ${M.homeCards()}
-
-    <div class="stats">
-      <section class="stat">
-        <span class="label">IMC</span>
-        <span class="val num">${nf(v, 1)}</span>
-        <span><span class="tag ${imcLabel(v) === 'Normal' ? 'ok' : ''}">${imcLabel(v)}</span></span>
-      </section>
-      <section class="stat">
-        <span class="label">Gasto en reposo</span>
-        <span class="val num">${nf(b)}<em>kcal</em></span>
-        <span class="hint">Lo que quema tu cuerpo al día sin moverte.</span>
-      </section>
-    </div>
 
     <section class="card">
       <div class="card-head"><h2>Tus objetivos</h2><button class="link" data-act="tab" data-v="perfil">Cambiar</button></div>
@@ -755,8 +729,26 @@ function viewPeso(sub = false) {
     ${sub ? '' : `<header class="hello"><div><h1>Peso</h1><p>${ws.length} ${ws.length === 1 ? 'registro' : 'registros'}${p.pesoObjetivo ? ` · objetivo ${nf(p.pesoObjetivo, 1)} kg` : ''}</p></div></header>`}
     ${dialPeso(ws, p.pesoObjetivo)}
     ${compCardHTML(ws)}
+    ${sub ? imcGastoHTML() : ''}
     <div class="fab-space" aria-hidden="true"></div>
     <button type="button" class="fab" data-act="peso-sheet">${I.plus} Añadir registro</button>`;
+}
+
+// IMC y gasto en reposo: abajo del todo de Forma física.
+function imcGastoHTML() {
+  const kg = currentKg(), p = st.profile, v = imc(kg, p.alturaCm), b = bmr({ ...p, pesoKg: kg });
+  return `<div class="stats">
+    <section class="stat">
+      <span class="label">IMC</span>
+      <span class="val num">${nf(v, 1)}</span>
+      <span><span class="tag ${imcLabel(v) === 'Normal' ? 'ok' : ''}">${imcLabel(v)}</span></span>
+    </section>
+    <section class="stat">
+      <span class="label">Gasto en reposo</span>
+      <span class="val num">${nf(b)}<em>kcal</em></span>
+      <span class="hint">Lo que quema tu cuerpo al día sin moverte.</span>
+    </section>
+  </div>`;
 }
 
 // comp: { grasa, musculo, agua, hueso } como texto (opcionales), escritos en la unidad `unit` ('pct' o 'kg').
@@ -818,7 +810,7 @@ function planCardHTML() {
       <div class="card-head"><h2>Tu plan</h2><span class="tag ok" id="plan-tag">Pro</span></div>
       <p><b>Cadencia Pro</b> · ${esc(PRO_PRECIO)} · suscripción mensual</p>
       <p class="small muted">Incluye Escanear alimento, recomendaciones del Taller con IA y 10 consultas de IA al día. ${renueva}</p>
-      ${PORTAL_LINK ? `<button type="button" class="btn ghost block" data-act="bill-open">Gestionar facturación</button>` : ''}
+      <button type="button" class="btn ghost block" data-act="bill-open">Gestionar suscripción</button>
     </section>`;
 }
 
@@ -932,22 +924,6 @@ function pwdSheetHTML() {
     </div>`;
 }
 
-// La baja de la suscripción vive aquí dentro, no a la vista en Perfil.
-function billSheetHTML() {
-  return `<div class="sheet-back" data-act="bill-close"></div>
-    <div class="sheet short" role="dialog" aria-modal="true" aria-label="Gestionar facturación">
-      <div class="sheet-grab"></div>
-      <div class="sheet-head"><button type="button" class="iconbtn" data-act="bill-close" aria-label="Cerrar">${I.back}</button><h2>Facturación</h2><span style="width:36px"></span></div>
-      <div class="sheet-list form-grid">
-        <p class="small muted">Se abre el portal seguro de Stripe: ahí ves tus recibos y cambias la tarjeta.</p>
-        <a class="btn block" href="${esc(PORTAL_LINK)}" target="_blank" rel="noopener">Abrir el portal de facturación</a>
-        <hr class="sep">
-        <p class="small muted">¿Quieres dejar Pro? Se hace en el mismo portal y sigues con Pro hasta el final del periodo ya pagado.</p>
-        <a class="btn ghost block" href="${esc(PORTAL_LINK)}" target="_blank" rel="noopener">Cancelar suscripción</a>
-      </div>
-    </div>`;
-}
-
 // Foto de perfil: se recorta en cuadrado, se reduce a 320 px y se sube a Firebase Storage (avatars/{uid}/perfil.jpg).
 async function subirFoto(file) {
   if (!file) return;
@@ -1019,7 +995,7 @@ function viewError() {
 async function enter(u) {
   st.user = u; st.busy = false;
   if (!u && M) M.pararPro();
-  if (!u) { st.cfg = st.pwd = st.bill = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = 'auth'; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
+  if (!u) { st.cfg = st.pwd = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = 'auth'; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
   try {
     st.profile = await api.getProfile(u.uid);
     if (!st.profile || !st.profile.onboarded) return startOnboarding();
@@ -1096,8 +1072,12 @@ root.addEventListener('click', async (e) => {
   else if (act === 'cfg-close') { st.cfg = null; render(); }
   else if (act === 'pwd-open') { st.pwd = { msg: '', busy: false }; render(); }
   else if (act === 'pwd-close') { st.pwd = null; render(); }
-  else if (act === 'bill-open') { st.bill = true; render(); }
-  else if (act === 'bill-close') { st.bill = null; render(); }
+  else if (act === 'bill-open') {
+    // Crea la sesión del portal de Stripe y salta directo; si el usuario aún no tiene cliente guardado, usa el enlace de acceso.
+    b.disabled = true; b.textContent = 'Abriendo…';
+    try { location.assign((await api.portal(location.href.split('#')[0])).url); }
+    catch (e) { if (PORTAL_LINK) location.assign(PORTAL_LINK); else { toast('No se pudo abrir la suscripción'); b.disabled = false; b.textContent = 'Gestionar suscripción'; } }
+  }
   else if (act === 'google-link') {
     st.gBusy = true; render();
     try { await api.linkGoogle(); toast('Cuenta de Google vinculada'); } catch (e) { toast(errorText(e)); }
@@ -1143,7 +1123,6 @@ root.addEventListener('submit', async (e) => {
   if (kind === 'login') onLogin(f);
   else if (kind === 'register') onRegister(f);
   else if (kind === 'ob') obNext();
-  else if (kind === 'quickweight') { const ok = await saveWeight(todayISO(), f.kg.value); if (!ok) return; }
   else if (kind === 'addweight') saveWeight(f.fecha.value, f.kg.value, { grasa: f.grasa.value, musculo: f.musculo.value, agua: f.agua.value, hueso: f.hueso.value }, pesoUnit(), !!f.dataset.edit, keepEdit(f));
   else if (kind === 'profile') saveProfileForm(f);
   else if (kind === 'delacc') borrarCuenta();

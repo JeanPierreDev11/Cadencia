@@ -124,6 +124,11 @@ async function firebaseBackend(config) {
       }
       return (await stravaFn(data)).data;
     },
+    // Sesión del portal de Stripe (cambiar tarjeta / cancelar). Devuelve { url }.
+    async portal(volver) {
+      const Fn = await import(FB + 'firebase-functions.js');
+      return (await Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), 'portalStripe', { timeout: 30000 })({ volver })).data;
+    },
     // Notificaciones push (Firebase Cloud Messaging). El token identifica este dispositivo; se guarda en users/{uid}.fcmTokens.
     async pushToken(vapidKey) {
       const M = await import(FB + 'firebase-messaging.js');
@@ -233,6 +238,7 @@ function localBackend() {
       if (typeof globalThis.cadenciaIAPrueba === 'function') return globalThis.cadenciaIAPrueba(data);
       throw err('local/no-ia');
     },
+    async portal() { throw err('local/no-portal'); },
     // En modo prueba no hay servidor: Strava solo responde si una prueba automática lo simula.
     async strava(data) {
       if (typeof globalThis.cadenciaStravaPrueba === 'function') return globalThis.cadenciaStravaPrueba(data);

@@ -113,7 +113,7 @@ La previsión de Rutas viene de [Open-Meteo](https://open-meteo.com/) (sin clave
 - `users/{uid}.isPro` (false por defecto). **Solo lo cambia el servidor**: las reglas de Firestore impiden que la app lo modifique (igual que `stripeCustomerId` y `stripeSubscriptionId`).
 - La función `ia` comprueba `isPro` en el servidor antes de procesar nada (error `permission-denied`); la app lo recibe y enseña el paywall.
 - `stripeWebhook` (europe-west1) recibe `checkout.session.completed`, `customer.subscription.updated` y `customer.subscription.deleted`, valida la firma y activa o quita `isPro`. Localiza a la persona por `client_reference_id` (el uid, que la app añade al enlace) o por el email.
-- Enlace de pago y portal: `js/pro.js` (`PRO_LINK`, `PORTAL_LINK`). Secretos de Firebase: `STRIPE_SECRET_KEY` y `STRIPE_WEBHOOK_SECRET` (se guardan desde los secretos de GitHub con el workflow «Publicar IA en Firebase»).
+- Enlace de pago y portal: `js/pro.js` (`PRO_LINK`, `PORTAL_LINK`). «Gestionar suscripción» llama a la función `portalStripe`, que crea una sesión del Portal de cliente de Stripe (cambiar tarjeta o cancelar); `PORTAL_LINK` solo es el plan B si el usuario aún no tiene `stripeCustomerId`. La clave restringida de Stripe necesita permiso de escritura en «Sesiones del portal de facturación» y el portal debe estar configurado en Stripe (modo prueba y real). Secretos de Firebase: `STRIPE_SECRET_KEY` y `STRIPE_WEBHOOK_SECRET` (se guardan desde los secretos de GitHub con el workflow «Publicar IA en Firebase»).
 
 ## Mapas y rutas GPX (gratis para todos)
 - Pestaña Bici → Rutas: mapa interactivo con **Leaflet 1.9.4** (cargado desde unpkg con huella SRI en `index.html`) y teselas de OpenStreetMap, sin clave de API. Atribución de OSM visible. Si en el futuro hay mucho tráfico o uso comercial intensivo, hay que cambiar a un proveedor de teselas propio o de pago (la política de OSM no admite uso masivo).
@@ -157,7 +157,7 @@ Toda la interfaz usa un único tema oscuro industrial: fondo #000000, superficie
 ## Configuración, Perfil y tema
 
 - **Engranaje** fijo arriba a la derecha en todas las pantallas principales → Configuración: tema (**Oscuro** por defecto, **Claro**, **Sistema** que sigue `prefers-color-scheme`) y Recordatorios. El tema se guarda en el móvil (`cadencia-theme`).
-- **Perfil** es siempre la última pestaña. Orden: Tu plan (la baja de la suscripción solo está dentro de «Gestionar facturación»), Tu cuenta (foto, contraseña, vincular Google), Integraciones (Strava), Tus datos (plegable, cerrado), Objetivos.
+- **Perfil** es siempre la última pestaña. Orden: Tu plan (cambiar tarjeta y baja: botón «Gestionar suscripción», abre el portal de Stripe), Tu cuenta (foto, contraseña, vincular Google), Integraciones (Strava), Tus datos (plegable, cerrado), Objetivos.
 - **Foto de perfil**: se sube a Firebase Storage en `avatars/{uid}/perfil.jpg` (reglas en `storage.rules`; el flujo de GitHub las publica en un paso aparte). Hay que activar **Storage** una vez en la consola de Firebase.
 - **Vincular Google**: hay que activar el proveedor **Google** en Firebase → Authentication → Sign-in method.
 - **Peso objetivo**: la recomendación es una línea con «Ignorar»; al ignorarla se guarda `hideWeightSuggestion: true` en `users/{uid}`.

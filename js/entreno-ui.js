@@ -53,17 +53,13 @@ const eqIcon = (eq) => `<svg width="20" height="20" viewBox="0 0 24 24" fill="no
 /* ---------- tarjeta en Inicio ---------- */
 function homeTraining() {
   const r = rutinaOf();
-  if (!r) return `<section class="card"><div class="card-head"><h2>Entreno</h2><button class="link" data-act="tab" data-v="entreno">Abrir</button></div>
-    <p>Añade tu rutina y la app te dirá qué toca cada día.</p></section>`;
+  const tarjeta = (titulo, l1, l2) => `<section class="card tap" data-act="tab" data-v="entreno" role="button" tabindex="0" aria-label="${esc(titulo)}: abrir Entreno">
+    <h2>${esc(titulo)}</h2>${l1 ? `<p>${esc(l1)}</p>` : ''}${l2 ? `<p class="small muted">${esc(l2)}</p>` : ''}</section>`;
+  if (!r) return tarjeta('Entreno de hoy', 'Añade tu rutina y la app te dirá qué toca cada día.', '');
   const today = todayISO(), stt = E.weekStats(st.workouts, E.mondayOf(today));
   const dp = dayPlan(today), doneToday = st.workouts.some((w) => w.fecha === today);
-  const line = doneToday ? 'Hoy ya has entrenado. Buen trabajo.' : dp ? `Hoy: ${dp.nombre} · ${sesDuracion(dp)}` : 'Hoy toca descansar.';
-  return `<section class="card">
-    <div class="card-head"><h2>Entreno de hoy</h2><button class="link" data-act="tab" data-v="entreno">Abrir</button></div>
-    <p>${esc(line)}</p>
-    <p class="small muted">Esta semana: ${stt.n} de ${r.dias.length} sesiones · ${fmtDur(stt.min)}</p>
-    <button class="btn small ghost" data-act="wk-new" data-date="${today}">${I.plus} Registrar</button>
-  </section>`;
+  const l1 = doneToday ? 'Hoy ya has entrenado. Buen trabajo.' : dp ? sesDuracion(dp) : 'Hoy toca descansar.';
+  return tarjeta(`Entreno de hoy: ${dp ? dp.nombre : 'Descanso'}`, l1, `Esta semana: ${stt.n} de ${r.dias.length} sesiones · ${fmtDur(stt.min)}`);
 }
 
 /* ---------- pestaña Entreno ---------- */
@@ -76,7 +72,6 @@ function viewEntreno() {
   const body = sub === 'rutina' ? wkRutina() : sub === 'objetivos' ? M.viewObjetivos() : wkSemana();
   return `<header class="hello"><div><h1>Entreno</h1><p>Semana del ${esc(fmtDate(mon))} al ${esc(fmtDate(sun))}</p></div>
       <button type="button" class="iconbtn hist-btn" data-act="wk-hist" aria-label="Historial de entrenos">${I.clock}</button></header>
-    <div class="cta-row"><button class="btn block" data-act="wk-new" data-date="${today}">Iniciar entreno</button></div>
     ${ctx.stravaBtn ? ctx.stravaBtn() : ''}
     <div class="seg" role="group" aria-label="Secciones de entreno">
       ${[['semana', 'Semana'], ['rutina', 'Rutinas'], ['objetivos', 'Objetivos']].map(([v, t]) => `<button type="button" data-act="wktab" data-v="${v}" aria-pressed="${sub === v}">${t}</button>`).join('')}

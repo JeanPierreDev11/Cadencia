@@ -19,7 +19,7 @@ const CATALOGO = require('./catalogo.json');
 initializeApp();
 const db = getFirestore();
 const CLAVE = defineSecret('ANTHROPIC_API_KEY');
-const STRIPE_CLAVE = defineSecret('STRIPE_SECRET_KEY'); // clave de la API de Stripe (restringida: solo leer Clientes)
+const STRIPE_CLAVE = defineSecret('STRIPE_SECRET_KEY'); // clave de la API de Stripe (restringida: leer Clientes y escribir «Sesiones del portal de facturación»)
 const STRIPE_FIRMA = defineSecret('STRIPE_WEBHOOK_SECRET'); // secreto de firma del webhook (empieza por whsec_)
 const STRAVA_ID = defineSecret('STRAVA_CLIENT_ID'); // datos de la aplicación creada en developers.strava.com
 const STRAVA_SECRETO = defineSecret('STRAVA_CLIENT_SECRET'); // el «Client Secret» nunca sale del servidor
@@ -298,6 +298,18 @@ async function procesarEvento(stripe, ev) {
     }
   }
 }
+
+// Portal de cliente de Stripe: crea una sesión de un solo uso para que el usuario cambie la tarjeta o cancele.
+exports.portalStripe = onCall({ secrets: [STRIPE_CLAVE], memory: '256MiB', timeoutSeconds: 30 }, async (req) => {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+  const d = (await db.collection('users').doc(req.auth.uid).get()).data() || {};
+  if (!d.stripeCustomerId) throw new HttpsError('failed-precondition', 'sin-cliente');
+  const stripe = new Stripe(String(STRIPE_CLAVE.value() || '').trim());
+  try {
+    const s = await stripe.billingPortal.sessions.create({ customer: d.stripeCustomerId, return_url: String(req.data && req.data.volver || 'https://jeanpierredev11.github.io/Cadencia/') });
+    return { url: s.url };
+  } catch (e) { console.error('portal', e && e.message); throw new HttpsError('internal', 'portal'); }
+});
 
 exports.stripeWebhook = onRequest({ secrets: [STRIPE_CLAVE, STRIPE_FIRMA], memory: '256MiB', maxInstances: 2, timeoutSeconds: 30 }, async (req, res) => {
   if (req.method !== 'POST') { res.status(405).send('Solo POST'); return; }

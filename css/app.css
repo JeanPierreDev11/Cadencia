@@ -1102,3 +1102,5 @@ details.comp { border: 1px solid var(--bd); border-radius: 2px; }
 .meal-acts2 .chip { padding: 9px 12px; }
 /* Resumen de la semana: a sangre, sin el marco gris de los lados */
 .main > .stats { padding-left: 0 !important; padding-right: 0 !important; border-left: 0; border-right: 0; }
+.meal-acts.full { display: block; }
+.meal-acts.full .chip { width: 100%; justify-content: center; }
