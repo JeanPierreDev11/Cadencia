@@ -128,10 +128,14 @@ La previsión de Rutas viene de [Open-Meteo](https://open-meteo.com/) (sin clave
 - Límites de Strava: las apps nuevas empiezan en «single-player» (solo el propietario); hay que pedir más capacidad y pasar la revisión de Strava antes de abrirlo a más gente. 200 peticiones/15 min y 2.000/día.
 
 ## Recordatorios (notificaciones push)
-- Perfil → **Recordatorios**: tres interruptores (peso 08:00, comidas 21:00, entreno 18:00; la hora se puede cambiar). El primero que se activa pide el permiso del navegador (`Notification.requestPermission()`), obtiene el token de FCM del dispositivo y lo guarda en `users/{uid}`: `fcmTokens` (lista de dispositivos), `recordatorios {peso|comidas|entreno: {on, h}}`, `recTz` (zona horaria) y `recActivo`.
-- **`js/push.js`** lleva la clave pública VAPID (`VAPID_KEY`, hay que pegarla ahí) y la lógica; `data.js` obtiene el token con `firebase-messaging.js` usando el service worker de la app (`sw.js`), así que no hace falta un `firebase-messaging-sw.js` aparte.
-- **`sw.js`**: eventos `push` (muestra el aviso; si la app está abierta y a la vista no lo muestra) y `notificationclick` (abre `./?ir=peso|comidas|entreno`). No toca la caché: solo se sube la versión y se añade `push.js` a SHELL.
-- **Cloud Function `recordatorios`** (`onSchedule`, cada hora en punto, Cloud Scheduler): busca `recActivo == true`, calcula la hora local de cada persona con su `recTz`, y manda con `sendEach` un mensaje solo de datos a sus dispositivos. No avisa si ese día ya está hecho (peso, comidas o entreno apuntados), ni los días de descanso de la rutina (entreno), ni dos veces el mismo día (`recEnviado`). Borra los tokens caducados.
+- **Pregunta inicial:** la primera vez que entras (tras el registro, o al abrir la app si aún no respondiste) sale «¿Quieres recibir recordatorios?» con los tres tipos para marcar. «Activar avisos» pide el permiso del navegador; «Ahora no» no vuelve a preguntar (`recPreguntado`). Si el navegador no admite notificaciones (p. ej. iPhone sin instalar la app), no se pregunta.
+- **Perfil → Recordatorios:** tres interruptores con sus ajustes.
+  - Peso: por defecto **una vez a la semana** (lunes 08:00); se puede elegir cada día, cada semana (y qué día), cada 2 semanas o cada mes (día 1), y la hora.
+  - Comidas: **10:00, 14:30 y 21:00** (cada una editable o «No avisar»). El aviso de cada hora comprueba su momento del día: desayuno (antes de las 12:00), comida, merienda (18:00–19:59) o cena.
+  - Entreno: **los días que te toca** según tu rutina, a las 18:00 por defecto.
+- **Datos en `users/{uid}`:** `fcmTokens` (dispositivos), `recordatorios {peso:{on,t,f,d}, comidas:{on,ts:[min…]}, entreno:{on,t}}` (`t` = minutos desde las 00:00, de 30 en 30), `recTz` (zona horaria), `recActivo`, `recPreguntado`; el servidor guarda `recEnviado` para no repetir.
+- **`js/push.js`** lleva la clave pública VAPID (`VAPID_KEY`) y toda la lógica; `data.js` obtiene el token con `firebase-messaging.js` usando el service worker de la app (`sw.js`): no hace falta un `firebase-messaging-sw.js`.
+- **`sw.js`:** eventos `push` (muestra el aviso; si la app está abierta y a la vista, no) y `notificationclick` (abre `./?ir=peso|comidas|entreno`). No toca la caché.
+- **Cloud Function `recordatorios`** (`onSchedule`, `0,30 * * * *`, Cloud Scheduler): busca `recActivo == true`, calcula el tramo de 30 min en la zona horaria de cada persona y manda con `sendEach` un mensaje solo de datos. No avisa si ya está hecho (peso de hoy, esa comida, entreno de hoy), ni en días de descanso (entreno), ni dos veces el mismo aviso el mismo día. Borra los tokens caducados.
 - iPhone: las notificaciones web solo funcionan con la app añadida a la pantalla de inicio (iOS 16.4 o superior).
-- Escala: cada hora lee los usuarios con avisos activos; con muchos miles habrá que filtrar por hora en la consulta.
-
+- Escala: cada 30 min lee los usuarios con avisos activos; con muchos miles habrá que filtrar por tramo en la consulta.

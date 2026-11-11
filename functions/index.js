@@ -410,32 +410,47 @@ exports.strava = onCall({ secrets: [STRAVA_ID, STRAVA_SECRETO], memory: '256MiB'
 });
 
 /* ------------------------------------------------------------------ */
-/* Recordatorios push (cada hora)                                      */
+/* Recordatorios push (cada 30 minutos)                                */
 /* ------------------------------------------------------------------ */
-// Perfil → Recordatorios guarda en users/{uid}: recordatorios {peso|comidas|entreno: {on, h}}, recTz (zona horaria),
-// recActivo (true si hay alguno activo) y fcmTokens (dispositivos). Cada hora en punto se busca a quien le toca ahora,
-// en SU zona horaria, y se le manda un mensaje solo con datos; el service worker (sw.js) lo muestra.
-// No se avisa si ese día ya está hecho (peso apuntado, comidas apuntadas o entreno registrado), ni dos veces el mismo día.
+// Perfil → Recordatorios guarda en users/{uid}: recordatorios {
+//   peso:    {on, t, f, d}   t = minutos desde las 00:00 (08:00 = 480), f = dia|semana|quincena|mes, d = día de la semana (0 = lunes)
+//   comidas: {on, ts: [600, 870, 1260]}  (10:00, 14:30 y 21:00 por defecto)
+//   entreno: {on, t}   (solo los días de tu rutina)
+// }, recTz (zona horaria), recActivo (true si hay alguno activo) y fcmTokens (dispositivos).
+// Cada 30 min se busca a quien le toca ahora, en SU zona horaria, y se le manda un mensaje solo con datos;
+// el service worker (sw.js) lo muestra. No se avisa si ya está hecho (peso de hoy, comida de ese momento o entreno de hoy),
+// ni dos veces el mismo aviso el mismo día.
 const TEXTOS_REC = {
-  peso: [['Hora de pesarte', 'Súbete a la báscula y apunta tu peso: son diez segundos.'], ['Buenos días', 'Apunta tu peso de hoy para no perder el hilo de tu progreso.'], ['¿Te pesas hoy?', 'Mejor en ayunas y a la misma hora. Anótalo en Cadencia.']],
-  comidas: [['Apunta tus comidas', 'Registra lo que has comido hoy para que tus calorías y macros cuenten.'], ['¿Qué has comido hoy?', 'Dos minutos ahora y tu día queda completo en Cadencia.'], ['Cierra tu día', 'Anota tus comidas de hoy antes de acabar el día.']],
+  peso: [['Hora de pesarte', 'Súbete a la báscula y apunta tu peso: son diez segundos.'], ['Pesaje de la semana', 'Apunta tu peso para no perder el hilo de tu progreso.'], ['¿Te pesas hoy?', 'Mejor en ayunas y a la misma hora. Anótalo en Cadencia.']],
   entreno: [['Hoy toca entrenar', 'Tu entreno de hoy te espera. ¡A por ello!'], ['Hora de moverse', 'Hoy tienes entreno. Ábrelo y empieza cuando quieras.'], ['No lo dejes para luego', 'Tu sesión de hoy está lista en Cadencia.']],
 };
+// Por momento del día: 0 desayuno, 1 comida, 2 merienda, 3 cena (índices de MEALS en la app).
+const TEXTOS_COMIDA = [['¿Ya has desayunado?', 'Apunta tu desayuno en Cadencia.'], ['Hora de la comida', 'Apunta lo que comes hoy para que tus macros cuenten.'], ['¿Merendamos?', 'Apunta tu merienda y mantén tu día al día.'], ['Cierra tu día', 'Apunta tu cena y lo que falte de hoy.']];
+const comidaDeLaHora = (t) => (t < 12 * 60 ? 0 : t < 18 * 60 ? 1 : t < 20 * 60 ? 2 : 3);
 const DESTINO_REC = { peso: './?ir=peso', comidas: './?ir=comidas', entreno: './?ir=entreno' };
 const TOKEN_MUERTO = new Set(['messaging/registration-token-not-registered', 'messaging/invalid-registration-token', 'messaging/invalid-argument']);
 
-// Fecha (AAAA-MM-DD), hora (0-23) y día de la semana (0 = lunes) en la zona horaria de la persona.
+// Fecha (AAAA-MM-DD), tramo de 30 min (minutos desde las 00:00), día de la semana (0 = lunes) y día del mes en la zona horaria de la persona.
 function horaLocal(zona, ahora) {
   let tz = zona;
   try { new Intl.DateTimeFormat('en-CA', { timeZone: tz }); } catch (e) { tz = 'Europe/Madrid'; }
-  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' }).formatToParts(ahora).map((x) => [x.type, x.value]));
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(ahora).map((x) => [x.type, x.value]));
   const fecha = `${p.year}-${p.month}-${p.day}`;
-  return { fecha, hora: Number(p.hour), semana: (new Date(`${fecha}T12:00:00Z`).getUTCDay() + 6) % 7 };
+  const dias = Math.floor(Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day)) / 86400000);
+  return { fecha, slot: Math.floor((Number(p.hour) * 60 + Number(p.minute)) / 30) * 30, semana: (new Date(`${fecha}T12:00:00Z`).getUTCDay() + 6) % 7, diaMes: Number(p.day), semanaN: Math.floor(dias / 7) };
+}
+// ¿Toca pesarse hoy según la frecuencia elegida?
+function tocaPesar(r, loc) {
+  const f = r.f || 'semana', d = Number.isInteger(r.d) ? r.d : 0;
+  if (f === 'dia') return true;
+  if (f === 'mes') return loc.diaMes === 1;
+  if (f === 'quincena') return loc.semana === d && loc.semanaN % 2 === 0;
+  return loc.semana === d;
 }
 
-async function yaHecho(uid, k, fecha) {
+async function yaHecho(uid, k, fecha, comida) {
   if (k === 'peso') return (await db.doc(`users/${uid}/pesos/${fecha}`).get()).exists;
-  if (k === 'comidas') { const d = await db.doc(`users/${uid}/comidas/${fecha}`).get(); return d.exists && Array.isArray(d.data().items) && d.data().items.length > 0; }
+  if (k === 'comidas') { const d = await db.doc(`users/${uid}/comidas/${fecha}`).get(); return d.exists && Array.isArray(d.data().items) && d.data().items.some((x) => x && x.m === comida); }
   return !(await db.collection(`users/${uid}/entrenos`).where('fecha', '==', fecha).limit(1).get()).empty;
 }
 
@@ -444,32 +459,34 @@ async function avisarUsuario(doc, ahora) {
   const loc = horaLocal(d.recTz, ahora);
   const tokens = (Array.isArray(d.fcmTokens) ? d.fcmTokens : []).filter((t) => typeof t === 'string' && t).slice(-10);
   if (!tokens.length) return 0;
+  // Qué avisos tocan ahora: [clave de control, tipo, momento de comida, texto]
+  const toca = [];
+  if (rec.peso && rec.peso.on === true && rec.peso.t === loc.slot && tocaPesar(rec.peso, loc)) toca.push(['peso', 'peso', 0, TEXTOS_REC.peso[loc.diaMes % 3]]);
+  if (rec.entreno && rec.entreno.on === true && rec.entreno.t === loc.slot) toca.push(['entreno', 'entreno', 0, TEXTOS_REC.entreno[loc.diaMes % 3]]);
+  if (rec.comidas && rec.comidas.on === true && Array.isArray(rec.comidas.ts) && rec.comidas.ts.includes(loc.slot)) { const c = comidaDeLaHora(loc.slot); toca.push([`comidas-${loc.slot}`, 'comidas', c, TEXTOS_COMIDA[c]]); }
   let enviados = 0;
-  for (const k of ['peso', 'comidas', 'entreno']) {
-    const r = rec[k];
-    if (!r || r.on !== true || r.h !== loc.hora) continue;
-    if (d.recEnviado && d.recEnviado[k] === loc.fecha) continue; // ya se mandó hoy (por si el cron se repite)
+  for (const [clave, k, comida, [title, body]] of toca) {
+    if (d.recEnviado && d.recEnviado[clave] === loc.fecha) continue; // ya se mandó hoy (por si el cron se repite)
     if (k === 'entreno') { // solo los días de tu rutina (si la tienes)
       const dias = (await userRef(uid).get()).get('rutina.dias');
       if (Array.isArray(dias) && dias.length && !dias.includes(loc.semana)) continue;
     }
-    if (await yaHecho(uid, k, loc.fecha)) continue;
-    const [title, body] = TEXTOS_REC[k][Number(loc.fecha.slice(8)) % TEXTOS_REC[k].length];
+    if (await yaHecho(uid, k, loc.fecha, comida)) continue;
     const res = await getMessaging().sendEach(tokens.map((token) => ({
       token,
-      data: { title, body, url: DESTINO_REC[k], tag: `cadencia-${k}` },
+      data: { title, body, url: DESTINO_REC[k], tag: `cadencia-${clave}` },
       webpush: { headers: { TTL: '3600', Urgency: 'normal' } },
     })));
     const muertos = [];
     res.responses.forEach((x, i) => { if (!x.success && x.error && TOKEN_MUERTO.has(x.error.code)) muertos.push(tokens[i]); });
     if (muertos.length) await userRef(uid).update({ fcmTokens: FieldValue.arrayRemove(...muertos) });
-    if (res.successCount > 0) { await userRef(uid).update({ [`recEnviado.${k}`]: loc.fecha }); enviados += 1; }
-    else console.warn('recordatorio sin entregar', { uid, k, fallos: res.failureCount });
+    if (res.successCount > 0) { await userRef(uid).update({ [`recEnviado.${clave}`]: loc.fecha }); enviados += 1; }
+    else console.warn('recordatorio sin entregar', { uid, clave, fallos: res.failureCount });
   }
   return enviados;
 }
 
-exports.recordatorios = onSchedule({ schedule: '0 * * * *', timeZone: 'Europe/Madrid', memory: '256MiB', timeoutSeconds: 300, maxInstances: 1, retryCount: 0 }, async () => {
+exports.recordatorios = onSchedule({ schedule: '0,30 * * * *', timeZone: 'Europe/Madrid', memory: '256MiB', timeoutSeconds: 300, maxInstances: 1, retryCount: 0 }, async () => {
   const ahora = new Date();
   const snap = await db.collection('users').where('recActivo', '==', true).select('recordatorios', 'recTz', 'fcmTokens', 'recEnviado').get();
   let enviados = 0, errores = 0;

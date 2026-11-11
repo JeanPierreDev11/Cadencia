@@ -62,7 +62,7 @@ function render() {
   else if (st.view === 'error') root.innerHTML = viewError();
   document.title = APP_NAME;
   if (M) M.afterRender();
-  document.body.classList.toggle('noscroll', !!(st.lib || st.food || st.tl || st.pesoSheet || st.meta || st.regPick || st.legal || st.del || st.iaFoto || st.pro || st.proWelcome));
+  document.body.classList.toggle('noscroll', !!(st.lib || st.food || st.tl || st.pesoSheet || st.meta || st.regPick || st.legal || st.del || st.iaFoto || st.pro || st.proWelcome || st.recAsk));
 }
 
 /* ================================================================== */
@@ -334,6 +334,7 @@ async function obNext() {
     st.view = 'main';
     render();
     toast('Perfil guardado');
+    R.preguntar();
   } catch (e) {
     o.saving = false; o.msg = errorText(e); render();
   }
@@ -356,12 +357,12 @@ const M = crearSecciones({
 });
 
 const S = crearStrava({ st, get api() { return api; }, render, toast, esc, E, currentKg: () => currentKg(), todayISO, fmtDate, lsGet, lsSet, errorText });
-const R = crearRecordatorios({ st, get api() { return api; }, render, toast, esc, lsGet, lsSet, errorText });
+const R = crearRecordatorios({ st, get api() { return api; }, render, toast, esc, lsGet, lsSet, errorText, I });
 let irPendiente = leerIr(); // si venimos de tocar un aviso, aquí queda la pantalla a la que ir
 let stravaRet = leerRetorno(); // si venimos de la pantalla de permisos de Strava, aquí queda el código temporal
 
 function viewMain() {
-  const sheet = st.legal ? legalSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.regPick ? regSheetHTML() : st.pesoSheet ? pesoSheetHTML() : M.sheet();
+  const sheet = st.legal ? legalSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.regPick ? regSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.recAsk ? R.askHTML() : M.sheet();
   if (st.rw) return viewRutWizard() + sheet;
   if (st.live && !st.liveMin) return viewLive() + sheet;
   if (st.wk) return viewWkForm();
@@ -759,7 +760,7 @@ function viewError() {
 async function enter(u) {
   st.user = u; st.busy = false;
   if (!u && M) M.pararPro();
-  if (!u) { st.del = null; st.legal = false; st.view = 'auth'; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
+  if (!u) { st.recAsk = null; st.del = null; st.legal = false; st.view = 'auth'; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
   try {
     st.profile = await api.getProfile(u.uid);
     if (!st.profile || !st.profile.onboarded) return startOnboarding();
@@ -771,9 +772,11 @@ async function enter(u) {
     try { const sv = JSON.parse(lsGet('cadencia-live') || 'null'); if (sv && sv.uid === u.uid && Array.isArray(sv.ex)) { st.live = sv; st.liveMin = true; } } catch (e) { /* nada */ }
     st.view = 'main';
     render();
+    const llegoConDestino = !!(stravaRet || irPendiente);
     if (stravaRet) { const r = stravaRet; stravaRet = null; S.vuelta(r); }
     else if (irPendiente) { const d = irPendiente; irPendiente = null; st.tab = d.tab; lsSet('cadencia-tab', d.tab); if (d.hoja === 'peso') st.pesoSheet = true; render(); }
     R.mantener();
+    if (!llegoConDestino) R.preguntar();
   } catch (e) {
     st.errText = errorText(e); st.view = 'error'; render();
   }
