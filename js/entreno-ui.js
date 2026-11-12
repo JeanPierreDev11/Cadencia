@@ -21,7 +21,14 @@ const WK_DE = { fuerza: 'gym', bici: 'bici', cardio: 'cardio', otro: 'otro' }; /
 const clone = (o) => JSON.parse(JSON.stringify(o));
 const kgTxt = (v) => nf(Math.round(v * 10) / 10);
 // Sugerencia Pro para la serie j: la misma serie de la última sesión (st.workouts ya viene de Firestore) con +1 rep o +2,5 kg.
-const sugSerie = (ex, j) => (esPro() && !(st.live && st.live.edit) ? E.sugerirSerie(ex.prev[j], ex.objReps) : null);
+// Las series de calentamiento (w) van delante: «Anterior» y la sugerencia se leen por posición entre las series de trabajo.
+const idxTrabajo = (ex, j) => ex.s.slice(0, j).filter((q) => !q.w).length;
+const sugSerie = (ex, j) => (esPro() && !(st.live && st.live.edit) && !ex.s[j].w ? E.sugerirSerie(ex.prev[idxTrabajo(ex, j)], ex.objReps) : null);
+// Límite gratuito: 3 rutinas y 3 ejercicios propios. Sin Pro, al llegar a 3 se avisa en lugar de crear.
+const LIM_FREE = 3;
+const sobreLimite = (tipo) => !esPro() && (tipo === 'rutinas' ? rutinasList().length : ((st.profile && st.profile.ejPropios) || []).length) >= LIM_FREE;
+function avisoLimite(tipo) { st.limite = { tipo }; render(); }
+const abrirSuscripcion = () => { st.limite = null; st.pf = { v: 'suscripcion', f: {}, busy: false }; render(); };
 // 1RM estimado (Brzycki) del ejercicio con lo que lleva escrito; vacío si no hay serie válida.
 const ormHTML = (ex) => { const v = E.mejor1RM(ex.s, num); return v == null ? '' : `👑 1RM estimado: ${kgTxt(v)} kg`; };
 const rutinaOf = () => { const r = st.profile && st.profile.rutina; return r && Array.isArray(r.dias) && r.dias.length && r.sesiones ? r : null; };
@@ -298,6 +305,7 @@ async function saveRutina(R, rid) {
   const res = normRutina(R);
   if (res.error) return res.error;
   const list = rutinasList(), act = rutinaOf(), id = rid || nidR(), prev = list.find((x) => x.id === id);
+  if (!prev && sobreLimite('rutinas')) { st.limite = { tipo: 'rutinas' }; return `Límite gratuito alcanzado (${LIM_FREE}/${LIM_FREE}). Desbloquea rutinas ilimitadas con Cadencia PRO`; }
   const rut = { ...res.rutina, id, nombre: (prev && prev.nombre) || (list.length ? `Rutina ${list.length + 1}` : 'Mi rutina'), ...(prev && prev.shareCode ? { shareCode: prev.shareCode } : {}) };
   const data = { rutinas: prev ? list.map((x) => (x.id === id ? rut : x)) : [...list, rut] };
   if (!act || !rid || act.id === id) data.rutina = rut;
@@ -416,6 +424,7 @@ const expBars = (k) => `<span class="bars" aria-hidden="true">${[1, 2, 3, 4, 5].
 
 function rwStart(rid, nueva) {
   const r = nueva ? null : rutinasList().find((x) => x.id === rid) || rutinaOf();
+  if (!r && sobreLimite('rutinas')) return avisoLimite('rutinas'); // crear una rutina nueva
   const base = { step: 0, main: '', exp: '', donde: '', eq: [], n: 0, dias: [], flex: false, modo: '', division: '', deporte: '', otro: '', msg: '', anim: 'fwd' };
   st.rw = r
     ? { ...base, rid: r.id, main: r.tipos[0] || '', otro: r.otro || '', n: r.dias.length, dias: [...r.dias], flex: !!r.flex, exp: r.exp || '', donde: r.donde || '', eq: r.eqSel ? [...r.eqSel] : [], deporte: r.deporte || '' }
@@ -785,6 +794,7 @@ async function libCrearSave() {
   if (!n) { c.msg = 'Escribe el nombre del ejercicio.'; return render(); }
   const existe = E.ejercicio(n);
   const nombre = existe ? existe.n : n;
+  if (!existe && sobreLimite('ejercicios')) return avisoLimite('ejercicios');
   if (!existe) {
     const propios = [...(st.profile.ejPropios || []), { n, m: c.m, eq: c.eq }];
     try { await api.saveProfile(st.user.uid, { ejPropios: propios }); } catch (e) { c.msg = errorText(e); return render(); }
@@ -840,6 +850,36 @@ function resumenSheetHTML() {
       </div>
     </div>`;
 }
+function limiteSheetHTML() {
+  const rut = st.limite && st.limite.tipo === 'rutinas', que = rut ? 'rutinas' : 'ejercicios propios';
+  return `<div class="sheet-back" data-act="lim-close"></div>
+    <div class="sheet short limite" role="alertdialog" aria-modal="true" aria-label="Límite gratuito alcanzado">
+      <div class="sheet-grab"></div>
+      <div class="lim-body">
+        <span class="lim-ico">${I.lock}</span>
+        <span class="lim-count num">${LIM_FREE}/${LIM_FREE}</span>
+        <p class="lim-t">Límite gratuito alcanzado (${LIM_FREE}/${LIM_FREE}). Desbloquea ${rut ? 'rutinas' : 'ejercicios'} ilimitad${rut ? 'as' : 'os'} con Cadencia PRO</p>
+        <button type="button" class="btn block" data-act="lim-pro">Ver Cadencia PRO</button>
+        <button type="button" class="btn ghost block" data-act="lim-close">Ahora no</button>
+        <span class="small muted">Tus ${que} actuales se mantienen: puedes usarlos, editarlos o borrarlos.</span>
+      </div>
+    </div>`;
+}
+// Calculadora de calentamiento: si no hay peso de referencia, se pregunta.
+function calentarSheetHTML() {
+  const c = st.calentar, x = st.live && st.live.ex[c.i];
+  return `<div class="sheet-back" data-act="cal-close"></div>
+    <div class="sheet short" role="dialog" aria-modal="true" aria-label="Calculadora de calentamiento">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><button type="button" class="iconbtn" data-act="cal-close" aria-label="Cerrar">${I.back}</button><h2>🔥 Calentamiento</h2><span style="width:36px"></span></div>
+      <div class="sheet-list">
+        <p class="small muted">No tenemos historial de ${esc(x ? x.n : 'este ejercicio')}. ¿Con qué peso de trabajo vas a hacerlo? Calcularemos 3 series previas (50 %, 70 % y 85 %).</p>
+        <label class="field"><span>Peso objetivo (kg)</span><input class="input" data-calkg inputmode="decimal" value="${esc(c.kg)}" placeholder="Ej. 60" autocomplete="off"></label>
+        ${c.msg ? `<div class="msg" role="alert">${esc(c.msg)}</div>` : ''}
+        <button type="button" class="btn block" data-act="cal-go">Añadir calentamiento</button>
+      </div>
+    </div>`;
+}
 function modoSheetHTML() {
   const opt = (v, ico, t, sub) => `<button type="button" class="regopt" data-act="modo-pick" data-v="${v}">${ico}<span><b>${esc(t)}</b><small class="muted">${esc(sub)}</small></span></button>`;
   return `<div class="sheet-back" data-act="modo-close"></div>
@@ -864,10 +904,11 @@ function startLive(fecha, modo = 'guiado') {
   st.liveMin = false; st.wk = null; liveSave(); render(); window.scrollTo(0, 0);
 }
 // Una serie cuenta si la marcaste con ✓ o si escribiste algo en ella.
-const serieCuenta = (s) => s.done || String(s.reps).trim() !== '' || String(s.kg).trim() !== '';
+// Un calentamiento viene rellenado de antemano: con ✓ cuenta solo si lo marcaste (en «simple registro», que no tiene ✓, cuenta si lo dejas escrito).
+const serieCuenta = (s) => (s.w && !livePlano(st.live) ? !!s.done : s.done || String(s.reps).trim() !== '' || String(s.kg).trim() !== '');
 function liveTotals() {
   let vol = 0, sets = 0;
-  for (const ex of st.live.ex) for (const s of ex.s) if (s.done) { sets++; vol += (num(s.kg) || 0) * (num(s.reps) || 0) * (ex.uni ? 2 : 1); }
+  for (const ex of st.live.ex) for (const s of ex.s) if (s.done && !s.w) { sets++; vol += (num(s.kg) || 0) * (num(s.reps) || 0) * (ex.uni ? 2 : 1); }
   return { vol: Math.round(vol), sets };
 }
 const liveIsToday = () => st.live && st.live.fecha === todayISO() && !st.live.edit;
@@ -903,25 +944,27 @@ function viewLive() {
   const L = st.live, t = liveTotals(), today = liveIsToday(), plano = livePlano(L), pro = esPro();
   const fmtKg = (v) => (v ? String(v).replace('.', ',') : '');
   const blocks = L.ex.map((e, i) => {
-    const x = E.ejercicio(e.n), uniOk = E.puedeUnilateral(e.n);
+    const x = E.ejercicio(e.n), uniOk = E.puedeUnilateral(e.n), conPeso = !x || x.eq !== 'corporal';
     return `<section class="lex ${i > 0 && L.ex[i - 1].superset ? 'ss-next' : ''} ${e.superset ? 'ss-first' : ''}">
       ${i > 0 && L.ex[i - 1].superset ? '<span class="ss-tag">Superserie</span>' : ''}
       <div class="lex-head">${exThumb(x || { eq: 'corporal' })}
         <span class="lex-t"><b>${esc(e.n)}</b><span class="small muted">${x ? E.MUSCULOS[x.m] : ''}${e.obj ? ` · Objetivo ${esc(e.obj)}` : ''}</span>${esPro() ? `<span class="orm" data-orm="${i}" ${ormHTML(e) ? '' : 'hidden'}>${ormHTML(e)}</span>` : ''}</span>
+        ${!L.edit && conPeso ? `<button type="button" class="warm-btn ${pro ? '' : 'is-locked'}" data-act="live-warm" data-v="${i}" aria-label="Calentamiento para ${esc(e.n)}${pro ? '' : ' (Cadencia Pro)'}">🔥 Calentar${pro ? '' : ' <span class="protag">Pro</span>'}</button>` : ''}
         <button type="button" class="iconbtn" data-act="live-swap" data-v="${i}" aria-label="Cambiar ${esc(e.n)}">${I.swap}</button>
         <button type="button" class="iconbtn" data-act="live-del" data-v="${i}" aria-label="Quitar ${esc(e.n)}">${I.trash}</button></div>
       ${uniOk ? `<div class="seg mini" role="group" aria-label="Lados"><button type="button" data-act="live-uni" data-v="${i}" data-u="0" aria-pressed="${!e.uni}">Ambos lados</button><button type="button" data-act="live-uni" data-v="${i}" data-u="1" aria-pressed="${!!e.uni}">Unilateral</button></div>` : ''}
       <div class="ltab ${plano ? 'simple' : ''}">
         <div class="lrow-h"><span>Serie</span><span>Anterior</span><span>kg</span><span>${e.uni ? 'Reps/lado' : 'Reps'}</span>${plano ? '' : '<span></span>'}</div>
-        ${e.s.map((s, j) => { const p = e.prev[j]; const sg = sugSerie(e, j); const phKg = sg ? (sg.kg ? fmtKg(sg.kg) : 'kg') : p && p.kg ? fmtKg(p.kg) : '–'; const phR = sg ? String(sg.reps) : p ? String(p.reps) : e.objReps || '–'; const pc = sg ? ' ph-sug' : ''; const sug = plano ? '' : sugerencia(e, s); return `<div class="lset ${!plano && s.done ? 'on' : ''}">
-          <span class="num sn">${j + 1}</span>
+        ${e.s.map((s, j) => { const wi = idxTrabajo(e, j), p = s.w ? null : e.prev[wi]; const sg = sugSerie(e, j); const phKg = sg ? (sg.kg ? fmtKg(sg.kg) : 'kg') : p && p.kg ? fmtKg(p.kg) : '–'; const phR = sg ? String(sg.reps) : p ? String(p.reps) : s.w ? '–' : e.objReps || '–'; const pc = sg ? ' ph-sug' : ''; const sug = plano || s.w ? '' : sugerencia(e, s); return `<div class="lset ${s.w ? 'is-w' : ''} ${!plano && s.done ? 'on' : ''}">
+          ${s.w ? '<span class="num sn sn-w" title="Calentamiento" aria-label="Serie de calentamiento">W</span>' : `<span class="num sn">${wi + 1}</span>`}
           <span class="prev">${p ? `${p.kg ? fmtKg(p.kg) + ' × ' : ''}${p.reps}${p.uni ? ' /lado' : ''}` : '—'}</span>
           <input class="input${pc}" data-lv="${i}.${j}.kg" inputmode="decimal" value="${esc(s.kg)}" placeholder="${esc(phKg)}" aria-label="Kilos serie ${j + 1} de ${esc(e.n)}">
           <input class="input${pc}" data-lv="${i}.${j}.reps" inputmode="numeric" value="${esc(s.reps)}" placeholder="${esc(phR)}" aria-label="Repeticiones serie ${j + 1} de ${esc(e.n)}">
           ${plano ? '' : `<button type="button" class="chk" data-act="live-done" data-v="${i}.${j}" aria-pressed="${s.done}" aria-label="Marcar serie ${j + 1} como hecha">${I.check}</button>`}
-        </div>${bestiaHTML(e, i, j, s)}${sug ? `<p class="lsug">${sug}</p>` : ''}`; }).join('')}
+        </div>${s.w ? '' : bestiaHTML(e, i, j, s)}${sug ? `<p class="lsug">${sug}</p>` : ''}`; }).join('')}
       </div>
       <div class="lex-foot"><button type="button" class="btn quiet small" data-act="live-set-add" data-v="${i}">${I.plus} Añadir serie</button>
+        ${e.s.some((q) => q.w) ? `<button type="button" class="link" data-act="live-w-del" data-v="${i}">Quitar calentamiento</button>` : ''}
         ${e.s.length > 1 ? `<button type="button" class="link" data-act="live-set-del" data-v="${i}">Quitar la última</button>` : ''}</div>
       ${i < L.ex.length - 1 ? (pro
         ? `<button type="button" class="ss-btn" data-act="live-sup" data-v="${i}" aria-pressed="${!!e.superset}">${e.superset ? 'Superserie con ' + esc(L.ex[i + 1].n) : 'Enlazar con el siguiente: Superserie'}</button>`
@@ -1023,9 +1066,25 @@ setInterval(() => {
   if (a) a.textContent = t; if (b) b.textContent = t;
 }, 1000);
 
+// Peso de trabajo: la última serie con kilos de hoy; si no hay, la última serie de la última vez (historial).
+function pesoObjetivo(ex) {
+  for (let j = ex.s.length - 1; j >= 0; j--) { const q = ex.s[j]; if (!q.w && num(q.kg) > 0) return num(q.kg); }
+  for (let j = ex.prev.length - 1; j >= 0; j--) if (num(ex.prev[j].kg) > 0) return num(ex.prev[j].kg);
+  return 0;
+}
+function aplicarCalentamiento(i, kg) {
+  const ex = st.live.ex[i], w = E.calentamiento(kg);
+  if (!w.length) return false;
+  ex.s.unshift(...w.map((q) => ({ kg: String(q.kg).replace('.', ','), reps: String(q.reps), done: false, rir: '', dropset: false, w: true })));
+  liveSave(); render();
+  toast(`Calentamiento añadido para ${kgTxt(kg)} kg`);
+  return true;
+}
+
 // Rellena una serie con la referencia (la última vez, o el objetivo) si está vacía.
 function rellenarSerie(ex, j) {
-  const s = ex.s[j], p = ex.prev[j], sg = sugSerie(ex, j);
+  const s = ex.s[j], p = ex.prev[idxTrabajo(ex, j)], sg = sugSerie(ex, j);
+  if (s.w) return !!String(s.reps).trim();
   if (sg) {
     if (!String(s.reps).trim()) s.reps = String(sg.reps);
     if (!String(s.kg).trim() && sg.kg) s.kg = String(sg.kg).replace('.', ',');
@@ -1047,8 +1106,9 @@ async function liveFinish() {
       if (!serieCuenta(s)) continue;
       if (!String(s.reps).trim()) rellenarSerie(ex, j);
       const reps = Math.round(num(s.reps)), kg = String(s.kg).trim() ? num(s.kg) : 0;
-      if (!(reps >= 1 && reps <= 200) || !(kg >= 0 && kg <= 600)) return fail(`Revisa la serie ${j + 1} de «${ex.n}»: repeticiones entre 1 y 200 y kilos entre 0 y 600.`);
+      if (!(reps >= 1 && reps <= 200) || !(kg >= 0 && kg <= 600)) return fail(`Revisa la serie ${s.w ? 'de calentamiento' : idxTrabajo(ex, j) + 1} de «${ex.n}»: repeticiones entre 1 y 200 y kilos entre 0 y 600.`);
       const q = { kg: Math.round(kg * 10) / 10, reps };
+      if (s.w) { q.w = true; series.push(q); continue; } // calentamiento: se guarda marcado, no cuenta en estadísticas
       if (esPro()) { // Modo Bestia (solo Pro): rir, isDropSet e isSuperset
         if (String(s.rir).trim() !== '') q.rir = Math.max(0, Math.min(5, Math.round(num(s.rir)) || 0));
         if (s.dropset) q.isDropSet = true;
@@ -1058,8 +1118,8 @@ async function liveFinish() {
     }
     if (series.length) ejs.push(ex.uni ? { n: ex.n, uni: true, series } : { n: ex.n, series });
   }
-  if (!ejs.length) return fail('Apunta al menos una serie (escribe los kilos o reps, o márcala con ✓) para guardar el entrenamiento.');
-  const nSets = ejs.reduce((a, e) => a + e.series.length, 0);
+  if (!ejs.some((e) => E.trabajo(e.series).length)) return fail('Apunta al menos una serie (escribe los kilos o reps, o márcala con ✓) para guardar el entrenamiento.');
+  const nSets = ejs.reduce((a, e) => a + E.trabajo(e.series).length, 0);
   const plano = livePlano(L);
   const min = L.edit ? L.orig.min : liveIsToday() && !plano ? Math.max(1, Math.min(600, Math.round((Date.now() - L.start) / 60000))) : Math.max(15, nSets * 3);
   // Al editar se sobrescribe el mismo documento (mismo id) conservando el resto de sus datos.
@@ -1073,7 +1133,7 @@ async function liveFinish() {
     st.workouts = await api.listWorkouts(st.user.uid);
     const editado = !!L.edit;
     // Pro: volumen total movido (peso × reps de todas las series; unilateral ×2, igual que el contador en vivo)
-    const volTotal = Math.round(ejs.reduce((a, e) => a + e.series.reduce((b, s) => b + s.kg * s.reps * (e.uni ? 2 : 1), 0), 0));
+    const volTotal = Math.round(ejs.reduce((a, e) => a + E.trabajo(e.series).reduce((b, s) => b + s.kg * s.reps * (e.uni ? 2 : 1), 0), 0));
     const record = E.beatsRecord(before, after);
     st.live = null; st.liveMin = false; liveSave();
     st.tab = 'entreno'; lsSet('cadencia-tab', 'entreno');
@@ -1218,7 +1278,7 @@ root.addEventListener('click', async (e) => {
     if (act === 'lib-det') { L.det = b.dataset.n; return render(); }
     if (act === 'lib-det-close') { L.det = null; return render(); }
     if (act === 'lib-det-toggle') { const n = b.dataset.n; L.sel = L.sel.includes(n) ? L.sel.filter((x) => x !== n) : [...L.sel, n]; L.det = null; return render(); }
-    if (act === 'lib-crear') { L.crear = { n: L.q, m: L.rec[0] || 'pecho', eq: (L.equipo && L.equipo[0]) || 'mancuernas', msg: '' }; return render(); }
+    if (act === 'lib-crear') { if (sobreLimite('ejercicios')) return avisoLimite('ejercicios'); L.crear = { n: L.q, m: L.rec[0] || 'pecho', eq: (L.equipo && L.equipo[0]) || 'mancuernas', msg: '' }; return render(); }
     if (act === 'lib-crear-cancel') { L.crear = null; return render(); }
     if (act === 'lib-crear-save') return libCrearSave();
     if (act === 'lib-add') return L.sel.length ? libApply(L.sel) : null;
@@ -1260,6 +1320,7 @@ root.addEventListener('click', async (e) => {
       const c = clone(src); delete c.shareCode; delete c.compartida;
       c.id = nidR(); c.userId = st.user.uid; c.nombre = String(c.nombre || 'Rutina importada').slice(0, 30);
       const list = rutinasList(), data = { rutinas: [...list, c] };
+      if (sobreLimite('rutinas')) { S.busy = false; st.rutShare = null; return avisoLimite('rutinas'); }
       if (!rutinaOf()) data.rutina = c;
       if (c.tipos.includes('bici') && st.profile.ciclismo !== true) data.ciclismo = true;
       await api.saveProfile(st.user.uid, data); st.profile = { ...st.profile, ...data };
@@ -1287,6 +1348,7 @@ root.addEventListener('click', async (e) => {
   }
   if (act === 'rut-use' || act === 'rut-dup') {
     const list = rutinasList(), r = list.find((x) => x.id === st.rutSel) || rutinaOf();
+    if (act === 'rut-dup' && sobreLimite('rutinas')) return avisoLimite('rutinas');
     try {
       if (act === 'rut-use') { await saveRutinas(list, r); st.rutSel = null; toast(`Ahora usas «${r.nombre}»`); }
       else if (act === 'rut-dup') { const c = { ...clone(r), id: nidR(), nombre: `${r.nombre || 'Rutina'} (copia)`.slice(0, 30) }; delete c.shareCode; await saveRutinas([...list, c]); st.rutSel = c.id; toast('Rutina duplicada'); }
@@ -1354,6 +1416,15 @@ root.addEventListener('click', async (e) => {
       liveSave(); return render();
     }
     if (act === 'live-lock') { toast('Función Pro'); return; }
+    if (act === 'live-warm') {
+      if (!esPro()) return abrirSuscripcion();
+      const ex = Lv.ex[Number(v)];
+      if (ex.s.some((q) => q.w)) { toast('Este ejercicio ya tiene calentamiento'); return; }
+      const kg = pesoObjetivo(ex);
+      if (!kg) { st.calentar = { i: Number(v), kg: '', msg: '' }; render(); const el = document.querySelector('[data-calkg]'); if (el) el.focus(); return; }
+      aplicarCalentamiento(Number(v), kg); return;
+    }
+    if (act === 'live-w-del') { const ex = Lv.ex[Number(v)]; ex.s = ex.s.filter((q) => !q.w); if (!ex.s.length) ex.s.push({ kg: '', reps: '', done: false, rir: '', dropset: false }); liveSave(); return render(); }
     if (act === 'live-drop') { if (!esPro()) { toast('Función Pro'); return; } const [i, j] = v.split('.').map(Number), q = Lv.ex[i].s[j]; q.dropset = !q.dropset; liveSave(); return render(); }
     if (act === 'live-sup') { if (!esPro()) { toast('Función Pro'); return; } const ex = Lv.ex[Number(v)]; if (Number(v) < Lv.ex.length - 1) ex.superset = !ex.superset; liveSave(); return render(); }
     if (act === 'live-uni') { Lv.ex[Number(v)].uni = b.dataset.u === '1'; liveSave(); return render(); }
@@ -1370,6 +1441,14 @@ root.addEventListener('click', async (e) => {
 
   // modo de entreno de fuerza
   if (act === 'sum-close') { st.resumen = null; return render(); }
+  if (act === 'lim-close') { st.limite = null; return render(); }
+  if (act === 'lim-pro') return abrirSuscripcion();
+  if (act === 'cal-close') { st.calentar = null; return render(); }
+  if (act === 'cal-go' && st.calentar) {
+    const c = st.calentar, kg = num(c.kg);
+    if (!(kg > 0 && kg <= 600)) { c.msg = 'Escribe un peso entre 1 y 600 kg.'; return render(); }
+    st.calentar = null; return void aplicarCalentamiento(c.i, kg);
+  }
   if (act === 'modo-close') { st.modoSel = null; return render(); }
   if (act === 'modo-pick' && st.modoSel) { const f = st.modoSel.fecha; st.modoSel = null; st.regPick = null; return startLive(f, v); }
 
@@ -1389,7 +1468,7 @@ root.addEventListener('click', async (e) => {
     if (x.tipo === 'gym' && (x.ejercicios || []).length) {
       if (st.live) { toast('Termina o descarta el entrenamiento en curso antes de editar otro'); return; }
       st.live = { uid: st.user.uid, fecha: x.fecha, start: Date.now(), edit: x.id, orig: x, modo: 'edit', nombre: x.nombre || 'Entrenamiento', foco: '', custom: true, msg: '',
-        ex: x.ejercicios.map((e) => ({ n: e.n, m: (E.ejercicio(e.n) || {}).m || '', obj: '', objReps: '', uni: !!e.uni, prev: [], superset: !!(e.series[0] && e.series[0].isSuperset), s: e.series.map((q) => ({ kg: q.kg ? String(q.kg).replace('.', ',') : '', reps: String(q.reps), done: true, rir: q.rir != null ? String(q.rir) : '', dropset: !!q.isDropSet })) })) };
+        ex: x.ejercicios.map((e) => ({ n: e.n, m: (E.ejercicio(e.n) || {}).m || '', obj: '', objReps: '', uni: !!e.uni, prev: [], superset: e.series.some((q) => q.isSuperset), s: e.series.map((q) => ({ w: !!q.w, kg: q.kg ? String(q.kg).replace('.', ',') : '', reps: String(q.reps), done: true, rir: q.rir != null ? String(q.rir) : '', dropset: !!q.isDropSet })) })) };
       st.liveMin = false; st.wkHist = false; st.wkMod = false; liveSave(); render(); window.scrollTo(0, 0); return;
     }
     st.wk = { orig: x, id: x.id, fecha: x.fecha, tipo: x.tipo, nombre: x.nombre || '', min: String(x.min || ''), km: x.km ? String(x.km) : '', elev: x.elev ? String(x.elev) : '', pulso: x.pulso ? String(x.pulso) : '', np: x.np ? String(x.np) : '', bici: x.bici, esf: x.esf || 2, msg: '', saving: false };
@@ -1415,6 +1494,7 @@ root.addEventListener('input', (e) => {
   if (st.lib && t.dataset.libq != null) { st.lib.q = t.value; const l = document.getElementById('lib-list'); if (l) { l.innerHTML = libListHTML(); l.scrollTop = 0; } return; }
   if (st.lib && st.lib.crear && t.dataset.libc) { st.lib.crear[t.dataset.libc] = t.value; return; }
   if (st.rw && t.dataset.rw) { st.rw[t.dataset.rw] = t.value; const nb = document.querySelector('[data-rwnext]'); if (nb) nb.disabled = !rwCanNext(); const chs = document.querySelectorAll('[data-act=rw-dep-otro]'); chs.forEach((c) => c.classList.toggle('on', c.dataset.v === t.value)); return; }
+  if (st.calentar && t.dataset.calkg != null) { st.calentar.kg = t.value; return; }
   if (st.live && t.dataset.livename != null) { st.live.nombre = t.value; st.live.custom = true; liveSave(); return; }
   if (st.live && t.dataset.lv) {
     const [i, j, k] = t.dataset.lv.split('.');
@@ -1503,5 +1583,5 @@ function recuperacionHTML() {
   return `<section class="rcv"><h2>Recuperación muscular</h2><p class="rcv-sub">Mira qué músculos están listos para entrenar</p>
     ${esPro() ? cuerpo : muro}</section>`;
 }
-  return { regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, recuperacionHTML, rutShareSheetHTML };
+  return { regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, limiteSheetHTML, calentarSheetHTML, recuperacionHTML, rutShareSheetHTML };
 }

@@ -1406,3 +1406,22 @@ body:has(.tabbar) .ib { bottom: calc(var(--safe-b) + 66px); }
 .cmp-n { color: var(--muted); font-size: 16px; }
 .cmp-t { font-weight: 700; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* Límite gratuito (3/3) y Calculadora de calentamiento (v46) */
+.sheet.limite { background: #000; border-top: 1px solid #F2BE1A; }
+.lim-body { display: grid; justify-items: center; gap: 10px; text-align: center; padding: 8px 20px 24px; color: #fff; }
+.lim-body h2 { font-family: Archivo, sans-serif; text-transform: uppercase; color: #F2BE1A; margin: 0; }
+.lim-body p { margin: 0; line-height: 1.4; }
+.lim-body .lim-t { font-weight: 700; font-size: 17px; }
+.lim-ico { display: grid; width: 48px; height: 48px; place-items: center; background: #1A1A1A; border: 1px solid #F2BE1A; color: #F2BE1A; border-radius: 2px; }
+.lim-count { font-family: Archivo, sans-serif; font-size: 34px; font-weight: 900; color: #F2BE1A; letter-spacing: .04em; }
+.lim-body .btn { width: 100%; }
+.lim-body .muted { color: #9a9a9a; }
+.warm-btn { flex: 0 0 auto; border: 1px solid rgba(242,190,26,.45); background: transparent; color: #F2BE1A; border-radius: 2px; padding: 6px 8px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.warm-btn.is-locked { opacity: .6; }
+.warm-btn .protag { margin-left: 2px; }
+.lex-head .lex-t { min-width: 0; flex: 1 1 auto; }
+.lset.is-w { border-left: 2px solid #F2BE1A; background: rgba(242,190,26,.06); }
+.lset.is-w.on { background: rgba(61,220,132,.14); }
+.lset .sn.sn-w { color: #F2BE1A; opacity: .7; font-weight: 900; }
+.lset.is-w .input { opacity: .85; }

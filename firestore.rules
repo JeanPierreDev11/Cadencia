@@ -32,7 +32,11 @@ service cloud.firestore {
         && request.resource.data.get('stripeSubscriptionId', null) == resource.data.get('stripeSubscriptionId', null)
         && request.resource.data.get('strava', null) == resource.data.get('strava', null)
         && request.resource.data.get('ultimoEscaneo', null) == resource.data.get('ultimoEscaneo', null)
-        && request.resource.data.get('proPlan', null) == resource.data.get('proPlan', null);
+        && request.resource.data.get('proPlan', null) == resource.data.get('proPlan', null)
+        // Límite gratuito: sin Pro, rutinas y ejercicios propios no pueden pasar de 3 (quien ya tenga más puede mantenerlos o borrar, no añadir).
+        && (resource.data.get('isPro', false) == true
+          || ((request.resource.data.get('rutinas', []).size() <= 3 || request.resource.data.get('rutinas', []).size() <= resource.data.get('rutinas', []).size())
+            && (request.resource.data.get('ejPropios', []).size() <= 3 || request.resource.data.get('ejPropios', []).size() <= resource.data.get('ejPropios', []).size())));
       match /{document=**} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }

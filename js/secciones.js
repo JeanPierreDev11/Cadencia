@@ -1585,7 +1585,7 @@ export function crearSecciones(ctx) {
     if (!key) return { best, fecha };
     st.workouts.forEach((w) => (w.ejercicios || []).forEach((x) => {
       if (normFood(x.n) !== key) return;
-      (x.series || []).forEach((sr) => { const kg = num(sr.kg); if (kg > best && num(sr.reps) >= 1) { best = kg; fecha = w.fecha; } });
+      (x.series || []).forEach((sr) => { if (sr.w) return; const kg = num(sr.kg); if (kg > best && num(sr.reps) >= 1) { best = kg; fecha = w.fecha; } });
     }));
     return { best, fecha };
   }

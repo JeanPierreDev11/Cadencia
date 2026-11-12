@@ -36,8 +36,10 @@ export function estimateKcal(w, kg) {
 /* ---------- estadísticas ---------- */
 const inWeek = (w, monday) => w.fecha >= monday && w.fecha <= addDays(monday, 6);
 // Series hechas y kilos movidos (kilos × repeticiones de cada serie; en los ejercicios a un lado, por los dos lados) de un entreno de fuerza.
-export const seriesDe = (w) => (w.ejercicios || []).reduce((a, e) => a + (e.series || []).length, 0);
-export const volumenDe = (w) => (w.ejercicios || []).reduce((a, e) => a + (e.series || []).reduce((b, s) => b + (Number(s.kg) || 0) * (Number(s.reps) || 0) * (e.uni ? 2 : 1), 0), 0);
+// Las series de calentamiento (w: true) se guardan en el historial pero NO cuentan en series, volumen, récords, 1RM ni fatiga.
+export const trabajo = (series) => (series || []).filter((s) => !(s && s.w));
+export const seriesDe = (w) => (w.ejercicios || []).reduce((a, e) => a + trabajo(e.series).length, 0);
+export const volumenDe = (w) => (w.ejercicios || []).reduce((a, e) => a + trabajo(e.series).reduce((b, s) => b + (Number(s.kg) || 0) * (Number(s.reps) || 0) * (e.uni ? 2 : 1), 0), 0);
 export function weekStats(ws, monday) {
   const list = ws.filter((w) => inWeek(w, monday));
   const sum = (k, l = list) => l.reduce((a, w) => a + (w[k] || 0), 0);
@@ -84,7 +86,7 @@ export function records(ws) {
         const e = map.get(key) || { key, n: ej.n.trim(), veces: 0, best: null, last: '' };
         e.veces++;
         if (w.fecha > e.last) e.last = w.fecha;
-        for (const s of ej.series || []) {
+        for (const s of trabajo(ej.series)) {
           const reps = s.reps || 0, kg = s.kg || 0;
           if (!reps) continue;
           const score = kg > 0 ? kg * (1 + reps / 30) : reps; // 1RM estimado (Epley) o repeticiones
@@ -113,7 +115,7 @@ export function lastSets(ws, name) {
   if (!key) return null;
   for (const w of ws) {
     for (const ej of w.ejercicios || []) {
-      if (String(ej.n || '').trim().toLowerCase() === key && (ej.series || []).length) return ej.series;
+      if (String(ej.n || '').trim().toLowerCase() === key && trabajo(ej.series).length) return trabajo(ej.series);
     }
   }
   return null;
@@ -129,8 +131,15 @@ export function orm1(kg, reps) {
 // Mejor 1RM estimado entre las series (kg y reps escritos).
 export function mejor1RM(series, parse = Number) {
   let best = null;
-  for (const s of series || []) { const v = orm1(parse(s.kg), parse(s.reps)); if (v != null && (best == null || v > best)) best = v; }
+  for (const s of trabajo(series)) { const v = orm1(parse(s.kg), parse(s.reps)); if (v != null && (best == null || v > best)) best = v; }
   return best;
+}
+// Pro: calentamiento a partir del peso de trabajo: 50 % × 10, 70 % × 5 y 85 % × 3, redondeado a 2,5 kg (mínimo 2,5).
+export const CALENTAMIENTO = [[0.5, 10], [0.7, 5], [0.85, 3]];
+export function calentamiento(kg) {
+  kg = Number(kg);
+  if (!(kg > 0)) return [];
+  return CALENTAMIENTO.map(([p, reps]) => ({ kg: Math.max(2.5, Math.round((kg * p) / 2.5) * 2.5), reps }));
 }
 // Sugerencia para forzar sobrecarga a partir de la misma serie de la última sesión.
 // Rango "8-12": si no llegaste al tope → mismo peso +1 rep; si lo alcanzaste → +2,5 kg y vuelta al mínimo del rango.
@@ -395,7 +404,7 @@ export const MUSC_GRUPOS = [
 export function seriesPorMusculo(w) {
   const o = {}, add = (k, v) => { o[k] = (o[k] || 0) + v; };
   for (const e of w.ejercicios || []) {
-    const x = ejercicio(e.n), n = (e.series || []).length;
+    const x = ejercicio(e.n), n = trabajo(e.series).length;
     if (!x || !n) continue;
     let { p, s } = musculosDet(x);
     if (!p.length && GRUPO_DET[x.m]) p = [GRUPO_DET[x.m]];
