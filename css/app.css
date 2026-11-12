@@ -1016,8 +1016,8 @@ details.comp { border: 1px solid var(--bd); border-radius: 2px; }
 .main > .seg { margin-left: 16px !important; margin-right: 16px !important; }
 
 /* ---------- engranaje fijo, Configuración y Perfil ---------- */
-.gear { position: absolute; z-index: 8; top: calc(var(--safe-t) + 14px); right: max(14px, calc((100vw - 560px) / 2 + 14px)); width: 44px; height: 44px; display: grid; place-items: center; background: var(--bg); color: var(--ink); border: 1px solid var(--bd); border-radius: 2px; }
-.gear:active { color: var(--accent-text); border-color: var(--accent); }
+.gear { position: absolute; z-index: 8; top: calc(var(--safe-t) + 14px); right: max(14px, calc((100vw - 560px) / 2 + 14px)); width: 44px; height: 44px; display: grid; place-items: center; background: none; color: var(--ink); border: 0; border-radius: 2px; }
+.gear:active { color: var(--accent-text); background: var(--surface2); }
 .hello { padding-right: 76px !important; }
 .hello .hello-r { margin-right: 0; }
 .perfil-h .who { display: flex; align-items: center; gap: 14px; min-width: 0; }
@@ -1460,8 +1460,15 @@ body:has(.tabbar) .ib { bottom: calc(var(--safe-b) + 66px); }
 /* Interruptor: caja fija (no salta al cambiar de estado) y círculo que se desliza. */
 .switch { box-sizing: border-box; display: flex; align-items: center; flex: none; width: 50px; height: 28px; min-height: 28px; max-height: 28px; overflow: hidden; transition: background-color .3s ease, border-color .3s ease; }
 .switch i { transition: transform .3s ease, background-color .3s ease; }
-/* Saludo: un nombre muy largo no rompe la cabecera. */
-.hello > div { min-width: 0; }
-.hello h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 65vw; }
+/* Cabecera de Inicio: el saludo se comporta como siempre (sin recorte con «…»); los iconos de la derecha
+   van en su propio contenedor y no se deforman. */
+.hello > div:first-child { min-width: 0; }
+.hello h1 { overflow-wrap: anywhere; } /* solo parte una palabra que NO cabe; sin «…» ni recorte */
+.hello-r { flex-shrink: 0; }
+.hello-ico { display: flex; gap: 12px; flex-shrink: 0; align-items: center; }
+.hello.hello-home { padding-right: 16px !important; }
+.hello-ico .gear { position: static; flex: none; }
+/* Barra inferior: nunca se encoge. */
+.tabbar { flex-shrink: 0 !important; padding-bottom: env(safe-area-inset-bottom, 0px); }
 /* Sin «rebote» al pasar del final (no se ve el fondo vacío). */
 html, body, main, .sheet-list, .sheet-scroll, .modal-body { overscroll-behavior-y: none; }

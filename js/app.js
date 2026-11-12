@@ -404,6 +404,7 @@ const R = crearRecordatorios({ st, get api() { return api; }, render, toast, esc
 let irPendiente = leerIr(); // si venimos de tocar un aviso, aquí queda la pantalla a la que ir
 let stravaRet = leerRetorno(); // si venimos de la pantalla de permisos de Strava, aquí queda el código temporal
 
+const gearHTML = () => `<button type="button" class="gear" data-act="cfg-open" aria-label="Configuración">${I.gear}</button>`;
 function viewMain() {
   const sheet = st.limite ? limiteSheetHTML() : st.proInfo ? proInfoHTML() : st.legal ? legalSheetHTML() : st.pf ? pfSheetHTML() : st.calentar ? calentarSheetHTML() : st.rutShare ? rutShareSheetHTML() : st.modoSel ? modoSheetHTML() : st.resumen ? resumenSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.rutDelAsk ? rutDelSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
   if (st.rw) return viewRutWizard() + sheet;
@@ -411,7 +412,7 @@ function viewMain() {
   if (st.wk) return viewWkForm();
   const tab = M.tabActual(), tabs = M.tabs();
   const body = tab === 'perfil' ? viewPerfil() : tab === 'entreno' ? viewEntreno() : tab === 'inicio' ? viewInicio() : M.view(tab);
-  return `<button type="button" class="gear" data-act="cfg-open" aria-label="Configuración">${I.gear}</button><main class="main ${st.live ? 'has-live' : ''}">${body}</main>${st.live ? liveBarHTML() : ''}${sheet}${M.novModalHTML()}
+  return `${tab === 'inicio' ? '' : gearHTML()}<main class="main ${st.live ? 'has-live' : ''}">${body}</main>${st.live ? liveBarHTML() : ''}${sheet}${M.novModalHTML()}
   <div class="tabbar"><nav aria-label="Secciones" class="n${tabs.length}">${tabs.map((t) => `<button type="button" data-act="tab" data-v="${t.id}" ${tab === t.id ? 'aria-current="page"' : ''}>${t.ico}<span>${t.t}</span></button>`).join('')}</nav></div>`;
 }
 
@@ -437,9 +438,9 @@ function viewInicio() {
   }
 
   return `
-    <header class="hello">
+    <header class="hello hello-home">
       <div><h1>Hola, ${esc(name)}</h1><p>${esc(new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }))}</p></div>
-      <div class="hello-r">${M.novBell()}${st.profile && st.profile.isPro === true ? '<button class="protag pill" data-act="tab" data-v="perfil" aria-label="Tu plan: Cadencia Pro">Pro</button>' : ''}</div>
+      <div class="hello-r">${st.profile && st.profile.isPro === true ? '<button class="protag pill" data-act="tab" data-v="perfil" aria-label="Tu plan: Cadencia Pro">Pro</button>' : ''}<div class="hello-ico">${M.novBell()}${gearHTML()}</div></div>
     </header>
 
     <section class="racha-home tap" data-act="tab" data-v="entreno" role="button" tabindex="0" aria-label="Tu racha: abrir Entreno">${fuegoHTML(rachaActual(), true)}<span class="racha-t"><b>${rachaActual() === 1 ? 'Día' : 'Días'} de racha</b><span class="small muted">${rachaActual() ? 'No la rompas hoy' : 'Entrena y enciende el fuego'}</span></span></section>
