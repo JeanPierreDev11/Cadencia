@@ -20,7 +20,7 @@ export function crearStrava(ctx) {
     const s = st.profile && st.profile.strava;
     if (conectado()) {
       return `<section class="card" id="strava-card">
-        <div class="card-head"><h2>Integraciones</h2><span class="tag ok">Strava conectado</span></div>
+        <div class="card-head"><h2>Strava</h2><span class="tag ok">Conectado</span></div>
         <p>Strava${s.atleta ? ` · <b>${esc(s.atleta)}</b>` : ''}</p>
         <p class="small muted">Tus salidas de bici y tus carreras se importan al pulsar «Sincronizar Strava» en Entreno. Solo leemos tus actividades.</p>
         <button type="button" class="btn ghost block ${st.stravaDel ? 'danger' : ''}" data-act="strava-desconectar" ${st.stravaBusy ? 'disabled' : ''}>${st.stravaDel ? 'Confirmar: desconectar Strava' : 'Desconectar Strava'}</button>
@@ -28,7 +28,6 @@ export function crearStrava(ctx) {
       </section>`;
     }
     return `<section class="card" id="strava-card">
-        <div class="card-head"><h2>Integraciones</h2></div>
         <p>Trae tus salidas de bici y tus carreras desde Strava, sin teclear nada.</p>
         <button type="button" class="btn block strava" data-act="strava-conectar" ${st.stravaBusy ? 'disabled' : ''}>${st.stravaBusy ? '<span class="spinner"></span> Conectando…' : 'Conectar con Strava'}</button>
         <p class="small muted">Strava te pedirá permiso para ver tus actividades. Puedes desconectarlo cuando quieras. Compatible con Strava.</p>

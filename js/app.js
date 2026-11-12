@@ -835,7 +835,6 @@ function planCardHTML() {
       <div class="card-head"><h2>Tu plan</h2><span class="tag ok" id="plan-tag">Pro</span></div>
       <p><b>Cadencia Pro</b></p>
       <p class="small muted">Incluye Escanear alimento, recomendaciones del Taller con IA y 10 consultas de IA al día. ${renueva}</p>
-      <button type="button" class="btn ghost block" data-act="bill-open">Gestionar suscripción</button>
     </section>`;
 }
 
@@ -882,12 +881,12 @@ function viewPerfil() {
       <p class="small muted">${esc(st.user.email || '')}</p>
       <button type="button" class="btn ghost small" data-act="pf-open" data-v="editar">Editar perfil</button></header>
     ${planCardHTML()}
-    ${S.integracionesHTML()}
     ${pfGrupo('Cuenta', [
       pfRow('crown', 'Administrar suscripción', { act: 'pf-open', v: 'suscripcion', val: p.isPro === true ? 'PRO' : 'Gratuita' }),
       pfRow('user', 'Detalles personales', { act: 'pf-open', v: 'detalles' }),
       pfRow('sliders', 'Preferencias', { act: 'pf-open', v: 'prefs', val: tema }),
       pfRow('globe', 'Idioma', { act: 'pf-open', v: 'idioma', val: idioma }),
+      pfRow('link', 'Integraciones', { act: 'pf-open', v: 'integraciones', val: S.conectado() ? 'Strava' : '' }),
       tienePass() ? pfRow('key', 'Modificar contraseña', { act: 'pwd-open' }) : '',
       tieneGoogle() ? pfRow('link', 'Cuenta de Google', { tag: '<span class="tag ok">Vinculada</span>' }) : pfRow('link', 'Vincular cuenta de Google', { act: 'google-link' }),
     ])}
@@ -905,7 +904,7 @@ function viewPerfil() {
     <p class="small muted pf-foot">${api.mode === 'firebase' ? 'Tus datos se guardan en la nube y los verás en cualquier dispositivo.' : 'Modo prueba: tus datos se guardan solo en este dispositivo.'}</p>`;
 }
 
-const PF_TITULO = { editar: 'Editar perfil', detalles: 'Detalles personales', prefs: 'Preferencias', idioma: 'Idioma', suscripcion: 'Administrar suscripción', func: 'Solicitar una función', faq: 'Preguntas frecuentes', terminos: 'Términos y condiciones', privacidad: 'Política de privacidad' };
+const PF_TITULO = { editar: 'Editar perfil', detalles: 'Detalles personales', prefs: 'Preferencias', idioma: 'Idioma', suscripcion: 'Administrar suscripción', integraciones: 'Integraciones', func: 'Solicitar una función', faq: 'Preguntas frecuentes', terminos: 'Términos y condiciones', privacidad: 'Política de privacidad' };
 const pfV = (k, d) => (st.pf.f && k in st.pf.f ? st.pf.f[k] : d); // lo escrito se conserva si la hoja se redibuja (p. ej. tras cambiar la foto)
 // El texto legal es uno solo (legal.js); cada vista toma las secciones que le tocan.
 const pfLegal = (re) => `<div class="sheet-list legal">${legalHTML().split(/(?=<h3>)/).filter((x) => re.test(x.slice(0, 60))).join('')}</div>`;
@@ -955,6 +954,7 @@ function pfCuerpo(v) {
       <p class="small muted">${t === 'system' ? 'Sigue el modo claro u oscuro de tu móvil.' : t === 'light' ? 'Fondo claro con el mismo amarillo.' : 'Negro y amarillo, el estilo de Cadencia.'}</p></section></div>`;
   }
   if (v === 'suscripcion') return suscripcionHTML();
+  if (v === 'integraciones') return `<div class="sheet-list">${S.integracionesHTML()}</div>`;
   if (v === 'idioma') {
     const l = p.idioma === 'en' ? 'en' : 'es';
     return `<div class="sheet-list"><div class="pf-list">${[['es', 'Español'], ['en', 'English']].map(([k, n]) => `<button type="button" class="pf-row" data-act="pf-idioma" data-v="${k}"><span class="pf-t">${n}</span>${l === k ? `<span class="pf-ok">${I.check}</span>` : ''}</button>`).join('')}</div>
@@ -969,7 +969,7 @@ function pfCuerpo(v) {
   if (v === 'faq') {
     const Q = [['¿Cómo registro mi peso?', 'En Forma física, pulsa «Añadir registro». También puedes cambiarlo en Perfil → Detalles personales.'],
       ['¿Cómo se calcula la recuperación muscular?', 'Al entrenar un músculo baja a 0–20 % según las series, y se recupera en torno a un 33 % cada 24 horas hasta el 100 % a las 72 horas.'],
-      ['¿Cómo cancelo Cadencia Pro?', 'Desde la tarjeta de tu plan en Perfil, con «Gestionar suscripción». Seguirás con Pro hasta que termine el periodo pagado.'],
+      ['¿Cómo cancelo Cadencia Pro?', 'Desde Perfil → Administrar suscripción, con «Gestionar suscripción». Seguirás con Pro hasta que termine el periodo pagado.'],
       ['¿Mis datos son privados?', 'Sí. Solo tú puedes verlos y no los compartimos con anunciantes. Puedes borrarlos cuando quieras con «Eliminar cuenta».']];
     return `<div class="sheet-list">${Q.map(([q, a]) => `<details class="faq"><summary>${q}</summary><p class="small muted">${a}</p></details>`).join('')}</div>`;
   }
@@ -1004,6 +1004,7 @@ function suscripcionHTML() {
         <span class="sub-radio" aria-hidden="true"></span><span class="sub-pt"><b>${x.n}</b><small>${on ? 'Tu plan actual' : x.nota}</small></span><span class="sub-price">${x.precio}</span></button>`; }).join('')}</div>
       <button type="button" class="btn block" data-act="plan-go" ${act === elegido.id ? 'disabled' : ''}>${act === elegido.id ? 'Plan activo' : `Continuar con ${elegido.n}`}</button>
       <button type="button" class="sub-link" data-act="pro-info-open">Ventajas de Cadencia PRO</button></section>
+    ${pro ? '<section class="sub-sec"><button type="button" class="btn ghost block" data-act="bill-open">Gestionar suscripción</button></section>' : ''}
   </div>`;
 }
 function proInfoHTML() {
