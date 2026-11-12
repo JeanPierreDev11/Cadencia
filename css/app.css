@@ -1367,3 +1367,28 @@ body:has(.tabbar) .ib { bottom: calc(var(--safe-b) + 66px); }
 .sum-lbl { font-family: 'Archivo', sans-serif; text-transform: uppercase; letter-spacing: .08em; font-size: 13px; font-weight: 800; color: var(--muted); }
 .sum-vol { font-size: 44px; line-height: 1.05; font-weight: 800; color: #F2BE1A; font-variant-numeric: tabular-nums; }
 .sum-pro .btn { margin-top: 10px; }
+
+/* ---- Administrar suscripción + modal de beneficios ---- */
+.sub { gap: 20px; padding-top: 8px; }
+.sub-sec { display: grid; gap: 10px; }
+.sub-cur { display: grid; gap: 4px; padding: 16px; background: var(--card-bg); color: var(--card-ink); border: 1px solid transparent; border-radius: 2px; }
+.sub-cur b { font-size: 18px; }
+.sub-cur.is-pro { border-color: #F2BE1A; }
+.sub-cur.is-pro b { color: #F2BE1A; text-transform: uppercase; letter-spacing: .06em; }
+.sub-plans { display: grid; gap: 10px; }
+.sub-plan { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; text-align: left; padding: 16px; background: var(--card-bg); color: var(--card-ink); border: 2px solid transparent; border-radius: 2px; font: inherit; cursor: pointer; transition: border-color .15s; }
+.sub-plan[aria-checked="true"] { border-color: #F2BE1A; }
+.sub-radio { flex: none; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--card-mute); display: grid; place-items: center; }
+.sub-plan[aria-checked="true"] .sub-radio { border-color: #F2BE1A; }
+.sub-plan[aria-checked="true"] .sub-radio::after { content: ''; width: 10px; height: 10px; border-radius: 50%; background: #F2BE1A; }
+.sub-pt { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.sub-pt small { color: var(--card-mute); font-weight: 400; }
+.sub-price { flex: none; font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.sub-link { background: none; border: 0; padding: 8px; font: inherit; font-size: 14px; color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; justify-self: center; }
+.sheet-back-top { z-index: 90; }
+.sheet.pinfo { z-index: 91; height: min(88dvh, 820px); }
+.pinfo-list { list-style: none; margin: 0 -16px; padding: 8px 16px; gap: 16px; }
+.pinfo-it { display: flex; gap: 14px; align-items: flex-start; }
+.pinfo-it small { display: block; color: var(--muted); font-weight: 400; margin-top: 2px; }
+.pinfo-ic { flex: none; width: 44px; height: 44px; display: grid; place-items: center; font-size: 24px; background: var(--card-bg); border-radius: 2px; }
+.pinfo-foot { flex: none; padding: 12px 0 calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); }

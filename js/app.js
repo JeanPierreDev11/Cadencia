@@ -71,7 +71,7 @@ function render() {
   else if (st.view === 'error') root.innerHTML = viewError();
   document.title = APP_NAME;
   if (M) M.afterRender();
-  document.body.classList.toggle('noscroll', !!(st.pf || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.resumen || st.legal || st.del || st.pro || st.proWelcome || st.recAsk));
+  document.body.classList.toggle('noscroll', !!(st.pf || st.proInfo || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.resumen || st.legal || st.del || st.pro || st.proWelcome || st.recAsk));
 }
 
 /* ================================================================== */
@@ -401,7 +401,7 @@ let irPendiente = leerIr(); // si venimos de tocar un aviso, aquí queda la pant
 let stravaRet = leerRetorno(); // si venimos de la pantalla de permisos de Strava, aquí queda el código temporal
 
 function viewMain() {
-  const sheet = st.legal ? legalSheetHTML() : st.pf ? pfSheetHTML() : st.rutShare ? rutShareSheetHTML() : st.modoSel ? modoSheetHTML() : st.resumen ? resumenSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.rutDelAsk ? rutDelSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
+  const sheet = st.proInfo ? proInfoHTML() : st.legal ? legalSheetHTML() : st.pf ? pfSheetHTML() : st.rutShare ? rutShareSheetHTML() : st.modoSel ? modoSheetHTML() : st.resumen ? resumenSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.rutDelAsk ? rutDelSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
   if (st.rw) return viewRutWizard() + sheet;
   if (st.live && !st.liveMin) return viewLive() + sheet;
   if (st.wk) return viewWkForm();
@@ -854,6 +854,7 @@ const PF_IC = {
   key: '<circle cx="8" cy="15" r="4"/><path d="M10.8 12.2L21 2M16 7l3 3"/>',
   link: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
   zap: '<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>',
+  crown: '<path d="M3 7l4.5 4L12 4l4.5 7L21 7l-2 12H5z"/>',
   mail: '<path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M22 6l-10 7L2 6"/>',
   help: '<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/>',
   file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>',
@@ -883,6 +884,7 @@ function viewPerfil() {
     ${planCardHTML()}
     ${S.integracionesHTML()}
     ${pfGrupo('Cuenta', [
+      pfRow('crown', 'Administrar suscripción', { act: 'pf-open', v: 'suscripcion', val: p.isPro === true ? 'PRO' : 'Gratuita' }),
       pfRow('user', 'Detalles personales', { act: 'pf-open', v: 'detalles' }),
       pfRow('sliders', 'Preferencias', { act: 'pf-open', v: 'prefs', val: tema }),
       pfRow('globe', 'Idioma', { act: 'pf-open', v: 'idioma', val: idioma }),
@@ -903,7 +905,7 @@ function viewPerfil() {
     <p class="small muted pf-foot">${api.mode === 'firebase' ? 'Tus datos se guardan en la nube y los verás en cualquier dispositivo.' : 'Modo prueba: tus datos se guardan solo en este dispositivo.'}</p>`;
 }
 
-const PF_TITULO = { editar: 'Editar perfil', detalles: 'Detalles personales', prefs: 'Preferencias', idioma: 'Idioma', func: 'Solicitar una función', faq: 'Preguntas frecuentes', terminos: 'Términos y condiciones', privacidad: 'Política de privacidad' };
+const PF_TITULO = { editar: 'Editar perfil', detalles: 'Detalles personales', prefs: 'Preferencias', idioma: 'Idioma', suscripcion: 'Administrar suscripción', func: 'Solicitar una función', faq: 'Preguntas frecuentes', terminos: 'Términos y condiciones', privacidad: 'Política de privacidad' };
 const pfV = (k, d) => (st.pf.f && k in st.pf.f ? st.pf.f[k] : d); // lo escrito se conserva si la hoja se redibuja (p. ej. tras cambiar la foto)
 // El texto legal es uno solo (legal.js); cada vista toma las secciones que le tocan.
 const pfLegal = (re) => `<div class="sheet-list legal">${legalHTML().split(/(?=<h3>)/).filter((x) => re.test(x.slice(0, 60))).join('')}</div>`;
@@ -952,6 +954,7 @@ function pfCuerpo(v) {
       <div class="seg" role="group" aria-label="Tema">${[['dark', 'Oscuro'], ['light', 'Claro'], ['system', 'Sistema']].map(([k, l]) => `<button type="button" data-act="theme" data-v="${k}" aria-pressed="${t === k}">${l}</button>`).join('')}</div>
       <p class="small muted">${t === 'system' ? 'Sigue el modo claro u oscuro de tu móvil.' : t === 'light' ? 'Fondo claro con el mismo amarillo.' : 'Negro y amarillo, el estilo de Cadencia.'}</p></section></div>`;
   }
+  if (v === 'suscripcion') return suscripcionHTML();
   if (v === 'idioma') {
     const l = p.idioma === 'en' ? 'en' : 'es';
     return `<div class="sheet-list"><div class="pf-list">${[['es', 'Español'], ['en', 'English']].map(([k, n]) => `<button type="button" class="pf-row" data-act="pf-idioma" data-v="${k}"><span class="pf-t">${n}</span>${l === k ? `<span class="pf-ok">${I.check}</span>` : ''}</button>`).join('')}</div>
@@ -971,6 +974,42 @@ function pfCuerpo(v) {
     return `<div class="sheet-list">${Q.map(([q, a]) => `<details class="faq"><summary>${q}</summary><p class="small muted">${a}</p></details>`).join('')}</div>`;
   }
   return pfLegal(v === 'terminos' ? /Aviso|Términos/ : /Privacidad/);
+}
+const PLANES = [
+  { id: 'mensual', n: 'PRO Mensual', precio: '4,99 €', nota: 'Facturado mensualmente' },
+  { id: 'anual', n: 'PRO Anual', precio: '39,99 €', nota: 'Facturado anualmente' },
+  { id: 'siempre', n: 'PRO Para Siempre', precio: '89,99 €', nota: 'Pago único' },
+];
+const BENEFICIOS = [
+  ['🤖', 'Escáner Nutricional IA', 'Haz una foto a tu plato y la IA calcula calorías y macros, sin límite diario.'],
+  ['🗺️', 'Mapa de Fatiga Muscular', 'Ve qué músculos están listos, descansando o fatigados, y el mapa de calor de tu semana.'],
+  ['🦍', 'Modo Bestia', 'RIR, drop-sets y superseries en cada serie, guardados en tu historial.'],
+  ['📈', 'Sobrecarga Progresiva Automática', 'Te sugerimos el peso y las repeticiones de cada serie, y calculamos tu 1RM y tu volumen total.'],
+  ['🔥', 'Calculadora de Calentamiento', 'Series de aproximación calculadas a partir de tu peso de trabajo.'],
+  ['♾️', 'Rutinas y Ejercicios Ilimitados', 'Crea todas las rutinas y ejercicios propios que quieras.'],
+];
+function suscripcionHTML() {
+  const pro = st.profile && st.profile.isPro === true, sel = (st.pf && st.pf.plan) || 'anual';
+  return `<div class="sheet-list sub">
+    <section class="sub-sec"><h3 class="pf-title">Suscripción actual</h3>
+      <div class="sub-cur ${pro ? 'is-pro' : ''}"><b>${pro ? 'Cadencia PRO' : 'Suscripción Gratuita'}</b>
+        <span class="small muted">${pro ? 'Tienes todas las funciones Pro desbloqueadas.' : 'Pásate a PRO para desbloquear todas las funciones.'}</span></div></section>
+    <section class="sub-sec"><h3 class="pf-title">Planes PRO</h3>
+      <div class="sub-plans" role="radiogroup" aria-label="Planes PRO">${PLANES.map((x) => `<button type="button" class="sub-plan" role="radio" aria-checked="${sel === x.id}" data-act="plan-sel" data-v="${x.id}">
+        <span class="sub-radio" aria-hidden="true"></span><span class="sub-pt"><b>${x.n}</b><small>${x.nota}</small></span><span class="sub-price">${x.precio}</span></button>`).join('')}</div>
+      <button type="button" class="btn block" data-act="plan-go">Continuar con ${PLANES.find((x) => x.id === sel).n}</button>
+      <button type="button" class="sub-link" data-act="pro-info-open">Más información sobre Cadencia PRO</button></section>
+  </div>`;
+}
+function proInfoHTML() {
+  const pro = st.profile && st.profile.isPro === true;
+  return `<div class="sheet-back sheet-back-top" data-act="pro-info-close"></div>
+    <div class="sheet pinfo" role="dialog" aria-modal="true" aria-label="Beneficios de Cadencia PRO">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><span style="width:36px"></span><h2>Cadencia PRO</h2><button type="button" class="iconbtn" data-act="pro-info-close" aria-label="Cerrar">${I.close || '✕'}</button></div>
+      <ul class="sheet-list pinfo-list">${BENEFICIOS.map(([ic, t, d]) => `<li class="pinfo-it"><span class="pinfo-ic" aria-hidden="true">${ic}</span><span><b>${t}</b><small>${d}</small></span></li>`).join('')}</ul>
+      <div class="pinfo-foot"><button type="button" class="btn block" data-act="pro-info-close">${pro ? 'Cerrar' : 'Elegir Plan'}</button></div>
+    </div>`;
 }
 function pfSheetHTML() {
   const v = st.pf.v;
@@ -1130,7 +1169,7 @@ function viewError() {
 async function enter(u) {
   st.user = u; st.busy = false;
   if (!u && M) M.pararPro();
-  if (!u) { st.cfg = st.pwd = st.pf = st.rutShare = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = 'auth'; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
+  if (!u) { st.cfg = st.pwd = st.pf = st.proInfo = st.rutShare = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = 'auth'; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
   try {
     st.profile = await api.getProfile(u.uid);
     if (!st.profile || !st.profile.onboarded) return startOnboarding();
@@ -1165,6 +1204,10 @@ root.addEventListener('click', async (e) => {
   else if (act === 'legal-open') { if (st.view === 'auth') { const f = root.querySelector('form'); st.authKeep = f ? { name: f.name ? f.name.value : '', email: f.email.value, pass: f.pass.value, acepto: f.acepto ? f.acepto.checked : false } : null; } st.legal = true; render(); if (st.authKeep) keepForm(st.authKeep); }
   else if (act === 'legal-close') { st.legal = false; render(); if (st.view === 'auth' && st.authKeep) { keepForm(st.authKeep); st.authKeep = null; } }
   else if (act === 'pf-open') { st.pf = { v, f: {}, busy: false }; st.editGoals = null; render(); }
+  else if (act === 'plan-sel') { if (st.pf && PLANES.some((x) => x.id === v)) { st.pf.plan = v; render(); } }
+  else if (act === 'plan-go') toast('La suscripción estará disponible muy pronto.');
+  else if (act === 'pro-info-open') { st.proInfo = true; render(); }
+  else if (act === 'pro-info-close') { st.proInfo = null; render(); }
   else if (act === 'pf-close') { st.pf = null; st.editGoals = null; render(); }
   else if (act === 'pf-idioma') { st.profile.idioma = v; render(); try { await api.saveProfile(st.user.uid, { idioma: v }); } catch (e) { toast(errorText(e)); } }
   else if (act === 'del-open') { st.del = { pass: '', txt: '', msg: '', busy: false }; render(); }
