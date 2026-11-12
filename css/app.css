@@ -1438,3 +1438,7 @@ body:has(.tabbar) .ib { bottom: calc(var(--safe-b) + 66px); }
 .det-sel::after { content: ''; position: absolute; right: 13px; top: 50%; width: 7px; height: 7px; border-right: 2px solid #F2BE1A; border-bottom: 2px solid #F2BE1A; transform: translateY(-70%) rotate(45deg); pointer-events: none; }
 .det-sel select:focus-visible { outline: 2px solid #F2BE1A; outline-offset: 2px; }
 .det-sel select option { background: #1A1A1A; color: #fff; text-transform: none; letter-spacing: 0; }
+
+/* v51: botón de suscripción de altura fija (sin saltos al cambiar de plan) */
+.btn.block.sub-cta { height: 60px; min-height: 60px; padding: 0 18px; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.2; font-size: 16px; box-sizing: border-box; }
+.sub-plan { box-sizing: border-box; }

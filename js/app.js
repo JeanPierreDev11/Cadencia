@@ -1004,7 +1004,7 @@ function suscripcionHTML() {
     <section class="sub-sec"><h3 class="pf-title">Planes PRO</h3>
       <div class="sub-plans" role="radiogroup" aria-label="Planes PRO">${PLANES.map((x) => { const on = act === x.id; return `<button type="button" class="sub-plan${on ? ' is-active' : ''}" role="radio" aria-checked="${sel === x.id}" data-act="plan-sel" data-v="${x.id}">
         <span class="sub-radio" aria-hidden="true"></span><span class="sub-pt"><b>${x.n}</b><small>${x.nota}</small></span>${on ? '<span class="sub-price sub-now">Plan actual</span>' : `<span class="sub-price">${x.precio}</span>`}</button>`; }).join('')}</div>
-      ${esActual && act === 'siempre' ? '<button type="button" class="btn block" disabled>Plan activo</button>' : `<button type="button" class="btn block" data-act="${esActual ? 'bill-open' : 'plan-go'}">${esActual ? 'Gestionar suscripción' : `Continuar con ${elegido.n}`}</button>`}
+      ${esActual && act === 'siempre' ? '<button type="button" class="btn block sub-cta" disabled>Plan activo</button>' : `<button type="button" class="btn block sub-cta" data-act="${esActual ? 'bill-open' : 'plan-go'}">${esActual ? 'Gestionar suscripción' : `Continuar con ${elegido.n}`}</button>`}
       <button type="button" class="sub-link" data-act="pro-info-open">Ventajas de Cadencia PRO</button></section>
   </div>`;
 }
