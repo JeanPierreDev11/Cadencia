@@ -25,7 +25,7 @@ service cloud.firestore {
         && !('stripeSubscriptionId' in request.resource.data)
         && !('strava' in request.resource.data)
         && !('ultimoEscaneo' in request.resource.data)
-        && !('proPlan' in request.resource.data);
+        && request.resource.data.get('proPlan', 'none') == 'none'; // al crear, `proPlan` solo puede faltar o valer 'none'; los planes de pago los pone el servidor
       allow update: if request.auth != null && request.auth.uid == uid
         && request.resource.data.get('isPro', false) == resource.data.get('isPro', false)
         && request.resource.data.get('stripeCustomerId', null) == resource.data.get('stripeCustomerId', null)
