@@ -994,9 +994,30 @@ const COMPARATIVA = [
 ];
 const cmpCelda = (v) => v === true ? '<span class="cmp-y" role="img" aria-label="Incluido">✓</span>' : v === false ? '<span class="cmp-n" role="img" aria-label="No incluido">✗</span>' : `<span class="cmp-t">${v}</span>`;
 const planActivo = () => { const pr = st.profile || {}; return pr.isPro === true && PLANES.some((x) => x.id === pr.proPlan) ? pr.proPlan : null; };
+// Botón principal de Administrar suscripción según el plan elegido (sel) y el activo (act).
+// Pro recurrente (mensual/anual) que elige otro plan recurrente → portal de Stripe (prorrateo, sin cobro doble).
+// Para Siempre es pago único → pasarela. Sin Pro → pasarela.
+const RECURRENTES = ['mensual', 'anual'];
+function subCta(sel, act) {
+  const p = PLANES.find((x) => x.id === sel) || PLANES[1];
+  if (act && p.id === act) return act === 'siempre' ? { txt: 'Plan activo', act: '', dis: true } : { txt: 'Gestionar suscripción', act: 'bill-open', dis: false };
+  if (RECURRENTES.includes(act) && RECURRENTES.includes(p.id)) return { txt: 'Cambiar de plan', act: 'bill-open', dis: false };
+  return { txt: `Continuar con ${p.n}`, act: 'plan-go', dis: false };
+}
+const subCtaHTML = (c) => `<button type="button" class="btn block sub-cta"${c.act ? ` data-act="${c.act}"` : ''}${c.dis ? ' disabled' : ''}>${c.txt}</button>`;
+// Cambia la selección sin render(): solo tarjetas (aria-checked → borde y radio amarillos) y botón principal.
+function pintarSeleccion(sel) {
+  const hoja = document.querySelector('.sub-plans'); if (!hoja) return false;
+  hoja.querySelectorAll('.sub-plan').forEach((el) => el.setAttribute('aria-checked', String(el.dataset.v === sel)));
+  const b = document.querySelector('.sub .sub-cta'); if (!b) return false;
+  const c = subCta(sel, planActivo());
+  b.textContent = c.txt; b.disabled = c.dis;
+  if (c.act) b.dataset.act = c.act; else b.removeAttribute('data-act');
+  return true;
+}
 function suscripcionHTML() {
   const pro = st.profile && st.profile.isPro === true, act = planActivo();
-  const sel = (st.pf && st.pf.plan) || act || 'anual', elegido = PLANES.find((x) => x.id === sel) || PLANES[1], esActual = !!act && elegido.id === act;
+  const sel = (st.pf && st.pf.plan) || act || 'anual';
   const nomAct = act ? PLANES.find((x) => x.id === act).n.replace('PRO ', '') : '';
   return `<div class="sheet-list sub">
     <section class="sub-sec"><h3 class="pf-title">Suscripción actual</h3>
@@ -1005,7 +1026,7 @@ function suscripcionHTML() {
     <section class="sub-sec"><h3 class="pf-title">Planes PRO</h3>
       <div class="sub-plans" role="radiogroup" aria-label="Planes PRO">${PLANES.map((x) => { const on = act === x.id; return `<button type="button" class="sub-plan${on ? ' is-active' : ''}" role="radio" aria-checked="${sel === x.id}" data-act="plan-sel" data-v="${x.id}">
         <span class="sub-radio" aria-hidden="true"></span><span class="sub-pt"><b>${x.n}</b><small>${x.nota}</small></span>${on ? '<span class="sub-price sub-now">Plan actual</span>' : `<span class="sub-price">${x.precio}</span>`}</button>`; }).join('')}</div>
-      ${esActual && act === 'siempre' ? '<button type="button" class="btn block sub-cta" disabled>Plan activo</button>' : `<button type="button" class="btn block sub-cta" data-act="${esActual ? 'bill-open' : 'plan-go'}">${esActual ? 'Gestionar suscripción' : `Continuar con ${elegido.n}`}</button>`}
+      ${subCtaHTML(subCta(sel, act))}
       <button type="button" class="sub-link" data-act="pro-info-open">Ventajas de Cadencia PRO</button></section>
   </div>`;
 }
@@ -1215,8 +1236,8 @@ root.addEventListener('click', async (e) => {
   else if (act === 'legal-open') { if (st.view === 'auth') { const f = root.querySelector('form'); st.authKeep = f ? { name: f.name ? f.name.value : '', email: f.email.value, pass: f.pass.value, acepto: f.acepto ? f.acepto.checked : false } : null; } st.legal = true; render(); if (st.authKeep) keepForm(st.authKeep); }
   else if (act === 'legal-close') { st.legal = false; render(); if (st.view === 'auth' && st.authKeep) { keepForm(st.authKeep); st.authKeep = null; } }
   else if (act === 'pf-open') { st.pf = { v, f: {}, busy: false }; st.editGoals = null; render(); }
-  else if (act === 'plan-sel') { const actual = (st.pf && st.pf.plan) || planActivo() || 'anual'; if (v === actual) return; if (st.pf && PLANES.some((x) => x.id === v)) { st.pf.plan = v; render(); } }
-  else if (act === 'plan-go') { if (((st.pf && st.pf.plan) || planActivo() || 'anual') === planActivo()) return; const url = planUrl((st.pf && st.pf.plan) || 'anual', st.user); if (!url) { toast('La suscripción estará disponible muy pronto.'); return; } const w = window.open(url, '_blank'); if (!w) location.assign(url); }
+  else if (act === 'plan-sel') { const actual = (st.pf && st.pf.plan) || planActivo() || 'anual'; if (v === actual) return; if (st.pf && PLANES.some((x) => x.id === v)) { st.pf.plan = v; if (!pintarSeleccion(v)) render(); } }
+  else if (act === 'plan-go') { const pa = planActivo(), el = (st.pf && st.pf.plan) || pa || 'anual'; if (subCta(el, pa).act !== 'plan-go') return; const url = planUrl((st.pf && st.pf.plan) || 'anual', st.user); if (!url) { toast('La suscripción estará disponible muy pronto.'); return; } const w = window.open(url, '_blank'); if (!w) location.assign(url); }
   else if (act === 'pro-info-open') { st.proInfo = true; render(); }
   else if (act === 'pro-info-close') { st.proInfo = null; render(); }
   else if (act === 'pf-close') { st.pf = null; st.editGoals = null; render(); }
@@ -1266,9 +1287,9 @@ root.addEventListener('click', async (e) => {
   else if (act === 'pwd-close') { st.pwd = null; render(); }
   else if (act === 'bill-open') {
     // Crea la sesión del portal de Stripe y salta directo; si el usuario aún no tiene cliente guardado, usa el enlace de acceso.
-    b.disabled = true; b.textContent = 'Abriendo…';
+    const t0 = b.textContent; b.disabled = true; b.textContent = 'Abriendo…';
     try { location.assign((await api.portal(location.href.split('#')[0])).url); }
-    catch (e) { if (PORTAL_LINK) location.assign(PORTAL_LINK); else { toast('No se pudo abrir la suscripción'); b.disabled = false; b.textContent = 'Gestionar suscripción'; } }
+    catch (e) { if (PORTAL_LINK) location.assign(PORTAL_LINK); else { toast('No se pudo abrir la suscripción'); b.disabled = false; b.textContent = t0; } }
   }
   else if (act === 'google-link') {
     st.gBusy = true; render();
