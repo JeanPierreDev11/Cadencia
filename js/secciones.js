@@ -16,6 +16,7 @@ const BILBAO = { lat: 43.263, lon: -2.935 };
 
 const svg = (d, w = 24) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 const ICO = {
+  lock: svg('<rect x="5" y="11" width="14" height="9" rx="1"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),
   food: svg('<path d="M7 3v7a2 2 0 0 0 4 0V3M9 12v9M17 3c-2.2 1.6-2.2 6.4 0 8v10"/>'),
   ruta: svg('<path d="M3 20l6-11 4 7 3-4 5 8z"/>'),
   llave: svg('<path d="M14.5 6.5a4 4 0 0 0-5.3 5.3L4 17l3 3 5.2-5.2a4 4 0 0 0 5.3-5.3l-2.5 2.5-2.5-.5-.5-2.5z"/>'),
@@ -1184,6 +1185,9 @@ export function crearSecciones(ctx) {
   /* Cadencia Pro                                                      */
   /* ================================================================ */
   const esPro = () => !!(st.profile && st.profile.isPro === true);
+  // Gratis: 1 escaneo de comida al día. La fecha del último escaneo la guarda el servidor en users/{uid}.ultimoEscaneo (día de Madrid).
+  const hoyES = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date());
+  const libreAgotado = () => !esPro() && !!st.profile && st.profile.ultimoEscaneo === hoyES();
   // Cuando la cuenta pasa a Pro (el servidor lo activa al cobrar), se actualiza sola y se da la bienvenida.
   const bienvenidaKey = () => `cadencia-pro-bienvenida-${st.user ? st.user.uid : ''}`;
   function revisarBienvenida() {
@@ -1192,6 +1196,7 @@ export function crearSecciones(ctx) {
   }
   function aplicarPro(p) {
     if (!st.profile || !p) return;
+    if (st.profile.ultimoEscaneo !== p.ultimoEscaneo) st.profile.ultimoEscaneo = p.ultimoEscaneo;
     const antes = esPro(), ahora = p.isPro === true;
     if (antes === ahora) return;
     st.profile.isPro = ahora; st.pro = null;
@@ -1224,6 +1229,8 @@ export function crearSecciones(ctx) {
   const proVentajas = () => [
       [ICO.camara, 'Escanear alimento', 'Haz una foto a tu plato y la IA calcula las calorías y los macros. Tú lo revisas y lo guardas.'],
       [ICO.spark, 'Recomendaciones para tu bici', 'En el Taller, 3 piezas compatibles con tu bici y tu presupuesto, con precio aproximado.'],
+      [ICO.lock, 'Mapa de fatiga muscular', 'Mira qué músculos están listos, descansando o fatigados, y el mapa de calor de tu semana.'],
+      [ICO.lock, 'Modo Bestia', 'En tus series: RIR, drop-sets y superseries, guardados en tu historial.'],
       [I.check, '10 consultas de IA al día', 'Se reparten entre fotos y recomendaciones, y se renuevan cada día.'],
   ];
   function proWelcomeSheet() {
@@ -1250,6 +1257,7 @@ export function crearSecciones(ctx) {
         <div class="sheet-grab"></div>
         <div class="sheet-head"><button type="button" class="iconbtn" data-act="pro-close" aria-label="Cerrar">${I.back}</button><h2>Cadencia Pro</h2><span style="width:36px"></span></div>
         <div class="sheet-list pw">
+          ${st.pro && st.pro.from === 'limite-scan' ? `<div class="pw-limit" role="alert"><span class="pw-limit-i">${ICO.lock}</span><b>Límite diario alcanzado.</b><span>Escanea sin límites con Cadencia Pro</span></div>` : ''}
           <ul class="pw-list">${proVentajas().map(([ic, t, d]) => `<li><span class="pw-li-i">${ic}</span><span><b>${t}</b><small>${d}</small></span></li>`).join('')}</ul>
           ${go}
           ${PRO_LINK ? '<p class="small muted">Paga con el mismo email de tu cuenta de Cadencia. Al volver a la app, tu cuenta se actualiza sola.</p>' : ''}
@@ -1267,7 +1275,7 @@ export function crearSecciones(ctx) {
     const hoy = todayISO();
     if (iaEstadoPedido === hoy || api.mode !== 'firebase' && typeof globalThis.cadenciaIAPrueba !== 'function') return;
     iaEstadoPedido = hoy;
-    try { const r = await api.ia({ modo: 'estado' }); if (r && typeof r.pro === 'boolean' && st.profile) st.profile.isPro = r.pro; if (r && Number.isFinite(r.quedan)) { st.iaQuedan = r.quedan; if (!document.activeElement || !document.activeElement.matches('input,textarea,select')) render(); } } catch (e) { /* la IA aún no está activada: no mostramos nada */ }
+    try { const r = await api.ia({ modo: 'estado' }); if (r && typeof r.pro === 'boolean' && st.profile) st.profile.isPro = r.pro; if (r && r.libreUsado && st.profile) st.profile.ultimoEscaneo = hoyES(); if (r && Number.isFinite(r.quedan)) { st.iaQuedan = r.quedan; if (!document.activeElement || !document.activeElement.matches('input,textarea,select')) render(); } } catch (e) { /* la IA aún no está activada: no mostramos nada */ }
   }
   // Si el servidor dice que no eres Pro (p. ej. la suscripción terminó), enseñamos el paywall.
   const noPro = (e) => { if (!(e && e.code === 'functions/permission-denied')) return false; if (st.profile) st.profile.isPro = false; st.scans = []; st.iaTallerBusy = false; st.iaTallerMsg = ''; st.pro = { from: 'servidor' }; render(); return true; };
@@ -1295,7 +1303,7 @@ export function crearSecciones(ctx) {
   // Tras la foto se vuelve al panel: aparece una tarjeta «skeleton» y, cuando la IA responde, se guarda la comida y la tarjeta real ocupa su sitio.
   async function fotoPlato(file, meal) {
     if (!file) return;
-    if (!esPro()) { st.pro = { from: 'foto' }; render(); return; }
+    if (libreAgotado()) { st.pro = { from: 'limite-scan' }; render(); return; }
     if (st.iaQuedan === 0) { toast('Ya has usado tus consultas de IA de hoy'); return; }
     const sc = { id: nid('s'), meal, fecha: st.nDate || todayISO(), fase: 'cargando', msg: '', pct: 4, url: '', b64: '' };
     (st.scans = st.scans || []).push(sc); st.mealDet = null; render();
@@ -1309,6 +1317,7 @@ export function crearSecciones(ctx) {
       const r = await api.ia({ modo: 'plato', imagen: sc.b64, comida: MEALS[sc.meal] });
       if (!(st.scans || []).includes(sc)) return;
       if (Number.isFinite(r.quedan)) st.iaQuedan = r.quedan;
+      if (!esPro() && st.profile) st.profile.ultimoEscaneo = hoyES();
       const items = iaItems(r);
       if (!items.length) { sc.fase = 'error'; sc.msg = String(r.nota || 'No he visto comida en la foto. Prueba con otra.'); render(); return; }
       const foto = await miniatura(sc.url).catch(() => '');
@@ -1319,6 +1328,7 @@ export function crearSecciones(ctx) {
     } catch (e) {
       if (!(st.scans || []).includes(sc)) return;
       if (noPro(e)) return;
+      if (e && e.code === 'functions/resource-exhausted' && e.details && e.details.codigo === 'limite-free') { if (st.profile) st.profile.ultimoEscaneo = hoyES(); st.scans = st.scans.filter((x) => x !== sc); st.pro = { from: 'limite-scan' }; render(); return; }
       sc.fase = 'error'; sc.msg = iaErr(e); render();
     }
   }
@@ -1333,7 +1343,7 @@ export function crearSecciones(ctx) {
 
   // Cámara propia a pantalla completa. Vive fuera de #root para que ningún render() la cierre. Si falla, queda el botón de galería.
   async function abrirCamara(meal) {
-    if (!esPro()) { st.pro = { from: 'foto' }; render(); return; }
+    if (libreAgotado()) { st.pro = { from: 'limite-scan' }; render(); return; }
     if (st.iaQuedan === 0) { toast('Ya has usado tus consultas de IA de hoy'); return; }
     const m = document.createElement('div');
     m.className = 'cam';

@@ -12,6 +12,7 @@ export function crearEntreno(ctx) {
   const M = new Proxy({}, { get: (_, k) => ctx.M[k] });
   const currentKg = () => ctx.currentKg();
   const goalById = (id) => ctx.goalById(id);
+  const esPro = () => !!(st.profile && st.profile.isPro === true);
 
 const fmtDur = (m) => { m = Math.round(m || 0); if (m < 60) return `${m} min`; const h = Math.floor(m / 60), r = m % 60; return r ? `${h} h ${r} min` : `${h} h`; };
 const fmtClock = (ms) => { const t = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60; return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`; };
@@ -797,7 +798,7 @@ const primerNumero = (t) => { const m = String(t || '').match(/\d+/); return m ?
 function liveEx(n, nSets, obj) {
   const x = E.ejercicio(n), prev = E.lastSets(st.workouts, n) || [];
   const objReps = obj ? obj.split('×')[1].trim() : '';
-  return { n, m: x ? x.m : '', obj: obj || '', objReps, uni: false, prev, s: Array.from({ length: Math.max(1, Math.min(10, nSets || 3)) }, () => ({ kg: '', reps: '', done: false })) };
+  return { n, m: x ? x.m : '', obj: obj || '', objReps, uni: false, superset: false, prev, s: Array.from({ length: Math.max(1, Math.min(10, nSets || 3)) }, () => ({ kg: '', reps: '', done: false, rir: '', dropset: false })) };
 }
 // Sesiones que puede elegir como título: las de su rutina y las de su tipo de entrenamiento.
 function liveOpciones() {
@@ -873,12 +874,18 @@ function liveTitleHTML(L) {
   </span>`;
 }
 
+// Modo Bestia: RIR (0-5) y drop-set por serie. Sin Pro se ven atenuados y al tocarlos sale «Función Pro».
+function bestiaHTML(e, i, j, s) {
+  if (!esPro()) return `<div class="lxtra is-locked"><span class="rir-wrap"><span>RIR</span><input class="rir-in" value="" placeholder="–" readonly tabindex="-1" aria-disabled="true" data-act="live-lock" aria-label="RIR serie ${j + 1} (función Pro)"></span><button type="button" class="drop-btn" data-act="live-lock" aria-disabled="true" aria-label="Drop-set serie ${j + 1} (función Pro)">D</button></div>`;
+  return `<div class="lxtra"><label class="rir-wrap"><span>RIR</span><input class="rir-in" data-lv="${i}.${j}.rir" inputmode="numeric" maxlength="1" value="${esc(s.rir)}" placeholder="0-5" aria-label="RIR serie ${j + 1} de ${esc(e.n)}"></label><button type="button" class="drop-btn" data-act="live-drop" data-v="${i}.${j}" aria-pressed="${!!s.dropset}" aria-label="Marcar serie ${j + 1} como drop-set">D</button></div>`;
+}
 function viewLive() {
-  const L = st.live, t = liveTotals(), today = liveIsToday(), plano = livePlano(L);
+  const L = st.live, t = liveTotals(), today = liveIsToday(), plano = livePlano(L), pro = esPro();
   const fmtKg = (v) => (v ? String(v).replace('.', ',') : '');
   const blocks = L.ex.map((e, i) => {
     const x = E.ejercicio(e.n), uniOk = E.puedeUnilateral(e.n);
-    return `<section class="lex">
+    return `<section class="lex ${i > 0 && L.ex[i - 1].superset ? 'ss-next' : ''} ${e.superset ? 'ss-first' : ''}">
+      ${i > 0 && L.ex[i - 1].superset ? '<span class="ss-tag">Superserie</span>' : ''}
       <div class="lex-head">${exThumb(x || { eq: 'corporal' })}
         <span class="lex-t"><b>${esc(e.n)}</b><span class="small muted">${x ? E.MUSCULOS[x.m] : ''}${e.obj ? ` · Objetivo ${esc(e.obj)}` : ''}</span></span>
         <button type="button" class="iconbtn" data-act="live-swap" data-v="${i}" aria-label="Cambiar ${esc(e.n)}">${I.swap}</button>
@@ -892,10 +899,13 @@ function viewLive() {
           <input class="input" data-lv="${i}.${j}.kg" inputmode="decimal" value="${esc(s.kg)}" placeholder="${esc(phKg)}" aria-label="Kilos serie ${j + 1} de ${esc(e.n)}">
           <input class="input" data-lv="${i}.${j}.reps" inputmode="numeric" value="${esc(s.reps)}" placeholder="${esc(phR)}" aria-label="Repeticiones serie ${j + 1} de ${esc(e.n)}">
           ${plano ? '' : `<button type="button" class="chk" data-act="live-done" data-v="${i}.${j}" aria-pressed="${s.done}" aria-label="Marcar serie ${j + 1} como hecha">${I.check}</button>`}
-        </div>${sug ? `<p class="lsug">${sug}</p>` : ''}`; }).join('')}
+        </div>${bestiaHTML(e, i, j, s)}${sug ? `<p class="lsug">${sug}</p>` : ''}`; }).join('')}
       </div>
       <div class="lex-foot"><button type="button" class="btn quiet small" data-act="live-set-add" data-v="${i}">${I.plus} Añadir serie</button>
         ${e.s.length > 1 ? `<button type="button" class="link" data-act="live-set-del" data-v="${i}">Quitar la última</button>` : ''}</div>
+      ${i < L.ex.length - 1 ? (pro
+        ? `<button type="button" class="ss-btn" data-act="live-sup" data-v="${i}" aria-pressed="${!!e.superset}">${e.superset ? 'Superserie con ' + esc(L.ex[i + 1].n) : 'Enlazar con el siguiente: Superserie'}</button>`
+        : `<button type="button" class="ss-btn is-locked" data-act="live-lock" aria-disabled="true">${I.lock} Superserie · Pro</button>`) : ''}
     </section>`;
   }).join('');
   return `<div class="screen live">
@@ -1013,7 +1023,13 @@ async function liveFinish() {
       if (!String(s.reps).trim()) rellenarSerie(ex, j);
       const reps = Math.round(num(s.reps)), kg = String(s.kg).trim() ? num(s.kg) : 0;
       if (!(reps >= 1 && reps <= 200) || !(kg >= 0 && kg <= 600)) return fail(`Revisa la serie ${j + 1} de «${ex.n}»: repeticiones entre 1 y 200 y kilos entre 0 y 600.`);
-      series.push({ kg: Math.round(kg * 10) / 10, reps });
+      const q = { kg: Math.round(kg * 10) / 10, reps };
+      if (esPro()) { // Modo Bestia (solo Pro): rir, isDropSet e isSuperset
+        if (String(s.rir).trim() !== '') q.rir = Math.max(0, Math.min(5, Math.round(num(s.rir)) || 0));
+        if (s.dropset) q.isDropSet = true;
+        if (ex.superset) q.isSuperset = true;
+      }
+      series.push(q);
     }
     if (series.length) ejs.push(ex.uni ? { n: ex.n, uni: true, series } : { n: ex.n, series });
   }
@@ -1299,7 +1315,7 @@ root.addEventListener('click', async (e) => {
     if (act === 'live-lib') return libOpen({ mode: 'add', ctx: 'live' });
     if (act === 'live-swap') return libOpen({ mode: 'swap', ctx: 'live', i: Number(v) });
     if (act === 'live-del') { Lv.ex.splice(Number(v), 1); liveSave(); return render(); }
-    if (act === 'live-set-add') { const ex = Lv.ex[Number(v)], last = ex.s[ex.s.length - 1] || { kg: '' }; ex.s.push({ kg: last.kg, reps: '', done: false }); liveSave(); return render(); }
+    if (act === 'live-set-add') { const ex = Lv.ex[Number(v)], last = ex.s[ex.s.length - 1] || { kg: '' }; ex.s.push({ kg: last.kg, reps: '', done: false, rir: '', dropset: false }); liveSave(); return render(); }
     if (act === 'live-set-del') { const ex = Lv.ex[Number(v)]; if (ex.s.length > 1) ex.s.pop(); liveSave(); return render(); }
     if (act === 'live-done') {
       const [i, j] = v.split('.').map(Number), ex = Lv.ex[i], s = ex.s[j];
@@ -1308,6 +1324,9 @@ root.addEventListener('click', async (e) => {
       if (s.done) restStart(); else if (st.rest) st.rest = null;
       liveSave(); return render();
     }
+    if (act === 'live-lock') { toast('Función Pro'); return; }
+    if (act === 'live-drop') { if (!esPro()) { toast('Función Pro'); return; } const [i, j] = v.split('.').map(Number), q = Lv.ex[i].s[j]; q.dropset = !q.dropset; liveSave(); return render(); }
+    if (act === 'live-sup') { if (!esPro()) { toast('Función Pro'); return; } const ex = Lv.ex[Number(v)]; if (Number(v) < Lv.ex.length - 1) ex.superset = !ex.superset; liveSave(); return render(); }
     if (act === 'live-uni') { Lv.ex[Number(v)].uni = b.dataset.u === '1'; liveSave(); return render(); }
     if (act === 'live-fin') { st.rest = null; return liveFinish(); }
     if (act === 'live-discard') {
@@ -1340,7 +1359,7 @@ root.addEventListener('click', async (e) => {
     if (x.tipo === 'gym' && (x.ejercicios || []).length) {
       if (st.live) { toast('Termina o descarta el entrenamiento en curso antes de editar otro'); return; }
       st.live = { uid: st.user.uid, fecha: x.fecha, start: Date.now(), edit: x.id, orig: x, modo: 'edit', nombre: x.nombre || 'Entrenamiento', foco: '', custom: true, msg: '',
-        ex: x.ejercicios.map((e) => ({ n: e.n, m: (E.ejercicio(e.n) || {}).m || '', obj: '', objReps: '', uni: !!e.uni, prev: [], s: e.series.map((q) => ({ kg: q.kg ? String(q.kg).replace('.', ',') : '', reps: String(q.reps), done: true })) })) };
+        ex: x.ejercicios.map((e) => ({ n: e.n, m: (E.ejercicio(e.n) || {}).m || '', obj: '', objReps: '', uni: !!e.uni, prev: [], superset: !!(e.series[0] && e.series[0].isSuperset), s: e.series.map((q) => ({ kg: q.kg ? String(q.kg).replace('.', ',') : '', reps: String(q.reps), done: true, rir: q.rir != null ? String(q.rir) : '', dropset: !!q.isDropSet })) })) };
       st.liveMin = false; st.wkHist = false; st.wkMod = false; liveSave(); render(); window.scrollTo(0, 0); return;
     }
     st.wk = { orig: x, id: x.id, fecha: x.fecha, tipo: x.tipo, nombre: x.nombre || '', min: String(x.min || ''), km: x.km ? String(x.km) : '', elev: x.elev ? String(x.elev) : '', pulso: x.pulso ? String(x.pulso) : '', np: x.np ? String(x.np) : '', bici: x.bici, esf: x.esf || 2, msg: '', saving: false };
@@ -1368,7 +1387,9 @@ root.addEventListener('input', (e) => {
   if (st.rw && t.dataset.rw) { st.rw[t.dataset.rw] = t.value; const nb = document.querySelector('[data-rwnext]'); if (nb) nb.disabled = !rwCanNext(); const chs = document.querySelectorAll('[data-act=rw-dep-otro]'); chs.forEach((c) => c.classList.toggle('on', c.dataset.v === t.value)); return; }
   if (st.live && t.dataset.livename != null) { st.live.nombre = t.value; st.live.custom = true; liveSave(); return; }
   if (st.live && t.dataset.lv) {
-    const [i, j, k] = t.dataset.lv.split('.'); st.live.ex[Number(i)].s[Number(j)][k] = t.value; liveSave();
+    const [i, j, k] = t.dataset.lv.split('.');
+    if (k === 'rir') { if (!esPro()) return; t.value = t.value.replace(/[^0-5]/g, '').slice(-1); }
+    st.live.ex[Number(i)].s[Number(j)][k] = t.value; liveSave();
     const tt = liveTotals(), vEl = document.getElementById('live-vol'); if (vEl) vEl.textContent = `${nf(tt.vol)} kg`;
     return;
   }
@@ -1437,12 +1458,18 @@ function recuperacionHTML() {
   const heat = {};
   Object.entries(sem).forEach(([k, v]) => { heat[k] = ['#F2BE1A', (0.25 + 0.75 * v).toFixed(2)]; });
   const hay = Object.keys(heat).length;
-  return `<section class="rcv"><h2>Recuperación muscular</h2><p class="rcv-sub">Mira qué músculos están listos para entrenar</p>
-    <div class="rcv-row">${tarjetas}</div>
+  const cuerpo = `<div class="rcv-row">${tarjetas}</div>
     <div class="rcv-leg"><i style="background:#3DDC84"></i>Listo <i style="background:#FFB020"></i>Descansando <i style="background:#FF453A"></i>Fatigado</div>
     <h2>Esta semana</h2><p class="rcv-sub">Mira qué músculos entrenaste</p>
     <div class="rcv-week">${figura(heat, 'front', 'Frente')}${figura(heat, 'back', 'Espalda')}</div>
-    <p class="rcv-sub rcv-note">${hay ? 'Cuanto más intenso el amarillo, más volumen.' : 'Aún no has entrenado esta semana.'}</p></section>`;
+    <p class="rcv-sub rcv-note">${hay ? 'Cuanto más intenso el amarillo, más volumen.' : 'Aún no has entrenado esta semana.'}</p>`;
+  // Muro de cristal: sin Pro se ve borroso y un candado encima abre la suscripción.
+  const muro = `<div class="pro-wall">
+      <div class="pro-blur-overlay" aria-hidden="true" inert>${cuerpo}</div>
+      <button type="button" class="pro-lock" data-act="pro-open" data-v="recuperacion" aria-label="Desbloquea tu mapa de fatiga con Pro">${I.lock}<b>Desbloquea tu mapa de fatiga con Pro</b></button>
+    </div>`;
+  return `<section class="rcv"><h2>Recuperación muscular</h2><p class="rcv-sub">Mira qué músculos están listos para entrenar</p>
+    ${esPro() ? cuerpo : muro}</section>`;
 }
   return { regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, recuperacionHTML, rutShareSheetHTML };
 }

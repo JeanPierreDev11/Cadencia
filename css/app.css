@@ -1330,3 +1330,32 @@ body:has(.tabbar) .ib { bottom: calc(var(--safe-b) + 66px); }
 @keyframes ibBounceUp { 0%, 100% { transform: rotate(180deg) translateY(0); } 50% { transform: rotate(180deg) translateY(10px); } }
 @keyframes ibPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(242,190,26,.5); } 50% { box-shadow: 0 0 0 6px rgba(242,190,26,0); } }
 @media (prefers-reduced-motion: reduce) { .ib, .ib-sheet, .ib-back { transition: none; } .ib-arrow, .ib-i { animation: none; } }
+
+/* ===== Muro de cristal (Pro): contenido visible pero borroso, con candado encima ===== */
+.pro-wall { position: relative; min-width: 0; }
+.pro-blur-overlay { filter: blur(4px); opacity: 0.5; pointer-events: none; user-select: none; -webkit-user-select: none; }
+.pro-lock { position: absolute; inset: 0; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; border: 0; border-radius: 2px; background: transparent; color: var(--ink); font: inherit; text-align: center; cursor: pointer; }
+.pro-lock svg { width: 56px; height: 56px; padding: 12px; box-sizing: border-box; border-radius: 2px; background: #1A1A1A; color: #F2BE1A; border: 2px solid #F2BE1A; stroke-width: 2.4; }
+.pro-lock b { font-family: Archivo, sans-serif; text-transform: uppercase; font-size: 1rem; letter-spacing: .02em; max-width: 24ch; text-shadow: 0 1px 8px var(--bg); }
+.pro-lock:active svg { transform: scale(.94); }
+
+/* Aviso de límite diario en la hoja de suscripción */
+.pw-limit { width: 100%; box-sizing: border-box; display: grid; justify-items: center; gap: 4px; padding: 14px; background: #1A1A1A; border: 1px solid #F2BE1A; border-radius: 2px; color: #fff; text-align: center; }
+.pw-limit b { font-family: Archivo, sans-serif; text-transform: uppercase; color: #F2BE1A; }
+.pw-limit-i { color: #F2BE1A; display: grid; }
+
+/* ===== Modo Bestia: RIR, drop-set y superserie ===== */
+.lxtra { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 0 0 4px; }
+.rir-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; letter-spacing: .08em; color: var(--muted); }
+.rir-in { width: 44px; height: 30px; box-sizing: border-box; padding: 0; text-align: center; font: 700 15px/1 Archivo, sans-serif; font-variant-numeric: tabular-nums; color: var(--ink); background: var(--surface2); border: 1px solid var(--line); border-radius: 2px; }
+.rir-in:focus { outline: 0; border-color: #F2BE1A; }
+.drop-btn { width: 34px; height: 30px; padding: 0; font: 800 14px/1 Archivo, sans-serif; color: var(--muted); background: var(--surface2); border: 1px solid var(--line); border-radius: 2px; cursor: pointer; }
+.drop-btn[aria-pressed="true"] { background: #F2BE1A; border-color: #F2BE1A; color: #000; }
+.ss-btn { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 9px 10px; font: 800 12px/1 Archivo, sans-serif; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: transparent; border: 1px dashed var(--line); border-radius: 2px; cursor: pointer; }
+.ss-btn svg { width: 14px; height: 14px; }
+.ss-btn[aria-pressed="true"] { color: #000; background: #F2BE1A; border: 1px solid #F2BE1A; }
+.lex.ss-first, .lex.ss-next { border-left: 3px solid #F2BE1A; }
+.ss-tag { font: 800 11px/1 Archivo, sans-serif; text-transform: uppercase; letter-spacing: .1em; color: #F2BE1A; }
+/* Controles bloqueados (Free): atenuados, pero se pueden tocar para avisar de que son Pro */
+.is-locked { opacity: .4; cursor: not-allowed; }
+.is-locked .rir-in, .is-locked .drop-btn { pointer-events: auto; }

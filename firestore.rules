@@ -1,6 +1,6 @@
 rules_version = '2';
 // Cada persona solo puede leer y escribir sus propios datos.
-// Excepción: «isPro», los datos de Stripe y el aviso «strava» solo los cambia el servidor (stripeWebhook y strava),
+// Excepción: «isPro», los datos de Stripe, «ultimoEscaneo» (límite diario de la IA gratis) y el aviso «strava» solo los cambia el servidor (stripeWebhook y strava),
 // para que nadie pueda hacerse Pro ni falsear la conexión desde la app. Los tokens de Strava viven en la colección
 // «stravaTokens», sin ninguna regla: la app no puede leerla ni escribirla (solo el servidor).
 service cloud.firestore {
@@ -23,12 +23,14 @@ service cloud.firestore {
         && request.resource.data.get('isPro', false) == false
         && !('stripeCustomerId' in request.resource.data)
         && !('stripeSubscriptionId' in request.resource.data)
-        && !('strava' in request.resource.data);
+        && !('strava' in request.resource.data)
+        && !('ultimoEscaneo' in request.resource.data);
       allow update: if request.auth != null && request.auth.uid == uid
         && request.resource.data.get('isPro', false) == resource.data.get('isPro', false)
         && request.resource.data.get('stripeCustomerId', null) == resource.data.get('stripeCustomerId', null)
         && request.resource.data.get('stripeSubscriptionId', null) == resource.data.get('stripeSubscriptionId', null)
-        && request.resource.data.get('strava', null) == resource.data.get('strava', null);
+        && request.resource.data.get('strava', null) == resource.data.get('strava', null)
+        && request.resource.data.get('ultimoEscaneo', null) == resource.data.get('ultimoEscaneo', null);
       match /{document=**} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }

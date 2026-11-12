@@ -218,8 +218,8 @@ exports.ia = onCall({ secrets: [CLAVE], timeoutSeconds: 90, memory: '512MiB', cp
   // La IA es de Cadencia Pro. Se comprueba aquí, en el servidor, antes de leer nada de la petición.
   const pro = await esPro(uid);
   if (modo === 'estado') {
-    const s = await usoRef(uid, dia).get();
-    return { quedan: Math.max(0, LIMITE_USUARIO - ((s.exists && s.data().n) || 0)), limite: LIMITE_USUARIO, pro };
+    const [s, u] = await Promise.all([usoRef(uid, dia).get(), db.doc(`users/${uid}`).get()]);
+    return { quedan: Math.max(0, LIMITE_USUARIO - ((s.exists && s.data().n) || 0)), limite: LIMITE_USUARIO, pro, libreUsado: !pro && !!u.exists && u.data().ultimoEscaneo === dia };
   }
   if (modo === 'borrar') { // la app lo llama al borrar la cuenta: elimina los contadores de uso y los tokens de Strava de esta persona
     await db.doc(`stravaTokens/${uid}`).delete().catch(() => {});
@@ -230,18 +230,23 @@ exports.ia = onCall({ secrets: [CLAVE], timeoutSeconds: 90, memory: '512MiB', cp
     return { ok: true };
   }
   if (modo !== 'plato' && modo !== 'taller') throw new HttpsError('invalid-argument', 'Petición no válida.');
-  if (!pro) throw new HttpsError('permission-denied', 'Esta función es de Cadencia Pro.', { codigo: 'pro-requerido' });
+  // Gratis: 1 foto de comida al día (la fecha del último escaneo se guarda en users/{uid}.ultimoEscaneo). El Taller sigue siendo solo Pro.
+  const libre = !pro && modo === 'plato';
+  if (!pro && !libre) throw new HttpsError('permission-denied', 'Esta función es de Cadencia Pro.', { codigo: 'pro-requerido' });
+  const userRef = db.doc(`users/${uid}`);
 
   // Reserva una consulta (por persona y global) antes de llamar a la IA.
   let usadas = 0;
   await db.runTransaction(async (tx) => {
-    const [u, g] = await Promise.all([tx.get(usoRef(uid, dia)), tx.get(globalRef(dia))]);
+    const [u, g, usr] = await Promise.all([tx.get(usoRef(uid, dia)), tx.get(globalRef(dia)), libre ? tx.get(userRef) : null]);
+    if (libre && usr.exists && usr.data().ultimoEscaneo === dia) throw new HttpsError('resource-exhausted', 'Límite diario alcanzado. Escanea sin límites con Cadencia Pro', { codigo: 'limite-free' });
     usadas = (u.exists && u.data().n) || 0;
     const total = (g.exists && g.data().n) || 0;
     if (usadas >= LIMITE_USUARIO) throw new HttpsError('resource-exhausted', `Ya has usado tus ${LIMITE_USUARIO} consultas de IA de hoy. Mañana tendrás otras ${LIMITE_USUARIO}.`);
     if (total >= LIMITE_GLOBAL) throw new HttpsError('resource-exhausted', 'La IA ha llegado a su límite de hoy. Prueba mañana.');
     tx.set(usoRef(uid, dia), { uid, dia, n: usadas + 1, ultima: FieldValue.serverTimestamp() }, { merge: true });
     tx.set(globalRef(dia), { n: total + 1 }, { merge: true });
+    if (libre) tx.set(userRef, { ultimoEscaneo: dia }, { merge: true });
   });
 
   try {
@@ -251,7 +256,7 @@ exports.ia = onCall({ secrets: [CLAVE], timeoutSeconds: 90, memory: '512MiB', cp
   } catch (e) {
     // Si falla, devolvemos la consulta para no gastarla.
     const dec = FieldValue.increment(-1);
-    await Promise.all([usoRef(uid, dia).set({ n: dec }, { merge: true }), globalRef(dia).set({ n: dec }, { merge: true })]).catch(() => {});
+    await Promise.all([usoRef(uid, dia).set({ n: dec }, { merge: true }), globalRef(dia).set({ n: dec }, { merge: true }), ...(libre ? [userRef.set({ ultimoEscaneo: FieldValue.delete() }, { merge: true })] : [])]).catch(() => {});
     if (e instanceof HttpsError) throw e;
     console.error('IA', modo, e && e.status, e && e.message);
     throw new HttpsError('unavailable', 'La IA no ha respondido. Prueba otra vez en un momento.');
