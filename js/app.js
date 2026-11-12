@@ -1000,6 +1000,7 @@ const planActivo = () => { const pr = st.profile || {}; return pr.isPro === true
 const RECURRENTES = ['mensual', 'anual'];
 function subCta(sel, act) {
   const p = PLANES.find((x) => x.id === sel) || PLANES[1];
+  if (act === 'siempre' && RECURRENTES.includes(p.id)) return { txt: 'Plan activo', act: '', dis: true };
   if (act && p.id === act) return act === 'siempre' ? { txt: 'Plan activo', act: '', dis: true } : { txt: 'Gestionar suscripción', act: 'bill-open', dis: false };
   if (RECURRENTES.includes(act) && RECURRENTES.includes(p.id)) return { txt: 'Cambiar de plan', act: 'bill-open', dis: false };
   return { txt: `Continuar con ${p.n}`, act: 'plan-go', dis: false };
@@ -1024,7 +1025,7 @@ function suscripcionHTML() {
       <div class="sub-cur ${pro ? 'is-pro' : ''}"><b>${pro ? `Cadencia PRO${nomAct ? ` <span class="sub-dot">• ${nomAct}</span>` : ''}` : 'Suscripción Gratuita'}</b>
         <span class="small muted">${pro ? 'Tienes todas las funciones Pro desbloqueadas.' : 'Pásate a PRO para desbloquear todas las funciones.'}</span></div></section>
     <section class="sub-sec"><h3 class="pf-title">Planes PRO</h3>
-      <div class="sub-plans" role="radiogroup" aria-label="Planes PRO">${PLANES.map((x) => { const on = act === x.id; return `<button type="button" class="sub-plan${on ? ' is-active' : ''}" role="radio" aria-checked="${sel === x.id}" data-act="plan-sel" data-v="${x.id}">
+      <div class="sub-plans" role="radiogroup" aria-label="Planes PRO">${PLANES.map((x) => { const on = act === x.id, lock = act === 'siempre' && RECURRENTES.includes(x.id); return `<button type="button" class="sub-plan${on ? ' is-active' : ''}${lock ? ' is-locked' : ''}" role="radio" aria-checked="${sel === x.id}"${lock ? ' aria-disabled="true"' : ''} data-act="plan-sel" data-v="${x.id}">
         <span class="sub-radio" aria-hidden="true"></span><span class="sub-pt"><b>${x.n}</b><small>${x.nota}</small></span>${on ? '<span class="sub-price sub-now">Plan actual</span>' : `<span class="sub-price">${x.precio}</span>`}</button>`; }).join('')}</div>
       ${subCtaHTML(subCta(sel, act))}
       <button type="button" class="sub-link" data-act="pro-info-open">Ventajas de Cadencia PRO</button></section>
@@ -1236,7 +1237,7 @@ root.addEventListener('click', async (e) => {
   else if (act === 'legal-open') { if (st.view === 'auth') { const f = root.querySelector('form'); st.authKeep = f ? { name: f.name ? f.name.value : '', email: f.email.value, pass: f.pass.value, acepto: f.acepto ? f.acepto.checked : false } : null; } st.legal = true; render(); if (st.authKeep) keepForm(st.authKeep); }
   else if (act === 'legal-close') { st.legal = false; render(); if (st.view === 'auth' && st.authKeep) { keepForm(st.authKeep); st.authKeep = null; } }
   else if (act === 'pf-open') { st.pf = { v, f: {}, busy: false }; st.editGoals = null; render(); }
-  else if (act === 'plan-sel') { const actual = (st.pf && st.pf.plan) || planActivo() || 'anual'; if (v === actual) return; if (st.pf && PLANES.some((x) => x.id === v)) { st.pf.plan = v; if (!pintarSeleccion(v)) render(); } }
+  else if (act === 'plan-sel') { if (planActivo() === 'siempre' && RECURRENTES.includes(v)) return; const actual = (st.pf && st.pf.plan) || planActivo() || 'anual'; if (v === actual) return; if (st.pf && PLANES.some((x) => x.id === v)) { st.pf.plan = v; if (!pintarSeleccion(v)) render(); } }
   else if (act === 'plan-go') { const pa = planActivo(), el = (st.pf && st.pf.plan) || pa || 'anual'; if (subCta(el, pa).act !== 'plan-go') return; const url = planUrl((st.pf && st.pf.plan) || 'anual', st.user); if (!url) { toast('La suscripción estará disponible muy pronto.'); return; } const w = window.open(url, '_blank'); if (!w) location.assign(url); }
   else if (act === 'pro-info-open') { st.proInfo = true; render(); }
   else if (act === 'pro-info-close') { st.proInfo = null; render(); }
