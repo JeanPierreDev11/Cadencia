@@ -1,4 +1,7 @@
 // Capa de datos: misma interfaz para Firebase (real) y para el modo prueba (local).
+// Respaldo para cuentas Pro antiguas sin `proPlan`: solo en memoria, NUNCA se guarda en Firestore.
+const conPlan = (p) => (p && p.isPro === true && !['mensual', 'anual', 'siempre'].includes(p.proPlan) ? { ...p, proPlan: 'mensual' } : p);
+
 import { FIREBASE_CONFIG } from './config.js';
 
 const FB = 'https://www.gstatic.com/firebasejs/10.14.1/';
@@ -71,14 +74,14 @@ async function firebaseBackend(config) {
     async resetPassword(email) { await A.sendPasswordResetEmail(auth, email); },
     async getProfile(uid) {
       const s = await F.getDoc(userRef(uid));
-      return s.exists() ? s.data() : null;
+      return s.exists() ? conPlan(s.data()) : null;
     },
     async saveProfile(uid, data) {
       await F.setDoc(userRef(uid), { ...data, actualizado: F.serverTimestamp() }, { merge: true });
     },
     // Avisa en directo de los cambios del perfil (p. ej. cuando el servidor activa Pro). Devuelve la función para dejar de escuchar.
     watchProfile(uid, cb) {
-      return F.onSnapshot(userRef(uid), (s) => { if (s.exists()) cb(s.data()); }, () => {});
+      return F.onSnapshot(userRef(uid), (s) => { if (s.exists()) cb(conPlan(s.data())); }, () => {});
     },
     async addWeight(uid, date, kg, extra = {}) {
       await F.setDoc(weightRef(uid, date), { fecha: date, kg, ...extra }, { merge: true });
@@ -227,8 +230,8 @@ function localBackend() {
     },
     async getSharedRutina(code) { const r = (read().shared || {})[code]; return r ? JSON.parse(JSON.stringify(r)) : null; },
     async resetPassword() { throw err('local/no-reset'); },
-    async getProfile(uid) { const u = byUid(read(), uid); return u ? u.profile : null; },
-    watchProfile(uid, cb) { const t = setInterval(() => { const u = byUid(read(), uid); if (u) cb(u.profile); }, 1500); return () => clearInterval(t); },
+    async getProfile(uid) { const u = byUid(read(), uid); return u ? conPlan(u.profile) : null; },
+    watchProfile(uid, cb) { const t = setInterval(() => { const u = byUid(read(), uid); if (u) cb(conPlan(u.profile)); }, 1500); return () => clearInterval(t); },
     async saveProfile(uid, data) {
       const s = read(); const u = byUid(s, uid); if (!u) return;
       u.profile = { ...u.profile, ...data, actualizado: Date.now() }; write(s);

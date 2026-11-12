@@ -1202,8 +1202,9 @@ export function crearSecciones(ctx) {
   function aplicarPro(p) {
     if (!st.profile || !p) return;
     if (st.profile.ultimoEscaneo !== p.ultimoEscaneo) st.profile.ultimoEscaneo = p.ultimoEscaneo;
-    const antes = esPro(), ahora = p.isPro === true;
-    if (antes === ahora) return;
+    const antes = esPro(), ahora = p.isPro === true, plan = ahora ? p.proPlan : undefined, cambioPlan = st.profile.proPlan !== plan;
+    if (cambioPlan) st.profile.proPlan = plan;
+    if (antes === ahora) { if (cambioPlan && ahora) render(); return; }
     st.profile.isPro = ahora; st.pro = null; st.vuelveDePago = false;
     if (ahora) { st.iaQuedan = null; iaEstadoPedido = ''; revisarBienvenida(); } else lsSet(bienvenidaKey(), '');
     render();
