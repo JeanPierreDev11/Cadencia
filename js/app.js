@@ -980,34 +980,42 @@ const PLANES = [
   { id: 'anual', n: 'PRO Anual', precio: '39,99 €', nota: 'Facturado anualmente' },
   { id: 'siempre', n: 'PRO Para Siempre', precio: '89,99 €', nota: 'Pago único' },
 ];
-const BENEFICIOS = [
-  ['🤖', 'Escáner Nutricional IA', 'Haz una foto a tu plato y la IA calcula calorías y macros, sin límite diario.'],
-  ['🗺️', 'Mapa de Fatiga Muscular', 'Ve qué músculos están listos, descansando o fatigados, y el mapa de calor de tu semana.'],
-  ['🦍', 'Modo Bestia', 'RIR, drop-sets y superseries en cada serie, guardados en tu historial.'],
-  ['📈', 'Sobrecarga Progresiva Automática', 'Te sugerimos el peso y las repeticiones de cada serie, y calculamos tu 1RM y tu volumen total.'],
-  ['🔥', 'Calculadora de Calentamiento', 'Series de aproximación calculadas a partir de tu peso de trabajo.'],
-  ['♾️', 'Rutinas y Ejercicios Ilimitados', 'Crea todas las rutinas y ejercicios propios que quieras.'],
+// Tabla comparativa Gratis vs Pro. true = ✓, false = ✗, texto = tal cual.
+const COMPARATIVA = [
+  ['Registrar entrenamientos', true, true],
+  ['Crear rutinas', '3', 'Ilimitadas'],
+  ['Escáner IA de alimentos', '1/día', 'Ilimitado'],
+  ['Mapa de Fatiga', false, true],
+  ['Modo Bestia', false, true],
+  ['Calculadora de Calentamiento', false, true],
 ];
+const cmpCelda = (v) => v === true ? '<span class="cmp-y" role="img" aria-label="Incluido">✓</span>' : v === false ? '<span class="cmp-n" role="img" aria-label="No incluido">✗</span>' : `<span class="cmp-t">${v}</span>`;
+const planActivo = () => { const pr = st.profile || {}; return pr.isPro === true && PLANES.some((x) => x.id === pr.proPlan) ? pr.proPlan : null; };
 function suscripcionHTML() {
-  const pro = st.profile && st.profile.isPro === true, sel = (st.pf && st.pf.plan) || 'anual';
+  const pro = st.profile && st.profile.isPro === true, act = planActivo();
+  const sel = (st.pf && st.pf.plan) || 'anual', elegido = PLANES.find((x) => x.id === (act || sel)) || PLANES[1];
+  const nomAct = act ? PLANES.find((x) => x.id === act).n.replace('PRO ', '') : '';
   return `<div class="sheet-list sub">
     <section class="sub-sec"><h3 class="pf-title">Suscripción actual</h3>
-      <div class="sub-cur ${pro ? 'is-pro' : ''}"><b>${pro ? 'Cadencia PRO' : 'Suscripción Gratuita'}</b>
+      <div class="sub-cur ${pro ? 'is-pro' : ''}"><b>${pro ? `Cadencia PRO${nomAct ? ` <span class="sub-dot">• ${nomAct}</span>` : ''}` : 'Suscripción Gratuita'}</b>
         <span class="small muted">${pro ? 'Tienes todas las funciones Pro desbloqueadas.' : 'Pásate a PRO para desbloquear todas las funciones.'}</span></div></section>
     <section class="sub-sec"><h3 class="pf-title">Planes PRO</h3>
-      <div class="sub-plans" role="radiogroup" aria-label="Planes PRO">${PLANES.map((x) => `<button type="button" class="sub-plan" role="radio" aria-checked="${sel === x.id}" data-act="plan-sel" data-v="${x.id}">
-        <span class="sub-radio" aria-hidden="true"></span><span class="sub-pt"><b>${x.n}</b><small>${x.nota}</small></span><span class="sub-price">${x.precio}</span></button>`).join('')}</div>
-      <button type="button" class="btn block" data-act="plan-go">Continuar con ${PLANES.find((x) => x.id === sel).n}</button>
-      <button type="button" class="sub-link" data-act="pro-info-open">Más información sobre Cadencia PRO</button></section>
+      <div class="sub-plans" role="radiogroup" aria-label="Planes PRO">${PLANES.map((x) => { const on = act === x.id; return `<button type="button" class="sub-plan${on ? ' is-active' : ''}" role="radio" aria-checked="${on || (!act && sel === x.id)}" ${on ? 'disabled aria-disabled="true"' : ''} data-act="plan-sel" data-v="${x.id}">
+        <span class="sub-radio" aria-hidden="true"></span><span class="sub-pt"><b>${x.n}</b><small>${on ? 'Tu plan actual' : x.nota}</small></span><span class="sub-price">${x.precio}</span></button>`; }).join('')}</div>
+      <button type="button" class="btn block" data-act="plan-go" ${act === elegido.id ? 'disabled' : ''}>${act === elegido.id ? 'Plan activo' : `Continuar con ${elegido.n}`}</button>
+      <button type="button" class="sub-link" data-act="pro-info-open">Ventajas de Cadencia PRO</button></section>
   </div>`;
 }
 function proInfoHTML() {
   const pro = st.profile && st.profile.isPro === true;
   return `<div class="sheet-back sheet-back-top" data-act="pro-info-close"></div>
-    <div class="sheet pinfo" role="dialog" aria-modal="true" aria-label="Beneficios de Cadencia PRO">
+    <div class="sheet pinfo" role="dialog" aria-modal="true" aria-label="Ventajas de Cadencia PRO">
       <div class="sheet-grab"></div>
-      <div class="sheet-head"><span style="width:36px"></span><h2>Cadencia PRO</h2><button type="button" class="iconbtn" data-act="pro-info-close" aria-label="Cerrar">${I.close || '✕'}</button></div>
-      <ul class="sheet-list pinfo-list">${BENEFICIOS.map(([ic, t, d]) => `<li class="pinfo-it"><span class="pinfo-ic" aria-hidden="true">${ic}</span><span><b>${t}</b><small>${d}</small></span></li>`).join('')}</ul>
+      <div class="sheet-head"><span style="width:36px"></span><h2>Gratis vs PRO</h2><button type="button" class="iconbtn" data-act="pro-info-close" aria-label="Cerrar">${I.close || '✕'}</button></div>
+      <div class="pinfo-scroll"><table class="cmp">
+        <thead><tr><th scope="col"><span class="sr">Función</span></th><th scope="col">Gratis</th><th scope="col" class="cmp-pro">PRO</th></tr></thead>
+        <tbody>${COMPARATIVA.map(([f, g, p]) => `<tr><th scope="row">${f}</th><td>${cmpCelda(g)}</td><td class="cmp-pro">${cmpCelda(p)}</td></tr>`).join('')}</tbody>
+      </table></div>
       <div class="pinfo-foot"><button type="button" class="btn block" data-act="pro-info-close">${pro ? 'Cerrar' : 'Elegir Plan'}</button></div>
     </div>`;
 }
@@ -1204,8 +1212,8 @@ root.addEventListener('click', async (e) => {
   else if (act === 'legal-open') { if (st.view === 'auth') { const f = root.querySelector('form'); st.authKeep = f ? { name: f.name ? f.name.value : '', email: f.email.value, pass: f.pass.value, acepto: f.acepto ? f.acepto.checked : false } : null; } st.legal = true; render(); if (st.authKeep) keepForm(st.authKeep); }
   else if (act === 'legal-close') { st.legal = false; render(); if (st.view === 'auth' && st.authKeep) { keepForm(st.authKeep); st.authKeep = null; } }
   else if (act === 'pf-open') { st.pf = { v, f: {}, busy: false }; st.editGoals = null; render(); }
-  else if (act === 'plan-sel') { if (st.pf && PLANES.some((x) => x.id === v)) { st.pf.plan = v; render(); } }
-  else if (act === 'plan-go') toast('La suscripción estará disponible muy pronto.');
+  else if (act === 'plan-sel') { if (st.pf && PLANES.some((x) => x.id === v) && v !== planActivo()) { st.pf.plan = v; render(); } }
+  else if (act === 'plan-go') { if (((st.pf && st.pf.plan) || 'anual') === planActivo()) return; toast('La suscripción estará disponible muy pronto.'); }
   else if (act === 'pro-info-open') { st.proInfo = true; render(); }
   else if (act === 'pro-info-close') { st.proInfo = null; render(); }
   else if (act === 'pf-close') { st.pf = null; st.editGoals = null; render(); }

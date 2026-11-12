@@ -290,6 +290,9 @@ async function uidsDeCliente(stripe, customerId) {
   } catch (e) { console.error('Stripe: no se pudo leer el cliente', e && e.message); return []; }
 }
 
+// Plan según el intervalo de cobro del precio de Stripe.
+const planDe = (o) => { const i = o.items && o.items.data && o.items.data[0] && o.items.data[0].price && o.items.data[0].price.recurring; return i && i.interval === 'month' ? 'mensual' : i && i.interval === 'year' ? 'anual' : null; };
+
 async function procesarEvento(stripe, ev) {
   const o = ev.data.object;
   if (ev.type === 'checkout.session.completed') {
@@ -309,7 +312,7 @@ async function procesarEvento(stripe, ev) {
       const d = (await userRef(uid).get()).data() || {};
       if (d.stripeSubscriptionId && d.stripeSubscriptionId !== o.id) continue; // es una suscripción antigua
       const fin = o.current_period_end || (o.items && o.items.data && o.items.data[0] && o.items.data[0].current_period_end) || null; // segundos
-      await ponerPro(uid, activa, activa ? { stripeCustomerId: o.customer, stripeSubscriptionId: o.id, proRenueva: fin ? fin * 1000 : null, proCancela: !!(o.cancel_at_period_end || o.cancel_at) } : { proCancela: false });
+      await ponerPro(uid, activa, activa ? { stripeCustomerId: o.customer, stripeSubscriptionId: o.id, proRenueva: fin ? fin * 1000 : null, proCancela: !!(o.cancel_at_period_end || o.cancel_at), proPlan: planDe(o) } : { proCancela: false });
     }
   }
 }
