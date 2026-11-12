@@ -4,7 +4,7 @@ import * as E from './entreno.js';
 import { crearSecciones, NOV_V } from './secciones.js';
 import { crearEntreno } from './entreno-ui.js';
 import { LEGAL_V, legalHTML, CONTACTO } from './legal.js';
-import { PORTAL_LINK } from './pro.js';
+import { PORTAL_LINK, planUrl } from './pro.js';
 import * as CAL from './calorias.js';
 import { leerRetorno } from './strava.js';
 import { crearRecordatorios, leerIr } from './push.js';
@@ -1002,7 +1002,7 @@ function suscripcionHTML() {
     <section class="sub-sec"><h3 class="pf-title">Planes PRO</h3>
       <div class="sub-plans" role="radiogroup" aria-label="Planes PRO">${PLANES.map((x) => { const on = act === x.id; return `<button type="button" class="sub-plan${on ? ' is-active' : ''}" role="radio" aria-checked="${sel === x.id}" data-act="plan-sel" data-v="${x.id}">
         <span class="sub-radio" aria-hidden="true"></span><span class="sub-pt"><b>${x.n}</b><small>${x.nota}</small></span>${on ? '<span class="sub-price sub-now">Plan actual</span>' : `<span class="sub-price">${x.precio}</span>`}</button>`; }).join('')}</div>
-      <button type="button" class="btn block" data-act="${esActual ? 'bill-open' : 'plan-go'}">${esActual ? 'Gestionar suscripción' : `Continuar con ${elegido.n}`}</button>
+      ${esActual && act === 'siempre' ? '<button type="button" class="btn block" disabled>Plan activo</button>' : `<button type="button" class="btn block" data-act="${esActual ? 'bill-open' : 'plan-go'}">${esActual ? 'Gestionar suscripción' : `Continuar con ${elegido.n}`}</button>`}
       <button type="button" class="sub-link" data-act="pro-info-open">Ventajas de Cadencia PRO</button></section>
   </div>`;
 }
@@ -1213,7 +1213,7 @@ root.addEventListener('click', async (e) => {
   else if (act === 'legal-close') { st.legal = false; render(); if (st.view === 'auth' && st.authKeep) { keepForm(st.authKeep); st.authKeep = null; } }
   else if (act === 'pf-open') { st.pf = { v, f: {}, busy: false }; st.editGoals = null; render(); }
   else if (act === 'plan-sel') { if (st.pf && PLANES.some((x) => x.id === v)) { st.pf.plan = v; render(); } }
-  else if (act === 'plan-go') { if (((st.pf && st.pf.plan) || planActivo() || 'anual') === planActivo()) return; toast('La suscripción estará disponible muy pronto.'); }
+  else if (act === 'plan-go') { if (((st.pf && st.pf.plan) || planActivo() || 'anual') === planActivo()) return; const url = planUrl((st.pf && st.pf.plan) || 'anual', st.user); if (!url) { toast('La suscripción estará disponible muy pronto.'); return; } const w = window.open(url, '_blank'); if (!w) location.assign(url); }
   else if (act === 'pro-info-open') { st.proInfo = true; render(); }
   else if (act === 'pro-info-close') { st.proInfo = null; render(); }
   else if (act === 'pf-close') { st.pf = null; st.editGoals = null; render(); }

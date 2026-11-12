@@ -290,18 +290,32 @@ async function uidsDeCliente(stripe, customerId) {
   } catch (e) { console.error('Stripe: no se pudo leer el cliente', e && e.message); return []; }
 }
 
+const PRECIO_SIEMPRE = 8999; // céntimos: el Payment Link «Para siempre» (89,99 €); si cambias ese precio, cámbialo aquí
 // Plan según el intervalo de cobro del precio de Stripe.
 const planDe = (o) => { const i = o.items && o.items.data && o.items.data[0] && o.items.data[0].price && o.items.data[0].price.recurring; return i && i.interval === 'month' ? 'mensual' : i && i.interval === 'year' ? 'anual' : null; };
 
 async function procesarEvento(stripe, ev) {
   const o = ev.data.object;
   if (ev.type === 'checkout.session.completed') {
-    if (o.mode !== 'subscription' || o.payment_status === 'unpaid') return;
+    const siempre = o.mode === 'payment' && o.payment_status === 'paid' && o.currency === 'eur' && o.amount_total === PRECIO_SIEMPRE; // pago único «Para siempre»
+    if (!siempre && (o.mode !== 'subscription' || o.payment_status === 'unpaid')) return;
     let uid = null;
     if (o.client_reference_id && (await userRef(o.client_reference_id).get()).exists) uid = o.client_reference_id;
     if (!uid) uid = await porEmail((o.customer_details && o.customer_details.email) || o.customer_email);
     if (!uid) { console.warn('Stripe: pago sin usuario asociado', o.id); return; }
-    await ponerPro(uid, true, { stripeCustomerId: o.customer || null, stripeSubscriptionId: o.subscription || null });
+    const antes = ((await userRef(uid).get()).data() || {}).stripeSubscriptionId;
+    let extra;
+    if (siempre) extra = { stripeCustomerId: o.customer || null, stripeSubscriptionId: 'siempre', proPlan: 'siempre', proRenueva: null, proCancela: false };
+    else {
+      let sub = null; try { sub = await stripe.subscriptions.retrieve(o.subscription); } catch (e) { console.error('Stripe: no se pudo leer la suscripción', e && e.message); }
+      const fin = sub && (sub.current_period_end || (sub.items && sub.items.data && sub.items.data[0] && sub.items.data[0].current_period_end));
+      extra = { stripeCustomerId: o.customer || null, stripeSubscriptionId: o.subscription || null, proPlan: sub ? planDe(sub) : null, proRenueva: fin ? fin * 1000 : null, proCancela: false };
+    }
+    await ponerPro(uid, true, extra);
+    // Si cambió de plan (o compró «Para siempre»), cancelamos la suscripción anterior para no cobrarle dos veces.
+    if (antes && antes !== 'siempre' && antes !== extra.stripeSubscriptionId) {
+      try { await stripe.subscriptions.cancel(antes); console.log('Stripe: cancelada la suscripción anterior ' + antes); } catch (e) { console.warn('Stripe: no se pudo cancelar la anterior', antes, e && e.message); }
+    }
     return;
   }
   if (ev.type === 'customer.subscription.deleted' || ev.type === 'customer.subscription.updated') {
