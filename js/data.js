@@ -1,6 +1,11 @@
 // Capa de datos: misma interfaz para Firebase (real) y para el modo prueba (local).
 // Respaldo para cuentas Pro antiguas sin `proPlan`: solo en memoria, NUNCA se guarda en Firestore.
-const conPlan = (p) => (p && p.isPro === true && !['mensual', 'anual', 'siempre'].includes(p.proPlan) ? { ...p, proPlan: 'mensual' } : p);
+// Cuentas gratuitas sin `proPlan` (anteriores a este campo): se ven con `proPlan: 'none'`, igual que las nuevas.
+const conPlan = (p) => {
+  if (!p) return p;
+  if (p.isPro === true) return ['mensual', 'anual', 'siempre'].includes(p.proPlan) ? p : { ...p, proPlan: 'mensual' };
+  return p.proPlan ? p : { ...p, proPlan: 'none' };
+};
 
 import { FIREBASE_CONFIG } from './config.js';
 
@@ -41,7 +46,7 @@ async function firebaseBackend(config) {
       const cred = await A.createUserWithEmailAndPassword(auth, email, pass);
       if (name) await A.updateProfile(cred.user, { displayName: name });
       const nombre = (name || '').trim().split(/\s+/)[0] || '';
-      await F.setDoc(userRef(cred.user.uid), { nombre, nombreCompleto: (name || '').trim(), email, creado: F.serverTimestamp(), onboarded: false, isPro: false }, { merge: true });
+      await F.setDoc(userRef(cred.user.uid), { nombre, nombreCompleto: (name || '').trim(), email, creado: F.serverTimestamp(), onboarded: false, isPro: false, proPlan: 'none' }, { merge: true });
       return toUser(cred.user);
     },
     async login(email, pass) { return toUser((await A.signInWithEmailAndPassword(auth, email, pass)).user); },
@@ -198,7 +203,7 @@ function localBackend() {
       const s = read();
       if (s.users[email]) throw err('auth/email-already-in-use');
       const uid = 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-      s.users[email] = { uid, email, pass: await hash(pass), profile: { nombre: (name || '').trim().split(/\s+/)[0] || '', nombreCompleto: (name || '').trim(), email, onboarded: false, creado: Date.now(), isPro: false }, pesos: {} };
+      s.users[email] = { uid, email, pass: await hash(pass), profile: { nombre: (name || '').trim().split(/\s+/)[0] || '', nombreCompleto: (name || '').trim(), email, onboarded: false, creado: Date.now(), isPro: false, proPlan: 'none' }, pesos: {} };
       s.session = email;
       write(s); emit();
       return current();

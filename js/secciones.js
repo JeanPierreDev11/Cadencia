@@ -31,6 +31,7 @@ const ICO = {
   camara: svg('<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>', 15),
   scan: svg('<path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M8 8v8M11 8v8M14 8v8M17 8v8"/>', 22),
   bell: svg('<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>', 22),
+  sparkles: svg('<path d="M10 4l1.9 5.1L17 11l-5.1 1.9L10 18l-1.9-5.1L3 11l5.1-1.9z"/><path d="M18.5 3v4M16.5 5h4M18.5 16v4M16.5 18h4"/>', 22),
 };
 
 /* Novedades: cambia NOV_V cada vez que publiques algo nuevo: la ventana sale una sola vez al abrir la app. */
@@ -1202,7 +1203,7 @@ export function crearSecciones(ctx) {
   function aplicarPro(p) {
     if (!st.profile || !p) return;
     if (st.profile.ultimoEscaneo !== p.ultimoEscaneo) st.profile.ultimoEscaneo = p.ultimoEscaneo;
-    const antes = esPro(), ahora = p.isPro === true, plan = ahora ? p.proPlan : undefined, cambioPlan = st.profile.proPlan !== plan;
+    const antes = esPro(), ahora = p.isPro === true, plan = ahora ? p.proPlan : 'none', cambioPlan = st.profile.proPlan !== plan;
     if (cambioPlan) st.profile.proPlan = plan;
     if (antes === ahora) { if (cambioPlan && ahora) render(); return; }
     st.profile.isPro = ahora; st.pro = null; st.vuelveDePago = false;
@@ -1545,7 +1546,7 @@ export function crearSecciones(ctx) {
   }
   let novLS = ''; try { novLS = localStorage.getItem('cadencia-nov') || ''; } catch (e) { /* nada */ }
   const novNueva = () => P().novVista !== NOV_V && novLS !== NOV_V;
-  const novBell = () => `<button type="button" class="iconbtn bell" data-act="nov-open" aria-label="Novedades${novNueva() ? ' (hay nuevas)' : ''}">${ICO.bell}${novNueva() ? '<i></i>' : ''}</button>`;
+  const novBell = () => `<button type="button" class="iconbtn bell" data-act="nov-open" aria-label="Novedades${novNueva() ? ' (hay nuevas)' : ''}">${ICO.sparkles}${novNueva() ? '<i></i>' : ''}</button>`;
   // Cierra la ventana y recuerda la versión vista (en el móvil y en tu perfil) para no volver a mostrarla hasta la próxima actualización.
   function novCerrar() {
     st.novOpen = false; st.novDone = true; novLS = NOV_V;

@@ -274,7 +274,7 @@ const editorHTML = (re) => [...re.draft.dias].sort((a, b) => a - b).map((d) => d
 function normRutina(R) {
   const used = [...new Set(R.dias.map((d) => R.sesiones[d].t))];
   const out = { tipos: used.length ? used : R.tipos, otro: String(R.otro || '').trim().slice(0, 30), dias: [...R.dias].sort((a, b) => a - b), modo: R.modo,
-    split: R.split || 'auto', exp: R.exp || '', equipo: R.equipo || null, eqSel: R.eqSel || [], donde: R.donde || '', flex: !!R.flex, deporte: R.deporte || '', sesiones: {} };
+    split: R.split || 'auto', exp: R.exp || '', equipo: R.equipo || null, eqSel: R.eqSel || [], donde: dondeDe(R.donde), flex: !!R.flex, deporte: R.deporte || '', sesiones: {} };
   for (const d of out.dias) {
     const s = R.sesiones[d];
     const o = { t: s.t, nombre: String(s.nombre || '').trim().slice(0, 40) || RT[s.t] };
@@ -412,6 +412,10 @@ const RW_MAT = [['maquina', 'Máquinas / poleas'], ['mancuernas', 'Mancuernas'],
 const RW_DIV = [['ppl', 'Push · Pull · Legs', 'Empuje, tirón y pierna'], ['tp', 'Torso / Pierna', 'Tren superior e inferior'], ['full', 'Full body', 'Todo el cuerpo cada día'], ['weider', 'Un músculo por día', 'Pecho, espalda, pierna, hombro y brazos'], ['deporte', 'Fuerza para deporte', 'Potencia y core para tu deporte'], ['custom', 'Personalizado', 'Tú decides qué haces cada día']];
 const RW_DEPORTES = ['Fútbol', 'Baloncesto', 'Bici', 'Pádel', 'Tenis', 'Natación', 'Running', 'Esquí'];
 const EQ_DEF = { gym: ['maquina', 'mancuernas', 'barra'], casa: ['ninguno'], parque: ['ninguno'] };
+// «Dónde entrenas» es una lista (['gym', 'casa']). Las rutinas guardadas antes con un solo texto ('gym') se leen como ['gym'].
+const dondeDe = (x) => (Array.isArray(x) ? x : x ? [x] : []).filter((k) => EQ_DEF[k]);
+// Material por defecto de los sitios elegidos; «ninguno» (peso corporal) solo si no hay nada más.
+const eqDeDonde = (ds) => { const eq = [...new Set(ds.flatMap((k) => EQ_DEF[k]))]; return eq.length > 1 ? eq.filter((x) => x !== 'ninguno') : eq; };
 const rwSteps = (o) => {
   if (o.main === 'fuerza') return ['tipo', 'exp', 'donde', 'material', 'n', 'dias', 'modo', ...(o.modo === 'propia' ? ['division'] : []), 'editor'];
   if (o.main === 'bici' || o.main === 'cardio') return ['tipo', 'exp', 'n', 'dias', 'modo', 'editor'];
@@ -424,9 +428,9 @@ const expBars = (k) => `<span class="bars" aria-hidden="true">${[1, 2, 3, 4, 5].
 function rwStart(rid, nueva) {
   const r = nueva ? null : rutinasList().find((x) => x.id === rid) || rutinaOf();
   if (!r && sobreLimite('rutinas')) return avisoLimite('rutinas'); // crear una rutina nueva
-  const base = { step: 0, main: '', exp: '', donde: '', eq: [], n: 0, dias: [], flex: false, modo: '', division: '', deporte: '', otro: '', msg: '', anim: 'fwd' };
+  const base = { step: 0, main: '', exp: '', donde: [], eq: [], n: 0, dias: [], flex: false, modo: '', division: '', deporte: '', otro: '', msg: '', anim: 'fwd' };
   st.rw = r
-    ? { ...base, rid: r.id, main: r.tipos[0] || '', otro: r.otro || '', n: r.dias.length, dias: [...r.dias], flex: !!r.flex, exp: r.exp || '', donde: r.donde || '', eq: r.eqSel ? [...r.eqSel] : [], deporte: r.deporte || '' }
+    ? { ...base, rid: r.id, main: r.tipos[0] || '', otro: r.otro || '', n: r.dias.length, dias: [...r.dias], flex: !!r.flex, exp: r.exp || '', donde: dondeDe(r.donde), eq: r.eqSel ? [...r.eqSel] : [], deporte: r.deporte || '' }
     : { ...base, nueva: true };
   st.re = null;
   render(); window.scrollTo(0, 0);
@@ -436,7 +440,7 @@ function rwCanNext() {
   const o = st.rw, s = rwStep(o);
   if (s === 'tipo') return !!o.main;
   if (s === 'exp') return !!o.exp;
-  if (s === 'donde') return !!o.donde;
+  if (s === 'donde') return o.donde.length > 0;
   if (s === 'material') return o.eq.length > 0;
   if (s === 'otro') return o.otro.trim().length > 0;
   if (s === 'n') return o.n > 0;
@@ -461,7 +465,8 @@ function viewRutWizard() {
       <div class="choices big">${RW_EXP.map(([k, t], i) => ch('rw-exp', k, o.exp === k, `<span class="t">${t}</span>${expBars(i + 1)}`)).join('')}</div>`;
   } else if (s === 'donde') {
     body = `<h1 class="ob-title">¿Dónde entrenas?</h1>
-      <div class="choices big">${RW_DONDE.map(([k, t, sub]) => ch('rw-donde', k, o.donde === k, `<span class="t">${t}<small>${sub}</small></span>${tick(o.donde === k)}`)).join('')}</div>`;
+      <p class="ob-sub">Marca todos los sitios donde entrenas.</p>
+      <div class="choices big">${RW_DONDE.map(([k, t, sub]) => ch('rw-donde', k, o.donde.includes(k), `<span class="t">${t}<small>${sub}</small></span>${tick(o.donde.includes(k))}`)).join('')}</div>`;
   } else if (s === 'material') {
     body = `<h1 class="ob-title">¿Qué material tienes?</h1><p class="ob-sub">Marca todo lo que puedas usar. Solo te propondremos ejercicios con eso.</p>
       <div class="choices">${RW_MAT.map(([k, t]) => ch('rw-eq', k, o.eq.includes(k), `<span class="ico">${eqIcon(k === 'ninguno' ? 'corporal' : k)}</span><span class="t">${t}</span>${tick(o.eq.includes(k))}`)).join('')}</div>`;
@@ -504,7 +509,7 @@ function viewRutWizard() {
   const msg = s === 'editor' ? st.re.msg : o.msg;
   const anim = o.anim ? ` step-in ${o.anim}` : ''; o.anim = null;
   const volvio = (o.maxStep || 0) > o.step; // si ya habías avanzado y has vuelto atrás, hay botón para seguir
-  const showNext = volvio || (!(['tipo', 'exp', 'donde', 'modo'].includes(s)) && !(s === 'n') && !(s === 'division' && o.division !== 'deporte'));
+  const showNext = volvio || (!(['tipo', 'exp', 'modo'].includes(s)) && !(s === 'n') && !(s === 'division' && o.division !== 'deporte'));
   return `<form class="screen" data-form="rw" novalidate>
     <div class="ob-top">
       <button type="button" class="ob-back" data-act="rw-back" aria-label="${o.step === 0 ? 'Cerrar' : 'Atrás'}">${o.step === 0 ? '✕' : I.back}</button>
@@ -519,7 +524,7 @@ function viewRutWizard() {
 // Lo que has respondido → configuración para el motor de rutinas.
 function rwCfg(o) {
   const fuerza = o.main === 'fuerza';
-  const gymCompleto = o.donde === 'gym' && ['maquina', 'mancuernas', 'barra'].every((x) => o.eq.includes(x)) && !o.eq.includes('ninguno');
+  const gymCompleto = o.donde.includes('gym') && ['maquina', 'mancuernas', 'barra'].every((x) => o.eq.includes(x)) && !o.eq.includes('ninguno');
   return { tipos: [o.main], dias: o.flex ? [...E.DIAS_DEF[o.n]] : [...o.dias], otro: o.main === 'otro' ? o.otro.trim() : '',
     split: 'auto', exp: o.exp, equipo: fuerza ? E.expandirEquipo(gymCompleto ? ['gym'] : o.eq) : null, run: o.main === 'cardio', escalar: o.main === 'bici' || o.main === 'cardio' };
 }
@@ -537,13 +542,13 @@ function rwPersonalizada(o) {
   return R;
 }
 // Mismas respuestas del asistente = mismo borrador (así «Atrás» y «Siguiente» no pierden lo que ya programaste).
-const rwKey = (o) => JSON.stringify([o.main, o.exp, o.donde, [...o.eq].sort(), o.n, [...o.dias].sort(), o.flex, o.modo, o.division, o.deporte, o.otro.trim()]);
+const rwKey = (o) => JSON.stringify([o.main, o.exp, [...o.donde].sort(), [...o.eq].sort(), o.n, [...o.dias].sort(), o.flex, o.modo, o.division, o.deporte, o.otro.trim()]);
 function rwGenerar() {
   const o = st.rw, key = rwKey(o), old = st.re && st.re.src === 'rw' ? st.re : null;
   if (old && old.genKey === key) { o.step = rwSteps(o).length - 1; o.maxStep = Math.max(o.maxStep || 0, o.step); o.anim = 'fwd'; render(); window.scrollTo(0, 0); return; }
   const cfg = rwCfg(o);
   const R = o.modo === 'propuesta' && o.main !== 'otro' ? E.proponerRutina(cfg, st.profile.objetivos) : rwPersonalizada(o);
-  R.eqSel = o.main === 'fuerza' ? [...o.eq] : []; R.donde = o.donde; R.flex = o.flex; R.deporte = o.deporte; R.exp = o.exp;
+  R.eqSel = o.main === 'fuerza' ? [...o.eq] : []; R.donde = [...o.donde]; R.flex = o.flex; R.deporte = o.deporte; R.exp = o.exp;
   const nuevo = reNew(R, 'rw'); nuevo.genKey = key;
   // Cambiaste una respuesta anterior: lo que ya habías programado a mano pasa al nuevo borrador (día a día, en orden) si el tipo de sesión es el mismo.
   if (old && (old.dirty || old.draft.modo === 'propia')) {
@@ -1356,9 +1361,10 @@ root.addEventListener('click', async (e) => {
   }
   if (act === 'nov-bici') { st.tab = 'entreno'; lsSet('cadencia-tab', 'entreno'); rwStart(null, true); return render(); }
   if (o && act === 'rw-back') { if (o.step === 0) { st.rw = null; st.re = null; } else { o.step--; o.msg = ''; o.anim = 'back'; } render(); return window.scrollTo(0, 0); }
-  if (o && act === 'rw-main') { if (o.main !== v) { o.main = v; o.modo = ''; o.division = ''; o.eq = []; o.donde = ''; } render(); return rwAuto(); }
+  if (o && act === 'rw-main') { if (o.main !== v) { o.main = v; o.modo = ''; o.division = ''; o.eq = []; o.donde = []; } render(); return rwAuto(); }
   if (o && act === 'rw-exp') { o.exp = v; render(); return rwAuto(); }
-  if (o && act === 'rw-donde') { o.donde = v; o.eq = [...EQ_DEF[v]]; render(); return rwAuto(); }
+  // Selección múltiple: no avanza sola; «Siguiente» se activa con al menos un sitio marcado.
+  if (o && act === 'rw-donde') { o.donde = o.donde.includes(v) ? o.donde.filter((x) => x !== v) : [...o.donde, v]; o.eq = eqDeDonde(o.donde); return render(); }
   if (o && act === 'rw-eq') {
     if (v === 'ninguno') o.eq = o.eq.includes(v) ? [] : [v];
     else { const rest = o.eq.filter((x) => x !== 'ninguno'); o.eq = rest.includes(v) ? rest.filter((x) => x !== v) : [...rest, v]; }

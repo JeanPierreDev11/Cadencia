@@ -11,6 +11,7 @@ import { leerRetorno } from './strava.js';
 import { crearRecordatorios, leerIr } from './push.js';
 import { crearStrava } from './strava-ui.js';
 import { iniciarInstalar } from './instalar.js';
+import * as UI from './ui.js';
 
 /* ================================================================== */
 /* Utilidades                                                          */
@@ -66,10 +67,12 @@ const st = {
 };
 
 function render() {
+  const antesUI = UI.antes(root);
   if (st.view === 'auth') root.innerHTML = viewAuth();
   else if (st.view === 'onboarding') root.innerHTML = viewOnboarding();
   else if (st.view === 'main') root.innerHTML = viewMain();
   else if (st.view === 'error') root.innerHTML = viewError();
+  UI.despues(root, antesUI);
   document.title = APP_NAME;
   if (M) M.afterRender();
   document.body.classList.toggle('noscroll', !!(st.limite || st.calentar || st.pf || st.proInfo || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.resumen || st.legal || st.del || st.pro || st.proWelcome || st.recAsk));
@@ -1224,6 +1227,7 @@ async function enter(u) {
   }
 }
 
+UI.iniciarHojas(root);
 root.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.tap')) { e.preventDefault(); e.target.click(); } });
 root.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-act]');
