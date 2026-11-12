@@ -2,6 +2,19 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
+  <script>
+    // Dirección antigua (GitHub Pages): borra el service worker viejo y manda a la web nueva.
+    if (location.hostname.endsWith('github.io')) {
+      var nueva = 'https://cadencia-11cb6.web.app/' + location.search + location.hash;
+      var ir = function () { location.replace(nueva); };
+      try {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); }).then(ir, ir);
+          setTimeout(ir, 1500);
+        } else ir();
+      } catch (e) { ir(); }
+    }
+  </script>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>Cadencia</title>
   <meta name="description" content="Tu compañera de bici, peso y objetivos.">
