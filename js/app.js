@@ -1,3 +1,4 @@
+import './br.js'; // Fórmulas de Bilbao Ride (globalThis.BR): debe cargarse antes que secciones.js
 import { createBackend, errorText } from './data.js';
 import { APP_NAME } from './config.js';
 import * as E from './entreno.js';

@@ -1,0 +1,42 @@
+# Compila la web con Vite (minificada y ofuscada) y la publica en Firebase Hosting.
+# Se lanza sola en cada push a main que toque la web, o a mano desde
+# GitHub → Actions → «Publicar web en Firebase Hosting» → Run workflow.
+# Usa el mismo secreto FIREBASE_SERVICE_ACCOUNT que «Publicar IA en Firebase»
+# (la cuenta de servicio necesita el rol «Administrador de Firebase Hosting» o «Firebase Admin»).
+# Funciona igual con el repositorio en Privado.
+name: Publicar web en Firebase Hosting
+
+on:
+  push:
+    branches: [main]
+    paths: ['index.html', 'js/**', 'css/**', 'public/**', 'sw.js', 'vite.config.js', 'package.json', 'package-lock.json', 'firebase.json', '.github/workflows/publicar-web.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: publicar-web
+  cancel-in-progress: true
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar Vite
+        run: npm ci
+
+      - name: Compilar (minificar + ofuscar)
+        run: npm run build
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Publicar en Firebase Hosting
+        run: npx --yes firebase-tools@15.34.0 deploy --only hosting --project cadencia-11cb6 --force --non-interactive

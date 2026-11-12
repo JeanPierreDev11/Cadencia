@@ -1,35 +1,7 @@
 // Service worker: permite instalar la app y abrirla sin conexión.
-// Sube el número de versión cada vez que publiques cambios para que los móviles se actualicen.
-const VERSION = 'cadencia-v53';
-const SHELL = [
-  './',
-  './index.html',
-  './css/app.css',
-  './js/app.js',
-  './js/data.js',
-  './js/config.js',
-  './js/entreno.js',
-  './js/calorias.js',
-  './js/ejercicios.js',
-  './js/secciones.js',
-  './js/entreno-ui.js',
-  './js/util.js',
-  './js/legal.js',
-  './js/pro.js',
-  './js/gpx.js',
-  './js/mapa.js',
-  './js/trazados.js',
-  './js/strava.js',
-  './js/strava-ui.js',
-  './js/push.js',
-  './js/alimentos.js',
-  './js/instalar.js',
-  './js/br.js',
-  './manifest.webmanifest',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
-  './icons/apple-touch-icon.png',
-];
+// Al compilar (npm run build), Vite rellena VERSION y SHELL solo (ver vite.config.js): ya no hace falta subir el número a mano.
+const VERSION = 'cadencia-dev';
+const SHELL = ['./', './index.html'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

@@ -13,9 +13,9 @@ const nuevoCodigo = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), 
 /* ------------------------------------------------------------------ */
 async function firebaseBackend(config) {
   const [{ initializeApp }, A, F] = await Promise.all([
-    import(FB + 'firebase-app.js'),
-    import(FB + 'firebase-auth.js'),
-    import(FB + 'firebase-firestore.js'),
+    import(/* @vite-ignore */ FB + 'firebase-app.js'),
+    import(/* @vite-ignore */ FB + 'firebase-auth.js'),
+    import(/* @vite-ignore */ FB + 'firebase-firestore.js'),
   ]);
   const app = initializeApp(config);
   const auth = A.getAuth(app);
@@ -56,7 +56,7 @@ async function firebaseBackend(config) {
     },
     async linkGoogle() { await A.linkWithPopup(auth.currentUser, new A.GoogleAuthProvider()); },
     async uploadAvatar(uid, blob) {
-      const S = await import(FB + 'firebase-storage.js');
+      const S = await import(/* @vite-ignore */ FB + 'firebase-storage.js');
       const r = S.ref(S.getStorage(app), `profile_pictures/${uid}/avatar.jpg`);
       await S.uploadBytes(r, blob, { contentType: 'image/jpeg', cacheControl: 'public,max-age=3600' });
       return `${await S.getDownloadURL(r)}&v=${Date.now()}`;
@@ -120,14 +120,14 @@ async function firebaseBackend(config) {
       }
       try { await this.strava({ modo: 'desconectar' }); } catch (e) { /* sin Strava conectado */ }
       try { await this.ia({ modo: 'borrar' }); } catch (e) { /* si no hay IA, no hay contadores que borrar */ }
-      try { const S = await import(FB + 'firebase-storage.js'); await S.deleteObject(S.ref(S.getStorage(app), `profile_pictures/${u.uid}/avatar.jpg`)); } catch (e) { /* sin foto */ }
+      try { const S = await import(/* @vite-ignore */ FB + 'firebase-storage.js'); await S.deleteObject(S.ref(S.getStorage(app), `profile_pictures/${u.uid}/avatar.jpg`)); } catch (e) { /* sin foto */ }
       await F.deleteDoc(userRef(u.uid));
       await A.deleteUser(u);
     },
     // IA (foto del plato y Taller) a través de la Cloud Function «ia».
     async ia(data) {
       if (!iaFn) {
-        const Fn = await import(FB + 'firebase-functions.js');
+        const Fn = await import(/* @vite-ignore */ FB + 'firebase-functions.js');
         iaFn = Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), 'ia', { timeout: 95000 });
       }
       return (await iaFn(data)).data;
@@ -135,26 +135,26 @@ async function firebaseBackend(config) {
     // Strava a través de la Cloud Function «strava» (conectar, actividades, desconectar). Los tokens nunca llegan al móvil.
     async strava(data) {
       if (!stravaFn) {
-        const Fn = await import(FB + 'firebase-functions.js');
+        const Fn = await import(/* @vite-ignore */ FB + 'firebase-functions.js');
         stravaFn = Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), 'strava', { timeout: 60000 });
       }
       return (await stravaFn(data)).data;
     },
     // Sesión del portal de Stripe (cambiar tarjeta / cancelar). Devuelve { url }.
     async portal(volver) {
-      const Fn = await import(FB + 'firebase-functions.js');
+      const Fn = await import(/* @vite-ignore */ FB + 'firebase-functions.js');
       return (await Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), 'portalStripe', { timeout: 30000 })({ volver })).data;
     },
     // Notificaciones push (Firebase Cloud Messaging). El token identifica este dispositivo; se guarda en users/{uid}.fcmTokens.
     async pushToken(vapidKey) {
-      const M = await import(FB + 'firebase-messaging.js');
+      const M = await import(/* @vite-ignore */ FB + 'firebase-messaging.js');
       if (!(await M.isSupported())) throw err('push/no-soportado');
       const espera = new Promise((_, no) => setTimeout(() => no(err('push/sin-sw')), 10000));
       const reg = await Promise.race([navigator.serviceWorker.ready, espera]);
       return M.getToken(M.getMessaging(app), { vapidKey, serviceWorkerRegistration: reg });
     },
     async pushBorrarToken() {
-      try { const M = await import(FB + 'firebase-messaging.js'); await M.deleteToken(M.getMessaging(app)); } catch (e) { /* ya no había token */ }
+      try { const M = await import(/* @vite-ignore */ FB + 'firebase-messaging.js'); await M.deleteToken(M.getMessaging(app)); } catch (e) { /* ya no había token */ }
     },
     async saveToken(uid, token) { await F.setDoc(userRef(uid), { fcmTokens: F.arrayUnion(token) }, { merge: true }); },
     async removeToken(uid, token) { await F.setDoc(userRef(uid), { fcmTokens: F.arrayRemove(token) }, { merge: true }); },

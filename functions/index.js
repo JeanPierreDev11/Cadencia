@@ -338,7 +338,7 @@ exports.portalStripe = onCall({ secrets: [STRIPE_CLAVE], memory: '256MiB', timeo
   if (!d.stripeCustomerId) throw new HttpsError('failed-precondition', 'sin-cliente');
   const stripe = new Stripe(String(STRIPE_CLAVE.value() || '').trim());
   try {
-    const s = await stripe.billingPortal.sessions.create({ customer: d.stripeCustomerId, return_url: String(req.data && req.data.volver || 'https://jeanpierredev11.github.io/Cadencia/') });
+    const s = await stripe.billingPortal.sessions.create({ customer: d.stripeCustomerId, return_url: String(req.data && req.data.volver || 'https://cadencia-11cb6.web.app/') });
     return { url: s.url };
   } catch (e) { console.error('portal', e && e.message); throw new HttpsError('internal', 'portal'); }
 });
