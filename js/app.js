@@ -726,7 +726,8 @@ function compCardHTML(ws) {
 function pesoDetalleHTML() {
   const c = COMP.find((x) => x.k === st.pesoComp) || COMP[1], modo = st.pesoModo || 'kg';
   const con = st.weights.filter((w) => w[c.k] != null), last = con[con.length - 1], prev = con.length > 1 ? con[con.length - 2] : null;
-  const back = `<div class="det-top"><button type="button" class="iconbtn" data-act="comp-close" aria-label="Volver">${I.back}</button><h2>${esc(c.t)}</h2><span style="width:36px"></span></div>`;
+  const back = `<div class="det-top"><button type="button" class="iconbtn" data-act="comp-close" aria-label="Volver">${I.back}</button>
+    <label class="det-sel"><span class="sr">Métrica</span><select data-comp-sel aria-label="Cambiar de métrica">${['agua', 'musculo', 'grasa', 'hueso'].map((k) => { const m = COMP.find((x) => x.k === k); return `<option value="${k}" ${m.k === c.k ? 'selected' : ''}>${esc(m.t)}</option>`; }).join('')}</select></label><span style="width:36px"></span></div>`;
   if (!last) return `<section class="det">${back}<div class="empty"><b>Aún no hay datos de ${esc(c.t.toLowerCase())}</b><span>Apúntalos con «Añadir registro» y verás aquí el detalle.</span></div></section>`;
   const p = pctOf(c, last), k = kgOf(c, last);
   const dk = prev && kgOf(c, prev) != null && k != null ? k - kgOf(c, prev) : null, dp = prev && pctOf(c, prev) != null && p != null ? p - pctOf(c, prev) : null;
@@ -981,13 +982,14 @@ const PLANES = [
   { id: 'siempre', n: 'PRO Para Siempre', precio: '89,99 €', nota: 'Pago único' },
 ];
 // Tabla comparativa Gratis vs Pro. true = ✓, false = ✗, texto = tal cual.
+// [función, gratis, pro, descripción corta]
 const COMPARATIVA = [
-  ['Registrar entrenamientos', true, true],
-  ['Crear rutinas', '3', 'Ilimitadas'],
-  ['Escáner IA de alimentos', '1/día', 'Ilimitado'],
-  ['Mapa de Fatiga', false, true],
-  ['Modo Bestia', false, true],
-  ['Calculadora de Calentamiento', false, true],
+  ['Registrar entrenamientos', true, true, 'Apunta series, kilos y repeticiones'],
+  ['Crear rutinas', '3', 'Ilimitadas', 'Guarda tus propios planes de entreno'],
+  ['Escáner IA de alimentos', '1/día', 'Ilimitado', 'Calcula calorías y macros desde una foto'],
+  ['Mapa de Fatiga', false, true, 'Ve qué músculos están listos para entrenar'],
+  ['Modo Bestia', false, true, 'RIR, drop-sets y superseries en tus series'],
+  ['Calculadora de Calentamiento', false, true, 'Series de aproximación hasta tu peso de trabajo'],
 ];
 const cmpCelda = (v) => v === true ? '<span class="cmp-y" role="img" aria-label="Incluido">✓</span>' : v === false ? '<span class="cmp-n" role="img" aria-label="No incluido">✗</span>' : `<span class="cmp-t">${v}</span>`;
 const planActivo = () => { const pr = st.profile || {}; return pr.isPro === true && PLANES.some((x) => x.id === pr.proPlan) ? pr.proPlan : null; };
@@ -1014,7 +1016,7 @@ function proInfoHTML() {
       <div class="sheet-head"><span style="width:36px"></span><h2>Gratis vs PRO</h2><button type="button" class="iconbtn" data-act="pro-info-close" aria-label="Cerrar">${I.close || '✕'}</button></div>
       <div class="pinfo-scroll"><table class="cmp">
         <thead><tr><th scope="col"><span class="sr">Función</span></th><th scope="col">Gratis</th><th scope="col" class="cmp-pro">PRO</th></tr></thead>
-        <tbody>${COMPARATIVA.map(([f, g, p]) => `<tr><th scope="row">${f}</th><td>${cmpCelda(g)}</td><td class="cmp-pro">${cmpCelda(p)}</td></tr>`).join('')}</tbody>
+        <tbody>${COMPARATIVA.map(([f, g, p, d]) => `<tr><th scope="row">${f}${d ? `<small class="cmp-d">${d}</small>` : ''}</th><td>${cmpCelda(g)}</td><td class="cmp-pro">${cmpCelda(p)}</td></tr>`).join('')}</tbody>
       </table></div>
       <div class="pinfo-foot"><button type="button" class="btn block" data-act="pro-info-close">${pro ? 'Cerrar' : 'Elegir Plan'}</button></div>
     </div>`;
@@ -1299,7 +1301,7 @@ root.addEventListener('input', (e) => {
   if (next) next.disabled = !ok;
 });
 
-root.addEventListener('change', async (e) => { if (st.view === 'main') { if (e.target.matches && e.target.matches('input[data-foto]')) { const f = e.target.files && e.target.files[0]; e.target.value = ''; return subirFoto(f); } if (R.change(e.target)) return; await M.change(e.target); } });
+root.addEventListener('change', async (e) => { if (st.view === 'main') { if (e.target.matches && e.target.matches('select[data-comp-sel]')) { st.pesoComp = e.target.value; st.pesoModo = 'kg'; render(); return; }  if (e.target.matches && e.target.matches('input[data-foto]')) { const f = e.target.files && e.target.files[0]; e.target.value = ''; return subirFoto(f); } if (R.change(e.target)) return; await M.change(e.target); } });
 
 root.addEventListener('submit', async (e) => {
   e.preventDefault();

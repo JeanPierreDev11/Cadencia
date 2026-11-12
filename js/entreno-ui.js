@@ -1561,15 +1561,17 @@ root.addEventListener('change', async (e) => {
 const recColor = (p) => (p >= 100 ? '#3DDC84' : p >= 50 ? '#FFB020' : '#FF453A');
 function recuperacionHTML() {
   const ws = (st.workouts || []).filter((w) => w.tipo === 'gym' || w.tipo === 'bici');
-  const rec = E.recuperacion(ws, new Date()), sem = E.semana(ws, todayISO());
+  const pro = esPro();
+  // Sin Pro NO se calcula nada real: todo 100 % fresco (verde) y sin semana, para que el blur no deje deducir la fatiga.
+  const rec = pro ? E.recuperacion(ws, new Date()) : {}, sem = pro ? E.semana(ws, todayISO()) : {};
   const tarjetas = E.MUSC_GRUPOS.map((g) => {
-    const pct = E.recGrupo(rec, g), c = recColor(pct), fills = {};
+    const pct = pro ? E.recGrupo(rec, g) : 100, c = recColor(pct), fills = {};
     g.m.forEach((k) => { fills[k] = [c, 0.95]; });
     return `<div class="rcv-card">${figura(fills, g.side, g.n)}<b>${g.n}</b><span class="rcv-pill" style="background:${c}">${pct}%</span></div>`;
   }).join('');
   const heat = {};
   Object.entries(sem).forEach(([k, v]) => { heat[k] = ['#F2BE1A', (0.25 + 0.75 * v).toFixed(2)]; });
-  const hay = Object.keys(heat).length;
+  const hay = pro && Object.keys(heat).length;
   const cuerpo = `<div class="rcv-row">${tarjetas}</div>
     <div class="rcv-leg"><i style="background:#3DDC84"></i>Listo <i style="background:#FFB020"></i>Descansando <i style="background:#FF453A"></i>Fatigado</div>
     <h2>Esta semana</h2><p class="rcv-sub">Mira qué músculos entrenaste</p>

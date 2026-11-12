@@ -231,7 +231,7 @@ export function crearSecciones(ctx) {
       ${MEALS.map((name, i) => {
         const arr = it.filter((x) => x.m === i), k = arr.reduce((a, x) => a + x.k, 0), ayer = prev.filter((x) => x.m === i), sk = scans.filter((x) => x.meal === i);
         return `<div class="meal">
-          <div class="meal-h"><button type="button" class="meal-n meal-open" data-act="meal-open" data-v="${i}" aria-haspopup="dialog" aria-label="${name}: ${arr.length ? nf(k) + ' kcal, ver alimentos' : 'sin alimentos'}"><b>${name}</b>${arr.length ? `<span class="muted small">${nf(k)} kcal</span>` : ''}<span class="chev" aria-hidden="true">${I.chev}</span></button>${arr.length && arr.some((x) => x.ia) ? `<span class="meal-acts full"><button type="button" class="chipbtn chip" data-act="meal-open" data-v="${i}">Modificar</button></span>` : `<span class="meal-acts">${esPro() ? `<button type="button" class="chipbtn chip iachip" data-act="scan-open" data-v="${i}" aria-label="Escanear alimento para ${name.toLowerCase()}">${ICO.camara} Escanear alimento</button>` : `<button type="button" class="chipbtn chip iachip" data-act="pro-open" data-v="foto" aria-label="Escanear alimento para ${name.toLowerCase()} (Cadencia Pro)">${ICO.camara} Escanear alimento <span class="protag">Pro</span></button>`}${arr.length ? `<button type="button" class="chipbtn chip" data-act="meal-open" data-v="${i}">Modificar</button>` : `<button type="button" class="chipbtn chip" data-act="n-add" data-v="${i}">${I.plus} Añadir</button>`}</span>`}</div>
+          <div class="meal-h"><button type="button" class="meal-n meal-open" data-act="meal-open" data-v="${i}" aria-haspopup="dialog" aria-label="${name}: ${arr.length ? nf(k) + ' kcal, ver alimentos' : 'sin alimentos'}"><b>${name}</b>${arr.length ? `<span class="muted small">${nf(k)} kcal</span>` : ''}<span class="chev" aria-hidden="true">${I.chev}</span></button>${arr.length && arr.some((x) => x.ia) ? `<span class="meal-acts full"><button type="button" class="chipbtn chip" data-act="meal-open" data-v="${i}">Modificar</button></span>` : `<span class="meal-acts">${scanBtn(i, `aria-label="Escanear alimento para ${name.toLowerCase()}"`)}${arr.length ? `<button type="button" class="chipbtn chip" data-act="meal-open" data-v="${i}">Modificar</button>` : `<button type="button" class="chipbtn chip" data-act="n-add" data-v="${i}">${I.plus} Añadir</button>`}</span>`}</div>
           ${sk.map(skeleton).join('')}${tarjetas(i, arr)}
           ${ayer.length && !arr.length && !sk.length ? `<button type="button" class="link repetir" data-act="n-repetir" data-v="${i}">Repetir de ${ayerTxt} · ${ayer.length === 1 ? esc(ayer[0].n.length > 28 ? ayer[0].n.slice(0, 27) + '…' : ayer[0].n) : ayer.length + ' alimentos'} (${nf(ayer.reduce((a, x) => a + x.k, 0))} kcal)</button>` : ''}
         </div>`;
@@ -890,6 +890,7 @@ export function crearSecciones(ctx) {
   function viewProgreso() {
     const sub = st.progSub || 'peso';
     let h = head('Forma física', 'Peso, cuerpo y forma', true, sub === 'peso' ? `<button class="iconbtn hist-btn" data-act="peso-hist" aria-label="Historial de registros">${I.clock}</button>` : '');
+    if (sub === 'peso' && st.pesoComp) return h + viewPeso(true); // detalle de una métrica: sin pestañas, el selector de la cabecera cambia de métrica
     h += seg('p-sub', [['peso', 'Peso'], ['cuerpo', 'Cuerpo'], ['forma', 'Forma']], sub, 'Qué ver');
     if (sub === 'cuerpo') return h + subCuerpo();
     if (sub === 'forma') return h + subForma();
@@ -1081,7 +1082,7 @@ export function crearSecciones(ctx) {
       case 'pro-welcome-close': st.proWelcome = false; render(); return true;
       case 'pro-welcome-go': st.proWelcome = false; st.tab = 'nutricion'; st.food = null; st.tl = null; lsSet('cadencia-tab', 'nutricion'); render(); window.scrollTo(0, 0); return true;
       case 'pro-refresh': refrescarPro(true); return true;
-      case 'scan-open': abrirCamara(Number(v)); return true;
+      case 'scan-open': if (libreAgotado()) { st.pro = { from: 'limite-scan' }; render(); return true; } abrirCamara(Number(v)); return true;
       case 'scan-quitar': st.scans = (st.scans || []).filter((x) => x.id !== v); render(); return true;
       case 'scan-reintentar': { const sc = (st.scans || []).find((x) => x.id === v); if (sc) analizarScan(sc); return true; }
       case 'meal-open': st.mealDet = Number(v); st.mealMsg = ''; st.mealCorr = ''; render(); return true;
@@ -1188,6 +1189,10 @@ export function crearSecciones(ctx) {
   // Gratis: 1 escaneo de comida al día. La fecha del último escaneo la guarda el servidor en users/{uid}.ultimoEscaneo (día de Madrid).
   const hoyES = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date());
   const libreAgotado = () => !esPro() && !!st.profile && st.profile.ultimoEscaneo === hoyES();
+  // Botón «Escanear alimento»: Pro y gratis con el escaneo del día disponible abren la cámara; gratis con el escaneo ya gastado va DIRECTO al modal Pro (sin cámara ni galería).
+  const scanBtn = (i, extra = '') => libreAgotado()
+    ? `<button type="button" class="chipbtn chip iachip" data-act="pro-open" data-v="limite-scan" ${extra}>${ICO.camara} Escanear alimento <span class="protag">Pro</span></button>`
+    : `<button type="button" class="chipbtn chip iachip" data-act="scan-open" data-v="${i}" ${extra}>${ICO.camara} Escanear alimento</button>`;
   // Cuando la cuenta pasa a Pro (el servidor lo activa al cobrar), se actualiza sola y se da la bienvenida.
   const bienvenidaKey = () => `cadencia-pro-bienvenida-${st.user ? st.user.uid : ''}`;
   function revisarBienvenida() {
@@ -1199,7 +1204,7 @@ export function crearSecciones(ctx) {
     if (st.profile.ultimoEscaneo !== p.ultimoEscaneo) st.profile.ultimoEscaneo = p.ultimoEscaneo;
     const antes = esPro(), ahora = p.isPro === true;
     if (antes === ahora) return;
-    st.profile.isPro = ahora; st.pro = null;
+    st.profile.isPro = ahora; st.pro = null; st.vuelveDePago = false;
     if (ahora) { st.iaQuedan = null; iaEstadoPedido = ''; revisarBienvenida(); } else lsSet(bienvenidaKey(), '');
     render();
   }
@@ -1221,11 +1226,12 @@ export function crearSecciones(ctx) {
   }
   // Tras pulsar «Suscribirme» comprobamos cada pocos segundos durante unos minutos, por si el aviso en directo no llega.
   function vigilarPago() {
+    st.vuelveDePago = true; // el usuario se va a Stripe: al volver se muestra «Ya he pagado»
     if (sondeo) clearInterval(sondeo);
     let n = 0;
     sondeo = setInterval(() => { if (esPro() || ++n > 60) { clearInterval(sondeo); sondeo = null; return; } refrescarPro(false); }, 5000);
   }
-  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && st.user && st.profile && !esPro()) refrescarPro(false); });
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && st.user && st.profile && !esPro()) { refrescarPro(false); if (st.vuelveDePago && st.pro) render(); /* de vuelta de Stripe: aparece «Ya he pagado» */ } });
   const proVentajas = () => [
       [ICO.camara, 'Escanear alimento', 'Haz una foto a tu plato y la IA calcula las calorías y los macros. Tú lo revisas y lo guardas.'],
       [ICO.spark, 'Recomendaciones para tu bici', 'En el Taller, 3 piezas compatibles con tu bici y tu presupuesto, con precio aproximado.'],
@@ -1261,7 +1267,7 @@ export function crearSecciones(ctx) {
           <ul class="pw-list">${proVentajas().map(([ic, t, d]) => `<li><span class="pw-li-i">${ic}</span><span><b>${t}</b><small>${d}</small></span></li>`).join('')}</ul>
           ${go}
           ${PRO_LINK ? '<p class="small muted">Paga con el mismo email de tu cuenta de Cadencia. Al volver a la app, tu cuenta se actualiza sola.</p>' : ''}
-          <button type="button" class="btn ghost block" data-act="pro-refresh">Ya he pagado: actualizar</button>
+          ${st.vuelveDePago ? '<button type="button" class="btn ghost block" data-act="pro-refresh">Ya he pagado: actualizar</button>' : ''}
         </div>
       </div>`;
   }
@@ -1362,7 +1368,7 @@ export function crearSecciones(ctx) {
     const tecla = (e) => { if (e.key === 'Escape') cerrar(); };
     document.addEventListener('keydown', tecla);
     m.querySelector('[data-cam=x]').onclick = cerrar;
-    m.querySelector('input[type=file]').onchange = (e) => { const f = e.target.files && e.target.files[0]; cerrar(); fotoPlato(f, meal); };
+    m.querySelector('input[type=file]').onchange = (e) => { const f = e.target.files && e.target.files[0]; cerrar(); if (libreAgotado()) { st.pro = { from: 'limite-scan' }; render(); return; } fotoPlato(f, meal); };
     shot.onclick = () => {
       if (!video.videoWidth) return;
       const c = document.createElement('canvas'); c.width = video.videoWidth; c.height = video.videoHeight;
@@ -1429,7 +1435,7 @@ export function crearSecciones(ctx) {
           <div class="mlist">${rows}</div>
           <div class="meal-acts2">
             <button type="button" class="chipbtn chip" data-act="n-add" data-v="${i}">${I.plus} Añadir alimento</button>
-            ${esPro() ? `<button type="button" class="chipbtn chip iachip" data-act="scan-open" data-v="${i}">${ICO.camara} Escanear alimento</button>` : `<button type="button" class="chipbtn chip iachip" data-act="pro-open" data-v="foto">${ICO.camara} Escanear alimento <span class="protag">Pro</span></button>`}
+            ${scanBtn(i)}
           </div>
           ${ia}
         </div>
