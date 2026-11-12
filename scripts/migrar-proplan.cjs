@@ -40,7 +40,9 @@ async function migrar(db, aplicar, log = console.log) {
 module.exports = { migrar };
 
 if (require.main === module) {
-  const admin = require(path.join(__dirname, '..', 'functions', 'node_modules', 'firebase-admin'));
-  admin.initializeApp({ projectId: 'cadencia-11cb6' });
-  migrar(admin.firestore(), process.env.APLICAR === 'true').then(() => process.exit(0), (e) => { console.error(e); process.exit(1); });
+  const desdeFunctions = (m) => require(require.resolve(m, { paths: [path.join(__dirname, '..', 'functions')] }));
+  const { initializeApp } = desdeFunctions('firebase-admin/app');
+  const { getFirestore } = desdeFunctions('firebase-admin/firestore');
+  initializeApp({ projectId: 'cadencia-11cb6' });
+  migrar(getFirestore(), process.env.APLICAR === 'true').then(() => process.exit(0), (e) => { console.error(e); process.exit(1); });
 }
