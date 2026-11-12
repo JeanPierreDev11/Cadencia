@@ -19,6 +19,11 @@ const fmtClock = (ms) => { const t = Math.max(0, Math.floor(ms / 1000)), h = Mat
 const RT = E.RTIPOS;
 const WK_DE = { fuerza: 'gym', bici: 'bici', cardio: 'cardio', otro: 'otro' }; // tipo de rutina → tipo de entreno registrado
 const clone = (o) => JSON.parse(JSON.stringify(o));
+const kgTxt = (v) => nf(Math.round(v * 10) / 10);
+// Sugerencia Pro para la serie j: la misma serie de la última sesión (st.workouts ya viene de Firestore) con +1 rep o +2,5 kg.
+const sugSerie = (ex, j) => (esPro() && !(st.live && st.live.edit) ? E.sugerirSerie(ex.prev[j], ex.objReps) : null);
+// 1RM estimado (Brzycki) del ejercicio con lo que lleva escrito; vacío si no hay serie válida.
+const ormHTML = (ex) => { const v = E.mejor1RM(ex.s, num); return v == null ? '' : `👑 1RM estimado: ${kgTxt(v)} kg`; };
 const rutinaOf = () => { const r = st.profile && st.profile.rutina; return r && Array.isArray(r.dias) && r.dias.length && r.sesiones ? r : null; };
 // Todas tus rutinas guardadas; la activa es la que usa la semana, Inicio y el entrenamiento en directo.
 function rutinasList() {
@@ -820,6 +825,21 @@ function empezarFuerza(fecha) {
   if (st.live) return startLive(fecha);
   st.modoSel = { fecha }; render();
 }
+function resumenSheetHTML() {
+  const r = st.resumen;
+  return `<div class="sheet-back" data-act="sum-close"></div>
+    <div class="sheet short" role="dialog" aria-modal="true" aria-label="Resumen del entreno">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><span style="width:36px"></span><h2>Entreno terminado</h2><button type="button" class="iconbtn" data-act="sum-close" aria-label="Cerrar">${I.back}</button></div>
+      <div class="sum-pro">
+        <span class="small muted">${esc(r.nombre)}${r.record ? ' · ¡Nuevo récord!' : ''}</span>
+        <span class="sum-lbl">👑 Volumen total movido</span>
+        <b class="sum-vol num">${nf(r.vol)} kg</b>
+        <span class="small muted">${r.sets} ${r.sets === 1 ? 'serie' : 'series'} · ${fmtDur(r.min)}</span>
+        <button type="button" class="btn block" data-act="sum-close">Listo</button>
+      </div>
+    </div>`;
+}
 function modoSheetHTML() {
   const opt = (v, ico, t, sub) => `<button type="button" class="regopt" data-act="modo-pick" data-v="${v}">${ico}<span><b>${esc(t)}</b><small class="muted">${esc(sub)}</small></span></button>`;
   return `<div class="sheet-back" data-act="modo-close"></div>
@@ -887,17 +907,17 @@ function viewLive() {
     return `<section class="lex ${i > 0 && L.ex[i - 1].superset ? 'ss-next' : ''} ${e.superset ? 'ss-first' : ''}">
       ${i > 0 && L.ex[i - 1].superset ? '<span class="ss-tag">Superserie</span>' : ''}
       <div class="lex-head">${exThumb(x || { eq: 'corporal' })}
-        <span class="lex-t"><b>${esc(e.n)}</b><span class="small muted">${x ? E.MUSCULOS[x.m] : ''}${e.obj ? ` · Objetivo ${esc(e.obj)}` : ''}</span></span>
+        <span class="lex-t"><b>${esc(e.n)}</b><span class="small muted">${x ? E.MUSCULOS[x.m] : ''}${e.obj ? ` · Objetivo ${esc(e.obj)}` : ''}</span>${esPro() ? `<span class="orm" data-orm="${i}" ${ormHTML(e) ? '' : 'hidden'}>${ormHTML(e)}</span>` : ''}</span>
         <button type="button" class="iconbtn" data-act="live-swap" data-v="${i}" aria-label="Cambiar ${esc(e.n)}">${I.swap}</button>
         <button type="button" class="iconbtn" data-act="live-del" data-v="${i}" aria-label="Quitar ${esc(e.n)}">${I.trash}</button></div>
       ${uniOk ? `<div class="seg mini" role="group" aria-label="Lados"><button type="button" data-act="live-uni" data-v="${i}" data-u="0" aria-pressed="${!e.uni}">Ambos lados</button><button type="button" data-act="live-uni" data-v="${i}" data-u="1" aria-pressed="${!!e.uni}">Unilateral</button></div>` : ''}
       <div class="ltab ${plano ? 'simple' : ''}">
         <div class="lrow-h"><span>Serie</span><span>Anterior</span><span>kg</span><span>${e.uni ? 'Reps/lado' : 'Reps'}</span>${plano ? '' : '<span></span>'}</div>
-        ${e.s.map((s, j) => { const p = e.prev[j]; const phKg = p && p.kg ? fmtKg(p.kg) : '–'; const phR = p ? String(p.reps) : e.objReps || '–'; const sug = plano ? '' : sugerencia(e, s); return `<div class="lset ${!plano && s.done ? 'on' : ''}">
+        ${e.s.map((s, j) => { const p = e.prev[j]; const sg = sugSerie(e, j); const phKg = sg ? (sg.kg ? fmtKg(sg.kg) : 'kg') : p && p.kg ? fmtKg(p.kg) : '–'; const phR = sg ? String(sg.reps) : p ? String(p.reps) : e.objReps || '–'; const pc = sg ? ' ph-sug' : ''; const sug = plano ? '' : sugerencia(e, s); return `<div class="lset ${!plano && s.done ? 'on' : ''}">
           <span class="num sn">${j + 1}</span>
           <span class="prev">${p ? `${p.kg ? fmtKg(p.kg) + ' × ' : ''}${p.reps}${p.uni ? ' /lado' : ''}` : '—'}</span>
-          <input class="input" data-lv="${i}.${j}.kg" inputmode="decimal" value="${esc(s.kg)}" placeholder="${esc(phKg)}" aria-label="Kilos serie ${j + 1} de ${esc(e.n)}">
-          <input class="input" data-lv="${i}.${j}.reps" inputmode="numeric" value="${esc(s.reps)}" placeholder="${esc(phR)}" aria-label="Repeticiones serie ${j + 1} de ${esc(e.n)}">
+          <input class="input${pc}" data-lv="${i}.${j}.kg" inputmode="decimal" value="${esc(s.kg)}" placeholder="${esc(phKg)}" aria-label="Kilos serie ${j + 1} de ${esc(e.n)}">
+          <input class="input${pc}" data-lv="${i}.${j}.reps" inputmode="numeric" value="${esc(s.reps)}" placeholder="${esc(phR)}" aria-label="Repeticiones serie ${j + 1} de ${esc(e.n)}">
           ${plano ? '' : `<button type="button" class="chk" data-act="live-done" data-v="${i}.${j}" aria-pressed="${s.done}" aria-label="Marcar serie ${j + 1} como hecha">${I.check}</button>`}
         </div>${bestiaHTML(e, i, j, s)}${sug ? `<p class="lsug">${sug}</p>` : ''}`; }).join('')}
       </div>
@@ -1005,7 +1025,12 @@ setInterval(() => {
 
 // Rellena una serie con la referencia (la última vez, o el objetivo) si está vacía.
 function rellenarSerie(ex, j) {
-  const s = ex.s[j], p = ex.prev[j];
+  const s = ex.s[j], p = ex.prev[j], sg = sugSerie(ex, j);
+  if (sg) {
+    if (!String(s.reps).trim()) s.reps = String(sg.reps);
+    if (!String(s.kg).trim() && sg.kg) s.kg = String(sg.kg).replace('.', ',');
+    return true;
+  }
   if (!String(s.reps).trim()) s.reps = p ? String(p.reps) : primerNumero(ex.objReps);
   if (!String(s.kg).trim() && p && p.kg) s.kg = String(p.kg).replace('.', ',');
   return !!String(s.reps).trim();
@@ -1047,11 +1072,15 @@ async function liveFinish() {
     await api.saveWorkout(st.user.uid, o);
     st.workouts = await api.listWorkouts(st.user.uid);
     const editado = !!L.edit;
+    // Pro: volumen total movido (peso × reps de todas las series; unilateral ×2, igual que el contador en vivo)
+    const volTotal = Math.round(ejs.reduce((a, e) => a + e.series.reduce((b, s) => b + s.kg * s.reps * (e.uni ? 2 : 1), 0), 0));
+    const record = E.beatsRecord(before, after);
     st.live = null; st.liveMin = false; liveSave();
     st.tab = 'entreno'; lsSet('cadencia-tab', 'entreno');
     if (editado) st.wkHist = true; else { st.wkTab = 'semana'; lsSet('cadencia-wktab', 'semana'); }
+    if (esPro() && !editado) st.resumen = { nombre: o.nombre, vol: volTotal, sets: nSets, min, record };
     render(); window.scrollTo(0, 0);
-    toast(editado ? 'Entreno actualizado' : E.beatsRecord(before, after) ? '¡Nuevo récord personal!' : `Entrenamiento guardado · ${nSets} series`);
+    toast(editado ? 'Entreno actualizado' : record ? '¡Nuevo récord personal!' : `Entrenamiento guardado · ${nSets} series`);
   } catch (e) { fail(`No se ha podido guardar: ${errorText(e)}`); }
 }
 
@@ -1340,6 +1369,7 @@ root.addEventListener('click', async (e) => {
   if (act === 'rest-saltar') { st.rest = null; restPaint(); return; }
 
   // modo de entreno de fuerza
+  if (act === 'sum-close') { st.resumen = null; return render(); }
   if (act === 'modo-close') { st.modoSel = null; return render(); }
   if (act === 'modo-pick' && st.modoSel) { const f = st.modoSel.fecha; st.modoSel = null; st.regPick = null; return startLive(f, v); }
 
@@ -1391,6 +1421,8 @@ root.addEventListener('input', (e) => {
     if (k === 'rir') { if (!esPro()) return; t.value = t.value.replace(/[^0-5]/g, '').slice(-1); }
     st.live.ex[Number(i)].s[Number(j)][k] = t.value; liveSave();
     const tt = liveTotals(), vEl = document.getElementById('live-vol'); if (vEl) vEl.textContent = `${nf(tt.vol)} kg`;
+    const oEl = esPro() && root.querySelector(`[data-orm="${i}"]`);
+    if (oEl) { const h = ormHTML(st.live.ex[Number(i)]); oEl.textContent = h; oEl.hidden = !h; }
     return;
   }
   if (st.re && t.dataset.re) {
@@ -1471,5 +1503,5 @@ function recuperacionHTML() {
   return `<section class="rcv"><h2>Recuperación muscular</h2><p class="rcv-sub">Mira qué músculos están listos para entrenar</p>
     ${esPro() ? cuerpo : muro}</section>`;
 }
-  return { regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, recuperacionHTML, rutShareSheetHTML };
+  return { regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, recuperacionHTML, rutShareSheetHTML };
 }

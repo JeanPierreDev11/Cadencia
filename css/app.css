@@ -1359,3 +1359,11 @@ body:has(.tabbar) .ib { bottom: calc(var(--safe-b) + 66px); }
 /* Controles bloqueados (Free): atenuados, pero se pueden tocar para avisar de que son Pro */
 .is-locked { opacity: .4; cursor: not-allowed; }
 .is-locked .rir-in, .is-locked .drop-btn { pointer-events: auto; }
+/* ---------- Pro: sobrecarga progresiva, 1RM y resumen ---------- */
+.input.ph-sug::placeholder { color: #F2BE1A; opacity: .6; font-weight: 700; }
+.orm { display: block; margin-top: 2px; font-size: 12px; font-weight: 700; letter-spacing: .02em; color: var(--accent-text); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.orm[hidden] { display: none; }
+.sum-pro { display: grid; gap: 8px; justify-items: center; text-align: center; padding: 8px 16px 20px; }
+.sum-lbl { font-family: 'Archivo', sans-serif; text-transform: uppercase; letter-spacing: .08em; font-size: 13px; font-weight: 800; color: var(--muted); }
+.sum-vol { font-size: 44px; line-height: 1.05; font-weight: 800; color: #F2BE1A; font-variant-numeric: tabular-nums; }
+.sum-pro .btn { margin-top: 10px; }

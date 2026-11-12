@@ -119,6 +119,31 @@ export function lastSets(ws, name) {
   return null;
 }
 
+/* ---------- Pro: sobrecarga progresiva y 1RM ---------- */
+// 1RM estimado (Brzycki): peso × 36 / (37 − reps). Solo es fiable hasta ~12 reps; fuera de 1–12 o sin peso → null.
+export function orm1(kg, reps) {
+  kg = Number(kg); reps = Math.round(Number(reps));
+  if (!(kg > 0) || !(reps >= 1 && reps <= 12)) return null;
+  return kg * (36 / (37 - reps));
+}
+// Mejor 1RM estimado entre las series (kg y reps escritos).
+export function mejor1RM(series, parse = Number) {
+  let best = null;
+  for (const s of series || []) { const v = orm1(parse(s.kg), parse(s.reps)); if (v != null && (best == null || v > best)) best = v; }
+  return best;
+}
+// Sugerencia para forzar sobrecarga a partir de la misma serie de la última sesión.
+// Rango "8-12": si no llegaste al tope → mismo peso +1 rep; si lo alcanzaste → +2,5 kg y vuelta al mínimo del rango.
+// Sin rango (ejercicio libre) → mismo peso +1 rep. Sin peso (corporal) → +1 rep. Objetivos en tiempo → sin sugerencia.
+export function sugerirSerie(prev, objReps) {
+  if (!prev) return null;
+  const kg = Number(prev.kg) || 0, reps = Math.round(Number(prev.reps));
+  if (!(reps >= 1) || /\b(s|seg|min)\b/i.test(String(objReps || ''))) return null;
+  const n = String(objReps || '').match(/\d+/g), lo = n ? Number(n[0]) : 0, hi = n ? Number(n[n.length - 1]) : 0;
+  if (kg > 0 && hi && reps >= hi) return { kg: Math.round((kg + 2.5) * 10) / 10, reps: Math.max(1, lo || reps) };
+  return { kg, reps: reps + 1 };
+}
+
 /* ================================================================== */
 /* Rutinas                                                             */
 /* ================================================================== */
