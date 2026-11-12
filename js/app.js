@@ -1214,7 +1214,7 @@ root.addEventListener('click', async (e) => {
   else if (act === 'legal-open') { if (st.view === 'auth') { const f = root.querySelector('form'); st.authKeep = f ? { name: f.name ? f.name.value : '', email: f.email.value, pass: f.pass.value, acepto: f.acepto ? f.acepto.checked : false } : null; } st.legal = true; render(); if (st.authKeep) keepForm(st.authKeep); }
   else if (act === 'legal-close') { st.legal = false; render(); if (st.view === 'auth' && st.authKeep) { keepForm(st.authKeep); st.authKeep = null; } }
   else if (act === 'pf-open') { st.pf = { v, f: {}, busy: false }; st.editGoals = null; render(); }
-  else if (act === 'plan-sel') { if (st.pf && PLANES.some((x) => x.id === v)) { st.pf.plan = v; render(); } }
+  else if (act === 'plan-sel') { const actual = (st.pf && st.pf.plan) || planActivo() || 'anual'; if (v === actual) return; if (st.pf && PLANES.some((x) => x.id === v)) { st.pf.plan = v; render(); } }
   else if (act === 'plan-go') { if (((st.pf && st.pf.plan) || planActivo() || 'anual') === planActivo()) return; const url = planUrl((st.pf && st.pf.plan) || 'anual', st.user); if (!url) { toast('La suscripción estará disponible muy pronto.'); return; } const w = window.open(url, '_blank'); if (!w) location.assign(url); }
   else if (act === 'pro-info-open') { st.proInfo = true; render(); }
   else if (act === 'pro-info-close') { st.proInfo = null; render(); }

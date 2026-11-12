@@ -1442,3 +1442,10 @@ body:has(.tabbar) .ib { bottom: calc(var(--safe-b) + 66px); }
 /* v51: botón de suscripción de altura fija (sin saltos al cambiar de plan) */
 .btn.block.sub-cta { height: 60px; min-height: 60px; padding: 0 18px; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.2; font-size: 16px; box-sizing: border-box; }
 .sub-plan { box-sizing: border-box; }
+
+/* Blindaje geometría — Administrar suscripción (v53) */
+.btn.block.sub-cta { height: 64px !important; min-height: 64px !important; max-height: 64px !important; padding: 0 18px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; line-height: 1.2; overflow: hidden; }
+.sub-plan { box-sizing: border-box; border: 2px solid transparent; min-height: 78px; }
+.sub-plan[aria-checked="true"] { border-color: #F2BE1A; }
+.sub-plan .sub-radio::after { content: ''; width: 10px; height: 10px; border-radius: 50%; background: transparent; }
+.sub-plan[aria-checked="true"] .sub-radio::after { background: #F2BE1A; }
