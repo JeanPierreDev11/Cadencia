@@ -141,22 +141,21 @@ function wkSemana() {
   const streak = E.streakDays(ws, today, (d) => !!dayPlan(d));
   // Si tu rutina no tiene bici y sí fuerza, el panel habla de series y kilos movidos en lugar de sesiones y distancia.
   const soloFuerza = r.dias.every((d) => r.sesiones[d].t !== 'bici') && r.dias.some((d) => r.sesiones[d].t === 'fuerza');
-  const hoy = { sets: 0, vol: 0 };
-  ws.filter((w) => w.fecha === today).forEach((w) => { hoy.sets += E.seriesDe(w); hoy.vol += E.volumenDe(w); });
+  const hoy = E.dayStats(ws, today);
   const caja2 = soloFuerza
-    ? `<section class="stat"><span class="label">Series</span><span class="val num">${nf(stt.sets)}</span><span class="hint">Hoy: ${nf(hoy.sets)}</span></section>`
+    ? `<section class="stat"><span class="label">Series</span><span class="val num">${nf(hoy.sets)}</span></section>`
     : `<section class="stat"><span class="label">Sesiones</span><span class="val num">${stt.n}<em>de ${r.dias.length}</em></span></section>`;
   const caja3 = soloFuerza
-    ? `<section class="stat"><span class="label">Volumen total</span><span class="val num">${nf(stt.vol)}<em>kg</em></span><span class="hint">Hoy: ${nf(Math.round(hoy.vol))} kg</span></section>`
+    ? `<section class="stat"><span class="label">Volumen total</span><span class="val num">${nf(hoy.vol)}<em>kg</em></span></section>`
     : `<section class="stat"><span class="label">Distancia en bici</span><span class="val num">${nf(stt.km, 1)}<em>km</em></span>${stt.elev ? `<span class="hint">+${nf(stt.elev)} m de desnivel</span>` : ''}</section>`;
   return `
     <section class="card"><h2>Tu semana</h2><div class="weekstrip">${cells}</div></section>
     ${todayCard}
     <div class="stats">
-      <section class="stat"><span class="label">Tiempo</span><span class="val num nowrap">${fmtDur(stt.min).replace(' min', '')}${stt.min % 60 ? '<em>min</em>' : ''}</span></section>
+      <section class="stat"><span class="label">Tiempo</span><span class="val num nowrap">${fmtDur(hoy.min).replace(' min', '')}${hoy.min % 60 ? '<em>min</em>' : ''}</span></section>
       ${caja2}
       ${caja3}
-      <section class="stat"><span class="label">Calorías</span><span class="val num">${nf(stt.kcal)}<em>kcal</em></span><span class="hint">Estimadas según tu peso</span></section>
+      <section class="stat"><span class="label">Calorías</span><span class="val num">${nf(hoy.kcal)}<em>kcal</em></span><span class="hint">Estimadas según tu peso</span></section>
     </div>
     <section class="card racha-card"><h2>Racha</h2>${fuegoHTML(streak, true)}
       <p class="small muted">Los descansos no la rompen. Vuelve a 0 si faltas a un día con entreno.</p></section>

@@ -46,6 +46,11 @@ export function weekStats(ws, monday) {
   const bici = list.filter((w) => w.tipo === 'bici');
   return { n: list.length, min: sum('min'), km: sum('km', bici), elev: sum('elev', bici), kcal: sum('kcal'), sets: list.reduce((a, w) => a + seriesDe(w), 0), vol: Math.round(list.reduce((a, w) => a + volumenDe(w), 0)) };
 }
+// Totales de UN día (fecha ISO). Series y volumen salen de seriesDe/volumenDe, que ignoran el calentamiento (w:true).
+export function dayStats(ws, fecha) {
+  const list = ws.filter((w) => w.fecha === fecha);
+  return { min: list.reduce((a, w) => a + (w.min || 0), 0), kcal: list.reduce((a, w) => a + (w.kcal || 0), 0), sets: list.reduce((a, w) => a + seriesDe(w), 0), vol: Math.round(list.reduce((a, w) => a + volumenDe(w), 0)) };
+}
 export function weeksSeries(ws, mondayNow, count = 8) {
   const out = [];
   for (let i = count - 1; i >= 0; i--) {
