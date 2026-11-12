@@ -1,0 +1,41 @@
+# Migración única: pone proPlan = 'none' a las cuentas gratuitas que no lo tienen (ver scripts/migrar-proplan.cjs).
+# GitHub → Actions → «Migrar proPlan» → Run workflow.
+#   1) Primero SIN marcar «aplicar»: solo cuenta (simulacro, no escribe nada).
+#   2) Si las cifras tienen sentido, otra vez MARCANDO «aplicar».
+# Usa el mismo secreto FIREBASE_SERVICE_ACCOUNT que los demás workflows. Es repetible sin riesgo.
+name: Migrar proPlan
+
+on:
+  workflow_dispatch:
+    inputs:
+      aplicar:
+        description: 'Escribir de verdad (si no se marca, solo cuenta: simulacro)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: migrar-proplan
+  cancel-in-progress: false
+
+jobs:
+  migrar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Instalar firebase-admin
+        run: npm ci --prefix functions
+
+      - name: Migrar
+        env:
+          APLICAR: ${{ github.event.inputs.aplicar }}
+        run: node scripts/migrar-proplan.cjs
