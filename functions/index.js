@@ -294,6 +294,46 @@ const PRECIO_SIEMPRE = 8999; // céntimos: el Payment Link «Para siempre» (89,
 // Plan según el intervalo de cobro del precio de Stripe.
 const planDe = (o) => { const i = o.items && o.items.data && o.items.data[0] && o.items.data[0].price && o.items.data[0].price.recurring; return i && i.interval === 'month' ? 'mensual' : i && i.interval === 'year' ? 'anual' : null; };
 
+// ¿Tiene ya el plan vitalicio? (proPlan o el marcador del pago único)
+const esVitalicio = (d) => d.isPro === true && (d.proPlan === 'siempre' || d.stripeSubscriptionId === 'siempre');
+
+// Busca el pago (PaymentIntent o cargo) de la primera factura de una suscripción.
+async function pagoDeFactura(stripe, invoiceId) {
+  if (!invoiceId) return null;
+  const inv = await stripe.invoices.retrieve(invoiceId);
+  if (!inv.amount_paid) return { gratis: true }; // 0 € (cupón 100 %, prueba gratis): nada que devolver
+  if (inv.payment_intent) return { payment_intent: typeof inv.payment_intent === 'string' ? inv.payment_intent : inv.payment_intent.id }; // API antigua
+  if (inv.charge) return { charge: typeof inv.charge === 'string' ? inv.charge : inv.charge.id };
+  const pagos = await stripe.invoicePayments.list({ invoice: invoiceId, limit: 10 }); // API actual
+  const p = pagos.data.find((x) => x.status === 'paid') || pagos.data[0];
+  const pi = p && p.payment && p.payment.payment_intent, ch = p && p.payment && p.payment.charge;
+  if (pi) return { payment_intent: typeof pi === 'string' ? pi : pi.id };
+  if (ch) return { charge: typeof ch === 'string' ? ch : ch.id };
+  return null;
+}
+
+// Un usuario con «Para siempre» ha pagado una suscripción por error: cancelarla YA y devolver el dinero.
+// Idempotente: Stripe puede repetir el evento; la cancelación ya hecha se ignora y el reembolso lleva idempotencyKey.
+// Si algo falla se lanza el error → el webhook responde 500 y Stripe lo reintenta.
+async function protegerVitalicio(stripe, o, uid) {
+  if (o.subscription) {
+    try { await stripe.subscriptions.cancel(o.subscription); }
+    catch (e) {
+      let estado = null; try { estado = (await stripe.subscriptions.retrieve(o.subscription)).status; } catch (e2) { /* nada */ }
+      if (estado !== 'canceled') throw e;
+    }
+  }
+  let invoiceId = o.invoice ? (typeof o.invoice === 'string' ? o.invoice : o.invoice.id) : null;
+  if (!invoiceId && o.subscription) { const sub = await stripe.subscriptions.retrieve(o.subscription); invoiceId = sub.latest_invoice ? (typeof sub.latest_invoice === 'string' ? sub.latest_invoice : sub.latest_invoice.id) : null; }
+  const pago = await pagoDeFactura(stripe, invoiceId);
+  let reembolso = 'sin cobro';
+  if (pago && !pago.gratis) {
+    const r = await stripe.refunds.create({ ...pago, reason: 'duplicate', metadata: { uid, motivo: 'plan-vitalicio', checkout: o.id } }, { idempotencyKey: 'vitalicio-' + o.id });
+    reembolso = r.id + ' (' + r.status + ')';
+  } else if (!pago) throw new Error('Stripe: no se encontró el pago a reembolsar de ' + o.id);
+  console.warn('Stripe: plan vitalicio protegido para ' + uid + ' — suscripción ' + o.subscription + ' cancelada, reembolso ' + reembolso);
+}
+
 async function procesarEvento(stripe, ev) {
   const o = ev.data.object;
   if (ev.type === 'checkout.session.completed') {
@@ -303,7 +343,10 @@ async function procesarEvento(stripe, ev) {
     if (o.client_reference_id && (await userRef(o.client_reference_id).get()).exists) uid = o.client_reference_id;
     if (!uid) uid = await porEmail((o.customer_details && o.customer_details.email) || o.customer_email);
     if (!uid) { console.warn('Stripe: pago sin usuario asociado', o.id); return; }
-    const antes = ((await userRef(uid).get()).data() || {}).stripeSubscriptionId;
+    const actual = (await userRef(uid).get()).data() || {};
+    // Blindaje del plan vitalicio: si ya tiene «Para siempre» y entra una suscripción (mensual/anual), se cancela y se reembolsa.
+    if (!siempre && esVitalicio(actual)) { await protegerVitalicio(stripe, o, uid); return; } // Firestore no se toca
+    const antes = actual.stripeSubscriptionId;
     let extra;
     if (siempre) extra = { stripeCustomerId: o.customer || null, stripeSubscriptionId: 'siempre', proPlan: 'siempre', proRenueva: null, proCancela: false };
     else {
@@ -324,6 +367,7 @@ async function procesarEvento(stripe, ev) {
     if (!activa && !caida) return; // past_due, incomplete…: no cambiamos nada
     for (const uid of await uidsDeCliente(stripe, o.customer)) {
       const d = (await userRef(uid).get()).data() || {};
+      if (esVitalicio(d)) continue; // «Para siempre»: ninguna suscripción le cambia el plan ni le quita Pro
       if (d.stripeSubscriptionId && d.stripeSubscriptionId !== o.id) continue; // es una suscripción antigua
       const fin = o.current_period_end || (o.items && o.items.data && o.items.data[0] && o.items.data[0].current_period_end) || null; // segundos
       await ponerPro(uid, activa, activa ? { stripeCustomerId: o.customer, stripeSubscriptionId: o.id, proRenueva: fin ? fin * 1000 : null, proCancela: !!(o.cancel_at_period_end || o.cancel_at), proPlan: planDe(o) } : { proCancela: false });
