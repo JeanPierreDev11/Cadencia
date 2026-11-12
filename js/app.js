@@ -993,18 +993,17 @@ const cmpCelda = (v) => v === true ? '<span class="cmp-y" role="img" aria-label=
 const planActivo = () => { const pr = st.profile || {}; return pr.isPro === true && PLANES.some((x) => x.id === pr.proPlan) ? pr.proPlan : null; };
 function suscripcionHTML() {
   const pro = st.profile && st.profile.isPro === true, act = planActivo();
-  const sel = (st.pf && st.pf.plan) || 'anual', elegido = PLANES.find((x) => x.id === (act || sel)) || PLANES[1];
+  const sel = (st.pf && st.pf.plan) || act || 'anual', elegido = PLANES.find((x) => x.id === sel) || PLANES[1], esActual = !!act && elegido.id === act;
   const nomAct = act ? PLANES.find((x) => x.id === act).n.replace('PRO ', '') : '';
   return `<div class="sheet-list sub">
     <section class="sub-sec"><h3 class="pf-title">Suscripción actual</h3>
       <div class="sub-cur ${pro ? 'is-pro' : ''}"><b>${pro ? `Cadencia PRO${nomAct ? ` <span class="sub-dot">• ${nomAct}</span>` : ''}` : 'Suscripción Gratuita'}</b>
         <span class="small muted">${pro ? 'Tienes todas las funciones Pro desbloqueadas.' : 'Pásate a PRO para desbloquear todas las funciones.'}</span></div></section>
     <section class="sub-sec"><h3 class="pf-title">Planes PRO</h3>
-      <div class="sub-plans" role="radiogroup" aria-label="Planes PRO">${PLANES.map((x) => { const on = act === x.id; return `<button type="button" class="sub-plan${on ? ' is-active' : ''}" role="radio" aria-checked="${on || (!act && sel === x.id)}" ${on ? 'disabled aria-disabled="true"' : ''} data-act="plan-sel" data-v="${x.id}">
-        <span class="sub-radio" aria-hidden="true"></span><span class="sub-pt"><b>${x.n}</b><small>${on ? 'Tu plan actual' : x.nota}</small></span><span class="sub-price">${x.precio}</span></button>`; }).join('')}</div>
-      <button type="button" class="btn block" data-act="plan-go" ${act === elegido.id ? 'disabled' : ''}>${act === elegido.id ? 'Plan activo' : `Continuar con ${elegido.n}`}</button>
+      <div class="sub-plans" role="radiogroup" aria-label="Planes PRO">${PLANES.map((x) => { const on = act === x.id; return `<button type="button" class="sub-plan${on ? ' is-active' : ''}" role="radio" aria-checked="${sel === x.id}" data-act="plan-sel" data-v="${x.id}">
+        <span class="sub-radio" aria-hidden="true"></span><span class="sub-pt"><b>${x.n}</b><small>${x.nota}</small></span>${on ? '<span class="sub-price sub-now">Plan actual</span>' : `<span class="sub-price">${x.precio}</span>`}</button>`; }).join('')}</div>
+      <button type="button" class="btn block" data-act="${esActual ? 'bill-open' : 'plan-go'}">${esActual ? 'Gestionar suscripción' : `Continuar con ${elegido.n}`}</button>
       <button type="button" class="sub-link" data-act="pro-info-open">Ventajas de Cadencia PRO</button></section>
-    ${pro ? '<section class="sub-sec"><button type="button" class="btn ghost block" data-act="bill-open">Gestionar suscripción</button></section>' : ''}
   </div>`;
 }
 function proInfoHTML() {
@@ -1213,8 +1212,8 @@ root.addEventListener('click', async (e) => {
   else if (act === 'legal-open') { if (st.view === 'auth') { const f = root.querySelector('form'); st.authKeep = f ? { name: f.name ? f.name.value : '', email: f.email.value, pass: f.pass.value, acepto: f.acepto ? f.acepto.checked : false } : null; } st.legal = true; render(); if (st.authKeep) keepForm(st.authKeep); }
   else if (act === 'legal-close') { st.legal = false; render(); if (st.view === 'auth' && st.authKeep) { keepForm(st.authKeep); st.authKeep = null; } }
   else if (act === 'pf-open') { st.pf = { v, f: {}, busy: false }; st.editGoals = null; render(); }
-  else if (act === 'plan-sel') { if (st.pf && PLANES.some((x) => x.id === v) && v !== planActivo()) { st.pf.plan = v; render(); } }
-  else if (act === 'plan-go') { if (((st.pf && st.pf.plan) || 'anual') === planActivo()) return; toast('La suscripción estará disponible muy pronto.'); }
+  else if (act === 'plan-sel') { if (st.pf && PLANES.some((x) => x.id === v)) { st.pf.plan = v; render(); } }
+  else if (act === 'plan-go') { if (((st.pf && st.pf.plan) || planActivo() || 'anual') === planActivo()) return; toast('La suscripción estará disponible muy pronto.'); }
   else if (act === 'pro-info-open') { st.proInfo = true; render(); }
   else if (act === 'pro-info-close') { st.proInfo = null; render(); }
   else if (act === 'pf-close') { st.pf = null; st.editGoals = null; render(); }
