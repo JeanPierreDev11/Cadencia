@@ -264,6 +264,119 @@ exports.ia = onCall({ secrets: [CLAVE], timeoutSeconds: 90, memory: '512MiB', cp
 });
 
 /* ------------------------------------------------------------------ */
+/* Coach AI post-entreno (Pro) con Gemini                              */
+/* ------------------------------------------------------------------ */
+// La app la llama SOLO al pulsar «Solicitar Análisis AI». Lee el entreno de Firestore (no se fía de lo que mande el móvil),
+// pide la valoración a Gemini y la guarda en el propio documento (aiNota, aiTitulo, aiTexto, aiConsejos, aiDemo:false, aiFecha).
+// Si el entreno ya tiene análisis, lo devuelve sin gastar nada. Contadores propios en iaUso/iaGlobal (campo «coach»).
+const GEMINI_CLAVE = defineSecret('GEMINI_API_KEY');
+const MODELO_COACH = 'gemini-3.6-flash'; // cambiar aquí si Google lo retira (lista: ai.google.dev/gemini-api/docs/models)
+const LIMITE_COACH_USUARIO = 10; // análisis por persona y día
+const LIMITE_COACH_GLOBAL = 400; // análisis al día entre todas las personas (seguridad de gasto)
+const PROMPT_COACH = `Eres un entrenador personal experto en fuerza e hipertrofia. Analizas UN entreno de gimnasio ya terminado y devuelves una valoración breve, honesta y útil, en español de España, tuteando.
+Reglas:
+- "nota": número de 0 a 10 con un decimal (calidad del entreno para el objetivo de la persona: volumen, intensidad, rango de repeticiones, RIR si lo hay, progresión respecto a la sesión anterior si se da).
+- "titulo": 2 a 5 palabras, sin punto final.
+- "analisis": 1 o 2 frases (máximo 300 caracteres) con lo más importante, citando ejercicios y cifras reales.
+- "consejos": 2 o 3 consejos concretos y accionables para la próxima sesión (máximo 140 caracteres cada uno).
+- Usa solo los datos recibidos; no inventes ejercicios ni cifras. Sin consejos médicos. Si los datos son escasos, dilo con tacto y puntúa con prudencia.
+- kg = peso por serie (0 = peso corporal), uni = ejercicio unilateral, rir = repeticiones en reserva, drop = drop set.`;
+const ESQUEMA_COACH = {
+  type: 'OBJECT',
+  properties: {
+    nota: { type: 'NUMBER' },
+    titulo: { type: 'STRING' },
+    analisis: { type: 'STRING' },
+    consejos: { type: 'ARRAY', items: { type: 'STRING' } },
+  },
+  required: ['nota', 'titulo', 'analisis', 'consejos'],
+};
+const resumenEntreno = (w) => ({
+  fecha: w.fecha, nombre: w.nombre || '', min: w.min || null,
+  ejercicios: (w.ejercicios || []).slice(0, 20).map((e) => ({
+    n: String(e.n || '').slice(0, 60), uni: !!e.uni,
+    series: (e.series || []).filter((s) => !s.w).slice(0, 15).map((s) => ({ kg: Number(s.kg) || 0, reps: Number(s.reps) || 0, ...(s.rir != null ? { rir: s.rir } : {}), ...(s.isDropSet ? { drop: true } : {}) })),
+  })).filter((e) => e.series.length),
+});
+const devolverCoach = (w) => ({ nota: w.aiNota, titulo: w.aiTitulo || '', analisis: w.aiTexto || '', consejos: w.aiConsejos || [], demo: false, aiFecha: w.aiFecha || null });
+
+async function llamarGemini(clave, entrada) {
+  const ctrl = new AbortController(), t = setTimeout(() => ctrl.abort(), 45000);
+  try {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODELO_COACH}:generateContent`, {
+      method: 'POST', signal: ctrl.signal,
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: PROMPT_COACH }] },
+        contents: [{ role: 'user', parts: [{ text: JSON.stringify(entrada) }] }],
+        generationConfig: { responseMimeType: 'application/json', responseSchema: ESQUEMA_COACH, temperature: 0.4, maxOutputTokens: 4096 },
+      }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { const e = new Error((j.error && j.error.message) || `HTTP ${r.status}`); e.status = r.status; throw e; }
+    const c = (j.candidates || [])[0];
+    const txt = ((c && c.content && c.content.parts) || []).map((p) => p.text || '').join('');
+    if (!txt) { const e = new Error(`Sin texto (${(c && c.finishReason) || (j.promptFeedback && j.promptFeedback.blockReason) || '¿?'})`); e.status = 'vacio'; throw e; }
+    return JSON.parse(txt);
+  } finally { clearTimeout(t); }
+}
+function limpiarCoach(x) {
+  const nota = Number(x && x.nota);
+  if (!Number.isFinite(nota)) throw new Error('nota no válida');
+  const txt = (v, n) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, n);
+  const consejos = (Array.isArray(x.consejos) ? x.consejos : []).map((c) => txt(c, 200)).filter(Boolean).slice(0, 3);
+  return { nota: Math.round(Math.max(0, Math.min(10, nota)) * 10) / 10, titulo: txt(x.titulo, 60) || 'Análisis del entreno', analisis: txt(x.analisis, 500), consejos };
+}
+
+exports.coach = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 60, memory: '256MiB', concurrency: 10 }, async (req) => {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión para usar la IA.');
+  const uid = req.auth.uid, id = String((req.data && req.data.id) || '');
+  if (!/^[\w-]{1,80}$/.test(id)) throw new HttpsError('invalid-argument', 'Petición no válida.');
+  const [usr, doc] = await Promise.all([userRef(uid).get(), db.doc(`users/${uid}/entrenos/${id}`).get()]);
+  const p = usr.exists ? usr.data() : {};
+  if (p.isPro !== true) throw new HttpsError('permission-denied', 'El Coach AI es de Cadencia Pro.', { codigo: 'pro-requerido' });
+  if (!doc.exists) throw new HttpsError('failed-precondition', 'No encontramos ese entreno. Actualiza la app y prueba otra vez.');
+  const w = doc.data();
+  if (Number.isFinite(Number(w.aiNota)) && w.aiDemo !== true) return devolverCoach(w); // ya analizado: no se gasta nada
+  const ent = resumenEntreno(w);
+  if (w.tipo !== 'gym' || !ent.ejercicios.length) throw new HttpsError('failed-precondition', 'Solo se pueden analizar entrenos de fuerza con series apuntadas.');
+
+  // Sesión anterior con el mismo nombre (para valorar la progresión). Si falla, se analiza sin ella.
+  let anterior = null;
+  try {
+    const q = await db.collection(`users/${uid}/entrenos`).where('fecha', '<=', w.fecha).orderBy('fecha', 'desc').limit(15).get();
+    const prev = q.docs.map((d) => ({ id: d.id, ...d.data() })).find((x) => x.id !== id && x.tipo === 'gym' && x.nombre === w.nombre && x.fecha <= w.fecha);
+    if (prev) anterior = resumenEntreno(prev);
+  } catch (e) { /* sin sesión anterior */ }
+
+  const dia = hoyMadrid();
+  let usadas = 0;
+  await db.runTransaction(async (tx) => {
+    const [u, g] = await Promise.all([tx.get(usoRef(uid, dia)), tx.get(globalRef(dia))]);
+    usadas = (u.exists && u.data().coach) || 0;
+    const total = (g.exists && g.data().coach) || 0;
+    if (usadas >= LIMITE_COACH_USUARIO) throw new HttpsError('resource-exhausted', `Ya has pedido ${LIMITE_COACH_USUARIO} análisis hoy. Mañana podrás pedir más.`);
+    if (total >= LIMITE_COACH_GLOBAL) throw new HttpsError('resource-exhausted', 'El Coach AI ha llegado a su límite de hoy. Prueba mañana.');
+    tx.set(usoRef(uid, dia), { uid, dia, coach: usadas + 1, ultima: FieldValue.serverTimestamp() }, { merge: true });
+    tx.set(globalRef(dia), { coach: total + 1 }, { merge: true });
+  });
+
+  try {
+    const perfil = { sexo: p.sexo || '', edad: p.edad || null, pesoKg: p.pesoKg || null, objetivos: Array.isArray(p.objetivos) ? p.objetivos.slice(0, 5) : [] };
+    const res = limpiarCoach(await llamarGemini(GEMINI_CLAVE.value(), { perfil, entreno: ent, sesionAnterior: anterior }));
+    const campos = { aiNota: res.nota, aiTitulo: res.titulo, aiTexto: res.analisis, aiConsejos: res.consejos, aiDemo: false, aiFecha: new Date().toISOString() };
+    await doc.ref.update(campos);
+    return devolverCoach(campos);
+  } catch (e) {
+    const dec = FieldValue.increment(-1); // si falla, la consulta no cuenta
+    await Promise.all([usoRef(uid, dia).set({ coach: dec }, { merge: true }), globalRef(dia).set({ coach: dec }, { merge: true })]).catch(() => {});
+    if (e instanceof HttpsError) throw e;
+    console.error('Coach AI', e && e.status, e && e.message);
+    throw new HttpsError('unavailable', 'El Coach AI no ha respondido. Prueba otra vez en un momento.');
+  }
+});
+
+/* ------------------------------------------------------------------ */
 /* Webhook de Stripe: activa o quita Cadencia Pro                      */
 /* ------------------------------------------------------------------ */
 // Pone isPro en el perfil. Solo el servidor puede cambiarlo (las reglas de Firestore lo impiden desde la app).
