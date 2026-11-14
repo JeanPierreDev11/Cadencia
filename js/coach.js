@@ -1,12 +1,9 @@
-// Coach AI post-entreno (Pro). Por ahora es una MAQUETA: devuelve una nota y un análisis de ejemplo.
-// Más adelante, fetchAICoachRating llamará a una Cloud Function (p. ej. la función `ia` con modo 'coach')
-// que hablará con OpenAI/Gemini. La pantalla ya espera esta forma de respuesta:
-//   { nota: 8.5, titulo: 'Texto corto', analisis: 'Párrafo', consejos: ['…', '…'], demo: true }
-// `demo: true` hace que la pantalla muestre la etiqueta «Ejemplo»; la respuesta real no debe llevarlo.
+// Coach AI post-entreno (Pro). Con Firebase llama a la Cloud Function «coach» (Gemini), que lee el entreno de Firestore,
+// lo analiza y GUARDA el resultado en el propio documento (aiNota, aiTitulo, aiTexto, aiConsejos, aiDemo:false, aiFecha).
+// En modo prueba (sin Firebase, api.local) devuelve un análisis de EJEMPLO (demo:true) que guarda la propia app.
+// Forma de la respuesta: { nota: 8.5, titulo, analisis, consejos: ['…'], demo, guardado }.
 
-export const COACH_DEMO = true;
-
-// Datos mínimos que se mandarán a la IA: sin uid, correo ni nombre.
+// Datos mínimos del entreno: sin uid, correo ni nombre (solo los usa el ejemplo; el servidor lee Firestore).
 export function datosParaCoach(o, extra = {}) {
   return {
     nombre: o.nombre, fecha: o.fecha, min: o.min,
@@ -14,14 +11,11 @@ export function datosParaCoach(o, extra = {}) {
     ...extra,
   };
 }
-export function perfilParaCoach(p = {}) {
-  return { sexo: p.sexo || '', edad: p.edad || null, pesoKg: p.pesoKg || null, objetivos: p.objetivos || [] };
-}
 
-// Placeholder: aquí irá la llamada real (httpsCallable a Cloud Functions). Mantener la firma y la forma de la respuesta.
-export async function fetchAICoachRating(datosEntreno, perfilUsuario) { // eslint-disable-line no-unused-vars
+// Análisis de ejemplo para el modo prueba.
+async function ejemploCoach(datos) {
   await new Promise((r) => setTimeout(r, 900)); // simula la espera de la IA
-  const ej = (datosEntreno && datosEntreno.ejercicios) || [];
+  const ej = (datos && datos.ejercicios) || [];
   const top = ej.reduce((m, e) => (!m || e.series.length > m.series.length ? e : m), null);
   const n = top ? top.n : 'Press banca';
   return {
@@ -29,6 +23,12 @@ export async function fetchAICoachRating(datosEntreno, perfilUsuario) { // eslin
     titulo: 'Sesión sólida',
     analisis: `Buen volumen, pero para hipertrofia deberías subir de 4 repeticiones en ${n}.`,
     consejos: ['Mantén 1-2 repeticiones en reserva en las últimas series.', 'Descansa 90-120 s entre series de los ejercicios básicos.'],
-    demo: COACH_DEMO,
+    demo: true,
   };
+}
+
+// Pide el análisis del entreno w. guardado:true → el servidor ya lo ha escrito en Firestore.
+export async function analizarEntreno(api, w) {
+  if (api.local) return { ...(await ejemploCoach(datosParaCoach(w))), guardado: false };
+  return { ...(await api.coach(w.id)), demo: false, guardado: true };
 }
