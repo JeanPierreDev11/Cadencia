@@ -270,7 +270,7 @@ exports.ia = onCall({ secrets: [CLAVE], timeoutSeconds: 90, memory: '512MiB', cp
 // pide la valoración a Gemini y la guarda en el propio documento (aiNota, aiTitulo, aiTexto, aiConsejos, aiDemo:false, aiFecha).
 // Si el entreno ya tiene análisis, lo devuelve sin gastar nada. Contadores propios en iaUso/iaGlobal (campo «coach»).
 const GEMINI_CLAVE = defineSecret('GEMINI_API_KEY');
-const MODELO_COACH = 'gemini-3.6-flash'; // cambiar aquí si Google lo retira (lista: ai.google.dev/gemini-api/docs/models)
+const MODELO_COACH = 'gemini-3.5-flash'; // tiene nivel gratuito (3.6 no); 1.5 y 2.0 ya están apagados // cambiar aquí si Google lo retira (lista: ai.google.dev/gemini-api/docs/models)
 const LIMITE_COACH_USUARIO = 10; // análisis por persona y día
 const LIMITE_COACH_GLOBAL = 400; // análisis al día entre todas las personas (seguridad de gasto)
 const PROMPT_COACH = `Eres un entrenador personal experto en fuerza e hipertrofia. Analizas UN entreno de gimnasio ya terminado y devuelves una valoración breve, honesta y útil, en español de España, tuteando.
