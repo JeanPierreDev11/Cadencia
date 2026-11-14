@@ -1472,3 +1472,38 @@ body:has(.tabbar) .ib { bottom: calc(var(--safe-b) + 66px); }
 .tabbar { flex-shrink: 0 !important; padding-bottom: env(safe-area-inset-bottom, 0px); }
 /* Sin «rebote» al pasar del final (no se ve el fondo vacío). */
 html, body, main, .sheet-list, .sheet-scroll, .modal-body { overscroll-behavior-y: none; }
+
+/* ===== Pro 2026-11-14: Calentamiento Inteligente, Salvavidas de racha y Coach AI ===== */
+/* Calentamiento: selector de 1, 2 o 3 series */
+.cal-q { margin: 6px 0 0; font-family: 'Archivo', sans-serif; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; font-size: 14px; color: var(--ink); }
+.cal-opts { display: grid; gap: 8px; }
+.cal-opt { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; border: 1.5px solid var(--line); background: var(--surface); border-radius: 2px; padding: 12px 14px; color: var(--ink); font: inherit; cursor: pointer; }
+.cal-opt > b { flex: none; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 2px; background: #F2BE1A; color: #000; font-size: 18px; font-weight: 800; }
+.cal-opt > span { display: grid; gap: 2px; min-width: 0; }
+.cal-opt small { font-size: 12px; }
+.cal-opt:active { background: var(--accent-soft); border-color: var(--accent-text); }
+/* Salvavidas de racha */
+.salv-card { display: grid; gap: 10px; border-left: 4px solid #F2BE1A; }
+.salv-card p { margin: 0; }
+.salv-btn { white-space: normal; line-height: 1.25; min-height: 48px; }
+.salv-btn.is-locked { opacity: .6; }
+/* Coach AI post-entreno */
+.ai-body { gap: 10px; }
+.ai-demo { font-style: normal; font-size: 10px; letter-spacing: .06em; padding: 1px 6px; margin-left: 6px; border: 1px solid var(--muted); border-radius: 2px; color: var(--muted); vertical-align: 2px; }
+.ai-score { --p: 0; position: relative; width: 132px; height: 132px; border-radius: 50%; display: grid; place-content: center; justify-items: center;
+  background: conic-gradient(#F2BE1A calc(var(--p) * 1%), var(--surface2) 0); }
+.ai-score::before { content: ''; position: absolute; inset: 10px; border-radius: 50%; background: var(--bg); }
+.ai-score > * { position: relative; }
+.ai-score b { font-size: 40px; line-height: 1; font-weight: 800; color: var(--ink); }
+.ai-score span { font-size: 13px; color: var(--muted); font-weight: 700; }
+.ai-tit { margin: 0; font-family: 'Archivo', sans-serif; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--accent-text); }
+.ai-box { width: 100%; text-align: left; background: var(--card-bg, var(--surface)); color: var(--card-ink, var(--ink)); border-left: 3px solid #F2BE1A; border-radius: 2px; padding: 12px 14px; display: grid; gap: 6px; }
+.ai-box p { margin: 0; line-height: 1.4; }
+.ai-box ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; color: var(--card-mute, var(--muted)); }
+.ai-lbl { font-family: 'Archivo', sans-serif; text-transform: uppercase; letter-spacing: .08em; font-size: 12px; font-weight: 800; color: var(--muted); }
+.ai-stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; font-size: 13px; color: var(--muted); }
+.ai-stats b { color: var(--ink); }
+.ai-load { display: grid; justify-items: center; gap: 10px; padding: 24px 0; }
+.ai-spin { width: 36px; height: 36px; border-radius: 50%; border: 3px solid var(--surface2); border-top-color: #F2BE1A; animation: ai-spin .8s linear infinite; }
+@keyframes ai-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ai-spin { animation-duration: 2.4s; } }

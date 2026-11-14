@@ -75,6 +75,25 @@ export function streakDays(ws, hoy, plan = () => true) {
   return n;
 }
 
+/* ---------- salvavidas de racha (Pro) ---------- */
+// Lista guardada en el perfil: [{ de: 'AAAA-MM-DD' (día con entreno que se perdió), a: 'AAAA-MM-DD' (día al que se movió) }].
+// Ese «de» pasa a contar como descanso (no rompe la racha) y «a» hereda la sesión. Se guardan como mucho SALV_MAX.
+export const SALV_MAX = 12;
+export const salvLista = (p) => (Array.isArray(p && p.salvavidas) ? p.salvavidas.filter((x) => x && typeof x.de === 'string' && typeof x.a === 'string') : []);
+// ¿Hay que ofrecer el salvavidas hoy? Solo si hoy es descanso en la rutina, hoy no has entrenado, no has usado ya uno esta semana
+// y algún día anterior de ESTA semana tocaba entrenar y no entrenaste. Devuelve el día perdido más reciente (ISO) o null.
+// planBase(iso) → la sesión de la rutina SIN contar salvavidas; hechos = Set de fechas con algún entreno.
+export function salvavidasHueco(hoy, planBase, hechos, lista = []) {
+  if (planBase(hoy) || hechos.has(hoy)) return null;
+  const lunes = mondayOf(hoy);
+  if (lista.some((x) => x.a >= lunes && x.a <= addDays(lunes, 6))) return null; // uno por semana
+  const movidos = new Set(lista.map((x) => x.de));
+  for (let d = addDays(hoy, -1); d >= lunes; d = addDays(d, -1)) {
+    if (planBase(d) && !hechos.has(d) && !movidos.has(d)) return d;
+  }
+  return null;
+}
+
 /* ---------- récords ---------- */
 export function records(ws) {
   const bici = { km: null, elev: null, min: null };
@@ -139,12 +158,18 @@ export function mejor1RM(series, parse = Number) {
   for (const s of trabajo(series)) { const v = orm1(parse(s.kg), parse(s.reps)); if (v != null && (best == null || v > best)) best = v; }
   return best;
 }
-// Pro: calentamiento a partir del peso de trabajo: 50 % × 10, 70 % × 5 y 85 % × 3, redondeado a 2,5 kg (mínimo 2,5).
-export const CALENTAMIENTO = [[0.5, 10], [0.7, 5], [0.85, 3]];
-export function calentamiento(kg) {
+// Pro: Calentamiento Inteligente. Según cuántas series elijas (1, 2 o 3), porcentaje del peso de trabajo × repeticiones,
+// redondeado a 2,5 kg (mínimo 2,5). Sin número → 3 series.
+export const CALENTAMIENTO = {
+  1: [[0.6, 8]],
+  2: [[0.5, 10], [0.7, 6]],
+  3: [[0.4, 12], [0.6, 8], [0.8, 4]],
+};
+export function calentamiento(kg, n = 3) {
   kg = Number(kg);
+  const esq = CALENTAMIENTO[n] || CALENTAMIENTO[3];
   if (!(kg > 0)) return [];
-  return CALENTAMIENTO.map(([p, reps]) => ({ kg: Math.max(2.5, Math.round((kg * p) / 2.5) * 2.5), reps }));
+  return esq.map(([p, reps]) => ({ kg: Math.max(2.5, Math.round((kg * p) / 2.5) * 2.5), reps }));
 }
 // Sugerencia para forzar sobrecarga a partir de la misma serie de la última sesión.
 // Rango "8-12": si no llegaste al tope → mismo peso +1 rep; si lo alcanzaste → +2,5 kg y vuelta al mínimo del rango.

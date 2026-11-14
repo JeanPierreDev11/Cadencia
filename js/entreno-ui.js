@@ -4,6 +4,7 @@ import { esc, num, nf, todayISO, fmtDate, lsSet, lsGet, toast, I } from './util.
 import { errorText } from './data.js';
 import * as E from './entreno.js';
 import * as CAL from './calorias.js';
+import { fetchAICoachRating, datosParaCoach, perfilParaCoach } from './coach.js';
 
 export function crearEntreno(ctx) {
   const { st, root } = ctx;
@@ -43,7 +44,17 @@ function rutinasList() {
   return list;
 }
 const nidR = () => 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-const dayPlan = (iso) => { const r = rutinaOf(); if (!r) return null; const d = E.weekdayIdx(iso); return r.dias.includes(d) ? r.sesiones[d] || null : null; };
+// dayPlanBase: lo que dice la rutina. dayPlan: además aplica los salvavidas de racha (Pro): el día perdido pasa a descanso y el día de rescate hereda su sesión.
+const dayPlanBase = (iso) => { const r = rutinaOf(); if (!r) return null; const d = E.weekdayIdx(iso); return r.dias.includes(d) ? r.sesiones[d] || null : null; };
+const dayPlan = (iso) => {
+  const sv = E.salvLista(st.profile);
+  if (!sv.length) return dayPlanBase(iso);
+  if (sv.some((x) => x.de === iso)) return null;
+  const m = sv.find((x) => x.a === iso);
+  return (m && dayPlanBase(m.de)) || dayPlanBase(iso);
+};
+// Día perdido de esta semana que se puede recuperar hoy (o null).
+const salvHueco = () => E.salvavidasHueco(todayISO(), dayPlanBase, new Set(st.workouts.map((w) => w.fecha)), E.salvLista(st.profile));
 const tipoIcon = (t) => (t === 'bici' ? I.bike : t === 'cardio' ? I.heart : t === 'otro' ? I.ball : I.dumb);
 const goalsKind = () => E.planKind(st.profile && st.profile.objetivos);
 const sesDuracion = (s) => (s.t === 'fuerza' ? `${(s.ej || []).length} ejercicios` : fmtDur(s.min));
@@ -126,7 +137,8 @@ function wkSemana() {
   const cells = [0, 1, 2, 3, 4, 5, 6].map((i) => {
     const date = E.addDays(mon, i), did = ws.some((w) => w.fecha === date), dp = dayPlan(date);
     const state = did ? 'done' : dp ? (date < today ? 'miss' : 'plan') : 'rest';
-    const label = `${E.DIAS_LARGO[i]}: ${did ? 'entrenado' : dp ? dp.nombre + ' previsto' : 'descanso'}`;
+    const mov = !did && !dp && E.salvLista(st.profile).find((x) => x.de === date);
+    const label = `${E.DIAS_LARGO[i]}: ${did ? 'entrenado' : dp ? dp.nombre + ' previsto' : mov ? 'entreno movido al ' + E.DIAS_LARGO[E.weekdayIdx(mov.a)].toLowerCase() + ' (salvavidas)' : 'descanso'}`;
     return `<button type="button" class="dc ${state} ${date === today ? 'now' : ''}" data-act="wk-new" data-date="${date}" ${date > today ? 'disabled' : ''} aria-label="${esc(label)}"><span>${E.DIAS[i]}</span><i>${did ? I.check : dp ? tipoIcon(dp.t) : ''}</i></button>`;
   }).join('');
 
@@ -136,7 +148,7 @@ function wkSemana() {
   else if (dp) todayCard = `<section class="card"><h2>Hoy toca</h2>
       <p class="today-line">${tipoIcon(dp.t)}<span><b>${esc(dp.nombre)}</b> · ${sesDuracion(dp)}<br><span class="muted small">${esc(sesResumen(dp))}</span></span></p>
       <button class="btn block" data-act="wk-new" data-date="${today}" data-tipo="${WK_DE[dp.t]}">${dp.t === 'fuerza' ? 'Empezar entrenamiento' : 'Registrar entreno'}</button></section>`;
-  else todayCard = `<section class="card"><h2>Hoy</h2><p>Hoy toca descansar. Si te apetece moverte, puedes registrar una sesión extra.</p></section>`;
+  else todayCard = `<section class="card"><h2>Hoy</h2><p>Hoy toca descansar. Si te apetece moverte, puedes registrar una sesión extra.</p></section>${salvavidasHTML()}`;
 
   const streak = E.streakDays(ws, today, (d) => !!dayPlan(d));
   // Si tu rutina no tiene bici y sí fuerza, el panel habla de series y kilos movidos en lugar de sesiones y distancia.
@@ -160,6 +172,16 @@ function wkSemana() {
     <section class="card racha-card"><h2>Racha</h2>${fuegoHTML(streak, true)}
       <p class="small muted">Los descansos no la rompen. Vuelve a 0 si faltas a un día con entreno.</p></section>
     <section class="card"><h2>Horas por semana</h2>${barsChart(E.weeksSeries(ws, mon, 8))}</section>`;
+}
+
+// Salvavidas de racha (Pro): hoy es descanso y esta semana se te pasó un día con entreno → ofrecer moverlo a hoy.
+function salvavidasHTML() {
+  const d = salvHueco(); if (!d) return '';
+  const dia = E.DIAS_LARGO[E.weekdayIdx(d)], ses = dayPlanBase(d), pro = esPro();
+  return `<section class="card salv-card"><h2>🛟 Salvavidas de racha</h2>
+    <p class="small">El ${esc(dia.toLowerCase())} tocaba <b>${esc(ses ? ses.nombre : 'entrenar')}</b> y no lo registraste. Muévelo a hoy y entrena sin perder el fuego.</p>
+    <button type="button" class="btn block salv-btn ${pro ? '' : 'is-locked'}" data-act="salv-go" data-v="${d}">Salvar racha: Recuperar entreno perdido de ${esc(dia)}${pro ? '' : ' <span class="protag">Pro</span>'}</button>
+    <span class="small muted">Uno por semana. ${esc(dia)} contará como descanso.</span></section>`;
 }
 
 function wkRow(w, mod) {
@@ -839,20 +861,40 @@ function empezarFuerza(fecha) {
   if (st.live) return startLive(fecha);
   st.modoSel = { fecha }; render();
 }
+// Pro: al terminar, «Análisis de Inteligencia Artificial» (Coach AI). r.ai = { estado: 'cargando' | 'ok' | 'error', nota, titulo, analisis, consejos, demo }.
 function resumenSheetHTML() {
-  const r = st.resumen;
+  const r = st.resumen, ai = r.ai || { estado: 'cargando' };
+  const nota = Number(ai.nota), pct = Math.max(0, Math.min(100, (nota / 10) * 100));
+  const cuerpo = ai.estado === 'ok'
+    ? `<div class="ai-score" style="--p:${pct.toFixed(0)}"><b class="num">${nf(nota, 1)}</b><span>/ 10</span></div>
+       <p class="ai-tit">${esc(ai.titulo || '')}</p>
+       <section class="ai-box"><span class="ai-lbl">Análisis</span><p>${esc(ai.analisis || '')}</p>
+         ${(ai.consejos || []).length ? `<ul>${ai.consejos.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}</section>`
+    : ai.estado === 'error'
+      ? `<p class="small muted">No se ha podido analizar el entreno ahora mismo. Tus datos están guardados.</p>`
+      : `<div class="ai-load" role="status"><span class="ai-spin" aria-hidden="true"></span><span class="small muted">Analizando tu entreno…</span></div>`;
   return `<div class="sheet-back" data-act="sum-close"></div>
-    <div class="sheet short" role="dialog" aria-modal="true" aria-label="Resumen del entreno">
+    <div class="sheet short ai-sheet" role="dialog" aria-modal="true" aria-label="Análisis de Inteligencia Artificial">
       <div class="sheet-grab"></div>
-      <div class="sheet-head"><span style="width:36px"></span><h2>Entreno terminado</h2><button type="button" class="iconbtn" data-act="sum-close" aria-label="Cerrar">${I.back}</button></div>
-      <div class="sum-pro">
+      <div class="sheet-head"><span style="width:36px"></span><h2>Coach AI</h2><button type="button" class="iconbtn" data-act="sum-close" aria-label="Cerrar">${I.back}</button></div>
+      <div class="sum-pro ai-body">
+        <span class="sum-lbl">👑 Análisis de Inteligencia Artificial${ai.demo ? ' <em class="ai-demo">Ejemplo</em>' : ''}</span>
         <span class="small muted">${esc(r.nombre)}${r.record ? ' · ¡Nuevo récord!' : ''}</span>
-        <span class="sum-lbl">👑 Volumen total movido</span>
-        <b class="sum-vol num">${nf(r.vol)} kg</b>
-        <span class="small muted">${r.sets} ${r.sets === 1 ? 'serie' : 'series'} · ${fmtDur(r.min)}</span>
+        ${cuerpo}
+        <div class="ai-stats"><span><b class="num">${nf(r.vol)}</b> kg movidos</span><span><b class="num">${r.sets}</b> ${r.sets === 1 ? 'serie' : 'series'}</span><span><b class="num">${esc(fmtDur(r.min))}</b></span></div>
         <button type="button" class="btn block" data-act="sum-close">Listo</button>
       </div>
     </div>`;
+}
+// Pide la valoración al Coach AI y repinta la hoja si sigue abierta.
+async function pedirCoach(o) {
+  const r = st.resumen;
+  try {
+    const res = await fetchAICoachRating(datosParaCoach(o), perfilParaCoach(st.profile));
+    if (st.resumen !== r) return;
+    r.ai = res && Number.isFinite(Number(res.nota)) ? { ...res, estado: 'ok' } : { estado: 'error' };
+  } catch (e) { if (st.resumen !== r) return; r.ai = { estado: 'error' }; }
+  render();
 }
 function limiteSheetHTML() {
   const rut = st.limite && st.limite.tipo === 'rutinas', que = rut ? 'rutinas' : 'ejercicios propios';
@@ -869,18 +911,22 @@ function limiteSheetHTML() {
       </div>
     </div>`;
 }
-// Calculadora de calentamiento: si no hay peso de referencia, se pregunta.
+// Calentamiento Inteligente (Pro): eliges 1, 2 o 3 series; el peso sale del peso de trabajo (rellenado si lo hay, editable).
+const CAL_TXT = { 1: 'Rápido', 2: 'Normal', 3: 'Completo' };
 function calentarSheetHTML() {
   const c = st.calentar, x = st.live && st.live.ex[c.i];
+  const opt = (n) => `<button type="button" class="cal-opt" data-act="cal-n" data-v="${n}" aria-label="${n} ${n === 1 ? 'serie' : 'series'} de calentamiento">
+      <b class="num">${n}</b><span><b>${CAL_TXT[n]}</b><small class="muted">${E.CALENTAMIENTO[n].map(([p, r]) => `${r} reps al ${Math.round(p * 100)} %`).join(' · ')}</small></span></button>`;
   return `<div class="sheet-back" data-act="cal-close"></div>
-    <div class="sheet short" role="dialog" aria-modal="true" aria-label="Calculadora de calentamiento">
+    <div class="sheet short" role="dialog" aria-modal="true" aria-label="Calentamiento inteligente">
       <div class="sheet-grab"></div>
       <div class="sheet-head"><button type="button" class="iconbtn" data-act="cal-close" aria-label="Cerrar">${I.back}</button><h2>🔥 Calentamiento</h2><span style="width:36px"></span></div>
-      <div class="sheet-list">
-        <p class="small muted">No tenemos historial de ${esc(x ? x.n : 'este ejercicio')}. ¿Con qué peso de trabajo vas a hacerlo? Calcularemos 3 series previas (50 %, 70 % y 85 %).</p>
-        <label class="field"><span>Peso objetivo (kg)</span><input class="input" data-calkg inputmode="decimal" value="${esc(c.kg)}" placeholder="Ej. 60" autocomplete="off"></label>
+      <div class="sheet-list cal-sheet">
+        <p class="small muted">${c.auto ? `Peso de trabajo de ${esc(x ? x.n : 'este ejercicio')} calculado con tus series. Puedes cambiarlo.` : `No tenemos peso de ${esc(x ? x.n : 'este ejercicio')}. ¿Con cuántos kilos vas a trabajar?`}</p>
+        <label class="field"><span>Peso de trabajo (kg)</span><input class="input" data-calkg inputmode="decimal" value="${esc(c.kg)}" placeholder="Ej. 60" autocomplete="off"></label>
+        <p class="cal-q">¿Cuántas series de calentamiento?</p>
+        <div class="cal-opts">${[1, 2, 3].map(opt).join('')}</div>
         ${c.msg ? `<div class="msg" role="alert">${esc(c.msg)}</div>` : ''}
-        <button type="button" class="btn block" data-act="cal-go">Añadir calentamiento</button>
       </div>
     </div>`;
 }
@@ -1076,12 +1122,12 @@ function pesoObjetivo(ex) {
   for (let j = ex.prev.length - 1; j >= 0; j--) if (num(ex.prev[j].kg) > 0) return num(ex.prev[j].kg);
   return 0;
 }
-function aplicarCalentamiento(i, kg) {
-  const ex = st.live.ex[i], w = E.calentamiento(kg);
+function aplicarCalentamiento(i, kg, n = 3) {
+  const ex = st.live.ex[i], w = E.calentamiento(kg, n);
   if (!w.length) return false;
   ex.s.unshift(...w.map((q) => ({ kg: String(q.kg).replace('.', ','), reps: String(q.reps), done: false, rir: '', dropset: false, w: true })));
   liveSave(); render();
-  toast(`Calentamiento añadido para ${kgTxt(kg)} kg`);
+  toast(`${w.length} ${w.length === 1 ? 'serie' : 'series'} de calentamiento para ${kgTxt(kg)} kg`);
   return true;
 }
 
@@ -1142,8 +1188,9 @@ async function liveFinish() {
     st.live = null; st.liveMin = false; liveSave();
     st.tab = 'entreno'; lsSet('cadencia-tab', 'entreno');
     if (editado) st.wkHist = true; else { st.wkTab = 'semana'; lsSet('cadencia-wktab', 'semana'); }
-    if (esPro() && !editado) st.resumen = { nombre: o.nombre, vol: volTotal, sets: nSets, min, record };
+    if (esPro() && !editado) st.resumen = { nombre: o.nombre, vol: volTotal, sets: nSets, min, record, ai: { estado: 'cargando' } };
     render(); window.scrollTo(0, 0);
+    if (st.resumen && st.resumen.ai) pedirCoach(o);
     toast(editado ? 'Entreno actualizado' : record ? '¡Nuevo récord personal!' : `Entrenamiento guardado · ${nSets} series`);
   } catch (e) { fail(`No se ha podido guardar: ${errorText(e)}`); }
 }
@@ -1426,8 +1473,9 @@ root.addEventListener('click', async (e) => {
       const ex = Lv.ex[Number(v)];
       if (ex.s.some((q) => q.w)) { toast('Este ejercicio ya tiene calentamiento'); return; }
       const kg = pesoObjetivo(ex);
-      if (!kg) { st.calentar = { i: Number(v), kg: '', msg: '' }; render(); const el = document.querySelector('[data-calkg]'); if (el) el.focus(); return; }
-      aplicarCalentamiento(Number(v), kg); return;
+      st.calentar = { i: Number(v), kg: kg ? String(kg).replace('.', ',') : '', auto: !!kg, msg: '' }; render();
+      if (!kg) { const el = document.querySelector('[data-calkg]'); if (el) el.focus(); }
+      return;
     }
     if (act === 'live-w-del') { const ex = Lv.ex[Number(v)]; ex.s = ex.s.filter((q) => !q.w); if (!ex.s.length) ex.s.push({ kg: '', reps: '', done: false, rir: '', dropset: false }); liveSave(); return render(); }
     if (act === 'live-drop') { if (!esPro()) { toast('Función Pro'); return; } const [i, j] = v.split('.').map(Number), q = Lv.ex[i].s[j]; q.dropset = !q.dropset; liveSave(); return render(); }
@@ -1449,10 +1497,10 @@ root.addEventListener('click', async (e) => {
   if (act === 'lim-close') { st.limite = null; return render(); }
   if (act === 'lim-pro') return abrirSuscripcion();
   if (act === 'cal-close') { st.calentar = null; return render(); }
-  if (act === 'cal-go' && st.calentar) {
-    const c = st.calentar, kg = num(c.kg);
-    if (!(kg > 0 && kg <= 600)) { c.msg = 'Escribe un peso entre 1 y 600 kg.'; return render(); }
-    st.calentar = null; return void aplicarCalentamiento(c.i, kg);
+  if (act === 'cal-n' && st.calentar) {
+    const c = st.calentar, kg = num(c.kg), n = Number(v);
+    if (!(kg > 0 && kg <= 600)) { c.msg = 'Escribe un peso de trabajo entre 1 y 600 kg.'; render(); const el = document.querySelector('[data-calkg]'); if (el) el.focus(); return; }
+    st.calentar = null; return void aplicarCalentamiento(c.i, kg, n);
   }
   if (act === 'modo-close') { st.modoSel = null; return render(); }
   if (act === 'modo-pick' && st.modoSel) { const f = st.modoSel.fecha; st.modoSel = null; st.regPick = null; return startLive(f, v); }
@@ -1462,6 +1510,17 @@ root.addEventListener('click', async (e) => {
   if (act === 'reg-pick' && st.regPick) { const d = st.regPick.date; st.regPick = null; return openRegistro(d, v); }
 
   // registro
+  if (act === 'salv-go') {
+    if (!esPro()) return abrirSuscripcion();
+    if (st.salvBusy || salvHueco() !== v) return;
+    const lista = [...E.salvLista(st.profile), { de: v, a: todayISO() }].slice(-E.SALV_MAX);
+    st.salvBusy = true;
+    try { await api.saveProfile(st.user.uid, { salvavidas: lista }); st.profile.salvavidas = lista; }
+    catch (e) { toast(errorText(e)); return; }
+    finally { st.salvBusy = false; }
+    const dp = dayPlan(todayISO());
+    render(); toast(`Racha salvada: hoy toca ${dp ? dp.nombre : 'entrenar'}`); return;
+  }
   if (act === 'wktab') { st.wkTab = v; lsSet('cadencia-wktab', v); render(); }
   else if (act === 'wk-new') openRegistro(b.dataset.date, b.dataset.tipo);
   else if (act === 'wk-cancel') { st.wk = null; if (st.wkBack) { st.wkHist = true; st.wkBack = false; } render(); }
