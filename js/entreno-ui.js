@@ -4,7 +4,7 @@ import { esc, num, nf, todayISO, fmtDate, lsSet, lsGet, toast, I } from './util.
 import { errorText } from './data.js';
 import * as E from './entreno.js';
 import * as CAL from './calorias.js';
-import { fetchAICoachRating, datosParaCoach, perfilParaCoach, COACH_DEMO } from './coach.js';
+import { analizarEntreno } from './coach.js';
 
 export function crearEntreno(ctx) {
   const { st, root } = ctx;
@@ -201,8 +201,8 @@ function diaHTML(sel, today) {
 /* ---------- Coach AI (Pro): bajo demanda y guardado en el propio entreno ---------- */
 // Campos del documento users/{uid}/entrenos/{id}: aiNota (0-10), aiTitulo, aiTexto, aiConsejos[], aiDemo, aiFecha.
 const AI_CAMPOS = ['aiNota', 'aiTitulo', 'aiTexto', 'aiConsejos', 'aiDemo', 'aiFecha'];
-// Análisis guardado (o null). Uno de ejemplo deja de valer cuando la IA sea real (COACH_DEMO = false) y se puede volver a pedir.
-const aiDe = (w) => (w && Number.isFinite(Number(w.aiNota)) && !(w.aiDemo && !COACH_DEMO)
+// Análisis guardado (o null). Uno de ejemplo (aiDemo, del modo prueba o de la maqueta antigua) no vale con Firebase: se puede pedir el real.
+const aiDe = (w) => (w && Number.isFinite(Number(w.aiNota)) && !(w.aiDemo && !api.local)
   ? { nota: Number(w.aiNota), titulo: w.aiTitulo || '', analisis: w.aiTexto || '', consejos: Array.isArray(w.aiConsejos) ? w.aiConsejos : [], demo: !!w.aiDemo } : null);
 const aiPosible = (w) => !!w && w.tipo === 'gym' && (w.ejercicios || []).length > 0;
 function aiHTML(w, compacto = false) {
@@ -218,17 +218,17 @@ function aiHTML(w, compacto = false) {
         ${ai.consejos.length ? `<ul>${ai.consejos.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}</section></div>`;
   }
   if (pend === 'cargando') return `<div class="ai-load" role="status"><span class="ai-spin" aria-hidden="true"></span><span class="small muted">Analizando…</span></div>`;
-  return `${pend === 'error' ? '<p class="small muted">No se ha podido analizar ahora mismo. Inténtalo otra vez.</p>' : ''}
+  return `${pend && pend.error ? `<p class="small muted" role="alert">${esc(pend.error)}</p>` : ''}
     <button type="button" class="btn block ai-btn ${pro ? '' : 'is-locked'}" data-act="ai-pedir" data-v="${esc(w.id)}">Solicitar Análisis AI 🧠${pro ? '' : ' <span class="protag">Pro</span>'}</button>`;
 }
-// Pide el análisis (solo al pulsar el botón), lo guarda en el documento del entreno y repinta. Si ya está guardado, no vuelve a pedirlo.
+// Pide el análisis (solo al pulsar el botón); el servidor lo guarda en el documento del entreno (en modo prueba, la app) y repinta. Si ya está guardado, no vuelve a pedirlo.
 async function pedirCoach(id) {
   const w0 = st.workouts.find((x) => x.id === id);
   st.aiPend = st.aiPend || {};
   if (!aiPosible(w0) || aiDe(w0) || st.aiPend[id] === 'cargando') return;
   st.aiPend[id] = 'cargando'; render();
   try {
-    const res = await fetchAICoachRating(datosParaCoach(w0), perfilParaCoach(st.profile));
+    const res = await analizarEntreno(api, w0); // con Firebase lo analiza Gemini en el servidor y ya queda guardado
     const nota = Number(res && res.nota);
     if (!Number.isFinite(nota)) throw new Error('Respuesta no válida');
     const w = st.workouts.find((x) => x.id === id);
@@ -239,11 +239,11 @@ async function pedirCoach(id) {
       aiTexto: String(res.analisis || '').slice(0, 1200),
       aiConsejos: (Array.isArray(res.consejos) ? res.consejos : []).slice(0, 5).map((c) => String(c).slice(0, 300)),
       aiDemo: !!res.demo,
-      aiFecha: new Date().toISOString() };
-    await api.saveWorkout(st.user.uid, nuevo);
+      aiFecha: res.aiFecha || new Date().toISOString() };
+    if (!res.guardado) await api.saveWorkout(st.user.uid, nuevo);
     st.workouts = st.workouts.map((x) => (x.id === id ? nuevo : x));
     delete st.aiPend[id];
-  } catch (e) { st.aiPend[id] = 'error'; }
+  } catch (e) { st.aiPend[id] = { error: errorText(e) }; }
   render();
 }
 

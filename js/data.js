@@ -137,6 +137,11 @@ async function firebaseBackend(config) {
       }
       return (await iaFn(data)).data;
     },
+    // Coach AI (Gemini) a través de la Cloud Function «coach»: analiza el entreno guardado y lo guarda en su documento.
+    async coach(id) {
+      const Fn = await import(/* @vite-ignore */ FB + 'firebase-functions.js');
+      return (await Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), 'coach', { timeout: 65000 })({ id })).data;
+    },
     // Strava a través de la Cloud Function «strava» (conectar, actividades, desconectar). Los tokens nunca llegan al móvil.
     async strava(data) {
       if (!stravaFn) {
@@ -267,6 +272,8 @@ function localBackend() {
       throw err('local/no-ia');
     },
     async portal() { throw err('local/no-portal'); },
+    local: true, // modo prueba: el Coach AI devuelve un ejemplo y lo guarda la propia app
+    async coach() { throw err('local/no-ia'); },
     // En modo prueba no hay servidor: Strava solo responde si una prueba automática lo simula.
     async strava(data) {
       if (typeof globalThis.cadenciaStravaPrueba === 'function') return globalThis.cadenciaStravaPrueba(data);
