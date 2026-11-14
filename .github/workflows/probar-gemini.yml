@@ -1,0 +1,27 @@
+# Prueba manual: llama a Gemini con la clave GEMINI_API_KEY de Secret Manager y el modelo del Coach AI.
+# No muestra la clave; solo el código HTTP y el comienzo de la respuesta. GitHub → Actions → «Probar Gemini» → Run workflow.
+name: Probar Gemini
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Llamar a Gemini
+        run: |
+          KEY=$(gcloud secrets versions access latest --secret=GEMINI_API_KEY --project cadencia-11cb6) || { echo "No se pudo leer el secreto"; exit 1; }
+          echo "::add-mask::$KEY"
+          MODELO=$(grep -oP "const MODELO_COACH = '\K[^']+" functions/index.js)
+          echo "Modelo: $MODELO"
+          curl -sS -o r.json -w "HTTP %{http_code}\n" -H "Content-Type: application/json" -H "x-goog-api-key: $KEY" \
+            "https://generativelanguage.googleapis.com/v1beta/models/$MODELO:generateContent" \
+            -d '{"contents":[{"parts":[{"text":"Responde solo: hola"}]}],"generationConfig":{"maxOutputTokens":200}}'
+          head -c 600 r.json; echo
