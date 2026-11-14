@@ -1483,10 +1483,20 @@ html, body, main, .sheet-list, .sheet-scroll, .modal-body { overscroll-behavior-
 .cal-opt small { font-size: 12px; }
 .cal-opt:active { background: var(--accent-soft); border-color: var(--accent-text); }
 /* Salvavidas de racha */
-.salv-card { display: grid; gap: 10px; border-left: 4px solid #F2BE1A; }
-.salv-card p { margin: 0; }
-.salv-btn { white-space: normal; line-height: 1.25; min-height: 48px; }
-.salv-btn.is-locked { opacity: .6; }
+/* Entreno › Semana: día elegido en la tira, tarjeta del día, Mover entreno a Hoy y Coach AI bajo demanda (2026-11-14) */
+.dc[aria-pressed="true"] { color: var(--ink); }
+.dc[aria-pressed="true"] i { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dia-card { display: grid; gap: 10px; }
+.dia-card > p, .dia-card .today-line { margin: 0; }
+.dia-wk { display: grid; gap: 10px; }
+.dia-wk + .dia-wk { border-top: 1px solid var(--line); padding-top: 10px; }
+.mover-btn, .ai-btn { white-space: normal; line-height: 1.25; min-height: 48px; }
+.mover-btn.is-locked, .ai-btn.is-locked { opacity: .6; }
+.ai-res { display: grid; justify-items: center; gap: 10px; text-align: center; }
+.ai-res.sm { justify-items: start; text-align: left; }
+.ai-score.sm { width: 88px; height: 88px; }
+.ai-score.sm::before { inset: 7px; }
+.ai-score.sm b { font-size: 28px; }
 /* Coach AI post-entreno */
 .ai-body { gap: 10px; }
 .ai-demo { font-style: normal; font-size: 10px; letter-spacing: .06em; padding: 1px 6px; margin-left: 6px; border: 1px solid var(--muted); border-radius: 2px; color: var(--muted); vertical-align: 2px; }

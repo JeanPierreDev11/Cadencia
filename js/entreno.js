@@ -75,23 +75,20 @@ export function streakDays(ws, hoy, plan = () => true) {
   return n;
 }
 
-/* ---------- salvavidas de racha (Pro) ---------- */
-// Lista guardada en el perfil: [{ de: 'AAAA-MM-DD' (día con entreno que se perdió), a: 'AAAA-MM-DD' (día al que se movió) }].
+/* ---------- mover entreno a hoy (Pro; sustituye al «salvavidas de racha») ---------- */
+// Lista guardada en el perfil (campo `salvavidas`, se mantiene el nombre por compatibilidad):
+// [{ de: 'AAAA-MM-DD' (día cuya sesión se movió), a: 'AAAA-MM-DD' (día al que se movió) }].
 // Ese «de» pasa a contar como descanso (no rompe la racha) y «a» hereda la sesión. Se guardan como mucho SALV_MAX.
-export const SALV_MAX = 12;
+export const SALV_MAX = 60;
 export const salvLista = (p) => (Array.isArray(p && p.salvavidas) ? p.salvavidas.filter((x) => x && typeof x.de === 'string' && typeof x.a === 'string') : []);
-// ¿Hay que ofrecer el salvavidas hoy? Solo si hoy es descanso en la rutina, hoy no has entrenado, no has usado ya uno esta semana
-// y algún día anterior de ESTA semana tocaba entrenar y no entrenaste. Devuelve el día perdido más reciente (ISO) o null.
-// planBase(iso) → la sesión de la rutina SIN contar salvavidas; hechos = Set de fechas con algún entreno.
-export function salvavidasHueco(hoy, planBase, hechos, lista = []) {
-  if (planBase(hoy) || hechos.has(hoy)) return null;
-  const lunes = mondayOf(hoy);
-  if (lista.some((x) => x.a >= lunes && x.a <= addDays(lunes, 6))) return null; // uno por semana
-  const movidos = new Set(lista.map((x) => x.de));
-  for (let d = addDays(hoy, -1); d >= lunes; d = addDays(d, -1)) {
-    if (planBase(d) && !hechos.has(d) && !movidos.has(d)) return d;
-  }
-  return null;
+// ¿Se puede mover la sesión del día `dia` a `hoy`? plan(iso) → sesión prevista YA con los movimientos aplicados; hechos = Set de fechas con entreno.
+// null → no hay nada que mover (no se muestra el botón). { ok: true } → se puede. { ok: false, msg } → se explica por qué no.
+export function moverAHoy(dia, hoy, plan, hechos, lista = []) {
+  if (dia === hoy || mondayOf(dia) !== mondayOf(hoy) || !plan(dia) || hechos.has(dia)) return null;
+  if (lista.some((x) => x.a === dia)) return { ok: false, msg: 'Esta sesión ya se movió una vez.' };
+  if (hechos.has(hoy)) return { ok: false, msg: 'Hoy ya has entrenado: no se puede mover otra sesión a hoy.' };
+  if (plan(hoy)) return { ok: false, msg: 'Hoy ya tienes una sesión prevista.' };
+  return { ok: true };
 }
 
 /* ---------- récords ---------- */

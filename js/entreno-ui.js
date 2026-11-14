@@ -4,7 +4,7 @@ import { esc, num, nf, todayISO, fmtDate, lsSet, lsGet, toast, I } from './util.
 import { errorText } from './data.js';
 import * as E from './entreno.js';
 import * as CAL from './calorias.js';
-import { fetchAICoachRating, datosParaCoach, perfilParaCoach } from './coach.js';
+import { fetchAICoachRating, datosParaCoach, perfilParaCoach, COACH_DEMO } from './coach.js';
 
 export function crearEntreno(ctx) {
   const { st, root } = ctx;
@@ -44,7 +44,7 @@ function rutinasList() {
   return list;
 }
 const nidR = () => 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-// dayPlanBase: lo que dice la rutina. dayPlan: además aplica los salvavidas de racha (Pro): el día perdido pasa a descanso y el día de rescate hereda su sesión.
+// dayPlanBase: lo que dice la rutina. dayPlan: además aplica los entrenos movidos a otro día (Pro, «Mover entreno a Hoy»): el día original pasa a descanso y el día destino hereda su sesión.
 const dayPlanBase = (iso) => { const r = rutinaOf(); if (!r) return null; const d = E.weekdayIdx(iso); return r.dias.includes(d) ? r.sesiones[d] || null : null; };
 const dayPlan = (iso) => {
   const sv = E.salvLista(st.profile);
@@ -53,8 +53,11 @@ const dayPlan = (iso) => {
   const m = sv.find((x) => x.a === iso);
   return (m && dayPlanBase(m.de)) || dayPlanBase(iso);
 };
-// Día perdido de esta semana que se puede recuperar hoy (o null).
-const salvHueco = () => E.salvavidasHueco(todayISO(), dayPlanBase, new Set(st.workouts.map((w) => w.fecha)), E.salvLista(st.profile));
+// ¿Se puede mover a hoy la sesión del día d? (ver E.moverAHoy)
+const moverInfo = (d) => E.moverAHoy(d, todayISO(), dayPlan, new Set(st.workouts.map((w) => w.fecha)), E.salvLista(st.profile));
+// Día elegido en la tira semanal (por defecto hoy; si es de otra semana, vuelve a hoy).
+const diaSel = () => { const t = todayISO(), m = E.mondayOf(t), v = st.wkDia; return v && v >= m && v <= E.addDays(m, 6) ? v : t; };
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const tipoIcon = (t) => (t === 'bici' ? I.bike : t === 'cardio' ? I.heart : t === 'otro' ? I.ball : I.dumb);
 const goalsKind = () => E.planKind(st.profile && st.profile.objetivos);
 const sesDuracion = (s) => (s.t === 'fuerza' ? `${(s.ej || []).length} ejercicios` : fmtDur(s.min));
@@ -133,27 +136,20 @@ function barsChart(series) {
 
 function wkSemana() {
   const today = todayISO(), mon = E.mondayOf(today), ws = st.workouts, r = rutinaOf();
-  const stt = E.weekStats(ws, mon);
+  const stt = E.weekStats(ws, mon), sel = diaSel();
+  // Tocar un día solo lo selecciona (métricas y plan de ese día abajo); registrar se hace con el botón de la tarjeta del día.
   const cells = [0, 1, 2, 3, 4, 5, 6].map((i) => {
     const date = E.addDays(mon, i), did = ws.some((w) => w.fecha === date), dp = dayPlan(date);
     const state = did ? 'done' : dp ? (date < today ? 'miss' : 'plan') : 'rest';
     const mov = !did && !dp && E.salvLista(st.profile).find((x) => x.de === date);
-    const label = `${E.DIAS_LARGO[i]}: ${did ? 'entrenado' : dp ? dp.nombre + ' previsto' : mov ? 'entreno movido al ' + E.DIAS_LARGO[E.weekdayIdx(mov.a)].toLowerCase() + ' (salvavidas)' : 'descanso'}`;
-    return `<button type="button" class="dc ${state} ${date === today ? 'now' : ''}" data-act="wk-new" data-date="${date}" ${date > today ? 'disabled' : ''} aria-label="${esc(label)}"><span>${E.DIAS[i]}</span><i>${did ? I.check : dp ? tipoIcon(dp.t) : ''}</i></button>`;
+    const label = `${E.DIAS_LARGO[i]}: ${did ? 'entrenado' : dp ? dp.nombre + ' previsto' : mov ? 'entreno movido al ' + E.DIAS_LARGO[E.weekdayIdx(mov.a)].toLowerCase() : 'descanso'}`;
+    return `<button type="button" class="dc ${state} ${date === today ? 'now' : ''}" data-act="wk-dia" data-date="${date}" aria-pressed="${date === sel}" aria-label="${esc(label)}"><span>${E.DIAS[i]}</span><i>${did ? I.check : dp ? tipoIcon(dp.t) : ''}</i></button>`;
   }).join('');
-
-  const dp = dayPlan(today), doneToday = ws.some((w) => w.fecha === today);
-  let todayCard;
-  if (doneToday) todayCard = `<section class="card ok-card"><h2>Hoy</h2><p><b>Ya has entrenado hoy.</b> Come bien y descansa.</p></section>`;
-  else if (dp) todayCard = `<section class="card"><h2>Hoy toca</h2>
-      <p class="today-line">${tipoIcon(dp.t)}<span><b>${esc(dp.nombre)}</b> · ${sesDuracion(dp)}<br><span class="muted small">${esc(sesResumen(dp))}</span></span></p>
-      <button class="btn block" data-act="wk-new" data-date="${today}" data-tipo="${WK_DE[dp.t]}">${dp.t === 'fuerza' ? 'Empezar entrenamiento' : 'Registrar entreno'}</button></section>`;
-  else todayCard = `<section class="card"><h2>Hoy</h2><p>Hoy toca descansar. Si te apetece moverte, puedes registrar una sesión extra.</p></section>${salvavidasHTML()}`;
 
   const streak = E.streakDays(ws, today, (d) => !!dayPlan(d));
   // Si tu rutina no tiene bici y sí fuerza, el panel habla de series y kilos movidos en lugar de sesiones y distancia.
   const soloFuerza = r.dias.every((d) => r.sesiones[d].t !== 'bici') && r.dias.some((d) => r.sesiones[d].t === 'fuerza');
-  const hoy = E.dayStats(ws, today);
+  const hoy = E.dayStats(ws, sel);
   const caja2 = soloFuerza
     ? `<section class="stat"><span class="label">Series</span><span class="val num">${nf(hoy.sets)}</span></section>`
     : `<section class="stat"><span class="label">Sesiones</span><span class="val num">${stt.n}<em>de ${r.dias.length}</em></span></section>`;
@@ -162,8 +158,8 @@ function wkSemana() {
     : `<section class="stat"><span class="label">Distancia en bici</span><span class="val num">${nf(stt.km, 1)}<em>km</em></span>${stt.elev ? `<span class="hint">+${nf(stt.elev)} m de desnivel</span>` : ''}</section>`;
   return `
     <section class="card"><h2>Tu semana</h2><div class="weekstrip">${cells}</div></section>
-    ${todayCard}
-    <div class="stats">
+    ${diaHTML(sel, today)}
+    <div class="stats" aria-label="Métricas del ${esc(sel === today ? 'día de hoy' : fmtDate(sel, { weekday: 'long', day: 'numeric' }))}">
       <section class="stat"><span class="label">Tiempo</span><span class="val num nowrap">${fmtDur(hoy.min).replace(' min', '')}${hoy.min % 60 ? '<em>min</em>' : ''}</span></section>
       ${caja2}
       ${caja3}
@@ -174,14 +170,81 @@ function wkSemana() {
     <section class="card"><h2>Horas por semana</h2>${barsChart(E.weeksSeries(ws, mon, 8))}</section>`;
 }
 
-// Salvavidas de racha (Pro): hoy es descanso y esta semana se te pasó un día con entreno → ofrecer moverlo a hoy.
-function salvavidasHTML() {
-  const d = salvHueco(); if (!d) return '';
-  const dia = E.DIAS_LARGO[E.weekdayIdx(d)], ses = dayPlanBase(d), pro = esPro();
-  return `<section class="card salv-card"><h2>🛟 Salvavidas de racha</h2>
-    <p class="small">El ${esc(dia.toLowerCase())} tocaba <b>${esc(ses ? ses.nombre : 'entrenar')}</b> y no lo registraste. Muévelo a hoy y entrena sin perder el fuego.</p>
-    <button type="button" class="btn block salv-btn ${pro ? '' : 'is-locked'}" data-act="salv-go" data-v="${d}">Salvar racha: Recuperar entreno perdido de ${esc(dia)}${pro ? '' : ' <span class="protag">Pro</span>'}</button>
-    <span class="small muted">Uno por semana. ${esc(dia)} contará como descanso.</span></section>`;
+// Tarjeta del día elegido en la tira: lo registrado (con Coach AI), lo previsto, «Registrar sesión» y «Mover entreno a Hoy».
+function diaHTML(sel, today) {
+  const esHoy = sel === today, futuro = sel > today, dp = dayPlan(sel), pro = esPro();
+  const hechos = st.workouts.filter((w) => w.fecha === sel);
+  const titulo = esHoy ? 'Hoy' : cap(fmtDate(sel, { weekday: 'long', day: 'numeric', month: 'short' }));
+  const reg = (txt, cls = 'ghost') => (futuro ? '' : `<button type="button" class="btn ${cls} block" data-act="wk-new" data-date="${sel}">${txt}</button>`);
+  const plan = dp ? `<p class="today-line">${tipoIcon(dp.t)}<span><b>${esc(dp.nombre)}</b> · ${sesDuracion(dp)}<br><span class="muted small">${esc(sesResumen(dp))}</span></span></p>` : '';
+  const mv = moverInfo(sel);
+  const mover = !mv ? '' : mv.ok
+    ? `<button type="button" class="btn ghost block mover-btn ${pro ? '' : 'is-locked'}" data-act="wk-mover" data-v="${sel}">Mover entreno a Hoy${pro ? '' : ' <span class="protag">Pro</span>'}</button>`
+    : `<p class="small muted">${esc(mv.msg)}</p>`;
+  if (hechos.length) {
+    return `<section class="card dia-card ${esHoy ? 'ok-card' : ''}"><h2>${esc(titulo)}</h2>
+      ${esHoy ? '<p><b>Ya has entrenado hoy.</b> Come bien y descansa.</p>' : ''}
+      ${hechos.map((w) => `<div class="dia-wk"><div class="list">${wkRow(w, false)}</div>${aiHTML(w, true)}</div>`).join('')}
+      ${reg('Registrar otra sesión')}</section>`;
+  }
+  if (dp) {
+    const txt = esHoy ? '' : futuro ? '<p class="small muted">Previsto en tu rutina.</p>' : '<p class="small muted">No registraste esta sesión.</p>';
+    const empezar = esHoy ? `<button type="button" class="btn block" data-act="wk-new" data-date="${today}" data-tipo="${WK_DE[dp.t]}">${dp.t === 'fuerza' ? 'Empezar entrenamiento' : 'Registrar entreno'}</button>` : '';
+    return `<section class="card dia-card"><h2>${esHoy ? 'Hoy toca' : esc(titulo)}</h2>${plan}${txt}${empezar}${reg('Registrar sesión', esHoy || futuro ? 'ghost' : '')}${mover}</section>`;
+  }
+  const movido = E.salvLista(st.profile).find((x) => x.de === sel);
+  const desc = movido ? `La sesión de este día se movió al ${esc(E.DIAS_LARGO[E.weekdayIdx(movido.a)].toLowerCase())}. Cuenta como descanso.`
+    : esHoy ? 'Hoy toca descansar. Si te apetece moverte, puedes registrar una sesión extra.' : futuro ? 'Día de descanso.' : 'Día de descanso. No hay ningún entreno registrado.';
+  return `<section class="card dia-card"><h2>${esc(titulo)}</h2><p>${desc}</p>${reg('Registrar sesión')}</section>`;
+}
+
+/* ---------- Coach AI (Pro): bajo demanda y guardado en el propio entreno ---------- */
+// Campos del documento users/{uid}/entrenos/{id}: aiNota (0-10), aiTitulo, aiTexto, aiConsejos[], aiDemo, aiFecha.
+const AI_CAMPOS = ['aiNota', 'aiTitulo', 'aiTexto', 'aiConsejos', 'aiDemo', 'aiFecha'];
+// Análisis guardado (o null). Uno de ejemplo deja de valer cuando la IA sea real (COACH_DEMO = false) y se puede volver a pedir.
+const aiDe = (w) => (w && Number.isFinite(Number(w.aiNota)) && !(w.aiDemo && !COACH_DEMO)
+  ? { nota: Number(w.aiNota), titulo: w.aiTitulo || '', analisis: w.aiTexto || '', consejos: Array.isArray(w.aiConsejos) ? w.aiConsejos : [], demo: !!w.aiDemo } : null);
+const aiPosible = (w) => !!w && w.tipo === 'gym' && (w.ejercicios || []).length > 0;
+function aiHTML(w, compacto = false) {
+  if (!aiPosible(w)) return '';
+  const ai = aiDe(w), pend = (st.aiPend || {})[w.id], pro = esPro();
+  if (ai) {
+    const pct = Math.max(0, Math.min(100, ai.nota * 10));
+    return `<div class="ai-res ${compacto ? 'sm' : ''}">
+      <span class="ai-lbl">🧠 Coach AI${ai.demo ? ' <em class="ai-demo">Ejemplo</em>' : ''}</span>
+      <div class="ai-score ${compacto ? 'sm' : ''}" style="--p:${pct.toFixed(0)}"><b class="num">${nf(ai.nota, 1)}</b><span>/ 10</span></div>
+      <p class="ai-tit">${esc(ai.titulo)}</p>
+      <section class="ai-box"><span class="ai-lbl">Análisis</span><p>${esc(ai.analisis)}</p>
+        ${ai.consejos.length ? `<ul>${ai.consejos.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}</section></div>`;
+  }
+  if (pend === 'cargando') return `<div class="ai-load" role="status"><span class="ai-spin" aria-hidden="true"></span><span class="small muted">Analizando…</span></div>`;
+  return `${pend === 'error' ? '<p class="small muted">No se ha podido analizar ahora mismo. Inténtalo otra vez.</p>' : ''}
+    <button type="button" class="btn block ai-btn ${pro ? '' : 'is-locked'}" data-act="ai-pedir" data-v="${esc(w.id)}">Solicitar Análisis AI 🧠${pro ? '' : ' <span class="protag">Pro</span>'}</button>`;
+}
+// Pide el análisis (solo al pulsar el botón), lo guarda en el documento del entreno y repinta. Si ya está guardado, no vuelve a pedirlo.
+async function pedirCoach(id) {
+  const w0 = st.workouts.find((x) => x.id === id);
+  st.aiPend = st.aiPend || {};
+  if (!aiPosible(w0) || aiDe(w0) || st.aiPend[id] === 'cargando') return;
+  st.aiPend[id] = 'cargando'; render();
+  try {
+    const res = await fetchAICoachRating(datosParaCoach(w0), perfilParaCoach(st.profile));
+    const nota = Number(res && res.nota);
+    if (!Number.isFinite(nota)) throw new Error('Respuesta no válida');
+    const w = st.workouts.find((x) => x.id === id);
+    if (!w || !st.user) { delete st.aiPend[id]; return render(); } // borrado o sesión cerrada mientras tanto
+    const nuevo = { ...w,
+      aiNota: Math.round(Math.max(0, Math.min(10, nota)) * 10) / 10,
+      aiTitulo: String(res.titulo || '').slice(0, 80),
+      aiTexto: String(res.analisis || '').slice(0, 1200),
+      aiConsejos: (Array.isArray(res.consejos) ? res.consejos : []).slice(0, 5).map((c) => String(c).slice(0, 300)),
+      aiDemo: !!res.demo,
+      aiFecha: new Date().toISOString() };
+    await api.saveWorkout(st.user.uid, nuevo);
+    st.workouts = st.workouts.map((x) => (x.id === id ? nuevo : x));
+    delete st.aiPend[id];
+  } catch (e) { st.aiPend[id] = 'error'; }
+  render();
 }
 
 function wkRow(w, mod) {
@@ -861,40 +924,20 @@ function empezarFuerza(fecha) {
   if (st.live) return startLive(fecha);
   st.modoSel = { fecha }; render();
 }
-// Pro: al terminar, «Análisis de Inteligencia Artificial» (Coach AI). r.ai = { estado: 'cargando' | 'ok' | 'error', nota, titulo, analisis, consejos, demo }.
+// Pro: resumen al terminar (st.resumen = { id, nombre, vol, sets, min, record }). El Coach AI NO se pide solo: botón «Solicitar Análisis AI 🧠».
 function resumenSheetHTML() {
-  const r = st.resumen, ai = r.ai || { estado: 'cargando' };
-  const nota = Number(ai.nota), pct = Math.max(0, Math.min(100, (nota / 10) * 100));
-  const cuerpo = ai.estado === 'ok'
-    ? `<div class="ai-score" style="--p:${pct.toFixed(0)}"><b class="num">${nf(nota, 1)}</b><span>/ 10</span></div>
-       <p class="ai-tit">${esc(ai.titulo || '')}</p>
-       <section class="ai-box"><span class="ai-lbl">Análisis</span><p>${esc(ai.analisis || '')}</p>
-         ${(ai.consejos || []).length ? `<ul>${ai.consejos.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}</section>`
-    : ai.estado === 'error'
-      ? `<p class="small muted">No se ha podido analizar el entreno ahora mismo. Tus datos están guardados.</p>`
-      : `<div class="ai-load" role="status"><span class="ai-spin" aria-hidden="true"></span><span class="small muted">Analizando tu entreno…</span></div>`;
+  const r = st.resumen, w = st.workouts.find((x) => x.id === r.id);
   return `<div class="sheet-back" data-act="sum-close"></div>
-    <div class="sheet short ai-sheet" role="dialog" aria-modal="true" aria-label="Análisis de Inteligencia Artificial">
+    <div class="sheet short ai-sheet" role="dialog" aria-modal="true" aria-label="Resumen del entreno">
       <div class="sheet-grab"></div>
-      <div class="sheet-head"><span style="width:36px"></span><h2>Coach AI</h2><button type="button" class="iconbtn" data-act="sum-close" aria-label="Cerrar">${I.back}</button></div>
+      <div class="sheet-head"><span style="width:36px"></span><h2>Entreno guardado</h2><button type="button" class="iconbtn" data-act="sum-close" aria-label="Cerrar">${I.back}</button></div>
       <div class="sum-pro ai-body">
-        <span class="sum-lbl">👑 Análisis de Inteligencia Artificial${ai.demo ? ' <em class="ai-demo">Ejemplo</em>' : ''}</span>
-        <span class="small muted">${esc(r.nombre)}${r.record ? ' · ¡Nuevo récord!' : ''}</span>
-        ${cuerpo}
+        <span class="sum-lbl">${esc(r.nombre)}${r.record ? ' · ¡Nuevo récord!' : ''}</span>
         <div class="ai-stats"><span><b class="num">${nf(r.vol)}</b> kg movidos</span><span><b class="num">${r.sets}</b> ${r.sets === 1 ? 'serie' : 'series'}</span><span><b class="num">${esc(fmtDur(r.min))}</b></span></div>
-        <button type="button" class="btn block" data-act="sum-close">Listo</button>
+        ${aiHTML(w)}
+        <button type="button" class="btn ghost block" data-act="sum-close">Listo</button>
       </div>
     </div>`;
-}
-// Pide la valoración al Coach AI y repinta la hoja si sigue abierta.
-async function pedirCoach(o) {
-  const r = st.resumen;
-  try {
-    const res = await fetchAICoachRating(datosParaCoach(o), perfilParaCoach(st.profile));
-    if (st.resumen !== r) return;
-    r.ai = res && Number.isFinite(Number(res.nota)) ? { ...res, estado: 'ok' } : { estado: 'error' };
-  } catch (e) { if (st.resumen !== r) return; r.ai = { estado: 'error' }; }
-  render();
 }
 function limiteSheetHTML() {
   const rut = st.limite && st.limite.tipo === 'rutinas', que = rut ? 'rutinas' : 'ejercicios propios';
@@ -1175,6 +1218,7 @@ async function liveFinish() {
   // Al editar se sobrescribe el mismo documento (mismo id) conservando el resto de sus datos.
   const o = { ...(L.edit ? L.orig : {}), id: L.edit || 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), fecha: L.fecha, tipo: 'gym', nombre: L.nombre.trim().slice(0, 60), min, esf: L.edit ? L.orig.esf || 2 : 2, ejercicios: ejs };
   o.kcal = E.estimateKcal(o, currentKg());
+  if (L.edit) AI_CAMPOS.forEach((k) => delete o[k]); // si cambian las series, el análisis guardado ya no vale
   toast('Guardando…');
   try {
     const resto = L.edit ? st.workouts.filter((w) => w.id !== L.edit) : st.workouts;
@@ -1188,9 +1232,9 @@ async function liveFinish() {
     st.live = null; st.liveMin = false; liveSave();
     st.tab = 'entreno'; lsSet('cadencia-tab', 'entreno');
     if (editado) st.wkHist = true; else { st.wkTab = 'semana'; lsSet('cadencia-wktab', 'semana'); }
-    if (esPro() && !editado) st.resumen = { nombre: o.nombre, vol: volTotal, sets: nSets, min, record, ai: { estado: 'cargando' } };
+    st.wkDia = o.fecha;
+    if (esPro() && !editado) st.resumen = { id: o.id, nombre: o.nombre, vol: volTotal, sets: nSets, min, record };
     render(); window.scrollTo(0, 0);
-    if (st.resumen && st.resumen.ai) pedirCoach(o);
     toast(editado ? 'Entreno actualizado' : record ? '¡Nuevo récord personal!' : `Entrenamiento guardado · ${nSets} series`);
   } catch (e) { fail(`No se ha podido guardar: ${errorText(e)}`); }
 }
@@ -1510,17 +1554,20 @@ root.addEventListener('click', async (e) => {
   if (act === 'reg-pick' && st.regPick) { const d = st.regPick.date; st.regPick = null; return openRegistro(d, v); }
 
   // registro
-  if (act === 'salv-go') {
+  if (act === 'wk-mover') {
     if (!esPro()) return abrirSuscripcion();
-    if (st.salvBusy || salvHueco() !== v) return;
-    const lista = [...E.salvLista(st.profile), { de: v, a: todayISO() }].slice(-E.SALV_MAX);
+    const inf = moverInfo(v);
+    if (st.salvBusy || !inf || !inf.ok) return;
+    const hoy = todayISO(), lista = [...E.salvLista(st.profile), { de: v, a: hoy }].slice(-E.SALV_MAX);
     st.salvBusy = true;
     try { await api.saveProfile(st.user.uid, { salvavidas: lista }); st.profile.salvavidas = lista; }
     catch (e) { toast(errorText(e)); return; }
     finally { st.salvBusy = false; }
-    const dp = dayPlan(todayISO());
-    render(); toast(`Racha salvada: hoy toca ${dp ? dp.nombre : 'entrenar'}`); return;
+    const dp = dayPlan(hoy);
+    st.wkDia = hoy; render(); toast(`Entreno movido a hoy: ${dp ? dp.nombre : 'entrenar'}`); return;
   }
+  if (act === 'ai-pedir') { if (!esPro()) { st.resumen = null; return abrirSuscripcion(); } return void pedirCoach(v); }
+  if (act === 'wk-dia') { st.wkDia = b.dataset.date; return render(); }
   if (act === 'wktab') { st.wkTab = v; lsSet('cadencia-wktab', v); render(); }
   else if (act === 'wk-new') openRegistro(b.dataset.date, b.dataset.tipo);
   else if (act === 'wk-cancel') { st.wk = null; if (st.wkBack) { st.wkHist = true; st.wkBack = false; } render(); }
