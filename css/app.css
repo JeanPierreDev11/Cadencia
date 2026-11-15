@@ -1668,3 +1668,35 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .ritmo-pf .ritmo-val b { font-size: 44px; }
 .ritmo-pf .ritmo-val span { font-size: 15px; }
 .ritmo-pf #pf-ritmo-txt { display: grid; gap: 6px; }
+
+/* 2026-11-15 · Editor del peso objetivo (hoja con regla + termómetro; js/peso-ui.js) */
+.pobj-sheet .pobj-body { gap: 8px; overscroll-behavior-y: contain; }
+.pobj-sub { margin: 0; }
+.pobj-sub b { color: var(--ink); }
+.pobj-val { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pobj-num { display: flex; align-items: baseline; justify-content: center; gap: 8px; }
+.pobj-num b { font-size: 54px; line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; font-stretch: 112%; }
+.pobj-num span { color: var(--muted); font-size: 18px; font-weight: 600; }
+.pobj-step { flex: none; width: 44px; height: 44px; border: 1.5px solid var(--line); border-radius: 2px; background: var(--surface2); color: var(--ink); font-size: 26px; font-weight: 700; line-height: 1; display: grid; place-items: center; touch-action: manipulation; }
+.pobj-step:active { background: var(--surface); }
+.pobj-ruler { position: relative; padding-bottom: 14px; }
+.pobj-ruler::after { content: ''; position: absolute; left: 16px; right: 16px; bottom: 2px; height: 9px; pointer-events: none;
+  background: repeating-linear-gradient(to right, var(--bd2, var(--line)) 0 1.5px, transparent 1.5px calc(100% / var(--n))); }
+.pobj-hoy { position: absolute; bottom: 2px; left: calc(16px + (100% - 32px) * var(--af)); width: 2px; height: 14px; margin-left: -1px; background: var(--ink); pointer-events: none; }
+.pobj-hoy em { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 1px; font-style: normal; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.pobj-rng { position: relative; z-index: 1; }
+.pobj-ruler + .ritmo-ticks { margin-top: 0; }
+.pobj-err { margin: 0; padding: 10px 12px; border-left: 4px solid var(--bad); background: var(--bad-soft); color: var(--ink); font-size: 14px; line-height: 1.35; border-radius: 2px; }
+.pobj-err[hidden] { display: none; }
+.pobj-actions { display: grid; gap: 4px; flex: none; justify-items: center; }
+.pobj-actions .btn { justify-self: stretch; }
+
+/* Disparadores: lápiz junto al objetivo (Peso) y botón en lugar del campo (Perfil › Detalles personales) */
+.icon-pencil { position: relative; display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; border: 0; background: none; padding: 4px; margin: -4px 0 -4px 2px; color: var(--accent-text); font: inherit; font-size: 12.5px; font-weight: 700; border-radius: 2px; cursor: pointer; }
+.icon-pencil::after { content: ''; position: absolute; inset: -10px -6px; }
+.icon-pencil svg { width: 16px; height: 16px; }
+.icon-pencil:active { background: var(--surface2); }
+.pobj-btn { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 52px; text-align: left; color: var(--ink); font-family: inherit; cursor: pointer; }
+.pobj-btn b { font-weight: 700; }
+.pobj-btn b.vacio { color: var(--muted); font-weight: 500; }
+.pobj-btn svg { flex: none; color: var(--accent-text); }

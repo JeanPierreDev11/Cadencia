@@ -13,6 +13,7 @@ import { crearStrava } from './strava-ui.js';
 import { iniciarInstalar } from './instalar.js';
 import * as UI from './ui.js';
 import * as OB from './onboarding.js';
+import * as PU from './peso-ui.js';
 
 /* ================================================================== */
 /* Utilidades                                                          */
@@ -77,7 +78,7 @@ function render() {
   document.body.dataset.view = st.view;
   document.title = APP_NAME;
   if (M) M.afterRender();
-  document.body.classList.toggle('noscroll', !!(st.limite || st.liveFin || st.calentar || st.pf || st.proInfo || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.resumen || st.legal || st.del || st.pro || st.proWelcome || st.recAsk));
+  document.body.classList.toggle('noscroll', !!(st.limite || st.liveFin || st.calentar || st.pf || st.proInfo || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.resumen || st.legal || st.del || st.pro || st.proWelcome || st.recAsk || PU.editorAbierto()));
 }
 
 /* ================================================================== */
@@ -379,6 +380,7 @@ const M = crearSecciones({
 
 const S = crearStrava({ st, get api() { return api; }, render, toast, esc, E, currentKg: () => currentKg(), todayISO, fmtDate, lsGet, lsSet, errorText });
 const R = crearRecordatorios({ st, get api() { return api; }, render, toast, esc, lsGet, lsSet, errorText, I });
+PU.iniciarPesoUI({ render, toast });
 let irPendiente = leerIr(); // si venimos de tocar un aviso, aquí queda la pantalla a la que ir
 let stravaRet = leerRetorno(); // si venimos de la pantalla de permisos de Strava, aquí queda el código temporal
 
@@ -390,7 +392,7 @@ function viewMain() {
   if (st.wk) return viewWkForm();
   const tab = M.tabActual(), tabs = M.tabs();
   const body = tab === 'perfil' ? viewPerfil() : tab === 'entreno' ? viewEntreno() : tab === 'inicio' ? viewInicio() : M.view(tab);
-  return `${tab === 'inicio' ? '' : gearHTML()}<main class="main ${st.live ? 'has-live' : ''}">${body}</main>${st.live ? liveBarHTML() : ''}${sheet}${M.novModalHTML()}
+  return `${tab === 'inicio' ? '' : gearHTML()}<main class="main ${st.live ? 'has-live' : ''}">${body}</main>${st.live ? liveBarHTML() : ''}${sheet}${PU.pesoObjSheetHTML()}${M.novModalHTML()}
   <div class="tabbar"><nav aria-label="Secciones" class="n${tabs.length}">${tabs.map((t) => `<button type="button" data-act="tab" data-v="${t.id}" ${tab === t.id ? 'aria-current="page"' : ''}>${t.ico}<span>${t.t}</span></button>`).join('')}</nav></div>`;
 }
 
@@ -532,6 +534,28 @@ function pfRitmoTxt() {
     : c.modo === 'superavit' ? `<small class="muted">Con este ritmo: unas <b>${nf(c.kcal)} kcal al día</b> (${nf(c.superavit)} más de lo que gastas).</small>`
     : `<small class="muted">Con tu peso objetivo actual comes lo que gastas, así que el ritmo no cambia tus calorías.</small>`;
   return OB.ritmoInfoHTML(r) + dif;
+}
+// Peso objetivo (2026-11-15): se edita en la hoja de js/peso-ui.js (regla + termómetro), desde Peso (lápiz) y desde Perfil › Detalles personales.
+// En Perfil el campo es un botón + un input oculto `pesoObjetivo` (pfGuardar y el resto lo leen como antes).
+const pfObjetivoBtnHTML = (txt) => `<button type="button" class="input pobj-btn" data-act="pobj-perfil" aria-labelledby="pf-obj-lbl pf-obj-txt">
+    <b id="pf-obj-txt" ${txt ? '' : 'class="vacio"'}>${txt ? `${esc(txt)} kg` : 'Sin definir · opcional'}</b>${I.pencil}</button>
+  <input type="hidden" name="pesoObjetivo" value="${esc(txt)}">`;
+function pfSetObjetivo(txt) { // txt: '' o '68,5' (como en el formulario)
+  if (!st.pf) return;
+  st.pf.f.pesoObjetivo = txt;
+  const i = document.querySelector('form[data-form="pf-det"] input[name="pesoObjetivo"]'); if (i) i.value = txt;
+  const b = document.getElementById('pf-obj-txt'); if (b) { b.textContent = txt ? `${txt} kg` : 'Sin definir · opcional'; b.classList.toggle('vacio', !txt); }
+  pfBtn(); refrescarRitmoTxt();
+}
+const errObjetivoPerfil = (v) => objetivoInvalido(v, num(pfV('alturaCm', st.profile.alturaCm || '')), pfV('sexo', st.profile.sexo === 'mujer' ? 'mujer' : 'hombre'), st.editGoals || st.profile.objetivos || [], grasaActual());
+const errObjetivoRegistro = (v) => objetivoInvalido(v, st.profile.alturaCm, st.profile.sexo === 'mujer' ? 'mujer' : 'hombre', st.profile.objetivos || [], grasaActual());
+// Desde Peso: se guarda directo en el perfil y se recalculan las calorías (el objetivo cambia el déficit/superávit en recomposición).
+async function guardarPesoObjetivo(v) {
+  const data = { pesoObjetivo: v == null ? null : Math.round(v * 10) / 10 };
+  data.calorias = CAL.resumen({ ...st.profile, ...data }, currentKg());
+  try { await api.saveProfile(st.user.uid, data); } catch (e) { return errorText(e); }
+  st.profile = { ...st.profile, ...data };
+  toast(v == null ? 'Peso objetivo quitado' : 'Peso objetivo actualizado');
 }
 function pfRitmoHTML() {
   if (!pfRitmoAplica()) return '';
@@ -730,7 +754,7 @@ function dialPeso(ws, objetivo) {
       <text class="sc" x="20" y="142" text-anchor="middle">${lo}</text><text class="sc" x="220" y="142" text-anchor="middle">${hi}</text>
     </svg>
     <div class="dial-c"><span class="lbl">Peso actual</span><b class="num">${cur != null ? nf(cur, 1) : '—'}<em>kg</em></b>
-      <span class="sub">${dd != null ? `${sgn(dd)}${nf(Math.abs(dd), 1)} kg vs. anterior` : cur != null ? 'Primer registro' : 'Apunta tu primer peso'}${objetivo ? ` · <i>objetivo ${nf(objetivo, 1)} kg</i>` : ''}</span></div>
+      <span class="sub">${dd != null ? `${sgn(dd)}${nf(Math.abs(dd), 1)} kg vs. anterior` : cur != null ? 'Primer registro' : 'Apunta tu primer peso'}${objetivo ? ` · <i>objetivo ${nf(objetivo, 1)} kg</i>` : ''}${cur != null ? (objetivo ? `<button type="button" class="icon-pencil" data-act="peso-obj" aria-label="Editar peso objetivo">${I.pencil}</button>` : ` · <button type="button" class="icon-pencil" data-act="peso-obj" aria-label="Fijar peso objetivo">${I.pencil}Fijar objetivo</button>`) : ''}</span></div>
   </section>`;
 }
 
@@ -967,7 +991,7 @@ function pfCuerpo(v) {
           <button type="button" data-act="psex" data-v="mujer" aria-pressed="${sexo === 'mujer'}">Mujer</button>
         </div><input type="hidden" name="sexo" value="${sexo}">
       </div>
-      <label class="field"><span>Peso objetivo (kg)</span><input class="input" name="pesoObjetivo" inputmode="decimal" value="${esc(pfV('pesoObjetivo', p.pesoObjetivo ? nf(p.pesoObjetivo, 1) : ''))}" placeholder="Opcional"></label>
+      <div class="field"><span id="pf-obj-lbl">Peso objetivo (kg)</span>${pfObjetivoBtnHTML(pfV('pesoObjetivo', p.pesoObjetivo ? nf(p.pesoObjetivo, 1) : ''))}</div>
       <div class="field"><span>Objetivos</span><div class="choices">${GOALS.map((g) => `<button type="button" class="choice" data-act="pgoal" data-v="${g.id}" aria-pressed="${goals.includes(g.id)}">
         <span class="ico">${goalIcon(g)}</span><span class="t">${g.t}</span><span class="tick">${goals.includes(g.id) ? I.check : ''}</span></button>`).join('')}</div></div>
       <div id="pf-guia">${pfGuiaHTML()}</div>
@@ -1228,7 +1252,7 @@ function viewError() {
 async function enter(u) {
   st.user = u; st.busy = false;
   if (!u && M) M.pararPro();
-  if (!u) { st.cfg = st.pwd = st.pf = st.proInfo = st.rutShare = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = 'auth'; st.ob = null; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
+  if (!u) { st.cfg = st.pwd = st.pf = st.proInfo = st.rutShare = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = 'auth'; PU.reiniciarPesoUI(); st.ob = null; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
   try {
     // PUERTA OBLIGATORIA: antes de pintar la app (y antes de pedir entrenos, peso, racha…) se lee el perfil.
     // Sin `onboardingCompletado: true` solo se ve el cuestionario: nada de cabecera, barra inferior ni secciones.
@@ -1328,9 +1352,16 @@ root.addEventListener('click', async (e) => {
     if (st.pf) { pfBtn(); refrescarGuia(); refrescarRitmo(); }
   }
   else if (act === 'recomp-usar') {
-    const f = b.closest('form'), inp = f && f.pesoObjetivo;
-    if (inp) { inp.value = nf(Number(v), 1); if (st.pf) { st.pf.f.pesoObjetivo = inp.value; pfBtn(); refrescarRitmoTxt(); } }
+    if (st.pf) pfSetObjetivo(nf(Number(v), 1));
   }
+  else if (act === 'peso-obj') PU.abrirEditorPesoObjetivo(currentKg(), st.profile.pesoObjetivo, guardarPesoObjetivo, { validar: errObjetivoRegistro });
+  else if (act === 'pobj-perfil') {
+    if (st.pf) PU.abrirEditorPesoObjetivo(pfV('pesoKg', currentKg()), pfV('pesoObjetivo', st.profile.pesoObjetivo ? nf(st.profile.pesoObjetivo, 1) : ''), (n) => { pfSetObjetivo(n == null ? '' : nf(n, 1)); }, { validar: errObjetivoPerfil });
+  }
+  else if (act === 'pobj-close') PU.cerrarEditorPesoObjetivo();
+  else if (act === 'pobj-step') PU.pasoRegla(Number(v));
+  else if (act === 'pobj-save') PU.guardarEditorPesoObjetivo(false);
+  else if (act === 'pobj-quitar') PU.guardarEditorPesoObjetivo(true);
   else if (act === 'cfg-cic') {
     const on = !M.tieneBici(); st.profile.ciclismo = on;
     if (!on && st.tab === 'bici') { st.tab = 'inicio'; lsSet('cadencia-tab', 'inicio'); }
@@ -1363,6 +1394,7 @@ root.addEventListener('click', async (e) => {
 });
 
 root.addEventListener('input', (e) => {
+  if (PU.alMoverRegla(e.target)) return; // regla del peso objetivo: se repinta sin render()
   if (st.del && e.target.dataset.del) {
     st.del[e.target.dataset.del] = e.target.value;
     const go = document.getElementById('del-go'); if (go) go.disabled = !(st.del.txt.trim().toUpperCase() === 'BORRAR' && st.del.pass) || st.del.busy;
