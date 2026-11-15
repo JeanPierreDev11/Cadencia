@@ -12,6 +12,7 @@ import { crearRecordatorios, leerIr } from './push.js';
 import { crearStrava } from './strava-ui.js';
 import { iniciarInstalar } from './instalar.js';
 import * as UI from './ui.js';
+import * as OB from './onboarding.js';
 
 /* ================================================================== */
 /* Utilidades                                                          */
@@ -206,10 +207,8 @@ async function onForgot() {
 }
 
 /* ================================================================== */
-/* Cuestionario inicial                                                */
+/* Cuestionario inicial (rediseño 2026-11-15; pantallas y cálculos en onboarding.js) */
 /* ================================================================== */
-const OB_STEPS = 5; // objetivos, qué entrenas, sobre ti, estatura, peso (+ resumen)
-const OB_ENTRENOS = [['fuerza', 'Fuerza', 'Gimnasio, calistenia…', () => I.dumb], ['bici', 'Bici', 'Carretera, rodillo…', () => I.bike], ['cardio', 'Running', 'Correr en calle, cinta o monte', () => I.pulse], ['otro', 'Otro deporte', 'Fútbol, natación…', () => I.ball]];
 
 // Nombre de usuario: solo letras, números, _ y -, sin espacios (3–20).
 const USER_RE = /^[a-zA-Z0-9_-]+$/;
@@ -220,167 +219,131 @@ function nomApe(p, fallback = '') {
   return [nom, p.apellidos != null ? p.apellidos : (full.startsWith(nom) ? full.slice(nom.length).trim() : '')];
 }
 
+// «¿Dónde entrenas?» puede venir de una versión antigua como texto suelto: se normaliza a lista.
+const dondeOb = (x) => (Array.isArray(x) ? x : x ? [x] : []).filter((k) => OB.DONDE.some((d) => d.id === k));
+
 function startOnboarding() {
-  const p = st.profile || {};
+  const p = st.profile || {}, [nom, ape] = nomApe(p, st.user && st.user.name);
   st.ob = {
-    step: 0,
-    objetivos: p.objetivos || [],
-    entrenos: Array.isArray(p.entrenos) ? p.entrenos : [],
-    nombre: nomApe(p, st.user && st.user.name)[0], apellidos: nomApe(p, st.user && st.user.name)[1], usuario: p.usuario || '',
-    sexo: p.sexo || '', edad: p.edad ? String(p.edad) : '',
-    alturaCm: p.alturaCm ? String(p.alturaCm) : '', pesoKg: p.pesoKg ? nf(p.pesoKg, 1) : '',
-    pesoObjetivo: p.pesoObjetivo ? nf(p.pesoObjetivo, 1) : '',
-    msg: '', saving: false,
+    step: 'perfil',
+    nombre: nom, apellidos: ape, usuario: p.usuario || '',
+    sexo: p.sexo || '', edad: p.edad ? String(p.edad) : '', alturaCm: p.alturaCm ? String(p.alturaCm) : '',
+    exp: OB.EXPS.some((e) => e.id === p.experiencia) ? p.experiencia : '',
+    donde: dondeOb(p.donde), material: (Array.isArray(p.material) ? p.material : []).filter((k) => OB.MATERIAL.some((m) => m.id === k)),
+    freq: p.diasSemana >= 2 && p.diasSemana <= 7 ? p.diasSemana : 0,
+    pesoKg: p.pesoKg ? nf(p.pesoKg, 1) : '', pesoObjetivo: p.pesoObjetivo ? nf(p.pesoObjetivo, 1) : '',
+    msg: '', saving: false, firmado: false,
   };
   st.view = 'onboarding';
   render();
 }
 
 function viewOnboarding() {
-  const o = st.ob, s = o.step;
+  const o = st.ob, flow = OB.flujo(o), i = Math.max(0, flow.indexOf(o.step)), s = o.step;
   const name = (st.profile && st.profile.nombre) || (st.user && st.user.name) || '';
-  const pct = Math.min(100, ((s + 1) / (OB_STEPS + 1)) * 100);
-  let body = '', canNext = true, nextLabel = 'Siguiente';
+  const pct = ((i + 1) / flow.length) * 100;
+  let body = '', nextLabel = 'Siguiente';
 
-  if (s === 0) {
-    body = `<h1 class="ob-title">${name ? `${esc(name)}, ¿qué` : '¿Qué'} quieres conseguir?</h1>
-      <p class="ob-sub">Elige todos los que quieras. Los podrás cambiar cuando quieras.</p>
-      <div class="choices">${GOALS.map((g) => `<button type="button" class="choice" data-act="goal" data-v="${g.id}" aria-pressed="${o.objetivos.includes(g.id)}">
-        <span class="ico">${goalIcon(g)}</span><span class="t">${g.t}<small>${g.s}</small></span><span class="tick">${o.objetivos.includes(g.id) ? I.check : ''}</span></button>`).join('')}</div>`;
-    canNext = o.objetivos.length > 0;
-  } else if (s === 1) {
-    body = `<h1 class="ob-title">¿Qué entrenas?</h1>
-      <p class="ob-sub">Elige todo lo que haces. Si marcas Bici, activamos la pestaña de ciclismo (rutas y taller).</p>
-      <div class="choices">${OB_ENTRENOS.map(([id, t, sub, ico]) => `<button type="button" class="choice" data-act="ent" data-v="${id}" aria-pressed="${o.entrenos.includes(id)}">
-        <span class="ico">${ico()}</span><span class="t">${t}<small>${sub}</small></span><span class="tick">${o.entrenos.includes(id) ? I.check : ''}</span></button>`).join('')}</div>
-      <p class="small muted">Puedes saltarte esta pregunta y cambiarlo luego en Configuración.</p>`;
-  } else if (s === 2) {
-    body = `<h1 class="ob-title">Cuéntanos sobre ti</h1>
-      <p class="ob-sub">Con esto calculamos cuánta energía gasta tu cuerpo.</p>
-      <label class="field"><span>Nombre</span><input class="input" data-ob="nombre" value="${esc(o.nombre)}" maxlength="40" autocomplete="given-name" required></label>
-      <label class="field"><span>Apellidos</span><input class="input" data-ob="apellidos" value="${esc(o.apellidos)}" maxlength="60" autocomplete="family-name" required></label>
-      <label class="field"><span>Nombre de usuario</span><input class="input" data-ob="usuario" value="${esc(o.usuario)}" maxlength="20" autocapitalize="none" autocomplete="username" placeholder="ej. jean_ramirez" required><small>Letras, números, _ y -, sin espacios.</small></label>
-      <div class="field"><span>Sexo</span>
-        <div class="pair">
-          <button type="button" class="choice" data-act="sex" data-v="hombre" aria-pressed="${o.sexo === 'hombre'}"><span class="ico">${I.male}</span>Hombre</button>
-          <button type="button" class="choice" data-act="sex" data-v="mujer" aria-pressed="${o.sexo === 'mujer'}"><span class="ico">${I.female}</span>Mujer</button>
-        </div>
-      </div>
-      <label class="field"><span>Edad</span>
-        <div class="big-input"><input name="edad" inputmode="numeric" pattern="[0-9]*" maxlength="3" value="${esc(o.edad)}" placeholder="30" data-ob="edad"><em>años</em></div>
-      </label>`;
-    canNext = !!o.sexo && !!o.edad && !!o.nombre.trim() && !!o.apellidos.trim() && !!o.usuario;
-  } else if (s === 3) {
-    body = `<h1 class="ob-title">¿Cuánto mides?</h1>
-      <label class="field"><span class="sr">Estatura</span>
-        <div class="big-input"><input name="alturaCm" inputmode="decimal" maxlength="4" value="${esc(o.alturaCm)}" placeholder="175" data-ob="alturaCm" autofocus><em>cm</em></div>
-        <small>En centímetros. Por ejemplo, 1,75 m son 175 cm.</small>
-      </label>`;
-    canNext = !!o.alturaCm;
-  } else if (s === 4) {
-    const wantsTarget = o.objetivos.some((g) => g === 'perder' || g === 'musculo');
-    body = `<h1 class="ob-title">¿Cuánto pesas hoy?</h1>
-      <label class="field">
-        <div class="big-input"><input name="pesoKg" inputmode="decimal" maxlength="5" value="${esc(o.pesoKg)}" placeholder="72,5" data-ob="pesoKg" autofocus><em>kg</em></div>
-        <small>Será el primer registro de tu historial de peso.</small>
-      </label>
-      <label class="field"><span>Peso objetivo ${wantsTarget ? '' : '<span class="muted">(opcional)</span>'}</span>
-        <div class="big-input"><input name="pesoObjetivo" inputmode="decimal" maxlength="5" value="${esc(o.pesoObjetivo)}" placeholder="${wantsTarget ? 'Ej. 70' : 'Déjalo vacío si no tienes'}" data-ob="pesoObjetivo"><em>kg</em></div>
-      </label>
-      ${pesoGuiaHTML(num(o.alturaCm), o.sexo, o.objetivos, 'ob', null, o.pesoObjetivo.trim() ? num(o.pesoObjetivo) : null, o.hideSug)}`;
-    canNext = !!o.pesoKg;
-  } else {
-    const p = obProfile();
-    const v = imc(p.pesoKg, p.alturaCm);
-    body = `<h1 class="ob-title">Todo listo${name ? `, ${esc(name)}` : ''}</h1>
-      <p class="ob-sub">Revisa tus datos antes de empezar.</p>
-      <div class="summary">
-        <div class="chips">${p.objetivos.map((id) => { const g = goalById(id); return `<span class="chip">${goalIcon(g, 16)}${g.t}</span>`; }).join('')}</div>
-        <dl>
-          <dt>Sexo</dt><dd>${p.sexo === 'mujer' ? 'Mujer' : 'Hombre'}</dd>
-          <dt>Edad</dt><dd>${p.edad} años</dd>
-          <dt>Estatura</dt><dd>${p.alturaCm} cm</dd>
-          <dt>Peso</dt><dd>${nf(p.pesoKg, 1)} kg</dd>
-          ${p.pesoObjetivo ? `<dt>Peso objetivo</dt><dd>${nf(p.pesoObjetivo, 1)} kg</dd>` : ''}
-          <dt>IMC</dt><dd>${nf(v, 1)} · ${imcLabel(v)}</dd>
-          <dt>Gasto en reposo</dt><dd>${nf(bmr(p))} kcal/día</dd>
-        </dl>
-      </div>`;
-    nextLabel = o.saving ? '<span class="spinner"></span>' : 'Empezar';
-  }
+  if (s === 'perfil') body = OB.perfilHTML(o, name);
+  else if (s === 'donde') body = OB.dondeHTML(o);
+  else if (s === 'material') body = OB.materialHTML(o);
+  else if (s === 'dias') body = OB.diasHTML(o);
+  else if (s === 'peso') {
+    const guia = pesoGuiaHTML(num(o.alturaCm), o.sexo, OB.objetivosDe(num(o.pesoKg), num(o.pesoObjetivo)), 'ob', null, o.pesoObjetivo.trim() ? num(o.pesoObjetivo) : null, o.hideSug);
+    body = OB.pesoHTML(o, guia);
+  } else if (s === 'plan') { body = OB.planHTML(o, obProfile(), todayISO()); nextLabel = 'Aceptar mi plan'; }
+  else body = OB.firmaHTML(o, `${o.nombre.trim()} ${o.apellidos.trim()}`.replace(/\s+/g, ' '));
 
+  const paso = OB.PASO[s];
   return `<form class="screen" data-form="ob" novalidate>
     <div class="ob-top">
-      ${s > 0 ? `<button type="button" class="ob-back" data-act="ob-back" aria-label="Atrás">${I.back}</button>` : ''}
+      ${i > 0 && !o.saving ? `<button type="button" class="ob-back" data-act="ob-back" aria-label="Atrás">${I.back}</button>` : ''}
       <div class="ob-track" aria-hidden="true"><i style="width:${pct}%"></i></div>
-      <span class="ob-count">${s < OB_STEPS ? `${s + 1} de ${OB_STEPS}` : ''}</span>
+      <span class="ob-count">${paso ? `Paso ${paso} de ${OB.PASOS}` : 'Tus datos'}</span>
     </div>
     <div class="ob-body">${body}
       ${o.msg ? `<div class="msg" role="alert">${esc(o.msg)}</div>` : ''}
     </div>
-    <div class="ob-foot"><button class="btn block" type="submit" data-next ${canNext && !o.saving ? '' : 'disabled'}>${nextLabel}</button></div>
+    ${s === 'firma' ? '' : `<div class="ob-foot"><button class="btn block" type="submit" data-next ${OB.puedeSeguir(o) ? '' : 'disabled'}>${nextLabel}</button></div>`}
   </form>`;
 }
 
 function obProfile() {
-  const o = st.ob;
-  const obj = num(o.pesoObjetivo);
+  const o = st.ob, act = num(o.pesoKg), obj = num(o.pesoObjetivo);
   const nombre = o.nombre.trim().replace(/\s+/g, ' '), apellidos = o.apellidos.trim().replace(/\s+/g, ' ');
   return {
     nombre, apellidos, nombreCompleto: `${nombre} ${apellidos}`, usuario: o.usuario.trim(),
-    objetivos: o.objetivos, entrenos: o.entrenos, ciclismo: o.entrenos.includes('bici'), sexo: o.sexo, edad: Math.round(num(o.edad)),
-    alturaCm: Math.round(num(o.alturaCm)), pesoKg: Math.round(num(o.pesoKg) * 10) / 10,
+    objetivos: OB.objetivosDe(act, obj), sexo: o.sexo, edad: Math.round(num(o.edad)),
+    alturaCm: Math.round(num(o.alturaCm)), pesoKg: Math.round(act * 10) / 10,
     pesoObjetivo: isFinite(obj) ? Math.round(obj * 10) / 10 : null,
+    experiencia: o.exp, donde: o.donde, material: o.material, eqSel: OB.eqDesde(o.donde, o.material), diasSemana: o.freq,
     ...(o.hideSug ? { hideWeightSuggestion: true } : {}),
   };
 }
 
 function obValidate() {
   const o = st.ob, s = o.step;
-  if (s === 2) {
+  if (s === 'perfil') {
     if (!o.nombre.trim()) return 'Escribe tu nombre.';
     if (!o.apellidos.trim()) return 'Escribe tus apellidos.';
     const ue = userErr(o.usuario.trim()); if (ue) return ue;
     const e = num(o.edad); if (!(e >= 14 && e <= 100)) return 'Escribe una edad entre 14 y 100 años.';
-  }
-  if (s === 3) {
     const h = num(o.alturaCm);
-    if (h > 1 && h < 2.5) { o.alturaCm = String(Math.round(h * 100)); return ''; } // escribió metros
-    if (!(h >= 120 && h <= 230)) return 'Escribe tu estatura en centímetros, entre 120 y 230.';
+    if (h > 1 && h < 2.5) o.alturaCm = String(Math.round(h * 100)); // escribió metros
+    else if (!(h >= 120 && h <= 230)) return 'Escribe tu estatura en centímetros, entre 120 y 230.';
   }
-  if (s === 4) {
-    const w = num(o.pesoKg); if (!(w >= 30 && w <= 250)) return 'Escribe un peso entre 30 y 250 kg.';
-    if (o.pesoObjetivo.trim()) { const err = objetivoInvalido(num(o.pesoObjetivo), num(o.alturaCm), o.sexo, o.objetivos); if (err) return err; }
+  if (s === 'peso') {
+    const w = num(o.pesoKg); if (!(w >= 30 && w <= 250)) return 'Escribe un peso actual entre 30 y 250 kg.';
+    const t = num(o.pesoObjetivo); if (!isFinite(t)) return 'Escribe tu peso objetivo (si quieres mantenerte, el mismo de hoy).';
+    return objetivoInvalido(t, num(o.alturaCm), o.sexo, OB.objetivosDe(w, t));
   }
   return '';
 }
 
-async function obNext() {
+function obNext() {
   const o = st.ob;
+  if (!OB.puedeSeguir(o)) return;
   const err = obValidate();
   if (err) { o.msg = err; return render(); }
   o.msg = '';
-  if (o.step < OB_STEPS) { o.step++; render(); focusFirst(); return; }
-  // Guardar
-  o.saving = true; render();
-  try {
-    const p = obProfile();
-    const uid = st.user.uid;
-    const data = { ...p, pesoInicial: p.pesoKg, fechaInicio: todayISO(), onboarded: true, novVista: NOV_V };
-    data.calorias = CAL.resumen({ ...(st.profile || {}), ...data }, p.pesoKg);
-    await api.saveProfile(uid, data);
-    await api.addWeight(uid, todayISO(), p.pesoKg);
-    st.profile = { ...(st.profile || {}), ...data };
-    st.weights = await api.listWeights(uid);
-    st.workouts = []; st.wk = null; st.wkHist = st.wkMod = st.wkDel = st.wkBack = false; st.rw = null; st.re = null; st.dias = {};
-    st.tab = 'inicio';
-    st.view = 'main';
+  const flow = OB.flujo(o), nxt = flow[flow.indexOf(o.step) + 1];
+  if (!nxt) return;
+  o.step = nxt; render(); window.scrollTo(0, 0); focusFirst();
+}
+
+function obBack() {
+  const o = st.ob, flow = OB.flujo(o), i = flow.indexOf(o.step);
+  if (i <= 0 || o.saving) return;
+  o.step = flow[i - 1]; o.msg = ''; render(); window.scrollTo(0, 0);
+}
+
+// Se llama al completar la firma (mantener pulsado 2 s). Guarda el perfil y entra en la app.
+async function obFirmado() {
+  const o = st.ob;
+  if (!o || o.saving) return;
+  o.firmado = true; o.saving = true; o.msg = '';
+  setTimeout(async () => { // deja ver el ✓ un instante antes de redibujar
+    if (!st.ob) return;
     render();
-    toast('Perfil guardado');
-    R.preguntar();
-  } catch (e) {
-    o.saving = false; o.msg = errorText(e); render();
-  }
+    try {
+      const p = obProfile();
+      const uid = st.user.uid;
+      const data = { ...p, firmaFecha: todayISO(), pesoInicial: p.pesoKg, fechaInicio: todayISO(), onboarded: true, novVista: NOV_V };
+      data.calorias = CAL.resumen({ ...(st.profile || {}), ...data }, p.pesoKg);
+      await api.saveProfile(uid, data);
+      await api.addWeight(uid, todayISO(), p.pesoKg);
+      st.profile = { ...(st.profile || {}), ...data };
+      st.weights = await api.listWeights(uid);
+      st.workouts = []; st.wk = null; st.wkHist = st.wkMod = st.wkDel = st.wkBack = false; st.rw = null; st.re = null; st.dias = {};
+      st.tab = 'inicio';
+      st.view = 'main';
+      render();
+      toast('¡Compromiso firmado!');
+      R.preguntar();
+    } catch (e) {
+      o.saving = false; o.firmado = false; o.msg = errorText(e); render();
+    }
+  }, 450);
 }
 
 function focusFirst() {
@@ -1229,6 +1192,7 @@ async function enter(u) {
 }
 
 UI.iniciarHojas(root);
+OB.iniciarFirma(root, obFirmado);
 root.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.tap')) { e.preventDefault(); e.target.click(); } });
 root.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-act]');
@@ -1252,10 +1216,12 @@ root.addEventListener('click', async (e) => {
   else if (act === 'del-close') { if (!st.del || !st.del.busy) { st.del = null; render(); } }
   else if (act === 'peek') { const i = b.previousElementSibling; i.type = i.type === 'password' ? 'text' : 'password'; b.textContent = i.type === 'password' ? 'Ver' : 'Ocultar'; }
   else if (act === 'forgot') onForgot();
-  else if (act === 'goal') { const g = st.ob.objetivos; st.ob.objetivos = g.includes(v) ? g.filter((x) => x !== v) : [...g, v]; render(); }
-  else if (act === 'ent') { const g = st.ob.entrenos; st.ob.entrenos = g.includes(v) ? g.filter((x) => x !== v) : [...g, v]; render(); }
+  else if (act === 'ob-donde') { const g = st.ob.donde; st.ob.donde = g.includes(v) ? g.filter((x) => x !== v) : [...g, v]; render(); }
+  else if (act === 'ob-mat') { const g = st.ob.material; st.ob.material = v === 'ninguno' ? (g.includes(v) ? [] : ['ninguno']) : g.includes(v) ? g.filter((x) => x !== v) : [...g.filter((x) => x !== 'ninguno'), v]; render(); }
+  else if (act === 'ob-dias') { st.ob.freq = Number(v); render(); }
+  else if (act === 'ob-exp') { st.ob.exp = v; render(); }
   else if (act === 'sex') { st.ob.sexo = v; render(); }
-  else if (act === 'ob-back') { st.ob.step = Math.max(0, st.ob.step - 1); st.ob.msg = ''; render(); }
+  else if (act === 'ob-back') obBack();
   else if (act === 'tab') { st.tab = v; st.editGoals = null; st.perfilDirty = false; st.mealDet = null; st.food = null; st.tl = null; lsSet('cadencia-tab', v); render(); window.scrollTo(0, 0); }
   else if (act === 'install') { if (installEvt) { installEvt.prompt(); const r = await installEvt.userChoice; if (r.outcome === 'accepted') installEvt = null; render(); } }
   else if (act === 'install-hide') { lsSet('cadencia-install-hide', '1'); render(); }
@@ -1325,8 +1291,8 @@ root.addEventListener('input', (e) => {
   st.ob[k] = e.target.value;
   // activar/desactivar «Siguiente» sin redibujar (para no perder el foco del teclado)
   const o = st.ob, next = root.querySelector('[data-next]');
-  const ok = o.step === 2 ? !!o.sexo && !!o.edad && !!o.nombre.trim() && !!o.apellidos.trim() && !!o.usuario : o.step === 3 ? !!o.alturaCm : o.step === 4 ? !!o.pesoKg : true;
-  if (next) next.disabled = !ok;
+  if (next) next.disabled = !OB.puedeSeguir(o);
+  if (o.step === 'peso') { const t = document.getElementById('ob-term'); if (t) t.innerHTML = OB.termometroHTML(num(o.pesoKg), num(o.pesoObjetivo)); } // termómetro en vivo, sin perder el teclado
 });
 
 root.addEventListener('change', async (e) => { if (st.view === 'main') { if (e.target.matches && e.target.matches('select[data-comp-sel]')) { st.pesoComp = e.target.value; st.pesoModo = 'kg'; render(); return; }  if (e.target.matches && e.target.matches('input[data-foto]')) { const f = e.target.files && e.target.files[0]; e.target.value = ''; return subirFoto(f); } if (R.change(e.target)) return; await M.change(e.target); } });

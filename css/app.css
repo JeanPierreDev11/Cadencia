@@ -1545,3 +1545,79 @@ html, body, main, .sheet-list, .sheet-scroll, .modal-body { overscroll-behavior-
 .ltab.cinta .lrow-h span:first-child { font-size: 11px; }
 .rx-int { margin-top: 8px; }
 .rx-int .lex-foot { margin-top: 2px; }
+
+/* ================================================================== */
+/* 2026-11-15 · Cuestionario inicial nuevo (js/onboarding.js)          */
+/* ================================================================== */
+.ob-count { min-width: 0; white-space: nowrap; }
+.ob-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.ob-grid2 .field { min-width: 0; }
+.big-input.md input { font-size: 38px; }
+.big-input.sm input { font-size: 30px; }
+.big-input.sm em, .big-input.md em { font-size: 16px; }
+.exp3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.exp3 .choice { flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 2px; padding: 12px 10px; font-size: 14px; min-width: 0; overflow-wrap: anywhere; }
+.exp3 .choice small { font-weight: 400; color: var(--muted); font-size: 12px; }
+.choice.freq .ico.num { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+/* termómetro del peso (colores fijos a propósito: verde / naranja / rojo) */
+.term { display: grid; gap: 12px; }
+.term-wrap { position: relative; padding-top: 12px; }
+.term-pin { position: absolute; top: 0; left: calc(var(--p) * 1%); width: 0; height: 0; margin-left: -6px; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 9px solid var(--ink); transition: left .3s cubic-bezier(.2,.8,.2,1); }
+.term-bar { display: flex; height: 10px; overflow: hidden; border-radius: 2px; }
+.term-bar i { display: block; }
+.term-bar i:nth-child(1) { flex: 40; background: var(--ok); }
+.term-bar i:nth-child(2) { flex: 20; background: #FF9F1C; }
+.term-bar i:nth-child(3) { flex: 40; background: var(--bad); }
+.term-scale { display: flex; justify-content: space-between; margin-top: 4px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.term-box { display: grid; gap: 3px; padding: 13px 14px; border: 1.5px solid var(--tc); border-left-width: 5px; background: var(--tb); border-radius: 2px; }
+.term-box b { color: var(--ink); font-size: 17px; line-height: 1.25; }
+.term-box small { color: var(--muted); font-size: 13px; }
+.term-box.ok { --tc: var(--ok); --tb: rgba(61, 220, 132, .14); }
+.term-box.mid { --tc: #FF9F1C; --tb: rgba(255, 159, 28, .16); }
+.term-box.high { --tc: var(--bad); --tb: var(--bad-soft); }
+.term-box.none { --tc: var(--line); --tb: var(--surface); }
+
+/* proyección IA */
+.plan-chip { display: inline-flex; align-items: center; gap: 6px; width: fit-content; padding: 4px 9px; background: var(--accent); color: var(--accent-ink); border-radius: 2px; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.proy { display: grid; gap: 12px; padding: 16px; background: var(--surface); border: 1px solid var(--bd, var(--line)); border-radius: 2px; }
+.proy-graf svg { display: block; width: 100%; height: auto; color: var(--muted); overflow: visible; }
+.proy text { fill: var(--muted); font-size: 11px; }
+.proy text.v { fill: var(--ink); font-size: 12px; font-weight: 700; }
+.proy .ln { fill: none; stroke: var(--accent-text); stroke-width: 3.5; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: proyDraw 1.5s .25s cubic-bezier(.3,.7,.2,1) forwards; }
+.proy .ar { fill: var(--accent); opacity: 0; animation: proyFade .9s 1.1s forwards; }
+.proy .dot { fill: var(--accent-text); }
+.proy .dot.fin { opacity: 0; animation: proyFade .3s 1.5s forwards; }
+.proy-txt { font-size: 19px; line-height: 1.3; font-weight: 600; }
+.proy-fecha { color: var(--accent-text); white-space: nowrap; }
+@keyframes proyDraw { to { stroke-dashoffset: 0; } }
+@keyframes proyFade { to { opacity: .14; } }
+.proy .dot.fin { animation-name: proyShow; }
+@keyframes proyShow { to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .proy .ln { animation: none; stroke-dashoffset: 0; }
+  .proy .ar { animation: none; opacity: .14; }
+  .proy .dot.fin { animation: none; opacity: 1; }
+}
+
+/* contrato y firma */
+.pact { margin: 0; padding: 20px; display: grid; gap: 14px; background: var(--surface); border: 1px solid var(--bd, var(--line)); border-left: 5px solid var(--accent); border-radius: 2px; }
+.pact p { margin: 0; font-size: 22px; line-height: 1.25; font-weight: 700; }
+.pact b { color: var(--accent-text); }
+.pact footer { color: var(--muted); font-size: 14px; border-top: 1px dashed var(--line); padding-top: 10px; }
+.sign { display: grid; justify-items: center; gap: 12px; margin-top: 4px; text-align: center; }
+.sign-btn { position: relative; width: 184px; height: 184px; padding: 0; border: 0; border-radius: 50%; background: var(--surface2); color: var(--accent-text); display: grid; place-items: center; cursor: pointer;
+  touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; transition: transform .15s, background .15s; }
+.sign-btn.holding { transform: scale(.96); background: var(--accent-soft); }
+.sign-btn:focus-visible { outline: 3px solid var(--accent-text); outline-offset: 4px; }
+.sign-btn .ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); pointer-events: none; }
+.ring .trk { fill: none; stroke: var(--line); stroke-width: 5; }
+.ring .bar { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: butt; stroke-dasharray: 100; transition: stroke-dashoffset .3s ease-out; }
+.sign-btn.holding .bar { transition: none; }
+.sign-in { position: relative; display: grid; justify-items: center; gap: 6px; padding: 0 22px; pointer-events: none; }
+.sign-lbl { font-size: 13px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--ink); line-height: 1.15; }
+.sign-btn.done { background: var(--accent); color: var(--accent-ink); }
+.sign-btn.done .sign-lbl { color: var(--accent-ink); }
+.sign-btn.done .trk { stroke: transparent; }
+.sign-btn.done .bar { stroke: var(--accent-ink); }
+@media (prefers-reduced-motion: reduce) { .sign-btn, .ring .bar { transition: none; } }

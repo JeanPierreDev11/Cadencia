@@ -85,17 +85,20 @@ export function weeksSeries(ws, mondayNow, count = 8) {
 // Racha de días entrenados. Los días de descanso de la rutina no suman ni rompen: solo se reinicia si faltas un día con entreno programado.
 // Hoy no rompe la racha si aún no has entrenado (todavía puedes hacerlo). Si no hay rutina, cuenta como programados todos los días.
 // plan(iso) → true si ese día tocaba entrenar.
-export function streakDays(ws, hoy, plan = () => true) {
+// `hueco` = días de descanso seguidos que no rompen la racha (por defecto 0). Sin rutina se calcula con la meta semanal: `huecoDeMeta`.
+export function streakDays(ws, hoy, plan = () => true, hueco = 0) {
   const hechos = new Set(ws.map((w) => w.fecha));
   const primero = ws.reduce((m, w) => (m && m < w.fecha ? m : w.fecha), '');
-  let n = 0, d = hoy;
+  let n = 0, d = hoy, seguidos = 0;
   for (let i = 0; i < 1500 && primero && d >= primero; i++, d = addDays(d, -1)) {
-    if (hechos.has(d)) n++;
+    if (hechos.has(d)) { n++; seguidos = 0; }
     else if (d === hoy) continue;
-    else if (plan(d)) break;
+    else if (plan(d) && ++seguidos > hueco) break;
   }
   return n;
 }
+// Descansos seguidos que permite una meta de `dias` entrenos por semana: 7 → 0, 6 → 1, 5 → 1, 4 → 1, 3 → 2, 2 → 3.
+export const huecoDeMeta = (dias) => (dias >= 2 && dias <= 7 ? Math.ceil(7 / dias) - 1 : 0);
 
 /* ---------- mover entreno a hoy (Pro; sustituye al «salvavidas de racha») ---------- */
 // Lista guardada en el perfil (campo `salvavidas`, se mantiene el nombre por compatibilidad):

@@ -82,7 +82,7 @@ const eqIcon = (eq) => `<svg width="20" height="20" viewBox="0 0 24 24" fill="no
 // Racha: días entrenados seguidos (los descansos programados no la rompen). Color según días: 0 gris, 1-3 amarillo, 4-6 naranja, 7+ rojo «On Fire».
 function rachaActual() {
   const r = rutinaOf();
-  return E.streakDays(st.workouts, todayISO(), r ? (d) => !!dayPlan(d) : undefined);
+  return E.streakDays(st.workouts, todayISO(), r ? (d) => !!dayPlan(d) : undefined, r ? 0 : E.huecoDeMeta(st.profile && st.profile.diasSemana)); // sin rutina, la meta semanal del cuestionario decide cuántos descansos aguanta la racha
 }
 function fuegoHTML(n, grande = false) {
   const nivel = n >= 7 ? 'fire' : n >= 4 ? 'hot' : n >= 1 ? 'on' : 'off';
@@ -540,6 +540,11 @@ const EQ_DEF = { gym: ['maquina', 'mancuernas', 'barra'], casa: ['ninguno'], par
 const dondeDe = (x) => (Array.isArray(x) ? x : x ? [x] : []).filter((k) => EQ_DEF[k]);
 // Material por defecto de los sitios elegidos; «ninguno» (peso corporal) solo si no hay nada más.
 const eqDeDonde = (ds) => { const eq = [...new Set(ds.flatMap((k) => EQ_DEF[k]))]; return eq.length > 1 ? eq.filter((x) => x !== 'ninguno') : eq; };
+// Lo que se contestó en el cuestionario inicial (experiencia, dónde, material y días por semana) precarga una rutina NUEVA; se puede cambiar paso a paso.
+function inicioDesdePerfil() {
+  const p = st.profile || {};
+  return { exp: RW_EXP.some(([k]) => k === p.experiencia) ? p.experiencia : '', donde: dondeDe(p.donde), eq: Array.isArray(p.eqSel) ? [...p.eqSel] : [], n: p.diasSemana >= 1 && p.diasSemana <= 7 ? p.diasSemana : 0 };
+}
 const rwSteps = (o) => {
   if (o.main === 'fuerza') return ['tipo', 'exp', 'donde', 'material', 'n', 'dias', 'modo', ...(o.modo === 'propia' ? ['division'] : []), 'editor'];
   if (o.main === 'bici' || o.main === 'cardio') return ['tipo', 'exp', 'n', 'dias', 'modo', 'editor'];
@@ -555,7 +560,7 @@ function rwStart(rid, nueva) {
   const base = { step: 0, main: '', exp: '', donde: [], eq: [], n: 0, dias: [], flex: false, modo: '', division: '', deporte: '', otro: '', msg: '', anim: 'fwd' };
   st.rw = r
     ? { ...base, rid: r.id, main: r.tipos[0] || '', otro: r.otro || '', n: r.dias.length, dias: [...r.dias], flex: !!r.flex, exp: r.exp || '', donde: dondeDe(r.donde), eq: r.eqSel ? [...r.eqSel] : [], deporte: r.deporte || '' }
-    : { ...base, nueva: true };
+    : { ...base, nueva: true, ...inicioDesdePerfil() };
   st.re = null;
   render(); window.scrollTo(0, 0);
 }
