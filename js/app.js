@@ -520,6 +520,35 @@ function pfGuiaHTML() {
 }
 const refrescarGuia = () => { const el = document.getElementById('pf-guia'); if (el && st.pf && st.pf.v === 'detalles') el.innerHTML = pfGuiaHTML(); };
 
+// Ritmo de progreso en Perfil › Detalles personales (solo con «Perder grasa» o «Ganar músculo» marcados). El valor se conserva en st.pf.f.ritmoKgSemana.
+const pfRitmoAplica = () => { const g = st.editGoals || st.profile.objetivos || []; return g.includes('perder') || g.includes('musculo'); };
+const pfRitmo = () => OB.ritmoDe(pfV('ritmoKgSemana', CAL.ritmoDePerfil(st.profile) || OB.RITMO.def));
+// Texto bajo el slider: etiqueta del ritmo + lo que supone en calorías con lo que hay escrito en el formulario (peso, objetivo, objetivos marcados).
+function pfRitmoTxt() {
+  const p = st.profile, r = pfRitmo(), goals = st.editGoals || p.objetivos || [], kg = num(pfV('pesoKg', currentKg() || '')) || currentKg();
+  const obj = num(pfV('pesoObjetivo', p.pesoObjetivo || '')), sexo = pfV('sexo', p.sexo === 'mujer' ? 'mujer' : 'hombre');
+  const c = kg ? CAL.resumen({ ...p, sexo, alturaCm: num(pfV('alturaCm', p.alturaCm || '')) || p.alturaCm, fechaNac: pfV('fechaNac', p.fechaNac || '') || p.fechaNac, objetivos: goals, pesoObjetivo: obj > 0 ? obj : null, ritmoKgSemana: r }, kg) : null;
+  const dif = !c ? '' : c.modo === 'deficit' ? `<small class="muted">Con este ritmo: unas <b>${nf(c.kcal)} kcal al día</b> (${nf(c.deficit)} menos de lo que gastas).${c.ritmo && (c.deficit * 7) / 7700 < c.ritmo - 0.02 ? ` No bajo de ese mínimo de calorías, así que tu ritmo real será de unos <b>${nf((c.deficit * 7) / 7700, 2)} kg por semana</b>.` : ''}</small>`
+    : c.modo === 'superavit' ? `<small class="muted">Con este ritmo: unas <b>${nf(c.kcal)} kcal al día</b> (${nf(c.superavit)} más de lo que gastas).</small>`
+    : `<small class="muted">Con tu peso objetivo actual comes lo que gastas, así que el ritmo no cambia tus calorías.</small>`;
+  return OB.ritmoInfoHTML(r) + dif;
+}
+function pfRitmoHTML() {
+  if (!pfRitmoAplica()) return '';
+  const goals = st.editGoals || st.profile.objetivos || [], r = pfRitmo(), verbo = goals.includes('perder') ? 'perder' : 'ganar';
+  return `<div class="field"><span>Ritmo de progreso</span><div class="ritmo ritmo-pf">
+      <div class="ritmo-val"><b class="num" id="pf-ritmo-v">${OB.fmtRitmo(r)}</b><span>kg / semana</span></div>
+      <input type="range" class="ritmo-rng" name="ritmoKgSemana" min="${OB.RITMO.min}" max="${OB.RITMO.max}" step="${OB.RITMO.step}" value="${r}" style="--p:${OB.ritmoPct(r)}%" aria-label="Ritmo en kilos por semana">
+      <div class="ritmo-ticks" aria-hidden="true"><span>0,25</span><span>0,5</span><span>0,75</span><span>1</span></div>
+      <div id="pf-ritmo-txt" aria-live="polite">${pfRitmoTxt()}</div></div>
+    <small>Cuántos kilos quieres ${verbo} cada semana. Tus calorías diarias se calculan con este ritmo.</small></div>`;
+}
+const refrescarRitmo = () => { // repinta el bloque entero (al marcar objetivos) o solo el texto (al cambiar peso, estatura…)
+  if (!st.pf || st.pf.v !== 'detalles') return;
+  const b = document.getElementById('pf-ritmo'); if (b) b.innerHTML = pfRitmoHTML();
+};
+const refrescarRitmoTxt = () => { const t = document.getElementById('pf-ritmo-txt'); if (t && st.pf && st.pf.v === 'detalles') t.innerHTML = pfRitmoTxt(); };
+
 // Unidad en la que se escribe la composición (grasa, músculo, agua y hueso): '%' del peso o kilos. Se guarda igual que siempre:
 // grasa y agua en %, músculo y hueso en kg, así que aquí se convierte según el peso del registro.
 const pesoUnit = () => (st.pesoUnit === 'kg' || st.pesoUnit === 'pct' ? st.pesoUnit : (lsGet('cadencia-peso-unit') === 'kg' ? 'kg' : 'pct'));
@@ -925,7 +954,7 @@ function pfCuerpo(v) {
   }
   if (v === 'detalles') {
     const goals = st.editGoals || p.objetivos || [], sexo = pfV('sexo', p.sexo === 'mujer' ? 'mujer' : 'hombre'), kg = currentKg();
-    st.pf.ini = { alturaCm: String(p.alturaCm || ''), pesoKg: kg ? nf(kg, 1) : '', fechaNac: p.fechaNac || '', sexo: p.sexo === 'mujer' ? 'mujer' : 'hombre', pesoObjetivo: p.pesoObjetivo ? nf(p.pesoObjetivo, 1) : '' };
+    st.pf.ini = { alturaCm: String(p.alturaCm || ''), pesoKg: kg ? nf(kg, 1) : '', fechaNac: p.fechaNac || '', sexo: p.sexo === 'mujer' ? 'mujer' : 'hombre', pesoObjetivo: p.pesoObjetivo ? nf(p.pesoObjetivo, 1) : '', ritmoKgSemana: String(OB.ritmoDe(CAL.ritmoDePerfil(p) || OB.RITMO.def)) };
     return `<form class="sheet-list form-grid" data-form="pf-det" novalidate>
       <div class="two">
         <label class="field"><span>Estatura (cm)</span><input class="input" name="alturaCm" inputmode="numeric" value="${esc(pfV('alturaCm', p.alturaCm || ''))}"></label>
@@ -942,6 +971,7 @@ function pfCuerpo(v) {
       <div class="field"><span>Objetivos</span><div class="choices">${GOALS.map((g) => `<button type="button" class="choice" data-act="pgoal" data-v="${g.id}" aria-pressed="${goals.includes(g.id)}">
         <span class="ico">${goalIcon(g)}</span><span class="t">${g.t}</span><span class="tick">${goals.includes(g.id) ? I.check : ''}</span></button>`).join('')}</div></div>
       <div id="pf-guia">${pfGuiaHTML()}</div>
+      <div id="pf-ritmo">${pfRitmoHTML()}</div>
       ${pfGuardarBtn()}</form>`;
   }
   if (v === 'prefs') {
@@ -1070,6 +1100,7 @@ async function pfGuardar(kind, f) {
     if (obj != null) { const err = objetivoInvalido(obj, alt, f.sexo.value, goals, grasaActual()); if (err) return toast(err); }
     data = { sexo: f.sexo.value, edad: Math.round(edad), alturaCm: Math.round(alt), pesoObjetivo: obj == null ? null : Math.round(obj * 10) / 10, objetivos: goals };
     if (fn) data.fechaNac = fn;
+    if (f.ritmoKgSemana) data.ritmoKgSemana = OB.ritmoDe(f.ritmoKgSemana.value); // el slider solo existe con «Perder grasa» o «Ganar músculo»
     const k1 = Math.round(kg * 10) / 10;
     try {
       if (k1 !== currentKg()) { await api.addWeight(uid, todayISO(), k1); st.weights = await api.listWeights(uid); data.pesoKg = k1; }
@@ -1288,17 +1319,17 @@ root.addEventListener('click', async (e) => {
   else if (act === 'comp-ver') { st.pesoComp = v; st.pesoModo = 'kg'; render(); scrollTo(0, 0); }
   else if (act === 'comp-close') { st.pesoComp = null; render(); }
   else if (act === 'comp-modo') { st.pesoModo = v; render(); }
-  else if (act === 'psex') { const f = b.closest('form'); f.sexo.value = v; if (st.pf) { st.pf.f.sexo = v; pfBtn(); refrescarGuia(); } b.parentElement.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); }
+  else if (act === 'psex') { const f = b.closest('form'); f.sexo.value = v; if (st.pf) { st.pf.f.sexo = v; pfBtn(); refrescarGuia(); refrescarRitmoTxt(); } b.parentElement.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); }
   else if (act === 'pgoal') {
     const g = st.editGoals || [...(st.profile.objetivos || [])];
     st.editGoals = g.includes(v) ? g.filter((x) => x !== v) : [...g, v];
     b.setAttribute('aria-pressed', String(st.editGoals.includes(v)));
     b.querySelector('.tick').innerHTML = st.editGoals.includes(v) ? I.check : '';
-    if (st.pf) { pfBtn(); refrescarGuia(); }
+    if (st.pf) { pfBtn(); refrescarGuia(); refrescarRitmo(); }
   }
   else if (act === 'recomp-usar') {
     const f = b.closest('form'), inp = f && f.pesoObjetivo;
-    if (inp) { inp.value = nf(Number(v), 1); if (st.pf) { st.pf.f.pesoObjetivo = inp.value; pfBtn(); } }
+    if (inp) { inp.value = nf(Number(v), 1); if (st.pf) { st.pf.f.pesoObjetivo = inp.value; pfBtn(); refrescarRitmoTxt(); } }
   }
   else if (act === 'cfg-cic') {
     const on = !M.tieneBici(); st.profile.ciclismo = on;
@@ -1338,7 +1369,17 @@ root.addEventListener('input', (e) => {
     return;
   }
   if (e.target.closest && e.target.closest('form[data-form="addweight"]')) { if (e.target.dataset && e.target.dataset.comp) e.target.dataset.tocado = '1'; pesoHints(); return; }
-  if (st.pf && e.target.name && e.target.closest('form[data-form^="pf-"]')) { st.pf.f[e.target.name] = e.target.value; pfBtn(); if (['alturaCm', 'pesoKg', 'fechaNac'].includes(e.target.name)) refrescarGuia(); }
+  if (st.pf && e.target.name && e.target.closest('form[data-form^="pf-"]')) {
+    if (e.target.name === 'ritmoKgSemana') { // slider: se repinta número, barra y texto sin render() (si no, se pierde el dedo)
+      const r = OB.ritmoDe(e.target.value); st.pf.f.ritmoKgSemana = String(r); pfBtn();
+      e.target.style.setProperty('--p', OB.ritmoPct(r) + '%');
+      const v = document.getElementById('pf-ritmo-v'); if (v) v.textContent = OB.fmtRitmo(r);
+      refrescarRitmoTxt(); return;
+    }
+    st.pf.f[e.target.name] = e.target.value; pfBtn();
+    if (['alturaCm', 'pesoKg', 'fechaNac'].includes(e.target.name)) refrescarGuia();
+    if (['alturaCm', 'pesoKg', 'fechaNac', 'pesoObjetivo'].includes(e.target.name)) refrescarRitmoTxt();
+  }
   if (st.view === 'main' && M.input(e.target)) return;
   const k = e.target.dataset && e.target.dataset.ob;
   if (!k || !st.ob) return;

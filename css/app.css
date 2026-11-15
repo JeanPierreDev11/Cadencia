@@ -1662,3 +1662,9 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .ritmo-rng::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50%; background: var(--accent-text); border: 4px solid var(--bg); box-shadow: 0 0 0 2px var(--accent-text); }
 .ritmo-rng:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--accent-text), 0 0 0 6px var(--accent-soft); }
 .ritmo-ticks { display: flex; justify-content: space-between; padding: 0 4px; margin-top: -6px; color: var(--muted); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* 2026-11-15 · Ritmo de progreso en Perfil › Detalles personales (mismo slider del cuestionario, más compacto) */
+.ritmo-pf { margin-top: 2px; }
+.ritmo-pf .ritmo-val b { font-size: 44px; }
+.ritmo-pf .ritmo-val span { font-size: 15px; }
+.ritmo-pf #pf-ritmo-txt { display: grid; gap: 6px; }

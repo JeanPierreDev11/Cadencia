@@ -38,21 +38,30 @@ export function calorias(p, { kg, dias = 0, actividad = 'auto' } = {}) {
   if (perder && musculo) modo = meta ? (kg > meta + 0.05 ? 'deficit' : kg < meta - 0.05 ? 'superavit' : 'mantenimiento') : 'mantenimiento';
   else if (perder) modo = 'deficit';
   else if (musculo) modo = 'superavit';
-  let kcal = modo === 'deficit' ? tdee * 0.8 : modo === 'superavit' ? tdee * 1.15 : tdee;
+  // Con ritmo elegido: déficit/superávit diario = kg por semana × 7700 / 7. Sin él (cuentas antiguas): −20 % / +15 % del gasto.
+  const rit = ritmoDePerfil(p), diario = rit ? (rit * KCAL_KG) / 7 : 0;
+  let kcal = modo === 'deficit' ? (rit ? tdee - diario : tdee * 0.8) : modo === 'superavit' ? (rit ? tdee + diario : tdee * 1.15) : tdee;
   if (modo === 'deficit') { // suelo habitual de seguridad, que nunca pasa del gasto
     const suelo = Math.min(tdee, sexoSuelo(p.sexo));
-    if (kcal < suelo) { kcal = suelo; aviso.push(`Tu objetivo quedaba por debajo de ${Math.round(suelo)} kcal, un mínimo razonable: lo he subido a ese suelo.`); }
+    if (kcal < suelo) {
+      kcal = suelo;
+      aviso.push(rit ? `Con ${String(rit).replace('.', ',')} kg por semana comerías menos de ${Math.round(suelo)} kcal, un mínimo razonable: lo he subido a ese suelo y tu ritmo real será de unos ${String(Math.round(((tdee - suelo) * 7 / KCAL_KG) * 100) / 100).replace('.', ',')} kg por semana.` : `Tu objetivo quedaba por debajo de ${Math.round(suelo)} kcal, un mínimo razonable: lo he subido a ese suelo.`);
+    }
     if (meta && kg <= meta + 0.05) aviso.push('Ya has llegado a tu peso objetivo: cambia tu objetivo a mantener peso si quieres dejar el déficit.');
   }
+  if (modo === 'superavit' && rit && rit > 0.5) aviso.push('Con un ritmo tan alto, buena parte de lo que ganes será grasa y no músculo: para ganar músculo limpio suele bastar con 0,25–0,5 kg por semana.');
   kcal = Math.round(kcal);
   const prot = Math.min((modo === 'deficit' ? 2 : 1.8) * kg, 0.35 * kcal / 4), fat = Math.min(Math.max(0.8 * kg, 0.22 * kcal / 9), 0.35 * kcal / 9);
   return {
-    tmb: Math.round(base), nivel, factor, tdee: Math.round(tdee), modo, kcal,
+    tmb: Math.round(base), nivel, factor, tdee: Math.round(tdee), modo, kcal, ritmo: modo === 'mantenimiento' ? null : rit,
     deficit: modo === 'deficit' ? Math.round(tdee) - kcal : 0, superavit: modo === 'superavit' ? kcal - Math.round(tdee) : 0,
     protG: Math.round(prot), fatG: Math.round(fat), carbG: Math.max(0, Math.round((kcal - prot * 4 - fat * 9) / 4)), aviso,
   };
 }
 const sexoSuelo = (sexo) => (sexo === 'mujer' ? 1200 : 1500);
+// Ritmo que eligió la persona (kg/semana, 0,25–1), o null si no hay uno válido (cuentas sin cuestionario nuevo).
+export const ritmoDePerfil = (p) => { const r = Number(p && p.ritmoKgSemana); return r >= 0.25 && r <= 1 ? r : null; };
+const KCAL_KG = 7700; // kcal de un kilo de peso corporal (misma cifra en todo el plan)
 
 // Lo que se guarda en el perfil (perfil.calorias) para tenerlo siempre al día en la base de datos.
 export function resumen(p, kg) {

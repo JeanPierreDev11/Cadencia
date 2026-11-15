@@ -255,7 +255,8 @@ export function crearSecciones(ctx) {
     const PL = plan(), n = P().nutri || {};
     if (!PL) return '';
     const pl = PL.pl;
-    const modo = pl.mode === 'deficit' ? `Déficit del 20 % (${nf(pl.dailyDeficit)} kcal al día): unos ${nf(pl.rateKgPerWeek, 2)} kg menos por semana.` : PL.surplus ? `Superávit del 15 % (${nf(PL.surplus)} kcal al día) para ganar músculo.` : 'Mantenimiento: comer lo que gastas.';
+    const pct = (x) => Math.round((x / (PL.tdee || 1)) * 100), rit = PL.c.ritmo && Math.abs(pl.rateKgPerWeek - PL.c.ritmo) < 0.02 || (PL.c.ritmo && PL.surplus) ? ` Es tu ritmo de ${nf(PL.c.ritmo, 2)} kg por semana (lo cambias en Perfil › Detalles personales).` : '';
+    const modo = pl.mode === 'deficit' ? `Déficit del ${pct(pl.dailyDeficit)} % (${nf(pl.dailyDeficit)} kcal al día): unos ${nf(pl.rateKgPerWeek, 2)} kg menos por semana.${rit}` : PL.surplus ? `Superávit del ${pct(PL.surplus)} % (${nf(PL.surplus)} kcal al día) para ganar músculo: unos ${nf((PL.surplus * 7) / 7700, 2)} kg más por semana.${rit}` : 'Mantenimiento: comer lo que gastas.';
     return `<details class="card plan"${st.nPlanOpen ? ' open' : ''}>
       <summary><h2>Tu plan de calorías</h2></summary>
       <p>${modo}${pl.weeksToGoal ? ` Llegarías a ${nf(P().pesoObjetivo, 1)} kg en unas <b>${nf(pl.weeksToGoal)} semanas</b>.` : ''}</p>
