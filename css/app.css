@@ -1621,3 +1621,16 @@ html, body, main, .sheet-list, .sheet-scroll, .modal-body { overscroll-behavior-
 .sign-btn.done .trk { stroke: transparent; }
 .sign-btn.done .bar { stroke: var(--accent-ink); }
 @media (prefers-reduced-motion: reduce) { .sign-btn, .ring .bar { transition: none; } }
+
+/* ================================================================== */
+/* 2026-11-15 · Puerta del cuestionario inicial (onboardingCompletado) */
+/* ================================================================== */
+/* Mientras se hace el cuestionario no se ve NADA más (el banner de instalar vive fuera de #root y taparía «Siguiente»). */
+body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[data-view="onboarding"] .gear, body[data-view="onboarding"] .nov-modal { display: none !important; }
+/* Entrada suave de la app al terminar de firmar */
+@keyframes appIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes appFade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) {
+  #root.app-in > main { animation: appIn .7s cubic-bezier(.2, .8, .2, 1) both; }
+  #root.app-in > .tabbar, #root.app-in > .gear { animation: appFade .9s ease both; }
+}

@@ -74,6 +74,7 @@ function render() {
   else if (st.view === 'main') root.innerHTML = viewMain();
   else if (st.view === 'error') root.innerHTML = viewError();
   UI.despues(root, antesUI);
+  document.body.dataset.view = st.view;
   document.title = APP_NAME;
   if (M) M.afterRender();
   document.body.classList.toggle('noscroll', !!(st.limite || st.liveFin || st.calentar || st.pf || st.proInfo || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.resumen || st.legal || st.del || st.pro || st.proWelcome || st.recAsk));
@@ -225,7 +226,7 @@ const dondeOb = (x) => (Array.isArray(x) ? x : x ? [x] : []).filter((k) => OB.DO
 function startOnboarding() {
   const p = st.profile || {}, [nom, ape] = nomApe(p, st.user && st.user.name);
   st.ob = {
-    step: 'perfil',
+    step: 'perfil', uid: st.user && st.user.uid,
     nombre: nom, apellidos: ape, usuario: p.usuario || '',
     sexo: p.sexo || '', edad: p.edad ? String(p.edad) : '', alturaCm: p.alturaCm ? String(p.alturaCm) : '',
     exp: OB.EXPS.some((e) => e.id === p.experiencia) ? p.experiencia : '',
@@ -317,32 +318,28 @@ function obBack() {
   o.step = flow[i - 1]; o.msg = ''; render(); window.scrollTo(0, 0);
 }
 
-// Se llama al completar la firma (mantener pulsado 2 s). Guarda el perfil y entra en la app.
+// Se llama al completar la firma (mantener pulsado 2 s). Guarda TODO el perfil y, solo si la escritura sale bien,
+// marca `onboardingCompletado: true`, quita el cuestionario y enseña la app con un fundido.
 async function obFirmado() {
   const o = st.ob;
   if (!o || o.saving) return;
   o.firmado = true; o.saving = true; o.msg = '';
   setTimeout(async () => { // deja ver el ✓ un instante antes de redibujar
-    if (!st.ob) return;
+    if (st.ob !== o) return;
     render();
     try {
-      const p = obProfile();
-      const uid = st.user.uid;
-      const data = { ...p, firmaFecha: todayISO(), pesoInicial: p.pesoKg, fechaInicio: todayISO(), onboarded: true, novVista: NOV_V };
+      const p = obProfile(), uid = st.user.uid, hoy = todayISO();
+      const data = { ...p, firmaFecha: hoy, pesoInicial: p.pesoKg, fechaInicio: hoy, onboarded: true, onboardingCompletado: true, novVista: NOV_V };
       data.calorias = CAL.resumen({ ...(st.profile || {}), ...data }, p.pesoKg);
-      await api.saveProfile(uid, data);
-      await api.addWeight(uid, todayISO(), p.pesoKg);
+      await api.addWeight(uid, hoy, p.pesoKg); // primero el peso inicial…
+      await api.saveProfile(uid, data);        // …y el perfil con la marca al final: si algo falla antes, la marca NO queda puesta
       st.profile = { ...(st.profile || {}), ...data };
-      st.weights = await api.listWeights(uid);
-      st.workouts = []; st.wk = null; st.wkHist = st.wkMod = st.wkDel = st.wkBack = false; st.rw = null; st.re = null; st.dias = {};
-      st.tab = 'inicio';
-      st.view = 'main';
-      render();
       toast('¡Compromiso firmado!');
-      R.preguntar();
     } catch (e) {
-      o.saving = false; o.firmado = false; o.msg = errorText(e); render();
+      o.saving = false; o.firmado = false; o.msg = errorText(e); render(); return;
     }
+    try { await entrarApp(st.user, { fade: true }); } // carga normal: peso, entrenos, racha…
+    catch (e) { st.errText = errorText(e); st.view = 'error'; render(); } // el perfil ya está guardado: «Reintentar» entra directo
   }, 450);
 }
 
@@ -1169,26 +1166,43 @@ function viewError() {
 async function enter(u) {
   st.user = u; st.busy = false;
   if (!u && M) M.pararPro();
-  if (!u) { st.cfg = st.pwd = st.pf = st.proInfo = st.rutShare = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = 'auth'; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
+  if (!u) { st.cfg = st.pwd = st.pf = st.proInfo = st.rutShare = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = 'auth'; st.ob = null; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
   try {
+    // PUERTA OBLIGATORIA: antes de pintar la app (y antes de pedir entrenos, peso, racha…) se lee el perfil.
+    // Sin `onboardingCompletado: true` solo se ve el cuestionario: nada de cabecera, barra inferior ni secciones.
     st.profile = await api.getProfile(u.uid);
-    if (!st.profile || !st.profile.onboarded) return startOnboarding();
-    st.weights = await api.listWeights(u.uid);
-    st.workouts = await api.listWorkouts(u.uid);
-    await M.cargar(u.uid);
-    E.setPropios(st.profile.ejPropios);
-    // Si cerraste la app a mitad de un entrenamiento de fuerza, sigue donde lo dejaste.
-    try { const sv = JSON.parse(lsGet('cadencia-live') || 'null'); if (sv && sv.uid === u.uid && Array.isArray(sv.ex)) { st.live = sv; st.liveMin = true; } } catch (e) { /* nada */ }
-    st.view = 'main';
-    render();
-    const llegoConDestino = !!(stravaRet || irPendiente);
-    if (stravaRet) { const r = stravaRet; stravaRet = null; S.vuelta(r); }
-    else if (irPendiente) { const d = irPendiente; irPendiente = null; st.tab = d.tab; lsSet('cadencia-tab', d.tab); if (d.hoja === 'peso') st.pesoSheet = true; render(); }
-    R.mantener();
-    if (!llegoConDestino) R.preguntar();
+    if (!onboardingHecho(st.profile)) {
+      if (st.view === 'onboarding' && st.ob && st.ob.uid === u.uid) return; // ya está dentro (aviso de sesión repetido): no perder lo escrito
+      return startOnboarding();
+    }
+    await entrarApp(u);
   } catch (e) {
     st.errText = errorText(e); st.view = 'error'; render();
   }
+}
+
+// ¿Esta cuenta ya pasó por el cuestionario? Las cuentas creadas antes del 15-11 no tienen el campo pero sí `onboarded: true`: cuentan como hechas.
+// Una cuenta nueva nace con `onboardingCompletado: false` (data.js) y el cuestionario es lo único que ve hasta firmar.
+const onboardingHecho = (p) => !!p && (p.onboardingCompletado === true || (p.onboardingCompletado == null && p.onboarded === true));
+
+// Carga normal de la app (peso, entrenos, racha, Pro…) y primera pantalla. `fade`: entrada suave tras firmar el cuestionario.
+async function entrarApp(u, { fade = false } = {}) {
+  st.weights = await api.listWeights(u.uid);
+  st.workouts = await api.listWorkouts(u.uid);
+  await M.cargar(u.uid);
+  E.setPropios(st.profile.ejPropios);
+  if (fade) { st.wk = null; st.wkHist = st.wkMod = st.wkDel = st.wkBack = false; st.rw = null; st.re = null; st.dias = {}; st.tab = 'inicio'; }
+  // Si cerraste la app a mitad de un entrenamiento de fuerza, sigue donde lo dejaste.
+  try { const sv = JSON.parse(lsGet('cadencia-live') || 'null'); if (sv && sv.uid === u.uid && Array.isArray(sv.ex)) { st.live = sv; st.liveMin = true; } } catch (e) { /* nada */ }
+  st.ob = null;
+  st.view = 'main';
+  if (fade) { root.classList.add('app-in'); setTimeout(() => root.classList.remove('app-in'), 1000); }
+  render();
+  const llegoConDestino = !!(stravaRet || irPendiente);
+  if (stravaRet) { const r = stravaRet; stravaRet = null; S.vuelta(r); }
+  else if (irPendiente) { const d = irPendiente; irPendiente = null; st.tab = d.tab; lsSet('cadencia-tab', d.tab); if (d.hoja === 'peso') st.pesoSheet = true; render(); }
+  R.mantener();
+  if (!llegoConDestino) R.preguntar();
 }
 
 UI.iniciarHojas(root);
