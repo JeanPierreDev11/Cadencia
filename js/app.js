@@ -223,6 +223,14 @@ function nomApe(p, fallback = '') {
 // «¿Dónde entrenas?» puede venir de una versión antigua como texto suelto: se normaliza a lista.
 const dondeOb = (x) => (Array.isArray(x) ? x : x ? [x] : []).filter((k) => OB.DONDE.some((d) => d.id === k));
 
+// Qué quiere lograr, precargado en cuentas antiguas: sus objetivos (perder + músculo = recomposición) o, si no, hacia dónde apunta su peso objetivo.
+function metaOb(p, ultimoKg) {
+  const g = Array.isArray(p.objetivos) ? p.objetivos : [], kg = ultimoKg || p.pesoKg;
+  if (g.includes('perder') && g.includes('musculo')) return 'recomp';
+  if (g.includes('perder')) return 'perder';
+  if (g.includes('musculo')) return 'volumen';
+  return p.pesoObjetivo > 0 && kg > 0 && Math.abs(p.pesoObjetivo - kg) >= 0.5 ? (p.pesoObjetivo < kg ? 'perder' : 'volumen') : '';
+}
 function startOnboarding(ultimoKg = null) {
   const p = st.profile || {}, [nom, ape] = nomApe(p, st.user && st.user.name);
   st.ob = {
@@ -233,6 +241,7 @@ function startOnboarding(ultimoKg = null) {
     donde: dondeOb(p.donde), material: (Array.isArray(p.material) ? p.material : []).filter((k) => OB.MATERIAL.some((m) => m.id === k)),
     freq: p.diasSemana >= 2 && p.diasSemana <= 7 ? p.diasSemana : 0,
     pesoKg: ultimoKg || p.pesoKg ? nf(ultimoKg || p.pesoKg, 1) : '', ultimoKg, pesoObjetivo: p.pesoObjetivo ? nf(p.pesoObjetivo, 1) : '',
+    meta: metaOb(p, ultimoKg), ritmo: p.ritmoKgSemana >= OB.RITMO.min && p.ritmoKgSemana <= OB.RITMO.max ? OB.ritmoDe(p.ritmoKgSemana) : OB.RITMO.def,
     msg: '', saving: false, firmado: false,
   };
   st.view = 'onboarding';
@@ -249,7 +258,9 @@ function viewOnboarding() {
   else if (s === 'donde') body = OB.dondeHTML(o);
   else if (s === 'material') body = OB.materialHTML(o);
   else if (s === 'dias') body = OB.diasHTML(o);
-  else if (s === 'peso') body = OB.pesoHTML(o); // sin «Recomendado para ti» (el IMC no vale para quien entrena fuerza)
+  else if (s === 'peso') body = OB.pesoHTML(o);   // peso actual + qué quiere lograr
+  else if (s === 'ritmo') body = OB.ritmoHTML(o); // ritmo elegido (kg/semana)
+  else if (s === 'meta') body = OB.metaHTML(o);   // peso meta (sin recomendaciones de IMC)
   else if (s === 'plan') { body = OB.planHTML(o, obProfile(), todayISO()); nextLabel = 'Aceptar mi plan'; }
   else body = OB.firmaHTML(o, `${o.nombre.trim()} ${o.apellidos.trim()}`.replace(/\s+/g, ' '));
 
@@ -272,7 +283,7 @@ function obProfile() {
   const nombre = o.nombre.trim().replace(/\s+/g, ' '), apellidos = o.apellidos.trim().replace(/\s+/g, ' ');
   return {
     nombre, apellidos, nombreCompleto: `${nombre} ${apellidos}`, usuario: o.usuario.trim(),
-    objetivos: OB.objetivosDe(act, obj), sexo: o.sexo, edad: Math.round(num(o.edad)),
+    objetivos: OB.objetivosDe(o.meta), ritmoKgSemana: o.ritmo, sexo: o.sexo, edad: Math.round(num(o.edad)),
     alturaCm: Math.round(num(o.alturaCm)), pesoKg: Math.round(act * 10) / 10,
     pesoObjetivo: isFinite(obj) ? Math.round(obj * 10) / 10 : null,
     experiencia: o.exp, donde: o.donde, material: o.material, eqSel: OB.eqDesde(o.donde, o.material), diasSemana: o.freq,
@@ -292,8 +303,15 @@ function obValidate() {
   }
   if (s === 'peso') {
     const w = num(o.pesoKg); if (!(w >= 30 && w <= 250)) return 'Escribe un peso actual entre 30 y 250 kg.';
-    const t = num(o.pesoObjetivo); if (!isFinite(t)) return 'Escribe tu peso objetivo (si quieres mantenerte, el mismo de hoy).';
-    return objetivoInvalido(t, num(o.alturaCm), o.sexo, OB.objetivosDe(w, t));
+    if (!o.meta) return 'Elige qué quieres lograr.';
+  }
+  if (s === 'meta') {
+    const w = num(o.pesoKg), t = num(o.pesoObjetivo);
+    if (!isFinite(t)) return 'Escribe tu peso meta con números.';
+    if (o.meta === 'perder' && !(t <= w - 0.5)) return 'Para perder grasa, tu peso meta tiene que ser menor que el de hoy.';
+    if (o.meta === 'volumen' && !(t >= w + 0.5)) return 'Para ganar volumen, tu peso meta tiene que ser mayor que el de hoy.';
+    if (o.meta === 'recomp' && !(t <= w)) return 'En una recomposición, tu peso meta no puede ser mayor que el de hoy.';
+    return objetivoInvalido(t, num(o.alturaCm), o.sexo, OB.objetivosDe(o.meta));
   }
   return '';
 }
@@ -306,6 +324,7 @@ function obNext() {
   o.msg = '';
   const flow = OB.flujo(o), nxt = flow[flow.indexOf(o.step) + 1];
   if (!nxt) return;
+  if (nxt === 'meta' && o.meta === 'recomp' && !o.pesoObjetivo.trim()) { const r = OB.recompDe(o); if (r) o.pesoObjetivo = nf(r.objetivo, 1); } // recomposición: propone el peso estimado
   o.step = nxt; render(); window.scrollTo(0, 0); focusFirst();
 }
 
@@ -328,8 +347,7 @@ async function obFirmado() {
       const p = obProfile(), uid = st.user.uid, hoy = todayISO();
       const ant = st.profile || {}; // cuenta antigua: conserva su punto de partida y los objetivos que el cuestionario no pregunta
       const extra = (Array.isArray(ant.objetivos) ? ant.objetivos : []).filter((g) => !['perder', 'musculo', 'mantener'].includes(g));
-      const recomp = Array.isArray(ant.objetivos) && ant.objetivos.includes('perder') && ant.objetivos.includes('musculo') && p.objetivos[0] !== 'mantener'; // quien ya tenía recomposición la conserva
-      const data = { ...p, objetivos: [...(recomp ? ['perder', 'musculo'] : p.objetivos), ...extra], firmaFecha: hoy, pesoInicial: ant.pesoInicial || p.pesoKg, fechaInicio: ant.fechaInicio || hoy, onboarded: true, onboardingCompletado: true, novVista: NOV_V };
+      const data = { ...p, objetivos: [...p.objetivos, ...extra], firmaFecha: hoy, pesoInicial: ant.pesoInicial || p.pesoKg, fechaInicio: ant.fechaInicio || hoy, onboarded: true, onboardingCompletado: true, novVista: NOV_V };
       data.calorias = CAL.resumen({ ...ant, ...data }, p.pesoKg);
       if (o.ultimoKg !== p.pesoKg) await api.addWeight(uid, hoy, p.pesoKg); // primero el peso (solo si cambió respecto al último)…
       await api.saveProfile(uid, data);        // …y el perfil con la marca al final: si algo falla antes, la marca NO queda puesta
@@ -498,12 +516,7 @@ function pfGuiaHTML() {
   const r = OB.pesoRecomp({ kg: num(pfV('pesoKg', currentKg() || '')), alturaCm: num(pfV('alturaCm', p.alturaCm || '')), sexo: pfV('sexo', p.sexo === 'mujer' ? 'mujer' : 'hombre'),
     edad: CAL.edadDe({ fechaNac: pfV('fechaNac', p.fechaNac || ''), edad: p.edad }), grasaPct: g ? g.pct : null });
   if (!r) return '<p class="sug small muted">Recomposición corporal: rellena estatura, peso y fecha de nacimiento para estimar tu peso objetivo.</p>';
-  const txt = r.yaEnForma
-    ? `Ya estás en un % de grasa bueno (${nf(r.bfActual, 0)} %): mantén tu peso y gana unos <b>${nf(r.musculo, 1)} kg</b> de músculo.`
-    : `Perderás unos <b>${nf(r.grasa, 1)} kg</b> de grasa y ganarás unos <b>${nf(r.musculo, 1)} kg</b> de músculo, hasta un ${nf(r.bfMeta, 0)} % de grasa.`;
-  return `<div class="recomp" id="recomp"><p class="small"><b>Recomposición corporal</b> · peso estimado: <b>${nf(r.objetivo, 1)} kg</b>. ${txt}
-    <span class="muted">${r.medido ? 'Calculado con tu % de grasa.' : 'Estimado sin medir tu grasa: añádela al registrar tu peso para afinarlo.'}</span></p>
-    <button type="button" class="btn ghost small" data-act="recomp-usar" data-v="${r.objetivo}">Usar ${nf(r.objetivo, 1)} kg como objetivo</button></div>`;
+  return OB.recompCardHTML(r, 'recomp-usar');
 }
 const refrescarGuia = () => { const el = document.getElementById('pf-guia'); if (el && st.pf && st.pf.v === 'detalles') el.innerHTML = pfGuiaHTML(); };
 
@@ -1255,6 +1268,8 @@ root.addEventListener('click', async (e) => {
   else if (act === 'ob-mat') { const g = st.ob.material; st.ob.material = v === 'ninguno' ? (g.includes(v) ? [] : ['ninguno']) : g.includes(v) ? g.filter((x) => x !== v) : [...g.filter((x) => x !== 'ninguno'), v]; render(); }
   else if (act === 'ob-dias') { st.ob.freq = Number(v); render(); }
   else if (act === 'ob-exp') { st.ob.exp = v; render(); }
+  else if (act === 'ob-meta') { st.ob.meta = v; render(); }
+  else if (act === 'ob-recomp-usar') { st.ob.pesoObjetivo = nf(Number(v), 1); st.ob.msg = ''; render(); }
   else if (act === 'sex') { st.ob.sexo = v; render(); }
   else if (act === 'ob-back') obBack();
   else if (act === 'tab') { st.tab = v; st.editGoals = null; st.perfilDirty = false; st.mealDet = null; st.food = null; st.tl = null; lsSet('cadencia-tab', v); render(); window.scrollTo(0, 0); }
@@ -1327,11 +1342,18 @@ root.addEventListener('input', (e) => {
   if (st.view === 'main' && M.input(e.target)) return;
   const k = e.target.dataset && e.target.dataset.ob;
   if (!k || !st.ob) return;
+  if (k === 'ritmo') { // slider del ritmo: se repinta el número, la barra y la etiqueta sin render() (si no, se perdería el dedo)
+    const r = OB.ritmoDe(e.target.value); st.ob.ritmo = r;
+    e.target.style.setProperty('--p', OB.ritmoPct(r) + '%');
+    const v = document.getElementById('ob-ritmo-v'), tx = document.getElementById('ob-ritmo-txt');
+    if (v) v.textContent = OB.fmtRitmo(r); if (tx) tx.innerHTML = OB.ritmoInfoHTML(r);
+    return;
+  }
   st.ob[k] = e.target.value;
   // activar/desactivar «Siguiente» sin redibujar (para no perder el foco del teclado)
   const o = st.ob, next = root.querySelector('[data-next]');
   if (next) next.disabled = !OB.puedeSeguir(o);
-  if (o.step === 'peso') { const t = document.getElementById('ob-term'); if (t) t.innerHTML = OB.termometroHTML(num(o.pesoKg), num(o.pesoObjetivo)); } // termómetro en vivo, sin perder el teclado
+  if (o.step === 'meta') { const t = document.getElementById('ob-term'); if (t) t.innerHTML = OB.termometroHTML(num(o.pesoKg), num(o.pesoObjetivo)); } // termómetro en vivo, sin perder el teclado
 });
 
 root.addEventListener('change', async (e) => { if (st.view === 'main') { if (e.target.matches && e.target.matches('select[data-comp-sel]')) { st.pesoComp = e.target.value; st.pesoModo = 'kg'; render(); return; }  if (e.target.matches && e.target.matches('input[data-foto]')) { const f = e.target.files && e.target.files[0]; e.target.value = ''; return subirFoto(f); } if (R.change(e.target)) return; await M.change(e.target); } });

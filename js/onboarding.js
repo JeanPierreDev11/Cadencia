@@ -1,6 +1,6 @@
 // Cuestionario inicial (rediseño 2026-11-15). Aquí viven los textos, los cálculos y el HTML de cada pantalla.
 // No guarda estado: app.js tiene `st.ob` y llama a estas funciones. Pantallas (en orden):
-//   perfil → donde → (material, solo si eliges Casa o Calistenia) → dias → peso → plan → firma
+//   perfil → donde → (material, solo si eliges Casa o Calistenia) → dias → peso (actual + qué quiere lograr) → ritmo → meta (peso objetivo) → plan → firma
 import { esc, nf, num, I } from './util.js';
 
 /* ---------- datos ---------- */
@@ -29,9 +29,17 @@ export const EXPS = [
   { id: 'anios', t: 'Avanzado', s: 'Varios años' },
 ];
 export const FREQ = [[2, 'Para arrancar'], [3, 'Constante'], [4, 'Comprometido'], [5, 'Increíble'], [6, 'Sin excusas'], [7, 'Imparable']];
-// Número de paso que se enseña («Paso 2 de 5»); «perfil» es la pantalla previa con tus datos.
-export const PASO = { donde: 1, material: 1, dias: 2, peso: 3, plan: 4, firma: 5 };
-export const PASOS = 5;
+// Número de paso que se enseña («Paso 2 de 7»); «perfil» es la pantalla previa con tus datos.
+export const PASO = { donde: 1, material: 1, dias: 2, peso: 3, ritmo: 4, meta: 5, plan: 6, firma: 7 };
+export const PASOS = 7;
+// Qué quiere lograr (paso 3). `obj` = objetivos que se guardan en el perfil (recomposición = perder grasa + ganar músculo).
+export const METAS = [
+  { id: 'perder', t: 'Perder grasa', s: 'Bajar peso sin perder fuerza', obj: ['perder'], ico: '<path d="M12 4v14M6 12l6 6 6-6"/>' },
+  { id: 'volumen', t: 'Ganar volumen', s: 'Más músculo y más fuerza', obj: ['musculo'], ico: '<path d="M4 10v4M7 7v10M17 7v10M20 10v4M7 12h10"/>' },
+  { id: 'recomp', t: 'Recomposición', s: 'Perder grasa y ganar músculo a la vez', obj: ['perder', 'musculo'], ico: '<path d="M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4"/>' },
+];
+// Ritmo de progreso (paso 4): lo elige la persona, de 0,25 a 1 kg por semana.
+export const RITMO = { min: 0.25, max: 1, step: 0.05, def: 0.5 };
 export const FIRMA_MS = 2000;
 
 const svg = (p, s = 22, w = 2) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
@@ -39,7 +47,7 @@ const tick = (on) => `<span class="tick">${on ? I.check : ''}</span>`;
 const expDe = (id) => EXPS.find((e) => e.id === id);
 
 /* ---------- lógica ---------- */
-export const flujo = (o) => ['perfil', 'donde', ...(o.donde.some((d) => d === 'casa' || d === 'parque') ? ['material'] : []), 'dias', 'peso', 'plan', 'firma'];
+export const flujo = (o) => ['perfil', 'donde', ...(o.donde.some((d) => d === 'casa' || d === 'parque') ? ['material'] : []), 'dias', 'peso', 'ritmo', 'meta', 'plan', 'firma'];
 
 export function puedeSeguir(o) {
   switch (o.step) {
@@ -47,13 +55,24 @@ export function puedeSeguir(o) {
     case 'donde': return o.donde.length > 0;
     case 'material': return o.material.length > 0;
     case 'dias': return o.freq >= 2 && o.freq <= 7;
-    case 'peso': return !!(o.pesoKg && o.pesoObjetivo);
+    case 'peso': return !!(o.pesoKg && o.meta);
+    case 'ritmo': return o.ritmo >= RITMO.min && o.ritmo <= RITMO.max;
+    case 'meta': return !!o.pesoObjetivo;
     default: return true;
   }
 }
 
-// Objetivo que se deduce del peso (ya no se pregunta aparte): bajar → perder grasa, subir → ganar músculo, igual → mantener.
-export const objetivosDe = (actual, meta) => (!(actual > 0) || !(meta > 0) || Math.abs(meta - actual) < 0.5 ? ['mantener'] : meta < actual ? ['perder'] : ['musculo']);
+// Objetivos de perfil según lo que elige en el paso 3 (perder → ['perder'], volumen → ['musculo'], recomposición → los dos).
+export const objetivosDe = (meta) => { const m = METAS.find((x) => x.id === meta); return m ? [...m.obj] : ['mantener']; };
+// Ritmo válido (0,25–1 kg/semana, de 0,05 en 0,05) a partir de lo que llegue del slider.
+export const ritmoDe = (v) => { const n = Math.round(parseFloat(v) * 20) / 20; return n >= RITMO.min && n <= RITMO.max ? Math.round(n * 100) / 100 : RITMO.def; };
+export const fmtRitmo = (r) => String(Math.round(r * 100) / 100).replace('.', ',');
+// Etiqueta dinámica del ritmo: < 0,4 conservador · 0,4–0,65 moderado · más, agresivo.
+export function ritmoInfo(r) {
+  return r < 0.4 ? { nivel: 'ok', t: 'Conservador.', s: 'Lento pero muy sostenible.' }
+    : r < 0.65 ? { nivel: 'ok', t: 'Moderado.', s: 'El equilibrio perfecto.' }
+      : { nivel: 'mid', t: 'Agresivo.', s: 'Requiere disciplina estricta.' };
+}
 
 // Material para el asistente de rutinas: el gimnasio lo trae todo; lo marcado aquí se suma; sin nada → solo peso corporal.
 export function eqDesde(donde, material) {
@@ -75,12 +94,11 @@ export function termometro(actual, meta) {
   return { nivel, pct, dif, txt };
 }
 
-// Fecha orientativa (mockup de «Proyección IA»): ritmo fijo en kg por semana, 0,6 kg al bajar y 0,25 kg al subir (≈ 1 kg al mes, subida limpia). Entre 4 semanas y 2 años.
-export const KG_SEMANA_BAJAR = 0.6, KG_SEMANA_SUBIR = 0.25;
-export function estimarMeta(actual, meta, hoyISO) {
+// Fecha orientativa (mockup de «Proyección IA»): semanas = |meta − actual| / ritmo elegido por la persona (kg por semana), redondeado hacia arriba, mínimo 1.
+export function estimarMeta(actual, meta, hoyISO, ritmo) {
   const dif = Math.abs(meta - actual);
-  if (!(actual > 0) || !(meta > 0) || dif < 0.5) return null;
-  const sem = Math.min(104, Math.max(4, Math.ceil(dif / (meta < actual ? KG_SEMANA_BAJAR : KG_SEMANA_SUBIR))));
+  if (!(actual > 0) || !(meta > 0) || !(ritmo > 0) || dif < 0.5) return null;
+  const sem = Math.max(1, Math.ceil(dif / ritmo));
   const fecha = new Date(`${hoyISO}T12:00:00`);
   fecha.setDate(fecha.getDate() + sem * 7);
   return { semanas: sem, fecha };
@@ -107,6 +125,15 @@ export function pesoRecomp({ kg, alturaCm, sexo, edad, grasaPct }) {
   const objetivo = yaEnForma ? r(kg) : Math.min(r(kg), r((magra + musculo) / (1 - meta)));
   const grasaBaja = yaEnForma ? 0 : Math.max(0, kg * bf - (objetivo - (magra + musculo)));
   return { objetivo, bfActual: Math.round(bf * 1000) / 10, bfMeta: Math.round(meta * 100), musculo: Math.round(musculo * 10) / 10, grasa: Math.round(grasaBaja * 10) / 10, yaEnForma, medido };
+}
+// Tarjeta de recomposición (la usan el cuestionario y Perfil › Detalles personales). `act` = data-act del botón «Usar».
+export function recompCardHTML(r, act) {
+  const txt = r.yaEnForma
+    ? `Ya estás en un % de grasa bueno (${nf(r.bfActual, 0)} %): mantén tu peso y gana unos <b>${nf(r.musculo, 1)} kg</b> de músculo.`
+    : `Perderás unos <b>${nf(r.grasa, 1)} kg</b> de grasa y ganarás unos <b>${nf(r.musculo, 1)} kg</b> de músculo, hasta un ${nf(r.bfMeta, 0)} % de grasa.`;
+  return `<div class="recomp" id="recomp"><p class="small"><b>Recomposición corporal</b> · peso estimado: <b>${nf(r.objetivo, 1)} kg</b>. ${txt}
+    <span class="muted">${r.medido ? 'Calculado con tu % de grasa.' : 'Estimado sin medir tu grasa: añádela al registrar tu peso para afinarlo.'}</span></p>
+    <button type="button" class="btn ghost small" data-act="${act}" data-v="${r.objetivo}">Usar ${nf(r.objetivo, 1)} kg como objetivo</button></div>`;
 }
 const fechaLarga = (d) => d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
 const fechaCorta = (d) => d.toLocaleDateString('es-ES', { month: 'short', year: 'numeric' }).replace('.', '');
@@ -165,14 +192,42 @@ export function termometroHTML(actual, meta) {
     <div class="term-box ${t.nivel}"><small>${cab}</small><b>${esc(t.txt)}</b></div>`;
 }
 
+// Paso 3: peso actual + qué quiere lograr.
 export function pesoHTML(o) {
-  return `<h1 class="ob-title">¿Cuál es tu peso ideal?</h1>
-    <p class="ob-sub">Compáralo con tu peso de hoy y mira si el objetivo es realista.</p>
-    <div class="ob-grid2">
-      <label class="field"><span>Peso actual</span><div class="big-input md"><input name="pesoKg" inputmode="decimal" maxlength="5" value="${esc(o.pesoKg)}" placeholder="72,5" data-ob="pesoKg" autofocus><em>kg</em></div></label>
-      <label class="field"><span>Peso objetivo</span><div class="big-input md"><input name="pesoObjetivo" inputmode="decimal" maxlength="5" value="${esc(o.pesoObjetivo)}" placeholder="68" data-ob="pesoObjetivo"><em>kg</em></div></label>
-    </div>
+  return `<h1 class="ob-title">¿Cuál es tu peso actual?</h1>
+    <label class="field"><span class="sr-only">Peso actual</span><div class="big-input"><input name="pesoKg" inputmode="decimal" maxlength="5" value="${esc(o.pesoKg)}" placeholder="72,5" data-ob="pesoKg" autofocus><em>kg</em></div></label>
     <small class="muted">Será el primer registro de tu historial de peso.</small>
+    <h2 class="ob-q">¿Qué quieres lograr?</h2>
+    <div class="choices">${METAS.map((m) => `<button type="button" class="choice" data-act="ob-meta" data-v="${m.id}" aria-pressed="${o.meta === m.id}">
+      <span class="ico">${svg(m.ico)}</span><span class="t">${m.t}<small>${m.s}</small></span>${tick(o.meta === m.id)}</button>`).join('')}</div>`;
+}
+
+// Paso 4: ritmo. Los textos y el valor se repintan solos al mover el slider (app.js, sin render()).
+export function ritmoInfoHTML(r) {
+  const i = ritmoInfo(r);
+  return `<div class="term-box ${i.nivel}"><small>≈ ${nf(r * 4.345, 1)} kg al mes</small><b>${i.t} ${i.s}</b></div>`;
+}
+export const ritmoPct = (r) => Math.round(((r - RITMO.min) / (RITMO.max - RITMO.min)) * 100);
+export function ritmoHTML(o) {
+  const verbo = o.meta === 'volumen' ? 'ganar' : 'perder';
+  return `<h1 class="ob-title">¿A qué ritmo quieres avanzar?</h1>
+    <p class="ob-sub">Elige cuántos kilos quieres ${verbo} cada semana. Más rápido exige más disciplina.</p>
+    <div class="ritmo">
+      <div class="ritmo-val"><b class="num" id="ob-ritmo-v">${fmtRitmo(o.ritmo)}</b><span>kg / semana</span></div>
+      <input type="range" class="ritmo-rng" data-ob="ritmo" min="${RITMO.min}" max="${RITMO.max}" step="${RITMO.step}" value="${o.ritmo}" style="--p:${ritmoPct(o.ritmo)}%" aria-label="Ritmo en kilos por semana">
+      <div class="ritmo-ticks" aria-hidden="true"><span>0,25</span><span>0,5</span><span>0,75</span><span>1</span></div>
+      <div id="ob-ritmo-txt" aria-live="polite">${ritmoInfoHTML(o.ritmo)}</div>
+    </div>`;
+}
+
+// Paso 5: peso meta (campo + termómetro de siempre). Con «Recomposición» se estima a qué peso debería quedar (sin recomendaciones de IMC).
+export const recompDe = (o) => pesoRecomp({ kg: num(o.pesoKg), alturaCm: num(o.alturaCm), sexo: o.sexo, edad: num(o.edad), grasaPct: null });
+export function metaHTML(o) {
+  const r = o.meta === 'recomp' ? recompDe(o) : null;
+  return `<h1 class="ob-title">¿Cuál es tu peso meta?</h1>
+    <p class="ob-sub">Hoy pesas ${nf(num(o.pesoKg), 1)} kg. Compáralo con tu meta y mira si es realista.</p>
+    <label class="field"><span class="sr-only">Peso meta</span><div class="big-input"><input name="pesoObjetivo" inputmode="decimal" maxlength="5" value="${esc(o.pesoObjetivo)}" placeholder="68" data-ob="pesoObjetivo" autofocus><em>kg</em></div></label>
+    ${r ? recompCardHTML(r, 'ob-recomp-usar') : ''}
     <div class="term" id="ob-term" aria-live="polite">${termometroHTML(num(o.pesoKg), num(o.pesoObjetivo))}</div>`;
 }
 
@@ -193,10 +248,10 @@ function graficaHTML(actual, meta, est) {
 }
 
 export function planHTML(o, p, hoyISO) {
-  const est = estimarMeta(p.pesoKg, p.pesoObjetivo, hoyISO), e = expDe(o.exp);
+  const est = estimarMeta(p.pesoKg, p.pesoObjetivo, hoyISO, o.ritmo), e = expDe(o.exp);
   const frase = est
-    ? `Estimamos que con Cadencia IA puedes lograr tu objetivo para el <b class="proy-fecha">${fechaLarga(est.fecha)}</b>`
-    : 'Con Cadencia IA mantendrás tu peso estable, con energía y constancia';
+    ? `A un ritmo de <b>${fmtRitmo(o.ritmo)} kg por semana</b>, estimamos que lograrás tu objetivo para el <b class="proy-fecha">${fechaLarga(est.fecha)}</b>.`
+    : o.meta === 'recomp' ? 'Con Cadencia IA mantendrás tu peso mientras ganas músculo y pierdes grasa' : 'Con Cadencia IA mantendrás tu peso estable, con energía y constancia';
   return `<h1 class="ob-title">¡Tu plan está listo!</h1>
     <div class="summary">
       <dl>
@@ -204,13 +259,14 @@ export function planHTML(o, p, hoyISO) {
         <dt>Experiencia</dt><dd>${e ? e.t : '–'}</dd>
         <dt>Peso actual</dt><dd>${nf(p.pesoKg, 1)} kg</dd>
         <dt>Peso meta</dt><dd>${nf(p.pesoObjetivo, 1)} kg</dd>
+        <dt>Ritmo</dt><dd>${fmtRitmo(o.ritmo)} kg/semana</dd>
       </dl>
     </div>
     <section class="proy" aria-label="Proyección">
       <span class="plan-chip">${svg(I_SPARK, 14, 2.4)}Proyección Cadencia IA</span>
       <div class="proy-graf">${graficaHTML(p.pesoKg, p.pesoObjetivo, est)}</div>
       <p class="proy-txt">${frase}</p>
-      ${est ? `<p class="small muted">Unas ${est.semanas} semanas a un ritmo saludable. Es una estimación orientativa: cada cuerpo es distinto.</p>` : ''}
+      ${est ? `<p class="small muted">Unas ${est.semanas} semanas. Es una estimación orientativa: cada cuerpo es distinto.</p>` : ''}
     </section>`;
 }
 const I_SPARK = '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/>';
