@@ -1683,3 +1683,18 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .pw-testi blockquote { margin: 0; font-size: 16px; line-height: 1.4; }
 .pw-testi figcaption { color: var(--muted); font-size: 14px; font-weight: 600; }
 .sub-code { margin-top: 2px; }
+
+/* 2026-11-15 · Hoja de referidos (maqueta) */
+.sheet.ref-sheet { z-index: 91; }
+.ref-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; display: grid; gap: 18px; align-content: start; padding: 4px 0 calc(16px + env(safe-area-inset-bottom)); }
+.ref-soon { margin: 0; padding: 12px 14px; border-left: 4px solid var(--accent); background: var(--accent-soft); font-size: 14px; line-height: 1.4; }
+.ref-sec { display: grid; gap: 8px; }
+.ref-code { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1.5px dashed var(--line); background: var(--surface); border-radius: 2px; }
+.ref-code b { font-size: 22px; letter-spacing: 2px; font-variant-numeric: tabular-nums; }
+.ref-prog { margin: 0; font-size: 16px; }
+.ref-hitos { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.ref-hitos li { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1.5px solid var(--line); background: var(--surface); border-radius: 2px; }
+.ref-hitos li.is-lock { opacity: .75; }
+.ref-ht { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.ref-ht small { color: var(--muted); font-size: 14px; }
+.ref-hitos .btn[disabled] { opacity: .5; cursor: not-allowed; }

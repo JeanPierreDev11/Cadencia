@@ -77,7 +77,7 @@ function render() {
   document.body.dataset.view = st.view;
   document.title = APP_NAME;
   if (M) M.afterRender();
-  document.body.classList.toggle('noscroll', !!(st.limite || st.liveFin || st.calentar || st.pf || st.proInfo || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.resumen || st.legal || st.del || st.pro || st.proWelcome || st.recAsk));
+  document.body.classList.toggle('noscroll', !!(st.limite || st.liveFin || st.calentar || st.pf || st.proInfo || st.referidos || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.resumen || st.legal || st.del || st.pro || st.proWelcome || st.recAsk));
 }
 
 /* ================================================================== */
@@ -392,7 +392,7 @@ function viewMain() {
   if (st.wk) return viewWkForm();
   const tab = M.tabActual(), tabs = M.tabs();
   const body = tab === 'perfil' ? viewPerfil() : tab === 'entreno' ? viewEntreno() : tab === 'inicio' ? viewInicio() : M.view(tab);
-  return `${tab === 'inicio' ? '' : gearHTML()}<main class="main ${st.live ? 'has-live' : ''}">${body}</main>${st.live ? liveBarHTML() : ''}${sheet}${M.novModalHTML()}
+  return `${tab === 'inicio' ? '' : gearHTML()}<main class="main ${st.live ? 'has-live' : ''}">${body}</main>${st.live ? liveBarHTML() : ''}${sheet}${referidosSheetHTML()}${M.novModalHTML()}
   <div class="tabbar"><nav aria-label="Secciones" class="n${tabs.length}">${tabs.map((t) => `<button type="button" data-act="tab" data-v="${t.id}" ${tab === t.id ? 'aria-current="page"' : ''}>${t.ico}<span>${t.t}</span></button>`).join('')}</nav></div>`;
 }
 
@@ -1071,9 +1071,29 @@ function suscripcionHTML() {
         <span class="sub-radio" aria-hidden="true"></span><span class="sub-pt"><b>${x.n}</b><small>${x.nota}</small></span>${on ? '<span class="sub-price sub-now">Plan actual</span>' : `<span class="sub-price">${x.precio}</span>`}</button>`; }).join('')}</div>
       ${pro ? '' : pwTestimonioHTML()}
       ${subCtaHTML(subCta(sel, act))}
-      ${pro ? '' : '<button type="button" class="btn ghost block sub-code" data-act="ob-code">🎁 Tengo un código de invitación</button>'}
+      ${pro ? '' : '<button type="button" class="btn ghost block sub-code" data-act="ref-open">🎁 Invita a un amigo y gana meses PRO</button>'}
       <button type="button" class="sub-link" data-act="pro-info-open">Ventajas de Cadencia PRO</button></section>
   </div>`;
+}
+// Hoja de referidos: MAQUETA (fase 2). No hay servidor, ni validación de códigos, ni reglas: el código y los hitos son de muestra.
+const REF_CODIGO = 'CADENCIA26', REF_INVITADOS = 0;
+const REF_HITOS = [{ n: 1, txt: '1 mes de PRO gratis' }, { n: 5, txt: '6 meses de PRO gratis' }];
+function referidosSheetHTML() {
+  if (!st.referidos) return '';
+  return `<div class="sheet-back sheet-back-top" data-act="ref-close"></div>
+    <div class="sheet short ref-sheet" role="dialog" aria-modal="true" aria-label="Invita a un amigo">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><span style="width:36px"></span><h2>Invita a un amigo</h2><button type="button" class="iconbtn" data-act="ref-close" aria-label="Cerrar">${I.close || '✕'}</button></div>
+      <div class="ref-body">
+        <p class="ref-soon" role="note"><b>Próximamente.</b> El programa de invitaciones todavía no está activo: esto es una vista previa.</p>
+        <section class="ref-sec"><h3 class="pf-title">Tu código</h3>
+          <div class="ref-code"><b>${REF_CODIGO}</b><button type="button" class="btn small" data-act="ref-copy">Copiar</button></div></section>
+        <section class="ref-sec"><h3 class="pf-title">Progreso</h3>
+          <p class="ref-prog">Has invitado a <b>${REF_INVITADOS}</b> ${REF_INVITADOS === 1 ? 'amigo' : 'amigos'}</p></section>
+        <section class="ref-sec"><h3 class="pf-title">Recompensas</h3>
+          <ul class="ref-hitos">${REF_HITOS.map((h) => `<li class="${REF_INVITADOS >= h.n ? 'is-ok' : 'is-lock'}"><span class="ref-lock" aria-hidden="true">🔒</span><span class="ref-ht"><b>${h.n} ${h.n === 1 ? 'amigo' : 'amigos'}</b><small>${h.txt}</small></span><button type="button" class="btn small" disabled>Reclamar</button></li>`).join('')}</ul></section>
+      </div>
+    </div>`;
 }
 function proInfoHTML() {
   const pro = st.profile && st.profile.isPro === true;
@@ -1247,7 +1267,7 @@ function viewError() {
 async function enter(u) {
   st.user = u; st.busy = false;
   if (!u && M) M.pararPro();
-  if (!u) { st.cfg = st.pwd = st.pf = st.proInfo = st.rutShare = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = 'auth'; st.ob = null; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
+  if (!u) { st.cfg = st.pwd = st.pf = st.proInfo = st.referidos = st.rutShare = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = 'auth'; st.ob = null; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
   try {
     // PUERTA OBLIGATORIA: antes de pintar la app (y antes de pedir entrenos, peso, racha…) se lee el perfil.
     // Sin `onboardingCompletado: true` solo se ve el cuestionario: nada de cabecera, barra inferior ni secciones.
@@ -1319,7 +1339,9 @@ root.addEventListener('click', async (e) => {
   else if (act === 'ob-dias') { st.ob.freq = Number(v); render(); }
   else if (act === 'ob-exp') { st.ob.exp = v; render(); }
   else if (act === 'ob-dolor') { st.ob.dolor = v; obNext(); } // las dos respuestas avanzan; no se guarda en el perfil
-  else if (act === 'ob-code') toast('Los códigos de invitación llegarán muy pronto');
+  else if (act === 'ref-open') { st.referidos = true; render(); }
+  else if (act === 'ref-close') { st.referidos = null; render(); }
+  else if (act === 'ref-copy') { try { await navigator.clipboard.writeText(REF_CODIGO); toast('Código copiado. Aún no sirve: el programa no está activo'); } catch (e) { toast(`Tu código es ${REF_CODIGO}`); } }
   else if (act === 'ob-meta') { st.ob.meta = v; render(); }
   else if (act === 'ob-recomp-usar') { st.ob.pesoObjetivo = nf(Number(v), 1); st.ob.msg = ''; render(); }
   else if (act === 'sex') { st.ob.sexo = v; render(); }
