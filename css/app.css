@@ -1537,3 +1537,11 @@ html, body, main, .sheet-list, .sheet-scroll, .modal-body { overscroll-behavior-
 .ltab.cardio.simple .lrow-h, .ltab.cardio.simple .lset { grid-template-columns: 34px repeat(3, minmax(0, 1fr)); }
 .ltab.cardio.simple.c2 .lrow-h, .ltab.cardio.simple.c2 .lset { grid-template-columns: 34px repeat(2, minmax(0, 1fr)); }
 .lset .input.c-int { font-size: 14px; padding: 9px 2px; text-align: center; text-align-last: center; min-width: 0; }
+/* 2026-11-15 · Cinta por intervalos (HIIT/LISS): [ 10 min ] | [ 4,5 km/h ] | [ 5 % ] + ✓ */
+.c-in { position: relative; display: block; min-width: 0; }
+.c-in .input { width: 100%; padding-right: 22px; }
+.c-in i { position: absolute; right: 5px; bottom: 4px; font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: .02em; color: var(--muted); pointer-events: none; line-height: 1; }
+.ltab.cinta .lset .input { font-size: 16px; padding-left: 2px; }
+.ltab.cinta .lrow-h span:first-child { font-size: 11px; }
+.rx-int { margin-top: 8px; }
+.rx-int .lex-foot { margin-top: 2px; }

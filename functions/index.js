@@ -281,7 +281,7 @@ Reglas:
 - "consejos": 2 o 3 consejos concretos y accionables para la próxima sesión (máximo 140 caracteres cada uno).
 - Usa solo los datos recibidos; no inventes ejercicios ni cifras. Sin consejos médicos. Si los datos son escasos, dilo con tacto y puntúa con prudencia.
 - kg = peso por serie (0 = peso corporal), uni = ejercicio unilateral, rir = repeticiones en reserva, drop = drop set.
-- Los ejercicios con cardio = true son bloques de cardio (no series de fuerza): min = minutos, km = distancia, kmh = velocidad, inc = inclinación %, nivel = resistencia de la máquina, int = ritmo (caminata, trote o correr). Valóralos como cardio, no por kilos.`;
+- Los ejercicios con cardio = true son bloques de cardio (no series de fuerza): min = minutos, km = distancia, kmh = velocidad, inc = inclinación %, nivel = resistencia de la máquina, int = ritmo (caminata, trote o correr). En la caminadora/cinta cada bloque es un INTERVALO (HIIT si alterna ritmos, LISS si es constante). Valóralos como cardio, no por kilos.`;
 const ESQUEMA_COACH = {
   type: 'OBJECT',
   properties: {
@@ -299,7 +299,9 @@ const resumenEntreno = (w) => ({
       n: String(e.n || '').slice(0, 60), cardio: true,
       series: (e.series || []).slice(0, 10).map((s) => {
         const o = {};
-        for (const k of ['min', 'km', 'kmh', 'inc', 'nivel']) if (Number(s[k]) > 0) o[k] = Number(s[k]);
+        // La cinta guarda { tiempo, velocidad, inclinacion }; antes { min, kmh, inc }. Se envía con los nombres cortos.
+        const al = { min: 'tiempo', kmh: 'velocidad', inc: 'inclinacion' };
+        for (const k of ['min', 'km', 'kmh', 'inc', 'nivel']) { const v = Number(s[k] ?? s[al[k]]); if (v > 0) o[k] = v; }
         if (['caminata', 'trote', 'correr'].includes(s.int)) o.int = s.int;
         return o;
       }).filter((o) => Object.keys(o).length),

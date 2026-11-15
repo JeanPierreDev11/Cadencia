@@ -317,14 +317,26 @@ function wkDelSheetHTML() {
 /* ---------- editor de rutina (se usa en el asistente y en la sección Rutina) ---------- */
 const reNew = (draft, src) => ({ draft, src, alt: null, ses: null, dirty: false, msg: '' });
 
+// Cinta en el editor de rutinas: intervalos planificados (Min · Vel · Inc). Se guardan en rx.intervalos y salen como referencia en el entreno.
+const intervalosDe = (e) => { if (!Array.isArray(e.intervalos) || !e.intervalos.length) e.intervalos = [{ tiempo: primerNumero(e.reps) || '20', velocidad: '', inclinacion: '' }]; return e.intervalos; };
+function rxCintaHTML(d, i, e) {
+  const ints = intervalosDe(e), campos = E.CARDIO_MODOS.cinta;
+  return `<div class="ltab cardio c3 cinta simple rx-int">
+    <div class="lrow-h"><span>Int.</span>${campos.map((c) => `<span>${c.t}</span>`).join('')}</div>
+    ${ints.map((q, j) => `<div class="lset"><span class="num sn">${j + 1}</span>${campos.map((c) => `<label class="c-in"><input class="input" data-re="${d}.ej.${i}.int.${j}.${c.k}" inputmode="${c.im}" value="${esc(valTxt(q[c.k]))}" placeholder="${esc(c.ph)}" aria-label="${esc(c.t)} del intervalo ${j + 1}"><i aria-hidden="true">${c.u}</i></label>`).join('')}</div>`).join('')}
+    <div class="lex-foot"><button type="button" class="btn quiet small" data-act="re-int-add" data-v="${d}.${i}">${I.plus} Añadir intervalo</button>
+      ${ints.length > 1 ? `<button type="button" class="link" data-act="re-int-del" data-v="${d}.${i}">Quitar el último</button>` : ''}</div>
+  </div>`;
+}
 function rxHTML(d, i, e, s, re) {
   const key = `${d}.${i}`, open = re.alt === key;
   const alts = open ? E.alternativas(e, s.ej.map((x) => x.n), re.draft.equipo).slice(0, 6) : [];
   const x = E.ejercicio(e.n);
   return `<div class="rx">
     <div class="rx-top">${exThumb(x || { eq: 'corporal' })}<span class="rx-n">${esc(e.n)}<span class="small muted">${x ? E.MUSCULOS[x.m] : ''}</span></span><button type="button" class="iconbtn" data-act="re-del" data-v="${key}" aria-label="Quitar ${esc(e.n)}">✕</button></div>
+    ${E.esCinta(e) ? rxCintaHTML(d, i, e) : ''}
     <div class="rx-bot">
-      <span class="rx-sr"><input class="input" data-re="${d}.ej.${i}.series" inputmode="numeric" value="${esc(e.series)}" aria-label="Series de ${esc(e.n)}"><span>×</span><input class="input" data-re="${d}.ej.${i}.reps" value="${esc(e.reps)}" aria-label="Repeticiones de ${esc(e.n)}"></span>
+      ${E.esCinta(e) ? '<span></span>' : `<span class="rx-sr"><input class="input" data-re="${d}.ej.${i}.series" inputmode="numeric" value="${esc(e.series)}" aria-label="Series de ${esc(e.n)}"><span>×</span><input class="input" data-re="${d}.ej.${i}.reps" value="${esc(e.reps)}" aria-label="Repeticiones de ${esc(e.n)}"></span>`}
       <button type="button" class="btn quiet small" data-act="re-alt" data-v="${key}" aria-expanded="${open}">${I.swap} Cambiar</button>
     </div>
     ${open ? `<div class="alts"><span class="small muted">Alternativas que trabajan lo mismo</span><div class="chips">${alts.map((a) => `<button type="button" class="chip chipbtn" data-act="re-swap" data-v="${key}" data-n="${esc(a)}">${esc(a)}</button>`).join('')}
@@ -384,7 +396,16 @@ function normRutina(R) {
     if (s.t === 'fuerza') {
       if (!s.ej.length) return { error: `Añade al menos un ejercicio al ${E.DIAS_LARGO[d].toLowerCase()}, o cambia ese día a otro tipo de entreno.` };
       if (s.foco) o.foco = s.foco;
-      o.ej = s.ej.map((e) => { const sr = Math.round(num(e.series)); const x = E.ejercicio(e.n); return { n: e.n, m: e.m || (x ? x.m : ''), series: sr >= 1 && sr <= 10 ? sr : 3, reps: String(e.reps || '').trim().slice(0, 20) || '10' }; });
+      o.ej = s.ej.map((e) => {
+        const sr = Math.round(num(e.series)); const x = E.ejercicio(e.n);
+        if (E.esCinta(e)) { // intervalos de la cinta: números o vacío; sin tiempo no se guardan
+          const rango = (v, lo, hi) => { const n = num(v); return String(v ?? '').trim() !== '' && n >= lo && n <= hi ? Math.round(n * 10) / 10 : ''; };
+          const ints = intervalosDe(e).map((q) => ({ tiempo: rango(q.tiempo, 0.5, 600), velocidad: rango(q.velocidad, 0.5, 30), inclinacion: rango(q.inclinacion, 0, 30) })).filter((q) => q.tiempo !== '').slice(0, 20);
+          const tot = ints.reduce((a, q) => a + q.tiempo, 0);
+          return { n: E.canon(e.n), m: 'cardio', series: Math.max(1, ints.length), reps: `${nf(tot || 20)} min`, intervalos: ints.length ? ints : [{ tiempo: 20, velocidad: '', inclinacion: '' }] };
+        }
+        return { n: e.n, m: e.m || (x ? x.m : ''), series: sr >= 1 && sr <= 10 ? sr : 3, reps: String(e.reps || '').trim().slice(0, 20) || '10' };
+      });
     } else {
       const m = Math.round(num(s.min));
       o.min = m >= 5 && m <= 600 ? m : 60;
@@ -921,11 +942,20 @@ const liveSave = () => lsSet('cadencia-live', st.live ? JSON.stringify(st.live) 
 const primerNumero = (t) => { const m = String(t || '').match(/\d+/); return m ? m[0] : ''; };
 // Bloque vacío de cardio (los campos que no use su modo se quedan vacíos y no se guardan).
 const bloqueCardio = (int) => ({ min: '', kmh: '', inc: '', km: '', nivel: '', int: int || 'correr', done: false });
-function liveEx(n, nSets, obj) {
+// Intervalo de la cinta: { tiempo, velocidad, inclinacion, completada }. Al añadir uno se copian velocidad e inclinación del anterior.
+const intervaloCinta = (ant) => ({ tiempo: '', velocidad: ant ? ant.velocidad || '' : '', inclinacion: ant ? ant.inclinacion || '' : '', completada: false });
+// Hecho = ✓ marcado (fuerza y otros bloques usan `done`; los intervalos de la cinta, `completada`).
+const hecha = (s) => !!(s && (s.done || s.completada));
+const marcar = (s, v) => { if ('completada' in s) s.completada = v; else s.done = v; };
+// Intervalos planificados en la rutina (rx.intervalos) → valores de referencia (texto con coma).
+const planCinta = (ej) => (ej && Array.isArray(ej.intervalos) ? ej.intervalos.slice(0, 20) : []);
+function liveEx(n, nSets, obj, ej) {
   const x = E.ejercicio(n), prev = E.lastSets(st.workouts, n) || [];
-  if (E.tipoEjercicio(x) === 'cardio') { // cardio: un bloque (tiempo, distancia, velocidad…) en lugar de series de kg × reps
+  if (E.tipoEjercicio(x) === 'cardio') { // cardio: bloques/intervalos (tiempo, distancia, velocidad…) en lugar de series de kg × reps
+    const cm = E.modoCardio(n), base = { n: x ? x.n : n, m: 'cardio', tipo: 'cardio', cm, obj: obj || '', objReps: '', uni: false, superset: false, prev };
+    if (cm === 'cinta') { const plan = planCinta(ej); return { ...base, plan, s: Array.from({ length: Math.max(1, plan.length) }, () => intervaloCinta()) }; }
     const int = (prev[0] && prev[0].int) || (x && x.int) || 'correr';
-    return { n, m: 'cardio', tipo: 'cardio', cm: E.modoCardio(n), obj: obj || '', objReps: '', uni: false, superset: false, prev, s: [bloqueCardio(int)] };
+    return { ...base, s: [bloqueCardio(int)] };
   }
   const objReps = obj ? obj.split('×')[1].trim() : '';
   return { n, m: x ? x.m : '', obj: obj || '', objReps, uni: false, superset: false, prev, s: Array.from({ length: Math.max(1, Math.min(10, nSets || 3)) }, () => ({ kg: '', reps: '', done: false, rir: '', dropset: false })) };
@@ -943,7 +973,7 @@ function liveCargarSesion(op) {
   const L = st.live, r = rutinaOf();
   const ej = op.ej || E.sesionFuerza(op.foco, goalsKind(), { exp: r && r.exp, equipo: r && r.equipo }).ej;
   L.nombre = op.nombre; L.foco = op.foco || ''; L.custom = false;
-  L.ex = ej.map((e) => liveEx(e.n, e.series, `${e.series} × ${e.reps}`));
+  L.ex = ej.map((e) => liveEx(e.n, e.series, `${e.series} × ${e.reps}`, e));
 }
 // Un entreno de fuerza nuevo pregunta el modo; si ya hay uno en curso, se continúa.
 function empezarFuerza(fecha) {
@@ -1019,14 +1049,15 @@ function startLive(fecha, modo = 'guiado') {
   }
   const dp = dayPlan(fecha), plan = dp && dp.t === 'fuerza' ? dp : null;
   st.live = { uid: st.user.uid, fecha, start: Date.now(), nombre: plan ? plan.nombre : 'Entrenamiento', foco: (plan && plan.foco) || '', custom: !plan && !liveOpciones().length, modo,
-    ex: plan ? plan.ej.map((e) => liveEx(e.n, e.series, `${e.series} × ${e.reps}`)) : [], msg: '' };
+    ex: plan ? plan.ej.map((e) => liveEx(e.n, e.series, `${e.series} × ${e.reps}`, e)) : [], msg: '' };
   st.liveMin = false; st.wk = null; liveSave(); render(); window.scrollTo(0, 0);
 }
 // Una serie cuenta si la marcaste con ✓ o si escribiste algo en ella.
 // Un calentamiento viene rellenado de antemano: con ✓ cuenta solo si lo marcaste (en «simple registro», que no tiene ✓, cuenta si lo dejas escrito).
-const CAMPOS_NUM = ['min', 'kmh', 'inc', 'km', 'nivel'];
+const CAMPOS_NUM = ['min', 'kmh', 'inc', 'km', 'nivel', 'tiempo', 'velocidad', 'inclinacion'];
 const lleno = (v) => v != null && String(v).trim() !== '';
-const serieCuenta = (s, ex) => (ex && ex.tipo === 'cardio' ? s.done || CAMPOS_NUM.some((k) => lleno(s[k]))
+// Un intervalo de cinta cuenta si está ✓ o tiene el tiempo escrito (velocidad e inclinación vienen copiadas del anterior).
+const serieCuenta = (s, ex) => (ex && ex.tipo === 'cardio' ? (ex.cm === 'cinta' ? hecha(s) || lleno(s.tiempo) : hecha(s) || CAMPOS_NUM.some((k) => lleno(s[k])))
   : s.w && !livePlano(st.live) ? !!s.done : s.done || String(s.reps).trim() !== '' || String(s.kg).trim() !== '');
 function liveTotals() {
   let vol = 0, sets = 0;
@@ -1034,10 +1065,12 @@ function liveTotals() {
   return { vol: Math.round(vol), sets };
 }
 // Rellena un bloque de cardio vacío con lo de la última vez. true si tiene tiempo o distancia.
+// Referencia de un bloque/intervalo: lo planificado en la rutina; si no, la misma posición de la última vez (o la última).
+const refCardio = (ex, j) => (ex.plan && ex.plan[j]) || ex.prev[j] || ex.prev[ex.prev.length - 1] || null;
 function rellenarCardio(ex, j) {
-  const s = ex.s[j], p = ex.prev[j] || ex.prev[ex.prev.length - 1];
-  if (p && !CAMPOS_NUM.some((k) => lleno(s[k]))) for (const c of E.CARDIO_MODOS[ex.cm] || []) if (c.k !== 'int' && lleno(p[c.k])) s[c.k] = String(p[c.k]).replace('.', ',');
-  return lleno(s.min) || lleno(s.km);
+  const s = ex.s[j], p = refCardio(ex, j);
+  if (p) for (const c of E.CARDIO_MODOS[ex.cm] || []) if (c.k !== 'int' && !lleno(s[c.k]) && lleno(E.cv(p, c.k))) s[c.k] = String(E.cv(p, c.k)).replace('.', ',');
+  return lleno(s.tiempo) || lleno(s.min) || lleno(s.km);
 }
 // Duración del entreno en minutos a partir de la HORA DE INICIO guardada (no de un contador que iOS congela al bloquear el móvil).
 // Si el entreno es de otro día (registro a posteriori) o el reloj no tiene sentido, se estima con 3 min por serie.
@@ -1084,25 +1117,26 @@ function bestiaHTML(e, i, j, s) {
 // cinta → Min · km/h · Incl. % · aire libre → km · Min · Ritmo (Caminata/Trote/Correr) · estática → Min · Nivel.
 const valTxt = (v) => (lleno(v) ? String(v).replace('.', ',') : '');
 function cardioBlockHTML(e, i, plano) {
-  const campos = E.CARDIO_MODOS[e.cm] || E.CARDIO_MODOS.aire, last = e.prev[e.prev.length - 1];
-  const prevTxt = last ? campos.map((c) => (c.k === 'int' ? E.INTENSIDADES[last.int] || '' : lleno(last[c.k]) ? `${valTxt(last[c.k])} ${c.t.toLowerCase()}` : '')).filter(Boolean).join(' · ') : '';
-  const cols = campos.length;
+  const campos = E.CARDIO_MODOS[e.cm] || E.CARDIO_MODOS.aire, last = e.prev[e.prev.length - 1], cinta = e.cm === 'cinta';
+  const uno = (q) => campos.map((c) => (c.k === 'int' ? E.INTENSIDADES[q.int] || '' : lleno(E.cv(q, c.k)) ? `${valTxt(E.cv(q, c.k))} ${c.u || c.t.toLowerCase()}` : '')).filter(Boolean).join(' · ');
+  const prevTxt = cinta ? (e.prev.length ? `${e.prev.length} ${e.prev.length === 1 ? 'intervalo' : 'intervalos'} (${e.prev.slice(0, 3).map(uno).join(' | ')}${e.prev.length > 3 ? ' …' : ''})` : '') : last ? uno(last) : '';
+  const cols = campos.length, nom = cinta ? 'intervalo' : 'bloque';
   return `<section class="lex lex-cardio">
     <div class="lex-head"><span class="thumb thumb-cardio" aria-hidden="true">${I.heart}</span>
       <span class="lex-t"><b>${esc(e.n)}</b><span class="small muted">Cardio${e.obj ? ` · Objetivo ${esc(e.obj)}` : ''}</span></span>
       <button type="button" class="iconbtn" data-act="live-swap" data-v="${i}" aria-label="Cambiar ${esc(e.n)}">${I.swap}</button>
       <button type="button" class="iconbtn" data-act="live-del" data-v="${i}" aria-label="Quitar ${esc(e.n)}">${I.trash}</button></div>
     ${prevTxt ? `<p class="small muted c-prev">La última vez: ${esc(prevTxt)}</p>` : ''}
-    <div class="ltab cardio c${cols} ${plano ? 'simple' : ''}">
-      <div class="lrow-h"><span>Bloque</span>${campos.map((c) => `<span>${c.t}</span>`).join('')}${plano ? '' : '<span></span>'}</div>
-      ${e.s.map((s, j) => `<div class="lset ${!plano && s.done ? 'on' : ''}"><span class="num sn">${j + 1}</span>
+    <div class="ltab cardio c${cols} ${cinta ? 'cinta' : ''} ${plano ? 'simple' : ''}">
+      <div class="lrow-h"><span>${cinta ? 'Int.' : 'Bloque'}</span>${campos.map((c) => `<span>${c.t}</span>`).join('')}${plano ? '' : '<span></span>'}</div>
+      ${e.s.map((s, j) => { const ref = refCardio(e, j); return `<div class="lset ${!plano && hecha(s) ? 'on' : ''}"><span class="num sn">${j + 1}</span>
         ${campos.map((c) => (c.k === 'int'
           ? `<select class="input c-int" data-lv="${i}.${j}.int" aria-label="Ritmo del bloque ${j + 1} de ${esc(e.n)}">${Object.entries(E.INTENSIDADES).map(([k, t]) => `<option value="${k}" ${s.int === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`
-          : `<input class="input" data-lv="${i}.${j}.${c.k}" inputmode="${c.im}" value="${esc(s[c.k] || '')}" placeholder="${esc(last && lleno(last[c.k]) ? valTxt(last[c.k]) : c.ph)}" aria-label="${esc(c.t)} del bloque ${j + 1} de ${esc(e.n)}">`)).join('')}
-        ${plano ? '' : `<button type="button" class="chk" data-act="live-done" data-v="${i}.${j}" aria-pressed="${!!s.done}" aria-label="Marcar bloque ${j + 1} como hecho">${I.check}</button>`}
-      </div>`).join('')}
+          : `<label class="c-in"><input class="input" data-lv="${i}.${j}.${c.k}" inputmode="${c.im}"${c.step ? ` data-step="${c.step}"` : ''} value="${esc(s[c.k] || '')}" placeholder="${esc(ref && lleno(E.cv(ref, c.k)) ? valTxt(E.cv(ref, c.k)) : c.ph)}" aria-label="${esc(c.t)} del ${nom} ${j + 1} de ${esc(e.n)}">${c.u ? `<i aria-hidden="true">${c.u}</i>` : ''}</label>`)).join('')}
+        ${plano ? '' : `<button type="button" class="chk" data-act="live-done" data-v="${i}.${j}" aria-pressed="${hecha(s)}" aria-label="Marcar ${nom} ${j + 1} como hecho">${I.check}</button>`}
+      </div>`; }).join('')}
     </div>
-    <div class="lex-foot"><button type="button" class="btn quiet small" data-act="live-set-add" data-v="${i}">${I.plus} Añadir bloque</button>
+    <div class="lex-foot"><button type="button" class="btn quiet small" data-act="live-set-add" data-v="${i}">${I.plus} Añadir ${nom}</button>
       ${e.s.length > 1 ? `<button type="button" class="link" data-act="live-set-del" data-v="${i}">Quitar el último</button>` : ''}</div>
   </section>`;
 }
@@ -1279,20 +1313,21 @@ function liveRecoger() {
   if (!(L.nombre || '').trim()) L.nombre = 'Entrenamiento';
   for (let i = 0; i < L.ex.length; i++) {
     const ex = L.ex[i], series = [];
-    if (ex.tipo === 'cardio') { // bloques de cardio: { min?, kmh?, inc?, km?, nivel?, int? }
-      const campos = E.CARDIO_MODOS[ex.cm] || E.CARDIO_MODOS.aire;
+    if (ex.tipo === 'cardio') { // bloques de cardio { min?, km?, nivel?, int? } · cinta: intervalos { tiempo, velocidad?, inclinacion?, completada }
+      const campos = E.CARDIO_MODOS[ex.cm] || E.CARDIO_MODOS.aire, nom = ex.cm === 'cinta' ? 'intervalo' : 'bloque';
       for (let j = 0; j < ex.s.length; j++) {
         const s = ex.s[j];
         if (!serieCuenta(s, ex)) continue;
-        if (!rellenarCardio(ex, j)) return fail(`Apunta el tiempo${campos.some((c) => c.k === 'km') ? ' o la distancia' : ''} del bloque ${j + 1} de «${ex.n}».`);
+        if (!rellenarCardio(ex, j)) return fail(`Apunta el tiempo${campos.some((c) => c.k === 'km') ? ' o la distancia' : ''} del ${nom} ${j + 1} de «${ex.n}».`);
         const q = {};
         for (const c of campos) {
           if (c.k === 'int') { if (E.INTENSIDADES[s.int]) q.int = s.int; continue; }
           if (!lleno(s[c.k])) continue;
           const v = num(s[c.k]);
-          if (!(v >= c.lo && v <= c.hi)) return fail(`Revisa «${c.t}» del bloque ${j + 1} de «${ex.n}»: entre ${nf(c.lo)} y ${nf(c.hi)}.`);
+          if (!(v >= c.lo && v <= c.hi)) return fail(`Revisa «${c.t}» del ${nom} ${j + 1} de «${ex.n}»: entre ${nf(c.lo)} y ${nf(c.hi)}.`);
           q[c.k] = Math.round(v * 10) / 10;
         }
+        if (ex.cm === 'cinta') { if (!(q.tiempo > 0)) return fail(`Apunta los minutos del intervalo ${j + 1} de «${ex.n}».`); q.completada = true; }
         series.push(q);
       }
       if (series.length) ejs.push({ n: ex.n, tipo: 'cardio', series });
@@ -1628,6 +1663,12 @@ root.addEventListener('click', async (e) => {
     else if (act === 're-lib-swap') { const [d, i] = v.split('.').map(Number); re.alt = null; return libOpen({ mode: 'swap', ctx: 're', d, i }); }
     else if (act === 're-lib-add') return libOpen({ mode: 'add', ctx: 're', d: Number(v) });
     else if (act === 're-del') { const [d, i] = v.split('.').map(Number); R.sesiones[d].ej.splice(i, 1); re.alt = null; touch(); }
+    else if (act === 're-int-add' || act === 're-int-del') { // intervalos de la cinta: «Añadir» copia velocidad e inclinación del anterior
+      const [d, i] = v.split('.').map(Number), ints = intervalosDe(R.sesiones[d].ej[i]), ant = ints[ints.length - 1] || {};
+      if (act === 're-int-add' && ints.length < 20) ints.push({ tiempo: '', velocidad: ant.velocidad ?? '', inclinacion: ant.inclinacion ?? '' });
+      else if (act === 're-int-del' && ints.length > 1) ints.pop();
+      touch();
+    }
     else if (act === 're-ses-open') re.ses = Number(v);
     else if (act === 're-ses-close') re.ses = null;
     else if (act === 're-ses') { const s = R.sesiones[Number(v)], x = E.sesionPorId(b.dataset.id); s.ses = x.id; s.nombre = x.n; s.min = x.min; s.km = x.km || ''; re.ses = null; touch(); }
@@ -1647,16 +1688,20 @@ root.addEventListener('click', async (e) => {
     if (act === 'live-del') { Lv.ex.splice(Number(v), 1); liveSave(); return render(); }
     if (act === 'live-set-add') {
       const ex = Lv.ex[Number(v)], last = ex.s[ex.s.length - 1] || { kg: '' };
-      ex.s.push(ex.tipo === 'cardio' ? bloqueCardio(last.int) : { kg: last.kg, reps: '', done: false, rir: '', dropset: false });
+      // Cinta: copia velocidad e inclinación del intervalo anterior (lo escrito o, si está vacío, su referencia en gris).
+      const ref = ex.cm === 'cinta' ? refCardio(ex, ex.s.length - 1) : null;
+      const ant = ex.cm === 'cinta' ? { velocidad: lleno(last.velocidad) ? last.velocidad : valTxt(E.cv(ref, 'velocidad')), inclinacion: lleno(last.inclinacion) ? last.inclinacion : valTxt(E.cv(ref, 'inclinacion')) } : null;
+      ex.s.push(ex.cm === 'cinta' ? intervaloCinta(ant) : ex.tipo === 'cardio' ? bloqueCardio(last.int) : { kg: last.kg, reps: '', done: false, rir: '', dropset: false });
       liveSave(); return render();
     }
     if (act === 'live-set-del') { const ex = Lv.ex[Number(v)]; if (ex.s.length > 1) ex.s.pop(); liveSave(); return render(); }
     if (act === 'live-done') {
       const [i, j] = v.split('.').map(Number), ex = Lv.ex[i], s = ex.s[j], car = ex.tipo === 'cardio';
-      if (!s.done && car && !rellenarCardio(ex, j)) { toast(ex.cm === 'aire' ? 'Escribe el tiempo o la distancia' : 'Escribe los minutos'); return; }
-      if (!s.done && !car && !rellenarSerie(ex, j)) { toast('Escribe las repeticiones de la serie'); return; }
-      s.done = !s.done; Lv.msg = '';
-      if (s.done && !car) restStart(); else if (!s.done && st.rest) st.rest = null; // tras el cardio no hay descanso entre series
+      const on = hecha(s);
+      if (!on && car && !rellenarCardio(ex, j)) { toast(ex.cm === 'aire' ? 'Escribe el tiempo o la distancia' : 'Escribe los minutos'); return; }
+      if (!on && !car && !rellenarSerie(ex, j)) { toast('Escribe las repeticiones de la serie'); return; }
+      marcar(s, !on); Lv.msg = '';
+      if (!on && !car) restStart(); else if (on && st.rest) st.rest = null; // tras el cardio no hay descanso entre series
       liveSave(); return render();
     }
     if (act === 'live-lock') { toast('Función Pro'); return; }
@@ -1730,8 +1775,11 @@ root.addEventListener('click', async (e) => {
       if (st.live) { toast('Termina o descarta el entrenamiento en curso antes de editar otro'); return; }
       st.live = { uid: st.user.uid, fecha: x.fecha, start: Date.now(), edit: x.id, orig: x, modo: 'edit', nombre: x.nombre || 'Entrenamiento', foco: '', custom: true, msg: '',
         ex: x.ejercicios.map((e) => (E.exCardio(e)
-          ? { n: e.n, m: 'cardio', tipo: 'cardio', cm: E.modoCardio(e.n), obj: '', objReps: '', uni: false, prev: [], superset: false,
-            s: e.series.map((q) => ({ ...bloqueCardio(q.int), ...Object.fromEntries(CAMPOS_NUM.filter((k) => q[k] != null).map((k) => [k, String(q[k]).replace('.', ',')])), done: true })) }
+          ? (E.modoCardio(e.n) === 'cinta'
+            ? { n: E.canon(e.n), m: 'cardio', tipo: 'cardio', cm: 'cinta', obj: '', objReps: '', uni: false, prev: [], plan: [], superset: false,
+              s: e.series.map((q) => ({ ...intervaloCinta(), ...Object.fromEntries(['tiempo', 'velocidad', 'inclinacion'].filter((k) => E.cv(q, k) != null).map((k) => [k, String(E.cv(q, k)).replace('.', ',')])), completada: true })) }
+            : { n: e.n, m: 'cardio', tipo: 'cardio', cm: E.modoCardio(e.n), obj: '', objReps: '', uni: false, prev: [], superset: false,
+              s: e.series.map((q) => ({ ...bloqueCardio(q.int), ...Object.fromEntries(CAMPOS_NUM.filter((k) => q[k] != null).map((k) => [k, String(q[k]).replace('.', ',')])), done: true })) })
           : { n: e.n, m: (E.ejercicio(e.n) || {}).m || '', obj: '', objReps: '', uni: !!e.uni, prev: [], superset: e.series.some((q) => q.isSuperset), s: e.series.map((q) => ({ w: !!q.w, kg: q.kg ? String(q.kg).replace('.', ',') : '', reps: String(q.reps), done: true, rir: q.rir != null ? String(q.rir) : '', dropset: !!q.isDropSet })) })) };
       st.liveMin = false; st.wkHist = false; st.wkMod = false; liveSave(); render(); window.scrollTo(0, 0); return;
     }
@@ -1772,7 +1820,8 @@ root.addEventListener('input', (e) => {
   }
   if (st.re && t.dataset.re) {
     const p = t.dataset.re.split('.'), s = st.re.draft.sesiones[Number(p[0])];
-    if (p[1] === 'ej') {
+    if (p[1] === 'ej' && p[3] === 'int') { const q = intervalosDe(s.ej[Number(p[2])])[Number(p[4])]; if (q) q[p[5]] = t.value; }
+    else if (p[1] === 'ej') {
       const ex = s.ej[Number(p[2])]; ex[p[3]] = t.value;
       if (p[2] === '0' && (p[3] === 'series' || p[3] === 'reps')) st.re.ref = { series: ex.series, reps: ex.reps };
     } else s[p[1]] = t.value;
