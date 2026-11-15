@@ -7,7 +7,9 @@
 export function datosParaCoach(o, extra = {}) {
   return {
     nombre: o.nombre, fecha: o.fecha, min: o.min,
-    ejercicios: (o.ejercicios || []).map((e) => ({ n: e.n, uni: !!e.uni, series: (e.series || []).filter((s) => !s.w).map((s) => ({ kg: s.kg, reps: s.reps, rir: s.rir })) })),
+    ejercicios: (o.ejercicios || []).map((e) => (e.tipo === 'cardio'
+      ? { n: e.n, cardio: true, series: (e.series || []).map((s) => ({ ...s })) } // bloques de cardio: min, km, kmh, inc, nivel, int
+      : { n: e.n, uni: !!e.uni, series: (e.series || []).filter((s) => !s.w).map((s) => ({ kg: s.kg, reps: s.reps, rir: s.rir })) })),
     ...extra,
   };
 }
@@ -15,7 +17,7 @@ export function datosParaCoach(o, extra = {}) {
 // Análisis de ejemplo para el modo prueba.
 async function ejemploCoach(datos) {
   await new Promise((r) => setTimeout(r, 900)); // simula la espera de la IA
-  const ej = (datos && datos.ejercicios) || [];
+  const ej = ((datos && datos.ejercicios) || []).filter((e) => !e.cardio);
   const top = ej.reduce((m, e) => (!m || e.series.length > m.series.length ? e : m), null);
   const n = top ? top.n : 'Press banca';
   return {

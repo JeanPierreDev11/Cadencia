@@ -30,7 +30,26 @@ export function estimateKcal(w, kg) {
     : w.tipo === 'cardio' ? { 1: 6, 2: 8, 3: 10 }[w.esf] || 8
     : w.tipo === 'otro' ? { 1: 4, 2: 6, 3: 8 }[w.esf] || 6
     : { 1: 3.5, 2: 5, 3: 6 }[w.esf] || 5;
-  return Math.round((met * peso * w.min) / 60);
+  if (w.tipo !== 'gym') return Math.round((met * peso * w.min) / 60);
+  // Fuerza con bloques de cardio dentro: esos minutos se cuentan con el MET del cardio y el resto con el de fuerza.
+  const bloques = [];
+  for (const e of w.ejercicios || []) if (exCardio(e)) for (const s of e.series || []) if (Number(s.min) > 0) bloques.push([metCardio(e, s), Number(s.min)]);
+  let mc = bloques.reduce((a, b) => a + b[1], 0);
+  const f = mc > w.min ? w.min / mc : 1; mc = Math.min(mc, w.min);
+  const kc = bloques.reduce((a, [m, t]) => a + m * peso * t * f, 0) + met * peso * (w.min - mc);
+  return Math.round(kc / 60);
+}
+// MET de un bloque de cardio: por velocidad si la hay; si no, por intensidad o nivel.
+function metCardio(e, s) {
+  let v = Number(s.kmh) || 0;
+  if (!v && Number(s.km) > 0 && Number(s.min) > 0) v = Number(s.km) / (Number(s.min) / 60);
+  if (v > 0) {
+    const base = v < 6.5 ? 3.8 : v < 8.5 ? 8 : v < 11 ? 9.8 : 11.5;
+    return base + Math.min(4, (Number(s.inc) || 0) * 0.3);
+  }
+  if (s.int) return { caminata: 3.8, trote: 7, correr: 9.8 }[s.int] || 7;
+  if (Number(s.nivel) > 0) return 5 + Math.min(20, Number(s.nivel)) * 0.2;
+  return 7;
 }
 
 /* ---------- estadísticas ---------- */
@@ -38,8 +57,10 @@ const inWeek = (w, monday) => w.fecha >= monday && w.fecha <= addDays(monday, 6)
 // Series hechas y kilos movidos (kilos × repeticiones de cada serie; en los ejercicios a un lado, por los dos lados) de un entreno de fuerza.
 // Las series de calentamiento (w: true) se guardan en el historial pero NO cuentan en series, volumen, récords, 1RM ni fatiga.
 export const trabajo = (series) => (series || []).filter((s) => !(s && s.w));
-export const seriesDe = (w) => (w.ejercicios || []).reduce((a, e) => a + trabajo(e.series).length, 0);
-export const volumenDe = (w) => (w.ejercicios || []).reduce((a, e) => a + trabajo(e.series).reduce((b, s) => b + (Number(s.kg) || 0) * (Number(s.reps) || 0) * (e.uni ? 2 : 1), 0), 0);
+// Los bloques de cardio (ejercicio con tipo 'cardio') no son series de fuerza: no cuentan en series ni volumen.
+const deFuerza = (w) => (w.ejercicios || []).filter((e) => !exCardio(e));
+export const seriesDe = (w) => deFuerza(w).reduce((a, e) => a + trabajo(e.series).length, 0);
+export const volumenDe = (w) => deFuerza(w).reduce((a, e) => a + trabajo(e.series).reduce((b, s) => b + (Number(s.kg) || 0) * (Number(s.reps) || 0) * (e.uni ? 2 : 1), 0), 0);
 export function weekStats(ws, monday) {
   const list = ws.filter((w) => inWeek(w, monday));
   const sum = (k, l = list) => l.reduce((a, w) => a + (w[k] || 0), 0);
@@ -92,9 +113,10 @@ export function moverAHoy(dia, hoy, plan, hechos, lista = []) {
 }
 
 /* ---------- récords ---------- */
+// Récords: bici (km, desnivel, tiempo), fuerza (mejor serie por ejercicio, todos) y cardio (por ejercicio: más km, más minutos y más km/h).
 export function records(ws) {
   const bici = { km: null, elev: null, min: null };
-  const map = new Map();
+  const map = new Map(), car = new Map();
   for (const w of ws) {
     if (w.tipo === 'bici') {
       if (w.km > (bici.km ? bici.km.v : 0)) bici.km = { v: w.km, fecha: w.fecha };
@@ -104,6 +126,13 @@ export function records(ws) {
       for (const ej of w.ejercicios || []) {
         const key = String(ej.n || '').trim().toLowerCase();
         if (!key) continue;
+        if (exCardio(ej)) {
+          const c = car.get(key) || { key, n: ej.n.trim(), veces: 0, km: null, min: null, kmh: null };
+          c.veces++;
+          for (const s of ej.series || []) for (const k of ['km', 'min', 'kmh']) { const v = Number(s[k]) || 0; if (v > (c[k] ? c[k].v : 0)) c[k] = { v, fecha: w.fecha }; }
+          car.set(key, c);
+          continue;
+        }
         const e = map.get(key) || { key, n: ej.n.trim(), veces: 0, best: null, last: '' };
         e.veces++;
         if (w.fecha > e.last) e.last = w.fecha;
@@ -117,12 +146,14 @@ export function records(ws) {
       }
     }
   }
-  const gym = [...map.values()].filter((e) => e.best).sort((a, b) => b.veces - a.veces || a.n.localeCompare(b.n)).slice(0, 6);
-  return { bici, gym };
+  const gym = [...map.values()].filter((e) => e.best).sort((a, b) => b.veces - a.veces || a.n.localeCompare(b.n));
+  const cardio = [...car.values()].filter((c) => c.km || c.min || c.kmh).sort((a, b) => b.veces - a.veces || a.n.localeCompare(b.n));
+  return { bici, gym, cardio };
 }
 function snapshot(r) {
   const o = { km: r.bici.km ? r.bici.km.v : 0, elev: r.bici.elev ? r.bici.elev.v : 0, min: r.bici.min ? r.bici.min.v : 0 };
   r.gym.forEach((e) => { o['g:' + e.key] = e.best.score; });
+  (r.cardio || []).forEach((c) => { for (const k of ['km', 'min', 'kmh']) if (c[k]) o[`c:${c.key}:${k}`] = c[k].v; });
   return o;
 }
 // ¿El entreno nuevo mejora algún récord que ya existía?
@@ -189,7 +220,7 @@ export const RTIPOS = { fuerza: 'Fuerza', bici: 'Bici', cardio: 'Cardio', otro: 
 export const MUSCULOS = {
   pecho: 'Pecho', espalda: 'Espalda', hombro: 'Hombros', biceps: 'Bíceps', triceps: 'Tríceps', antebrazo: 'Antebrazos',
   cuadriceps: 'Cuádriceps', femoral: 'Isquiotibiales', gluteo: 'Glúteos', gemelos: 'Gemelos', core: 'Core',
-  aductores: 'Aductores', abductores: 'Abductores de la cadera',
+  aductores: 'Aductores', abductores: 'Abductores de la cadera', cardio: 'Cardio',
 };
 export const EQUIPOS = {
   barra: 'Barra', barraz: 'Barra Z', mancuernas: 'Mancuernas', kettlebell: 'Kettlebells', polea: 'Polea', maquina: 'Máquina',
@@ -343,15 +374,38 @@ Curl inverso|antebrazo|antebrazo|barra
 Paseo del granjero|antebrazo|antebrazo|mancuernas
 `;
 // Los ejercicios principales (con patrón de movimiento) y el resto de la base con imagen.
+// Cada ejercicio tiene `tipo`: 'fuerza' (por defecto: kg × reps) o 'cardio' (bloques de tiempo, distancia, velocidad…).
 export const BIBLIOTECA = TABLA.trim().split('\n').map((l) => {
   const [n, m, p, eq] = l.split('|'), c = IMG_CUR[n];
-  return { n, m, p, eq, img: c ? c[0] : '', mu: c ? c[1] : GRUPO_DET[m], base: true };
+  return { n, m, p, eq, img: c ? c[0] : '', mu: c ? c[1] : GRUPO_DET[m], base: true, tipo: 'fuerza' };
 });
-const RESTO = EXTRA.map(([n, m, eq, img, mu, cat]) => ({ n, m, p: null, eq, img, mu, cat }));
+const RESTO = EXTRA.map(([n, m, eq, img, mu, cat]) => ({ n, m, p: null, eq, img, mu, cat, tipo: 'fuerza' }));
+
+/* ---------- cardio dentro del entreno ---------- */
+// cm = cómo se apunta cada bloque. Cada campo: k (clave guardada), t (cabecera), im (teclado), ph (ejemplo), lo/hi (rango válido).
+// «int» no es un número: es un selector de intensidad (INTENSIDADES).
+export const INTENSIDADES = { caminata: 'Caminata', trote: 'Trote', correr: 'Correr' };
+export const CARDIO_MODOS = {
+  cinta: [{ k: 'min', t: 'Min', im: 'decimal', ph: '20', lo: 1, hi: 600 }, { k: 'kmh', t: 'km/h', im: 'decimal', ph: '8', lo: 0.5, hi: 30 }, { k: 'inc', t: 'Incl. %', im: 'decimal', ph: '1', lo: 0, hi: 30 }],
+  aire: [{ k: 'km', t: 'km', im: 'decimal', ph: '5', lo: 0.1, hi: 200 }, { k: 'min', t: 'Min', im: 'decimal', ph: '30', lo: 1, hi: 600 }, { k: 'int', t: 'Ritmo' }],
+  estatica: [{ k: 'min', t: 'Min', im: 'decimal', ph: '20', lo: 1, hi: 600 }, { k: 'nivel', t: 'Nivel', im: 'numeric', ph: '8', lo: 1, hi: 30 }],
+};
+const CARDIO = [
+  { n: 'Cinta de correr', eq: 'maquina', cm: 'cinta' },
+  { n: 'Correr al aire libre', eq: 'corporal', cm: 'aire', int: 'correr' },
+  { n: 'Caminata', eq: 'corporal', cm: 'aire', int: 'caminata' },
+  { n: 'Bicicleta estática', eq: 'maquina', cm: 'estatica' },
+].map((x) => ({ ...x, m: 'cardio', p: null, img: '', mu: '', base: true, tipo: 'cardio' }));
+export const tipoEjercicio = (x) => (x && (x.tipo === 'cardio' || x.m === 'cardio') ? 'cardio' : 'fuerza');
+// ¿Este ejercicio (de la biblioteca o ya guardado en un entreno) es de cardio? Los guardados llevan tipo: 'cardio'.
+export const exCardio = (e) => !!e && (e.tipo === 'cardio' || tipoEjercicio(ejercicio(e.n)) === 'cardio');
+// Modo de apunte del ejercicio de cardio (los propios de cardio se apuntan como «aire libre»).
+export const modoCardio = (n) => { const x = ejercicio(n); return x && CARDIO_MODOS[x.cm] ? x.cm : 'aire'; };
+
 let PROPIOS = [];
 let INDICE = null;
-export const setPropios = (l) => { PROPIOS = (l || []).filter((x) => x && x.n).map((x) => ({ n: x.n, m: x.m || 'core', p: null, eq: x.eq || 'corporal', img: '', mu: GRUPO_DET[x.m] || '', propio: true })); INDICE = null; };
-export const todosEjercicios = () => [...PROPIOS, ...BIBLIOTECA, ...RESTO];
+export const setPropios = (l) => { PROPIOS = (l || []).filter((x) => x && x.n).map((x) => ({ n: x.n, m: x.m || 'core', p: null, eq: x.eq || 'corporal', img: '', mu: GRUPO_DET[x.m] || '', propio: true, tipo: x.m === 'cardio' ? 'cardio' : 'fuerza', ...(x.m === 'cardio' ? { cm: 'aire', int: 'correr' } : {}) })); INDICE = null; };
+export const todosEjercicios = () => [...PROPIOS, ...BIBLIOTECA, ...CARDIO, ...RESTO];
 
 // ---------- Buscador: sin acentos ni mayúsculas, con erratas y también en inglés ----------
 // El nombre en inglés sale del id de la imagen (p. ej. «Barbell_Deadlift»); estos son los que no tienen imagen y los apodos más comunes.
@@ -431,6 +485,11 @@ export const MUSC_GRUPOS = [
 export function seriesPorMusculo(w) {
   const o = {}, add = (k, v) => { o[k] = (o[k] || 0) + v; };
   for (const e of w.ejercicios || []) {
+    if (exCardio(e)) { // cardio dentro del entreno: carga piernas por minutos, como la bici
+      const mins = (e.series || []).reduce((a, s) => a + (Number(s.min) || 0), 0), v = Math.min(8, mins / 10);
+      if (v > 0) { add('qu', v); add('gl', v / 2); add('ca', v); add('ha', v / 2); }
+      continue;
+    }
     const x = ejercicio(e.n), n = trabajo(e.series).length;
     if (!x || !n) continue;
     let { p, s } = musculosDet(x);
@@ -497,6 +556,7 @@ const REPS_OBJ = { fuerza: '8-12', grasa: '10-15', rend: '5-8', general: '8-12' 
 const SERIES_EXP = { nuevo: 3, meses: 3, anio: 4, anios: 4, compite: 4 };
 export function nuevoEjercicio(n, kind, exp) {
   const x = ejercicio(n);
+  if (tipoEjercicio(x) === 'cardio') return { n, m: 'cardio', series: 1, reps: '20 min' };
   return { n, m: x ? x.m : '', series: SERIES_EXP[exp] || 3, reps: REPS_FIJAS[n] || (exp === 'nuevo' ? '10-12' : REPS_OBJ[kind] || '8-12') };
 }
 // Al cambiar un ejercicio por otro, ajusta las repeticiones si uno se mide en tiempo o por lado.

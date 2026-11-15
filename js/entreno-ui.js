@@ -108,13 +108,13 @@ function viewEntreno() {
     return `${ctx.stravaBtn ? ctx.stravaBtn() : ''}<div class="wk-empty"><button type="button" class="addbig" data-act="rw-start"><span class="addbig-c">${I.plusBig}</span><span>Añadir rutina</span></button><button type="button" class="btn ghost" data-act="rut-imp">Importar rutina con un código</button></div>`;
   }
   const today = todayISO(), mon = E.mondayOf(today), sun = E.addDays(mon, 6);
-  const sub = ['semana', 'rutina', 'objetivos'].includes(st.wkTab) ? st.wkTab : 'semana';
-  const body = sub === 'rutina' ? wkRutina() : sub === 'objetivos' ? M.viewObjetivos() : wkSemana();
+  const sub = ['semana', 'rutina', 'objetivos', 'records'].includes(st.wkTab) ? st.wkTab : 'semana';
+  const body = sub === 'rutina' ? wkRutina() : sub === 'objetivos' ? M.viewObjetivos() : sub === 'records' ? wkRecords() : wkSemana();
   return `<header class="hello"><div><h1>Entreno</h1><p>Semana del ${esc(fmtDate(mon))} al ${esc(fmtDate(sun))}</p></div>
       <button type="button" class="iconbtn hist-btn" data-act="wk-hist" aria-label="Historial de entrenos">${I.clock}</button></header>
     ${ctx.stravaBtn ? ctx.stravaBtn() : ''}
-    <div class="seg" role="group" aria-label="Secciones de entreno">
-      ${[['semana', 'Semana'], ['rutina', 'Rutinas'], ['objetivos', 'Objetivos']].map(([v, t]) => `<button type="button" data-act="wktab" data-v="${v}" aria-pressed="${sub === v}">${t}</button>`).join('')}
+    <div class="seg four" role="group" aria-label="Secciones de entreno">
+      ${[['semana', 'Semana'], ['rutina', 'Rutinas'], ['objetivos', 'Objetivos'], ['records', 'Récords']].map(([v, t]) => `<button type="button" data-act="wktab" data-v="${v}" aria-pressed="${sub === v}">${t}</button>`).join('')}
     </div>
     ${body}`;
 }
@@ -260,19 +260,37 @@ function wkRow(w, mod) {
     ${mod ? `<button type="button" class="iconbtn" data-act="wk-edit" data-v="${esc(w.id)}" aria-label="Editar entreno">${I.pencil}</button><button type="button" class="iconbtn bad" data-act="wk-del-ask" data-v="${esc(w.id)}" aria-label="Borrar entreno">${I.trash}</button>` : ''}</div>`;
 }
 
+/* ---------- pestaña Récords ---------- */
+// Récords personales (antes estaban dentro del Historial): fuerza (mejor serie de cada ejercicio), cardio y bici.
+function wkRecords() {
+  const r = E.records(st.workouts);
+  const fecha = (f) => esc(fmtDate(f, { day: 'numeric', month: 'short', year: 'numeric' }));
+  const fila = (t, v, f, extra = '') => `<div class="row rec-row"><span>${esc(t)}<br><span class="muted small">${fecha(f)}${extra}</span></span><b class="nowrap num">${esc(v)}</b></div>`;
+  const fuerza = r.gym.map((e) => fila(cap(e.n), e.best.kg > 0 ? `${nf(e.best.kg, 1)} kg × ${e.best.reps}` : `${e.best.reps} reps`, e.best.fecha, ` · ${e.veces} ${e.veces === 1 ? 'sesión' : 'sesiones'}`));
+  const cardio = (r.cardio || []).map((c) => {
+    const p = [];
+    if (c.km) p.push(fila(`${c.n} · más distancia`, `${nf(c.km.v, 1)} km`, c.km.fecha));
+    if (c.min) p.push(fila(`${c.n} · más tiempo`, fmtDur(c.min.v), c.min.fecha));
+    if (c.kmh) p.push(fila(`${c.n} · más rápido`, `${nf(c.kmh.v, 1)} km/h`, c.kmh.fecha));
+    return p.join('');
+  });
+  const bici = [];
+  if (r.bici.km) bici.push(fila('Salida más larga', `${nf(r.bici.km.v, 1)} km`, r.bici.km.fecha));
+  if (r.bici.elev) bici.push(fila('Más desnivel', `${nf(r.bici.elev.v)} m`, r.bici.elev.fecha));
+  if (r.bici.min) bici.push(fila('Más tiempo en bici', fmtDur(r.bici.min.v), r.bici.min.fecha));
+  if (!fuerza.length && !cardio.length && !bici.length) {
+    return `<section class="card"><div class="empty"><b>Aún no hay récords</b><span>Termina un entreno y aquí verás tu mejor serie de cada ejercicio, tus marcas de cardio y tus salidas en bici.</span></div></section>`;
+  }
+  const bloque = (t, filas) => (filas.length ? `<section class="card rec-card"><h2>${t}</h2><div class="list">${filas.join('')}</div></section>` : '');
+  return `${bloque('Fuerza', fuerza)}${bloque('Cardio', cardio)}${bloque('Bici', bici)}
+    <p class="small muted rec-nota">En fuerza cuenta tu mejor serie (más peso para sus repeticiones). Las de calentamiento no cuentan.</p>`;
+}
+
 function wkHistSheetHTML() {
   const ws = st.workouts, mod = !!st.wkMod;
   let body;
-  if (!ws.length) body = `<div class="empty"><b>Todavía no hay entrenos</b><span>Pulsa «Iniciar entreno» y aquí verás tu historial y tus récords.</span></div>`;
-  else {
-    const r = E.records(ws), rec = [];
-    if (r.bici.km) rec.push(['Salida más larga', `${nf(r.bici.km.v, 1)} km`, r.bici.km.fecha]);
-    if (r.bici.elev) rec.push(['Más desnivel', `${nf(r.bici.elev.v)} m`, r.bici.elev.fecha]);
-    if (r.bici.min) rec.push(['Más tiempo en bici', fmtDur(r.bici.min.v), r.bici.min.fecha]);
-    r.gym.forEach((e) => rec.push([e.n.charAt(0).toUpperCase() + e.n.slice(1), e.best.kg > 0 ? `${nf(e.best.kg, 1)} kg × ${e.best.reps}` : `${e.best.reps} repeticiones`, e.best.fecha]));
-    body = `${rec.length ? `<h3 class="sub-h">Récords personales</h3><div class="list">${rec.map(([t, v, f]) => `<div class="row"><span>${esc(t)}<br><span class="muted small">${esc(fmtDate(f, { day: 'numeric', month: 'short', year: 'numeric' }))}</span></span><b class="nowrap">${esc(v)}</b></div>`).join('')}</div>` : ''}
-      <h3 class="sub-h">Todos tus entrenos</h3><div class="list">${ws.map((w) => wkRow(w, mod)).join('')}</div>`;
-  }
+  if (!ws.length) body = `<div class="empty"><b>Todavía no hay entrenos</b><span>Pulsa «Iniciar entreno» y aquí verás tu historial. Tus récords están en la pestaña «Récords».</span></div>`;
+  else body = `<div class="list">${ws.map((w) => wkRow(w, mod)).join('')}</div>`;
   return `<div class="sheet-back" data-act="wk-hist-close"></div>
     <div class="sheet" role="dialog" aria-modal="true" aria-label="Historial de entrenos">
       <div class="sheet-grab"></div>
@@ -728,10 +746,11 @@ function anatomia(x, lado = 'ambos') {
   sec.forEach((k) => { fills[k] = ['url(#an-ms)']; }); p.forEach((k) => { fills[k] = ['url(#an-mp)']; });
   return figura(fills, lado, [...p, ...sec].map((k) => E.MUSC_DET[k]).filter(Boolean).join(', '));
 }
-const chipIcono = (m) => { const k = GRUPO_MAP[m]; return k ? anatomia({ m, mu: k + '|' }, MUSC_ESPALDA.has(k) ? 'back' : 'front') : ''; };
+const chipIcono = (m) => { if (m === 'cardio') return I.heart; const k = GRUPO_MAP[m]; return k ? anatomia({ m, mu: k + '|' }, MUSC_ESPALDA.has(k) ? 'back' : 'front') : ''; };
 // Miniatura cuadrada de un ejercicio: imagen 3D (IMG3D) si existe; si no, la misma figura anatómica de la Biblioteca (un solo lado, el del músculo principal).
 const exThumb = (x) => {
   x = x || { eq: 'corporal' };
+  if (E.tipoEjercicio(x) === 'cardio') return `<span class="thumb thumb-cardio" aria-hidden="true">${I.heart}</span>`;
   const i3 = E.img3d(x), k = E.musculosDet(x).p[0] || GRUPO_MAP[x.m];
   return `<span class="thumb">${i3 ? `<img class="ex3d" src="${esc(i3)}" alt="" loading="lazy" decoding="async">` : anatomia(x, MUSC_ESPALDA.has(k) ? 'back' : 'front')}</span>`;
 };
@@ -787,7 +806,7 @@ function libListHTML() {
     const img3d = E.img3d(x);
     out += `<div class="lcard ${on ? 'on' : ''} ${inUse ? 'used' : ''}">
       <button type="button" class="lc-main" data-act="lib-pick" data-n="${esc(x.n)}" ${inUse ? 'disabled' : ''} aria-label="${esc(x.n)}${inUse ? ' (ya está en la sesión)' : ''}">
-        <span class="lc-img">${img3d ? `<img class="ex3d" src="${esc(img3d)}" alt="" loading="lazy" decoding="async">` : anatomia(x)}</span>
+        <span class="lc-img ${E.tipoEjercicio(x) === 'cardio' ? 'lc-cardio' : ''}">${img3d ? `<img class="ex3d" src="${esc(img3d)}" alt="" loading="lazy" decoding="async">` : E.tipoEjercicio(x) === 'cardio' ? I.heart : anatomia(x)}</span>
         <b class="lc-n">${esc(x.n)}</b><span class="lc-m">${esc(E.MUSCULOS[x.m] || '')}${x.propio ? ' · Tuyo' : ''}</span></button>
       <button type="button" class="lc-ico lc-bm ${saved ? 'on' : ''}" data-act="lib-fav" data-n="${esc(x.n)}" aria-pressed="${saved}" aria-label="${saved ? 'Quitar de guardados' : 'Guardar'} ${esc(x.n)}">${BM_ICO(saved)}</button>
       <button type="button" class="lc-ico lc-info" data-act="lib-det" data-n="${esc(x.n)}" aria-label="Ver cómo se hace ${esc(x.n)}">?</button>
@@ -811,11 +830,12 @@ function libDetHTML(x) {
   const on = L.sel.includes(x.n);
   return `<div class="sheet-head"><button type="button" class="iconbtn" data-act="lib-det-close" aria-label="Volver">${I.back}</button><h2 class="det-title">${esc(x.n)}</h2><span style="width:36px"></span></div>
     <div class="sheet-list det">
-      <div class="det-hero">${i3 ? `<img class="ex3d" src="${esc(i3)}" alt="${esc(x.n)}">` : anatomia(x)}</div>
+      <div class="det-hero ${E.tipoEjercicio(x) === 'cardio' ? 'lc-cardio' : ''}">${i3 ? `<img class="ex3d" src="${esc(i3)}" alt="${esc(x.n)}">` : E.tipoEjercicio(x) === 'cardio' ? I.heart : anatomia(x)}</div>
       <div class="det-body">
         <div class="det-mus">
           ${p.length ? `<p><span class="dot mp"></span><b>Principal:</b> ${esc(p.map((k) => E.MUSC_DET[k]).join(', '))}</p>` : ''}
           ${s.length ? `<p><span class="dot ms"></span><b>Secundarios:</b> ${esc(s.map((k) => E.MUSC_DET[k]).join(', '))}</p>` : ''}
+          ${E.tipoEjercicio(x) === 'cardio' ? `<p><b>Cardio:</b> en el entreno apuntas ${esc((E.CARDIO_MODOS[E.modoCardio(x.n)] || []).map((c) => c.t.toLowerCase()).join(', '))} en lugar de kilos y repeticiones.</p>` : ''}
           <p class="small muted">Equipo: ${E.EQUIPOS[x.eq] || 'Otro'}</p>
         </div></div>
     </div>
@@ -899,8 +919,14 @@ async function libCrearSave() {
 const liveSave = () => lsSet('cadencia-live', st.live ? JSON.stringify(st.live) : null);
 // "8-12" → 8 · "10 por pierna" → 10 · "30-45 s" → 30
 const primerNumero = (t) => { const m = String(t || '').match(/\d+/); return m ? m[0] : ''; };
+// Bloque vacío de cardio (los campos que no use su modo se quedan vacíos y no se guardan).
+const bloqueCardio = (int) => ({ min: '', kmh: '', inc: '', km: '', nivel: '', int: int || 'correr', done: false });
 function liveEx(n, nSets, obj) {
   const x = E.ejercicio(n), prev = E.lastSets(st.workouts, n) || [];
+  if (E.tipoEjercicio(x) === 'cardio') { // cardio: un bloque (tiempo, distancia, velocidad…) en lugar de series de kg × reps
+    const int = (prev[0] && prev[0].int) || (x && x.int) || 'correr';
+    return { n, m: 'cardio', tipo: 'cardio', cm: E.modoCardio(n), obj: obj || '', objReps: '', uni: false, superset: false, prev, s: [bloqueCardio(int)] };
+  }
   const objReps = obj ? obj.split('×')[1].trim() : '';
   return { n, m: x ? x.m : '', obj: obj || '', objReps, uni: false, superset: false, prev, s: Array.from({ length: Math.max(1, Math.min(10, nSets || 3)) }, () => ({ kg: '', reps: '', done: false, rir: '', dropset: false })) };
 }
@@ -998,13 +1024,34 @@ function startLive(fecha, modo = 'guiado') {
 }
 // Una serie cuenta si la marcaste con ✓ o si escribiste algo en ella.
 // Un calentamiento viene rellenado de antemano: con ✓ cuenta solo si lo marcaste (en «simple registro», que no tiene ✓, cuenta si lo dejas escrito).
-const serieCuenta = (s) => (s.w && !livePlano(st.live) ? !!s.done : s.done || String(s.reps).trim() !== '' || String(s.kg).trim() !== '');
+const CAMPOS_NUM = ['min', 'kmh', 'inc', 'km', 'nivel'];
+const lleno = (v) => v != null && String(v).trim() !== '';
+const serieCuenta = (s, ex) => (ex && ex.tipo === 'cardio' ? s.done || CAMPOS_NUM.some((k) => lleno(s[k]))
+  : s.w && !livePlano(st.live) ? !!s.done : s.done || String(s.reps).trim() !== '' || String(s.kg).trim() !== '');
 function liveTotals() {
   let vol = 0, sets = 0;
-  for (const ex of st.live.ex) for (const s of ex.s) if (s.done && !s.w) { sets++; vol += (num(s.kg) || 0) * (num(s.reps) || 0) * (ex.uni ? 2 : 1); }
+  for (const ex of st.live.ex) if (ex.tipo !== 'cardio') for (const s of ex.s) if (s.done && !s.w) { sets++; vol += (num(s.kg) || 0) * (num(s.reps) || 0) * (ex.uni ? 2 : 1); }
   return { vol: Math.round(vol), sets };
 }
-const liveIsToday = () => st.live && st.live.fecha === todayISO() && !st.live.edit;
+// Rellena un bloque de cardio vacío con lo de la última vez. true si tiene tiempo o distancia.
+function rellenarCardio(ex, j) {
+  const s = ex.s[j], p = ex.prev[j] || ex.prev[ex.prev.length - 1];
+  if (p && !CAMPOS_NUM.some((k) => lleno(s[k]))) for (const c of E.CARDIO_MODOS[ex.cm] || []) if (c.k !== 'int' && lleno(p[c.k])) s[c.k] = String(p[c.k]).replace('.', ',');
+  return lleno(s.min) || lleno(s.km);
+}
+// Duración del entreno en minutos a partir de la HORA DE INICIO guardada (no de un contador que iOS congela al bloquear el móvil).
+// Si el entreno es de otro día (registro a posteriori) o el reloj no tiene sentido, se estima con 3 min por serie.
+const isoDe = (ts) => E.toISO(new Date(ts));
+const liveConReloj = (L) => !!L && !L.edit && Number.isFinite(L.start) && L.fecha === isoDe(L.start);
+const minTranscurridos = (L) => Math.round((Date.now() - L.start) / 60000);
+function minPropuestos(L, nSets) {
+  if (L.edit) return Math.max(1, Math.round(L.orig.min || 0) || nSets * 3);
+  const est = Math.max(15, nSets * 3), real = liveConReloj(L) ? minTranscurridos(L) : 0;
+  if (!livePlano(L) && real >= 1) return Math.min(600, real);
+  return Math.min(600, real >= 10 ? real : est); // «simple registro»: el reloj solo vale si llevas un rato; si no, estimación (editable)
+}
+// Entreno con reloj: el de hoy (aunque pase de medianoche: cuenta desde la hora de inicio).
+const liveIsToday = () => liveConReloj(st.live);
 // Modos sin temporizador: «simple registro» y editar un entreno ya guardado.
 const livePlano = (L) => L.modo === 'simple' || !!L.edit;
 // Guiado: si superas las repeticiones del objetivo → sube peso; si no llegas → baja. (Objetivos en segundos se ignoran.)
@@ -1033,10 +1080,37 @@ function bestiaHTML(e, i, j, s) {
   if (!esPro()) return `<div class="lxtra is-locked"><span class="rir-wrap"><span>RIR</span><input class="rir-in" value="" placeholder="–" readonly tabindex="-1" aria-disabled="true" data-act="live-lock" aria-label="RIR serie ${j + 1} (función Pro)"></span><button type="button" class="drop-btn" data-act="live-lock" aria-disabled="true" aria-label="Drop-set serie ${j + 1} (función Pro)">D</button></div>`;
   return `<div class="lxtra"><label class="rir-wrap"><span>RIR</span><input class="rir-in" data-lv="${i}.${j}.rir" inputmode="numeric" maxlength="1" value="${esc(s.rir)}" placeholder="0-5" aria-label="RIR serie ${j + 1} de ${esc(e.n)}"></label><button type="button" class="drop-btn" data-act="live-drop" data-v="${i}.${j}" aria-pressed="${!!s.dropset}" aria-label="Marcar serie ${j + 1} como drop-set">D</button></div>`;
 }
+// Fila de un bloque de cardio (equivale a la fila de serie .lset de fuerza). Los campos dependen del modo del ejercicio (E.CARDIO_MODOS):
+// cinta → Min · km/h · Incl. % · aire libre → km · Min · Ritmo (Caminata/Trote/Correr) · estática → Min · Nivel.
+const valTxt = (v) => (lleno(v) ? String(v).replace('.', ',') : '');
+function cardioBlockHTML(e, i, plano) {
+  const campos = E.CARDIO_MODOS[e.cm] || E.CARDIO_MODOS.aire, last = e.prev[e.prev.length - 1];
+  const prevTxt = last ? campos.map((c) => (c.k === 'int' ? E.INTENSIDADES[last.int] || '' : lleno(last[c.k]) ? `${valTxt(last[c.k])} ${c.t.toLowerCase()}` : '')).filter(Boolean).join(' · ') : '';
+  const cols = campos.length;
+  return `<section class="lex lex-cardio">
+    <div class="lex-head"><span class="thumb thumb-cardio" aria-hidden="true">${I.heart}</span>
+      <span class="lex-t"><b>${esc(e.n)}</b><span class="small muted">Cardio${e.obj ? ` · Objetivo ${esc(e.obj)}` : ''}</span></span>
+      <button type="button" class="iconbtn" data-act="live-swap" data-v="${i}" aria-label="Cambiar ${esc(e.n)}">${I.swap}</button>
+      <button type="button" class="iconbtn" data-act="live-del" data-v="${i}" aria-label="Quitar ${esc(e.n)}">${I.trash}</button></div>
+    ${prevTxt ? `<p class="small muted c-prev">La última vez: ${esc(prevTxt)}</p>` : ''}
+    <div class="ltab cardio c${cols} ${plano ? 'simple' : ''}">
+      <div class="lrow-h"><span>Bloque</span>${campos.map((c) => `<span>${c.t}</span>`).join('')}${plano ? '' : '<span></span>'}</div>
+      ${e.s.map((s, j) => `<div class="lset ${!plano && s.done ? 'on' : ''}"><span class="num sn">${j + 1}</span>
+        ${campos.map((c) => (c.k === 'int'
+          ? `<select class="input c-int" data-lv="${i}.${j}.int" aria-label="Ritmo del bloque ${j + 1} de ${esc(e.n)}">${Object.entries(E.INTENSIDADES).map(([k, t]) => `<option value="${k}" ${s.int === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`
+          : `<input class="input" data-lv="${i}.${j}.${c.k}" inputmode="${c.im}" value="${esc(s[c.k] || '')}" placeholder="${esc(last && lleno(last[c.k]) ? valTxt(last[c.k]) : c.ph)}" aria-label="${esc(c.t)} del bloque ${j + 1} de ${esc(e.n)}">`)).join('')}
+        ${plano ? '' : `<button type="button" class="chk" data-act="live-done" data-v="${i}.${j}" aria-pressed="${!!s.done}" aria-label="Marcar bloque ${j + 1} como hecho">${I.check}</button>`}
+      </div>`).join('')}
+    </div>
+    <div class="lex-foot"><button type="button" class="btn quiet small" data-act="live-set-add" data-v="${i}">${I.plus} Añadir bloque</button>
+      ${e.s.length > 1 ? `<button type="button" class="link" data-act="live-set-del" data-v="${i}">Quitar el último</button>` : ''}</div>
+  </section>`;
+}
 function viewLive() {
   const L = st.live, t = liveTotals(), today = liveIsToday(), plano = livePlano(L), pro = esPro();
   const fmtKg = (v) => (v ? String(v).replace('.', ',') : '');
   const blocks = L.ex.map((e, i) => {
+    if (e.tipo === 'cardio') return cardioBlockHTML(e, i, plano);
     const x = E.ejercicio(e.n), uniOk = E.puedeUnilateral(e.n), conPeso = !x || x.eq !== 'corporal';
     return `<section class="lex ${i > 0 && L.ex[i - 1].superset ? 'ss-next' : ''} ${e.superset ? 'ss-first' : ''}">
       ${i > 0 && L.ex[i - 1].superset ? '<span class="ss-tag">Superserie</span>' : ''}
@@ -1059,7 +1133,7 @@ function viewLive() {
       <div class="lex-foot"><button type="button" class="btn quiet small" data-act="live-set-add" data-v="${i}">${I.plus} Añadir serie</button>
         ${e.s.some((q) => q.w) ? `<button type="button" class="link" data-act="live-w-del" data-v="${i}">Quitar calentamiento</button>` : ''}
         ${e.s.length > 1 ? `<button type="button" class="link" data-act="live-set-del" data-v="${i}">Quitar la última</button>` : ''}</div>
-      ${i < L.ex.length - 1 ? (pro
+      ${i < L.ex.length - 1 && L.ex[i + 1].tipo !== 'cardio' ? (pro
         ? `<button type="button" class="ss-btn" data-act="live-sup" data-v="${i}" aria-pressed="${!!e.superset}">${e.superset ? 'Superserie con ' + esc(L.ex[i + 1].n) : 'Enlazar con el siguiente: Superserie'}</button>`
         : `<button type="button" class="ss-btn is-locked" data-act="live-lock" aria-disabled="true">${I.lock} Superserie · Pro</button>`) : ''}
     </section>`;
@@ -1152,12 +1226,22 @@ setInterval(() => {
   if (!R.done && Date.now() >= R.end) restFin(); else if (!R.done) restPaint();
 }, 250);
 
-setInterval(() => {
+// El reloj SIEMPRE se calcula como ahora − hora de inicio (st.live.start). En iOS los setInterval se congelan con el móvil
+// bloqueado: no pasa nada, porque no se suman segundos; al volver a la app se repinta al momento con la hora real.
+function relojPaint() {
   if (!st.live || !liveIsToday()) return;
   const t = fmtClock(Date.now() - st.live.start);
   const a = document.getElementById('live-dur'), b = document.getElementById('live-bar-t');
   if (a) a.textContent = t; if (b) b.textContent = t;
-}, 1000);
+}
+setInterval(relojPaint, 1000);
+const alVolver = () => {
+  if (document.visibilityState === 'hidden') return;
+  relojPaint();
+  const R = st.rest; if (R && !R.done) { if (Date.now() >= R.end) restFin(); else restPaint(); }
+};
+document.addEventListener('visibilitychange', alVolver);
+window.addEventListener('pageshow', alVolver);
 
 // Peso de trabajo: la última serie con kilos de hoy; si no hay, la última serie de la última vez (historial).
 function pesoObjetivo(ex) {
@@ -1188,15 +1272,35 @@ function rellenarSerie(ex, j) {
   return !!String(s.reps).trim();
 }
 
-async function liveFinish() {
+// Lee lo apuntado y lo valida. Devuelve { ejs, nSets } o null (y enseña el error).
+function liveRecoger() {
   const L = st.live, ejs = [];
-  const fail = (m) => { L.msg = m; render(); toast(m); const el = document.getElementById('live-msg'); if (el) el.scrollIntoView({ block: 'center' }); };
+  const fail = (m) => { st.liveFin = null; L.msg = m; render(); toast(m); const el = document.getElementById('live-msg'); if (el) el.scrollIntoView({ block: 'center' }); return null; };
   if (!(L.nombre || '').trim()) L.nombre = 'Entrenamiento';
-  for (const ex of L.ex) {
-    const series = [];
+  for (let i = 0; i < L.ex.length; i++) {
+    const ex = L.ex[i], series = [];
+    if (ex.tipo === 'cardio') { // bloques de cardio: { min?, kmh?, inc?, km?, nivel?, int? }
+      const campos = E.CARDIO_MODOS[ex.cm] || E.CARDIO_MODOS.aire;
+      for (let j = 0; j < ex.s.length; j++) {
+        const s = ex.s[j];
+        if (!serieCuenta(s, ex)) continue;
+        if (!rellenarCardio(ex, j)) return fail(`Apunta el tiempo${campos.some((c) => c.k === 'km') ? ' o la distancia' : ''} del bloque ${j + 1} de «${ex.n}».`);
+        const q = {};
+        for (const c of campos) {
+          if (c.k === 'int') { if (E.INTENSIDADES[s.int]) q.int = s.int; continue; }
+          if (!lleno(s[c.k])) continue;
+          const v = num(s[c.k]);
+          if (!(v >= c.lo && v <= c.hi)) return fail(`Revisa «${c.t}» del bloque ${j + 1} de «${ex.n}»: entre ${nf(c.lo)} y ${nf(c.hi)}.`);
+          q[c.k] = Math.round(v * 10) / 10;
+        }
+        series.push(q);
+      }
+      if (series.length) ejs.push({ n: ex.n, tipo: 'cardio', series });
+      continue;
+    }
     for (let j = 0; j < ex.s.length; j++) {
       const s = ex.s[j];
-      if (!serieCuenta(s)) continue;
+      if (!serieCuenta(s, ex)) continue;
       if (!String(s.reps).trim()) rellenarSerie(ex, j);
       const reps = Math.round(num(s.reps)), kg = String(s.kg).trim() ? num(s.kg) : 0;
       if (!(reps >= 1 && reps <= 200) || !(kg >= 0 && kg <= 600)) return fail(`Revisa la serie ${s.w ? 'de calentamiento' : idxTrabajo(ex, j) + 1} de «${ex.n}»: repeticiones entre 1 y 200 y kilos entre 0 y 600.`);
@@ -1205,16 +1309,55 @@ async function liveFinish() {
       if (esPro()) { // Modo Bestia (solo Pro): rir, isDropSet e isSuperset
         if (String(s.rir).trim() !== '') q.rir = Math.max(0, Math.min(5, Math.round(num(s.rir)) || 0));
         if (s.dropset) q.isDropSet = true;
-        if (ex.superset) q.isSuperset = true;
+        if (ex.superset && L.ex[i + 1] && L.ex[i + 1].tipo !== 'cardio') q.isSuperset = true;
       }
       series.push(q);
     }
     if (series.length) ejs.push(ex.uni ? { n: ex.n, uni: true, series } : { n: ex.n, series });
   }
-  if (!ejs.some((e) => E.trabajo(e.series).length)) return fail('Apunta al menos una serie (escribe los kilos o reps, o márcala con ✓) para guardar el entrenamiento.');
-  const nSets = ejs.reduce((a, e) => a + E.trabajo(e.series).length, 0);
-  const plano = livePlano(L);
-  const min = L.edit ? L.orig.min : liveIsToday() && !plano ? Math.max(1, Math.min(600, Math.round((Date.now() - L.start) / 60000))) : Math.max(15, nSets * 3);
+  if (!ejs.some((e) => E.trabajo(e.series).length)) return fail('Apunta al menos una serie o un bloque de cardio (escribe los datos o márcalo con ✓) para guardar el entrenamiento.');
+  return { ejs, nSets: E.seriesDe({ ejercicios: ejs }) };
+}
+
+// «Finalizar»/«Guardar» abre la hoja final con la duración (horas y minutos) ya calculada y editable.
+function liveAbrirFin() {
+  const L = st.live, r = liveRecoger();
+  if (!r) return;
+  const m = minPropuestos(L, r.nSets);
+  L.msg = ''; st.liveFin = { h: String(Math.floor(m / 60)), m: String(m % 60), auto: liveConReloj(L) && !livePlano(L), nSets: r.nSets, nCar: r.ejs.filter((e) => e.tipo === 'cardio').length, msg: '' };
+  render();
+}
+function finSheetHTML() {
+  const f = st.liveFin, L = st.live, t = liveTotals(), r = { nSets: f.nSets || 0 }, nCar = f.nCar || 0;
+  const hint = L.edit ? 'Es la duración que tenía guardada. Cámbiala si no era correcta.'
+    : f.auto ? 'Calculada desde la hora a la que empezaste. Si se te olvidó terminar, corrígela.'
+    : 'Es una estimación. Pon lo que duró de verdad.';
+  return `<div class="sheet-back" data-act="fin-close"></div>
+    <div class="sheet short" role="dialog" aria-modal="true" aria-label="Terminar entreno">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><button type="button" class="iconbtn" data-act="fin-close" aria-label="Volver al entreno">${I.back}</button><h2>${L.edit ? 'Guardar cambios' : 'Terminar entreno'}</h2><span style="width:36px"></span></div>
+      <div class="sheet-list form-grid fin-sheet">
+        <p class="fin-res"><b>${esc(L.nombre || 'Entrenamiento')}</b><br><span class="small muted">${r.nSets} ${r.nSets === 1 ? 'serie' : 'series'}${t.vol ? ` · ${nf(t.vol)} kg` : ''}${nCar ? ` · ${nCar} de cardio` : ''}</span></p>
+        <div class="field"><span>Duración total</span>
+          <div class="dur-in">
+            <label><input class="input num" data-fin="h" inputmode="numeric" maxlength="2" value="${esc(f.h)}" aria-label="Horas"><span>h</span></label>
+            <label><input class="input num" data-fin="m" inputmode="numeric" maxlength="2" value="${esc(f.m)}" aria-label="Minutos"><span>min</span></label>
+          </div></div>
+        <p class="small muted">${hint}</p>
+        ${f.msg ? `<div class="msg" role="alert">${esc(f.msg)}</div>` : ''}
+        <button type="button" class="btn block" data-act="fin-ok">Guardar entreno</button>
+      </div>
+    </div>`;
+}
+async function liveFinish() {
+  const L = st.live, f = st.liveFin, r = liveRecoger();
+  if (!r || !f) return;
+  const { ejs, nSets } = r;
+  const fail = (m) => { st.liveFin = null; L.msg = m; render(); toast(m); };
+  const hh = String(f.h).trim() === '' ? 0 : Number(f.h), mm = String(f.m).trim() === '' ? 0 : Number(f.m);
+  const min = Math.round(hh * 60 + mm);
+  if (!Number.isInteger(hh) || !Number.isInteger(mm) || hh < 0 || mm < 0 || mm > 59 || !(min >= 1 && min <= 600)) { f.msg = 'Escribe una duración entre 1 minuto y 10 horas (minutos de 0 a 59).'; return render(); }
+  st.liveFin = null;
   // Al editar se sobrescribe el mismo documento (mismo id) conservando el resto de sus datos.
   const o = { ...(L.edit ? L.orig : {}), id: L.edit || 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), fecha: L.fecha, tipo: 'gym', nombre: L.nombre.trim().slice(0, 60), min, esf: L.edit ? L.orig.esf || 2 : 2, ejercicios: ejs };
   o.kcal = E.estimateKcal(o, currentKg());
@@ -1227,7 +1370,7 @@ async function liveFinish() {
     st.workouts = await api.listWorkouts(st.user.uid);
     const editado = !!L.edit;
     // Pro: volumen total movido (peso × reps de todas las series; unilateral ×2, igual que el contador en vivo)
-    const volTotal = Math.round(ejs.reduce((a, e) => a + E.trabajo(e.series).reduce((b, s) => b + s.kg * s.reps * (e.uni ? 2 : 1), 0), 0));
+    const volTotal = Math.round(E.volumenDe(o)); // los bloques de cardio no suman volumen
     const record = E.beatsRecord(before, after);
     st.live = null; st.liveMin = false; liveSave();
     st.tab = 'entreno'; lsSet('cadencia-tab', 'entreno');
@@ -1235,7 +1378,7 @@ async function liveFinish() {
     st.wkDia = o.fecha;
     if (esPro() && !editado) st.resumen = { id: o.id, nombre: o.nombre, vol: volTotal, sets: nSets, min, record };
     render(); window.scrollTo(0, 0);
-    toast(editado ? 'Entreno actualizado' : record ? '¡Nuevo récord personal!' : `Entrenamiento guardado · ${nSets} series`);
+    toast(editado ? 'Entreno actualizado' : record ? '¡Nuevo récord personal!' : nSets ? `Entrenamiento guardado · ${nSets} ${nSets === 1 ? 'serie' : 'series'}` : 'Entrenamiento guardado');
   } catch (e) { fail(`No se ha podido guardar: ${errorText(e)}`); }
 }
 
@@ -1502,13 +1645,18 @@ root.addEventListener('click', async (e) => {
     if (act === 'live-lib') return libOpen({ mode: 'add', ctx: 'live' });
     if (act === 'live-swap') return libOpen({ mode: 'swap', ctx: 'live', i: Number(v) });
     if (act === 'live-del') { Lv.ex.splice(Number(v), 1); liveSave(); return render(); }
-    if (act === 'live-set-add') { const ex = Lv.ex[Number(v)], last = ex.s[ex.s.length - 1] || { kg: '' }; ex.s.push({ kg: last.kg, reps: '', done: false, rir: '', dropset: false }); liveSave(); return render(); }
+    if (act === 'live-set-add') {
+      const ex = Lv.ex[Number(v)], last = ex.s[ex.s.length - 1] || { kg: '' };
+      ex.s.push(ex.tipo === 'cardio' ? bloqueCardio(last.int) : { kg: last.kg, reps: '', done: false, rir: '', dropset: false });
+      liveSave(); return render();
+    }
     if (act === 'live-set-del') { const ex = Lv.ex[Number(v)]; if (ex.s.length > 1) ex.s.pop(); liveSave(); return render(); }
     if (act === 'live-done') {
-      const [i, j] = v.split('.').map(Number), ex = Lv.ex[i], s = ex.s[j];
-      if (!s.done && !rellenarSerie(ex, j)) { toast('Escribe las repeticiones de la serie'); return; }
+      const [i, j] = v.split('.').map(Number), ex = Lv.ex[i], s = ex.s[j], car = ex.tipo === 'cardio';
+      if (!s.done && car && !rellenarCardio(ex, j)) { toast(ex.cm === 'aire' ? 'Escribe el tiempo o la distancia' : 'Escribe los minutos'); return; }
+      if (!s.done && !car && !rellenarSerie(ex, j)) { toast('Escribe las repeticiones de la serie'); return; }
       s.done = !s.done; Lv.msg = '';
-      if (s.done) restStart(); else if (st.rest) st.rest = null;
+      if (s.done && !car) restStart(); else if (!s.done && st.rest) st.rest = null; // tras el cardio no hay descanso entre series
       liveSave(); return render();
     }
     if (act === 'live-lock') { toast('Función Pro'); return; }
@@ -1525,7 +1673,7 @@ root.addEventListener('click', async (e) => {
     if (act === 'live-drop') { if (!esPro()) { toast('Función Pro'); return; } const [i, j] = v.split('.').map(Number), q = Lv.ex[i].s[j]; q.dropset = !q.dropset; liveSave(); return render(); }
     if (act === 'live-sup') { if (!esPro()) { toast('Función Pro'); return; } const ex = Lv.ex[Number(v)]; if (Number(v) < Lv.ex.length - 1) ex.superset = !ex.superset; liveSave(); return render(); }
     if (act === 'live-uni') { Lv.ex[Number(v)].uni = b.dataset.u === '1'; liveSave(); return render(); }
-    if (act === 'live-fin') { st.rest = null; return liveFinish(); }
+    if (act === 'live-fin') { st.rest = null; return liveAbrirFin(); }
     if (act === 'live-discard') {
       if (!window.confirm(Lv.edit ? '¿Salir sin guardar los cambios?' : '¿Descartar este entrenamiento? Se perderán las series apuntadas.')) return;
       st.live = null; st.liveMin = false; st.rest = null; liveSave(); render(); toast(Lv.edit ? 'Edición cancelada' : 'Entrenamiento descartado'); return;
@@ -1538,6 +1686,8 @@ root.addEventListener('click', async (e) => {
 
   // modo de entreno de fuerza
   if (act === 'sum-close') { st.resumen = null; return render(); }
+  if (act === 'fin-close') { st.liveFin = null; return render(); }
+  if (act === 'fin-ok' && st.liveFin && st.live) return void liveFinish();
   if (act === 'lim-close') { st.limite = null; return render(); }
   if (act === 'lim-pro') return abrirSuscripcion();
   if (act === 'cal-close') { st.calentar = null; return render(); }
@@ -1579,7 +1729,10 @@ root.addEventListener('click', async (e) => {
     if (x.tipo === 'gym' && (x.ejercicios || []).length) {
       if (st.live) { toast('Termina o descarta el entrenamiento en curso antes de editar otro'); return; }
       st.live = { uid: st.user.uid, fecha: x.fecha, start: Date.now(), edit: x.id, orig: x, modo: 'edit', nombre: x.nombre || 'Entrenamiento', foco: '', custom: true, msg: '',
-        ex: x.ejercicios.map((e) => ({ n: e.n, m: (E.ejercicio(e.n) || {}).m || '', obj: '', objReps: '', uni: !!e.uni, prev: [], superset: e.series.some((q) => q.isSuperset), s: e.series.map((q) => ({ w: !!q.w, kg: q.kg ? String(q.kg).replace('.', ',') : '', reps: String(q.reps), done: true, rir: q.rir != null ? String(q.rir) : '', dropset: !!q.isDropSet })) })) };
+        ex: x.ejercicios.map((e) => (E.exCardio(e)
+          ? { n: e.n, m: 'cardio', tipo: 'cardio', cm: E.modoCardio(e.n), obj: '', objReps: '', uni: false, prev: [], superset: false,
+            s: e.series.map((q) => ({ ...bloqueCardio(q.int), ...Object.fromEntries(CAMPOS_NUM.filter((k) => q[k] != null).map((k) => [k, String(q[k]).replace('.', ',')])), done: true })) }
+          : { n: e.n, m: (E.ejercicio(e.n) || {}).m || '', obj: '', objReps: '', uni: !!e.uni, prev: [], superset: e.series.some((q) => q.isSuperset), s: e.series.map((q) => ({ w: !!q.w, kg: q.kg ? String(q.kg).replace('.', ',') : '', reps: String(q.reps), done: true, rir: q.rir != null ? String(q.rir) : '', dropset: !!q.isDropSet })) })) };
       st.liveMin = false; st.wkHist = false; st.wkMod = false; liveSave(); render(); window.scrollTo(0, 0); return;
     }
     st.wk = { orig: x, id: x.id, fecha: x.fecha, tipo: x.tipo, nombre: x.nombre || '', min: String(x.min || ''), km: x.km ? String(x.km) : '', elev: x.elev ? String(x.elev) : '', pulso: x.pulso ? String(x.pulso) : '', np: x.np ? String(x.np) : '', bici: x.bici, esf: x.esf || 2, msg: '', saving: false };
@@ -1606,6 +1759,7 @@ root.addEventListener('input', (e) => {
   if (st.lib && st.lib.crear && t.dataset.libc) { st.lib.crear[t.dataset.libc] = t.value; return; }
   if (st.rw && t.dataset.rw) { st.rw[t.dataset.rw] = t.value; const nb = document.querySelector('[data-rwnext]'); if (nb) nb.disabled = !rwCanNext(); const chs = document.querySelectorAll('[data-act=rw-dep-otro]'); chs.forEach((c) => c.classList.toggle('on', c.dataset.v === t.value)); return; }
   if (st.calentar && t.dataset.calkg != null) { st.calentar.kg = t.value; return; }
+  if (st.liveFin && t.dataset.fin) { t.value = t.value.replace(/\D/g, '').slice(0, 2); st.liveFin[t.dataset.fin] = t.value; return; }
   if (st.live && t.dataset.livename != null) { st.live.nombre = t.value; st.live.custom = true; liveSave(); return; }
   if (st.live && t.dataset.lv) {
     const [i, j, k] = t.dataset.lv.split('.');
@@ -1696,5 +1850,5 @@ function recuperacionHTML() {
   return `<section class="rcv"><h2>Recuperación muscular</h2><p class="rcv-sub">Mira qué músculos están listos para entrenar</p>
     ${esPro() ? cuerpo : muro}</section>`;
 }
-  return { regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, limiteSheetHTML, calentarSheetHTML, recuperacionHTML, rutShareSheetHTML };
+  return { finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, limiteSheetHTML, calentarSheetHTML, recuperacionHTML, rutShareSheetHTML };
 }

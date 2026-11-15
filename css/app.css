@@ -1517,3 +1517,23 @@ html, body, main, .sheet-list, .sheet-scroll, .modal-body { overscroll-behavior-
 .ai-spin { width: 36px; height: 36px; border-radius: 50%; border: 3px solid var(--surface2); border-top-color: #F2BE1A; animation: ai-spin .8s linear infinite; }
 @keyframes ai-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .ai-spin { animation-duration: 2.4s; } }
+/* 2026-11-15 · Pestaña Récords, hoja «Terminar entreno» y cardio en el entreno en vivo */
+.seg.four button { font-size: 12px; letter-spacing: .02em; padding: 12px 2px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rec-card .list { margin: 0; }
+.rec-row b { color: var(--accent-text); }
+.rec-nota { margin: 4px 2px 0; }
+.fin-sheet { gap: 14px; }
+.fin-res { margin: 0; }
+.dur-in { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dur-in label { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.dur-in .input { text-align: center; font-size: 22px; font-weight: 800; min-width: 0; }
+.dur-in span { color: var(--muted); font-weight: 700; }
+.thumb.thumb-cardio, .lc-img.lc-cardio, .det-hero.lc-cardio { color: #F2BE1A; }
+.thumb.thumb-cardio svg { display: block; width: 60%; height: 60%; margin: auto; }
+.lc-img.lc-cardio > svg, .det-hero.lc-cardio > svg { width: 56px; height: 56px; }
+.c-prev { margin: 0; }
+.ltab.cardio .lrow-h, .ltab.cardio .lset { grid-template-columns: 34px repeat(3, minmax(0, 1fr)) 44px; }
+.ltab.cardio.c2 .lrow-h, .ltab.cardio.c2 .lset { grid-template-columns: 34px repeat(2, minmax(0, 1fr)) 44px; }
+.ltab.cardio.simple .lrow-h, .ltab.cardio.simple .lset { grid-template-columns: 34px repeat(3, minmax(0, 1fr)); }
+.ltab.cardio.simple.c2 .lrow-h, .ltab.cardio.simple.c2 .lset { grid-template-columns: 34px repeat(2, minmax(0, 1fr)); }
+.lset .input.c-int { font-size: 14px; padding: 9px 2px; text-align: center; text-align-last: center; min-width: 0; }
