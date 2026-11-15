@@ -75,11 +75,12 @@ export function termometro(actual, meta) {
   return { nivel, pct, dif, txt };
 }
 
-// Fecha orientativa (mockup de «Proyección IA»): ritmo prudente de 0,6 % del peso por semana al bajar y 0,25 % al subir. Entre 4 semanas y 2 años.
+// Fecha orientativa (mockup de «Proyección IA»): 0,94 % del peso por semana al bajar (≈ 0,75 kg/semana con 80 kg) y 0,39 % al subir. Entre 4 semanas y 2 años.
+const RITMO_BAJAR = 0.0094, RITMO_SUBIR = 0.0039;
 export function estimarMeta(actual, meta, hoyISO) {
   const dif = Math.abs(meta - actual);
   if (!(actual > 0) || !(meta > 0) || dif < 0.5) return null;
-  const sem = Math.min(104, Math.max(4, Math.ceil(dif / (actual * (meta < actual ? 0.006 : 0.0025)))));
+  const sem = Math.min(104, Math.max(4, Math.ceil(dif / (actual * (meta < actual ? RITMO_BAJAR : RITMO_SUBIR)))));
   const fecha = new Date(`${hoyISO}T12:00:00`);
   fecha.setDate(fecha.getDate() + sem * 7);
   return { semanas: sem, fecha };
@@ -141,7 +142,7 @@ export function termometroHTML(actual, meta) {
     <div class="term-box ${t.nivel}"><small>${cab}</small><b>${esc(t.txt)}</b></div>`;
 }
 
-export function pesoHTML(o, guia) {
+export function pesoHTML(o) {
   return `<h1 class="ob-title">¿Cuál es tu peso ideal?</h1>
     <p class="ob-sub">Compáralo con tu peso de hoy y mira si el objetivo es realista.</p>
     <div class="ob-grid2">
@@ -149,7 +150,6 @@ export function pesoHTML(o, guia) {
       <label class="field"><span>Peso objetivo</span><div class="big-input md"><input name="pesoObjetivo" inputmode="decimal" maxlength="5" value="${esc(o.pesoObjetivo)}" placeholder="68" data-ob="pesoObjetivo"><em>kg</em></div></label>
     </div>
     <small class="muted">Será el primer registro de tu historial de peso.</small>
-    ${guia || ''}
     <div class="term" id="ob-term" aria-live="polite">${termometroHTML(num(o.pesoKg), num(o.pesoObjetivo))}</div>`;
 }
 

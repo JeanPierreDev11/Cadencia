@@ -67,11 +67,11 @@ export function iniciarHojas(root) {
     cerrar(hoja, fondo);
   }, true);
 
-  // Arrastrar la rayita hacia abajo (estilo iOS): la hoja sigue al dedo y, pasados ~50 px, se cierra con la misma animación.
+  // Arrastrar la rayita (o la cabecera) hacia abajo (estilo iOS): la hoja sigue al dedo y, pasados ~50 px, se cierra con la misma animación.
   root.addEventListener('touchstart', (e) => {
     arrastre = null;
     if (cerrando) return;
-    const g = e.target.closest && e.target.closest('.sheet-grab');
+    const g = e.target.closest && e.target.closest('.sheet-grab, .sheet-head'); // la rayita mide 5 px: también vale la cabecera con el título
     const hoja = g && g.closest('.sheet');
     if (!hoja || hoja.classList.contains('sheet-closing')) return;
     arrastre = { hoja, y0: e.touches[0].clientY, dy: 0 };

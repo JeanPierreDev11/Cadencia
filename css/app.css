@@ -1634,3 +1634,9 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
   #root.app-in > main { animation: appIn .7s cubic-bezier(.2, .8, .2, 1) both; }
   #root.app-in > .tabbar, #root.app-in > .gear { animation: appFade .9s ease both; }
 }
+
+/* 2026-11-15 · Hoja del Coach AI: el texto se desplaza dentro de la hoja y la cabecera entera sirve para arrastrar */
+.sheet.ai-sheet { overflow: hidden; }
+.sheet.ai-sheet .ai-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; touch-action: pan-y; align-content: start; }
+.sheet-head { touch-action: none; }
+.sheet-head .iconbtn { touch-action: manipulation; }

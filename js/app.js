@@ -249,10 +249,8 @@ function viewOnboarding() {
   else if (s === 'donde') body = OB.dondeHTML(o);
   else if (s === 'material') body = OB.materialHTML(o);
   else if (s === 'dias') body = OB.diasHTML(o);
-  else if (s === 'peso') {
-    const guia = pesoGuiaHTML(num(o.alturaCm), o.sexo, OB.objetivosDe(num(o.pesoKg), num(o.pesoObjetivo)), 'ob', null, o.pesoObjetivo.trim() ? num(o.pesoObjetivo) : null, o.hideSug);
-    body = OB.pesoHTML(o, guia);
-  } else if (s === 'plan') { body = OB.planHTML(o, obProfile(), todayISO()); nextLabel = 'Aceptar mi plan'; }
+  else if (s === 'peso') body = OB.pesoHTML(o); // sin «Recomendado para ti» (el IMC no vale para quien entrena fuerza)
+  else if (s === 'plan') { body = OB.planHTML(o, obProfile(), todayISO()); nextLabel = 'Aceptar mi plan'; }
   else body = OB.firmaHTML(o, `${o.nombre.trim()} ${o.apellidos.trim()}`.replace(/\s+/g, ' '));
 
   const paso = OB.PASO[s];
@@ -278,7 +276,6 @@ function obProfile() {
     alturaCm: Math.round(num(o.alturaCm)), pesoKg: Math.round(act * 10) / 10,
     pesoObjetivo: isFinite(obj) ? Math.round(obj * 10) / 10 : null,
     experiencia: o.exp, donde: o.donde, material: o.material, eqSel: OB.eqDesde(o.donde, o.material), diasSemana: o.freq,
-    ...(o.hideSug ? { hideWeightSuggestion: true } : {}),
   };
 }
 
