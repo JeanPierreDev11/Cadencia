@@ -281,7 +281,12 @@ Reglas:
 - "consejos": 2 o 3 consejos concretos y accionables para la próxima sesión (máximo 140 caracteres cada uno).
 - Usa solo los datos recibidos; no inventes ejercicios ni cifras. Sin consejos médicos. Si los datos son escasos, dilo con tacto y puntúa con prudencia.
 - kg = peso por serie (0 = peso corporal), uni = ejercicio unilateral, rir = repeticiones en reserva, drop = drop set.
-- Los ejercicios con cardio = true son bloques de cardio (no series de fuerza): min = minutos, km = distancia, kmh = velocidad, inc = inclinación %, nivel = resistencia de la máquina, int = ritmo (caminata, trote o correr). En la caminadora/cinta cada bloque es un INTERVALO (HIIT si alterna ritmos, LISS si es constante). Valóralos como cardio, no por kilos.`;
+- Los ejercicios con cardio = true son bloques de cardio (no series de fuerza): min = minutos, km = distancia, kmh = velocidad, inc = inclinación %, nivel = resistencia de la máquina, int = ritmo (caminata, trote o correr). En la caminadora/cinta cada bloque es un INTERVALO (HIIT si alterna ritmos, LISS si es constante). Valóralos como cardio, no por kilos.
+- "perfil" puede traer datos del cuestionario inicial; úsalos (si faltan, ignóralos) para personalizar sin decirlos como una lista:
+  · experiencia: adapta el nivel de exigencia y la progresión (principiante: técnica y constancia antes que cargas; avanzado: volumen, intensidad y RIR).
+  · lugares y material: los consejos que propongan ejercicios o cambios deben ser posibles con ese equipamiento (en casa o calistenia no propongas máquinas ni poleas; sin barra o discos no propongas press con barra). Si entrena en gimnasio, cuenta con máquinas, poleas y peso libre.
+  · diasSemana: los días por semana que se ha comprometido a entrenar; ajusta el reparto y el volumen de la sesión a esa frecuencia (con 2-3 días se espera más trabajo por sesión; con 5-7, sesiones más repartidas).
+  · pesoKg y pesoObjetivo: si el objetivo es bajar o subir de peso, enfoca la valoración y un consejo a ese camino (más gasto y densidad si baja; superávit y sobrecarga progresiva si sube). Sin dar dietas ni cifras de calorías.`;
 const ESQUEMA_COACH = {
   type: 'OBJECT',
   properties: {
@@ -291,6 +296,22 @@ const ESQUEMA_COACH = {
     consejos: { type: 'ARRAY', items: { type: 'STRING' } },
   },
   required: ['nota', 'titulo', 'analisis', 'consejos'],
+};
+// Datos del perfil que se mandan a Gemini (nunca nombre, usuario, correo ni uid). Los del cuestionario inicial (2026-11-15) pueden faltar en cuentas que aún no lo han hecho.
+// Los ids se traducen con listas cerradas (nada de texto libre del cliente en el prompt).
+const COACH_EXP = { nuevo: 'principiante (menos de 6 meses)', meses: 'unos meses', anio: 'intermedio (cerca de 1 año)', anios: 'avanzado (varios años)', compite: 'competidor' };
+const COACH_DONDE = { casa: 'en casa', gym: 'en gimnasio', parque: 'calistenia (barras y peso corporal)' };
+const COACH_MATERIAL = { mancuernas: 'mancuernas', dominadas: 'barra de dominadas', banda: 'bandas elásticas', kettlebell: 'kettlebells', barra: 'barra con discos', banco: 'banco', suspension: 'anillas o TRX', paralelas: 'paralelas o fondos', ninguno: 'solo su cuerpo' };
+const lista = (v, mapa) => (Array.isArray(v) ? v.filter((k) => typeof k === 'string' && mapa[k]).map((k) => mapa[k]).slice(0, 10) : []);
+const perfilCoach = (p) => {
+  const base = { sexo: p.sexo || '', edad: p.edad || null, pesoKg: p.pesoKg || null, objetivos: Array.isArray(p.objetivos) ? p.objetivos.slice(0, 5) : [] };
+  const donde = lista(p.donde, COACH_DONDE), material = lista(p.material, COACH_MATERIAL);
+  if (COACH_EXP[p.experiencia]) base.experiencia = COACH_EXP[p.experiencia];
+  if (donde.length) base.lugares = donde;
+  if (material.length) base.material = material;
+  if (p.diasSemana >= 1 && p.diasSemana <= 7) base.diasSemana = Math.round(p.diasSemana);
+  if (p.pesoObjetivo > 20 && p.pesoObjetivo < 300) base.pesoObjetivo = p.pesoObjetivo;
+  return base;
 };
 const resumenEntreno = (w) => ({
   fecha: w.fecha, nombre: w.nombre || '', min: w.min || null,
@@ -375,7 +396,7 @@ exports.coach = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 60, memory: '2
   });
 
   try {
-    const perfil = { sexo: p.sexo || '', edad: p.edad || null, pesoKg: p.pesoKg || null, objetivos: Array.isArray(p.objetivos) ? p.objetivos.slice(0, 5) : [] };
+    const perfil = perfilCoach(p);
     const res = limpiarCoach(await llamarGemini(GEMINI_CLAVE.value(), { perfil, entreno: ent, sesionAnterior: anterior }));
     const campos = { aiNota: res.nota, aiTitulo: res.titulo, aiTexto: res.analisis, aiConsejos: res.consejos, aiDemo: false, aiFecha: new Date().toISOString() };
     await doc.ref.update(campos);
