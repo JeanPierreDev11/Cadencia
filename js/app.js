@@ -223,7 +223,7 @@ function nomApe(p, fallback = '') {
 // «¿Dónde entrenas?» puede venir de una versión antigua como texto suelto: se normaliza a lista.
 const dondeOb = (x) => (Array.isArray(x) ? x : x ? [x] : []).filter((k) => OB.DONDE.some((d) => d.id === k));
 
-function startOnboarding() {
+function startOnboarding(ultimoKg = null) {
   const p = st.profile || {}, [nom, ape] = nomApe(p, st.user && st.user.name);
   st.ob = {
     step: 'perfil', uid: st.user && st.user.uid,
@@ -232,7 +232,7 @@ function startOnboarding() {
     exp: OB.EXPS.some((e) => e.id === p.experiencia) ? p.experiencia : '',
     donde: dondeOb(p.donde), material: (Array.isArray(p.material) ? p.material : []).filter((k) => OB.MATERIAL.some((m) => m.id === k)),
     freq: p.diasSemana >= 2 && p.diasSemana <= 7 ? p.diasSemana : 0,
-    pesoKg: p.pesoKg ? nf(p.pesoKg, 1) : '', pesoObjetivo: p.pesoObjetivo ? nf(p.pesoObjetivo, 1) : '',
+    pesoKg: ultimoKg || p.pesoKg ? nf(ultimoKg || p.pesoKg, 1) : '', ultimoKg, pesoObjetivo: p.pesoObjetivo ? nf(p.pesoObjetivo, 1) : '',
     msg: '', saving: false, firmado: false,
   };
   st.view = 'onboarding';
@@ -329,9 +329,11 @@ async function obFirmado() {
     render();
     try {
       const p = obProfile(), uid = st.user.uid, hoy = todayISO();
-      const data = { ...p, firmaFecha: hoy, pesoInicial: p.pesoKg, fechaInicio: hoy, onboarded: true, onboardingCompletado: true, novVista: NOV_V };
-      data.calorias = CAL.resumen({ ...(st.profile || {}), ...data }, p.pesoKg);
-      await api.addWeight(uid, hoy, p.pesoKg); // primero el peso inicial…
+      const ant = st.profile || {}; // cuenta antigua: conserva su punto de partida y los objetivos que el cuestionario no pregunta
+      const extra = (Array.isArray(ant.objetivos) ? ant.objetivos : []).filter((g) => !['perder', 'musculo', 'mantener'].includes(g));
+      const data = { ...p, objetivos: [...p.objetivos, ...extra], firmaFecha: hoy, pesoInicial: ant.pesoInicial || p.pesoKg, fechaInicio: ant.fechaInicio || hoy, onboarded: true, onboardingCompletado: true, novVista: NOV_V };
+      data.calorias = CAL.resumen({ ...ant, ...data }, p.pesoKg);
+      if (o.ultimoKg !== p.pesoKg) await api.addWeight(uid, hoy, p.pesoKg); // primero el peso (solo si cambió respecto al último)…
       await api.saveProfile(uid, data);        // …y el perfil con la marca al final: si algo falla antes, la marca NO queda puesta
       st.profile = { ...(st.profile || {}), ...data };
       toast('¡Compromiso firmado!');
@@ -1173,7 +1175,10 @@ async function enter(u) {
     st.profile = await api.getProfile(u.uid);
     if (!onboardingHecho(st.profile)) {
       if (st.view === 'onboarding' && st.ob && st.ob.uid === u.uid) return; // ya está dentro (aviso de sesión repetido): no perder lo escrito
-      return startOnboarding();
+      // Cuenta antigua (ya tenía datos): su peso más reciente sale de la lista de pesos, no del perfil (puede estar desfasado).
+      let ultimo = null;
+      if (st.profile && (st.profile.onboarded === true || st.profile.pesoKg)) { const ws = await api.listWeights(u.uid); ultimo = ws.length ? ws[ws.length - 1].kg : null; }
+      return startOnboarding(ultimo);
     }
     await entrarApp(u);
   } catch (e) {
@@ -1181,9 +1186,9 @@ async function enter(u) {
   }
 }
 
-// ¿Esta cuenta ya pasó por el cuestionario? Las cuentas creadas antes del 15-11 no tienen el campo pero sí `onboarded: true`: cuentan como hechas.
-// Una cuenta nueva nace con `onboardingCompletado: false` (data.js) y el cuestionario es lo único que ve hasta firmar.
-const onboardingHecho = (p) => !!p && (p.onboardingCompletado === true || (p.onboardingCompletado == null && p.onboarded === true));
+// ¿Esta cuenta ya pasó por el cuestionario? Solo vale la marca `onboardingCompletado: true`. Las cuentas anteriores al 15-11 no la tienen:
+// la primera vez que entran hacen el cuestionario (con sus datos ya rellenados) y al firmar queda en true, así que es una sola vez.
+const onboardingHecho = (p) => !!p && p.onboardingCompletado === true;
 
 // Carga normal de la app (peso, entrenos, racha, Pro…) y primera pantalla. `fade`: entrada suave tras firmar el cuestionario.
 async function entrarApp(u, { fade = false } = {}) {
