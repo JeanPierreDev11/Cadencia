@@ -1668,3 +1668,18 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .ritmo-pf .ritmo-val b { font-size: 44px; }
 .ritmo-pf .ritmo-val span { font-size: 15px; }
 .ritmo-pf #pf-ritmo-txt { display: grid; gap: 6px; }
+
+/* 2026-11-15 · Pantallas de empatía del cuestionario y paywall de suscripción */
+.ob-dolor { display: grid; gap: 12px; margin-top: 28px; }
+.ob-dolor-b { min-height: 60px; font-size: 18px; }
+.ob-dolor-t { margin-top: 12px; }
+.empatia-img { display: grid; place-items: center; aspect-ratio: 4 / 3; margin: 18px 0; border: 1.5px dashed var(--line); border-radius: 2px; background: var(--surface); color: var(--muted); }
+.empatia-txt { font-size: 18px; line-height: 1.45; color: var(--ink); }
+.pw-hook { padding: 14px 16px; border-left: 4px solid var(--accent); background: var(--accent-soft); font-size: 18px; font-weight: 800; line-height: 1.3; }
+.pw-hook mark { background: none; color: var(--accent-text); }
+.pw-cmp th:first-child { width: 52%; }
+.pw-testi { margin: 0; padding: 14px 16px; border: 1.5px solid var(--line); background: var(--surface); border-radius: 2px; display: grid; gap: 6px; }
+.pw-stars { color: #F2BE1A; letter-spacing: 3px; font-size: 18px; }
+.pw-testi blockquote { margin: 0; font-size: 16px; line-height: 1.4; }
+.pw-testi figcaption { color: var(--muted); font-size: 14px; font-weight: 600; }
+.sub-code { margin-top: 2px; }

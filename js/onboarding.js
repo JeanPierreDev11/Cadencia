@@ -29,9 +29,9 @@ export const EXPS = [
   { id: 'anios', t: 'Avanzado', s: 'Varios años' },
 ];
 export const FREQ = [[2, 'Para arrancar'], [3, 'Constante'], [4, 'Comprometido'], [5, 'Increíble'], [6, 'Sin excusas'], [7, 'Imparable']];
-// Número de paso que se enseña («Paso 2 de 7»); «perfil» es la pantalla previa con tus datos.
-export const PASO = { donde: 1, material: 1, dias: 2, peso: 3, ritmo: 4, meta: 5, plan: 6, firma: 7 };
-export const PASOS = 7;
+// Número de paso que se enseña («Paso 2 de 9»); «perfil» es la pantalla previa con tus datos. «dolor» y «empatia» son las dos pantallas de empatía.
+export const PASO = { donde: 1, material: 1, dias: 2, dolor: 3, empatia: 4, peso: 5, ritmo: 6, meta: 7, plan: 8, firma: 9 };
+export const PASOS = 9;
 // Qué quiere lograr (paso 3). `obj` = objetivos que se guardan en el perfil (recomposición = perder grasa + ganar músculo).
 export const METAS = [
   { id: 'perder', t: 'Perder grasa', s: 'Bajar peso sin perder fuerza', obj: ['perder'], ico: '<path d="M12 4v14M6 12l6 6 6-6"/>' },
@@ -47,7 +47,7 @@ const tick = (on) => `<span class="tick">${on ? I.check : ''}</span>`;
 const expDe = (id) => EXPS.find((e) => e.id === id);
 
 /* ---------- lógica ---------- */
-export const flujo = (o) => ['perfil', 'donde', ...(o.donde.some((d) => d === 'casa' || d === 'parque') ? ['material'] : []), 'dias', 'peso', 'ritmo', 'meta', 'plan', 'firma'];
+export const flujo = (o) => ['perfil', 'donde', ...(o.donde.some((d) => d === 'casa' || d === 'parque') ? ['material'] : []), 'dias', 'dolor', 'empatia', 'peso', 'ritmo', 'meta', 'plan', 'firma'];
 
 export function puedeSeguir(o) {
   switch (o.step) {
@@ -179,6 +179,22 @@ export function diasHTML(o) {
     <p class="ob-sub">Será tu compromiso semanal y marcará cómo cuenta tu racha.</p>
     <div class="choices tight">${FREQ.map(([n, t]) => `<button type="button" class="choice freq" data-act="ob-dias" data-v="${n}" aria-pressed="${o.freq === n}">
       <span class="ico num">${n}</span><span class="t">${n} días<small>${t}</small></span>${tick(o.freq === n)}</button>`).join('')}</div>`;
+}
+
+// Pantallas de empatía (entre «dias» y «peso»). El texto del dolor depende de la meta si ya se conoce (cuentas antiguas la traen precargada); si no, el genérico.
+export const dolorTexto = (meta) => (meta === 'perder' || meta === 'recomp' ? '¿Bajas de peso y vuelves a subir?' : '¿Te cuesta encontrar la motivación si vas solo?');
+export function dolorHTML(o) {
+  return `<h1 class="ob-title ob-dolor-t">${dolorTexto(o.meta)}</h1>
+    <div class="ob-dolor">
+      <button type="button" class="btn block ob-dolor-b" data-act="ob-dolor" data-v="si">Me representa</button>
+      <button type="button" class="btn ghost block ob-dolor-b" data-act="ob-dolor" data-v="no">No me representa</button>
+    </div>`;
+}
+// `div.empatia-img` es un hueco para una ilustración futura (de momento un marcador).
+export function empatiaHTML() {
+  return `<h1 class="ob-title">Te entendemos perfectamente</h1>
+    <div class="empatia-img" role="img" aria-label="Ilustración pendiente">${svg('<circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20a6 6 0 0 1 12 0M14 20a4.5 4.5 0 0 1 7 -3.5"/>', 56, 1.6)}</div>
+    <p class="ob-sub empatia-txt">Muchas personas empiezan justo donde tú estás. Cadencia IA está diseñada para romper ese ciclo.</p>`;
 }
 
 // Cajita del termómetro (se repinta sola al escribir: ver `ob-term` en app.js).

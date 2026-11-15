@@ -258,6 +258,8 @@ function viewOnboarding() {
   else if (s === 'donde') body = OB.dondeHTML(o);
   else if (s === 'material') body = OB.materialHTML(o);
   else if (s === 'dias') body = OB.diasHTML(o);
+  else if (s === 'dolor') body = OB.dolorHTML(o);   // empatía 1: «Me representa / No me representa»
+  else if (s === 'empatia') { body = OB.empatiaHTML(); nextLabel = 'Continuar'; }
   else if (s === 'peso') body = OB.pesoHTML(o);   // peso actual + qué quiere lograr
   else if (s === 'ritmo') body = OB.ritmoHTML(o); // ritmo elegido (kg/semana)
   else if (s === 'meta') body = OB.metaHTML(o);   // peso meta (sin recomendaciones de IMC)
@@ -274,7 +276,7 @@ function viewOnboarding() {
     <div class="ob-body">${body}
       ${o.msg ? `<div class="msg" role="alert">${esc(o.msg)}</div>` : ''}
     </div>
-    ${s === 'firma' ? '' : `<div class="ob-foot"><button class="btn block" type="submit" data-next ${OB.puedeSeguir(o) ? '' : 'disabled'}>${nextLabel}</button></div>`}
+    ${s === 'firma' || s === 'dolor' ? '' : `<div class="ob-foot"><button class="btn block" type="submit" data-next ${OB.puedeSeguir(o) ? '' : 'disabled'}>${nextLabel}</button></div>`}
   </form>`;
 }
 
@@ -1017,7 +1019,21 @@ const COMPARATIVA = [
   ['Modo Bestia', false, true, 'RIR, drop-sets y superseries en tus series'],
   ['Calculadora de Calentamiento', false, true, 'Series de aproximación hasta tu peso de trabajo'],
 ];
-const cmpCelda = (v) => v === true ? '<span class="cmp-y" role="img" aria-label="Incluido">✓</span>' : v === false ? '<span class="cmp-n" role="img" aria-label="No incluido">✗</span>' : `<span class="cmp-t">${v}</span>`;
+// Paywall de Perfil › Administrar suscripción (solo sin Pro): gancho + tabla Gratis vs PRO + prueba social + código de invitación.
+// El gancho NO lleva cifras inventadas. La prueba social solo se pinta con testimonios REALES de personas que hayan dado permiso: añádelos aquí como {txt, autor}.
+const PW_GANCHO = ['Entrena con un coach IA que te acompaña en cada sesión', 'con Cadencia PRO'];
+const PW_FILAS = [
+  ['Registrar entrenamientos', true, true],
+  ['Coach IA y Análisis post-entreno', false, true],
+  ['Calentamiento Inteligente', false, true],
+  ['Mover entrenos de día', false, true],
+];
+const TESTIMONIOS = [];
+const pwMarketingHTML = () => `<div class="pw-hook"><span>${PW_GANCHO[0]}</span> <mark>${PW_GANCHO[1]}</mark></div>
+    <table class="cmp pw-cmp"><thead><tr><th scope="col"><span class="sr">Función</span></th><th scope="col">Gratis</th><th scope="col" class="cmp-pro">PRO</th></tr></thead>
+      <tbody>${PW_FILAS.map(([f, g, p]) => `<tr><th scope="row">${f}</th><td>${cmpCelda(g)}</td><td class="cmp-pro">${cmpCelda(p)}</td></tr>`).join('')}</tbody></table>`;
+const pwTestimonioHTML = () => TESTIMONIOS.length ? (({ txt, autor }) => `<figure class="pw-testi"><div class="pw-stars" role="img" aria-label="5 estrellas">★★★★★</div><blockquote>“${esc(txt)}”</blockquote><figcaption>— ${esc(autor)}</figcaption></figure>`)(TESTIMONIOS[0]) : '';
+const cmpCelda = (v) => v === true ? '<span class="cmp-y" role="img" aria-label="Incluido">✓</span>' : v === false ? '<span class="cmp-n" role="img" aria-label="No incluido">✕</span>' : `<span class="cmp-t">${v}</span>`;
 const planActivo = () => { const pr = st.profile || {}; return pr.isPro === true && PLANES.some((x) => x.id === pr.proPlan) ? pr.proPlan : null; };
 // Botón principal de Administrar suscripción según el plan elegido (sel) y el activo (act).
 // Pro recurrente (mensual/anual) que elige otro plan recurrente → portal de Stripe (prorrateo, sin cobro doble).
@@ -1046,13 +1062,16 @@ function suscripcionHTML() {
   const sel = (st.pf && st.pf.plan) || act || 'anual';
   const nomAct = act ? PLANES.find((x) => x.id === act).n.replace('PRO ', '') : '';
   return `<div class="sheet-list sub">
+    ${pro ? '' : `<section class="sub-sec">${pwMarketingHTML()}</section>`}
     <section class="sub-sec"><h3 class="pf-title">Suscripción actual</h3>
       <div class="sub-cur ${pro ? 'is-pro' : ''}"><b>${pro ? `Cadencia PRO${nomAct ? ` <span class="sub-dot">• ${nomAct}</span>` : ''}` : 'Suscripción Gratuita'}</b>
         <span class="small muted">${pro ? 'Tienes todas las funciones Pro desbloqueadas.' : 'Pásate a PRO para desbloquear todas las funciones.'}</span></div></section>
     <section class="sub-sec"><h3 class="pf-title">Planes PRO</h3>
       <div class="sub-plans" role="radiogroup" aria-label="Planes PRO">${PLANES.map((x) => { const on = act === x.id, lock = act === 'siempre' && RECURRENTES.includes(x.id); return `<button type="button" class="sub-plan${on ? ' is-active' : ''}${lock ? ' is-locked' : ''}" role="radio" aria-checked="${sel === x.id}"${lock ? ' aria-disabled="true"' : ''} data-act="plan-sel" data-v="${x.id}">
         <span class="sub-radio" aria-hidden="true"></span><span class="sub-pt"><b>${x.n}</b><small>${x.nota}</small></span>${on ? '<span class="sub-price sub-now">Plan actual</span>' : `<span class="sub-price">${x.precio}</span>`}</button>`; }).join('')}</div>
+      ${pro ? '' : pwTestimonioHTML()}
       ${subCtaHTML(subCta(sel, act))}
+      ${pro ? '' : '<button type="button" class="btn ghost block sub-code" data-act="ob-code">🎁 Tengo un código de invitación</button>'}
       <button type="button" class="sub-link" data-act="pro-info-open">Ventajas de Cadencia PRO</button></section>
   </div>`;
 }
@@ -1299,6 +1318,8 @@ root.addEventListener('click', async (e) => {
   else if (act === 'ob-mat') { const g = st.ob.material; st.ob.material = v === 'ninguno' ? (g.includes(v) ? [] : ['ninguno']) : g.includes(v) ? g.filter((x) => x !== v) : [...g.filter((x) => x !== 'ninguno'), v]; render(); }
   else if (act === 'ob-dias') { st.ob.freq = Number(v); render(); }
   else if (act === 'ob-exp') { st.ob.exp = v; render(); }
+  else if (act === 'ob-dolor') { st.ob.dolor = v; obNext(); } // las dos respuestas avanzan; no se guarda en el perfil
+  else if (act === 'ob-code') toast('Los códigos de invitación llegarán muy pronto');
   else if (act === 'ob-meta') { st.ob.meta = v; render(); }
   else if (act === 'ob-recomp-usar') { st.ob.pesoObjetivo = nf(Number(v), 1); st.ob.msg = ''; render(); }
   else if (act === 'sex') { st.ob.sexo = v; render(); }
