@@ -77,6 +77,16 @@ jobs:
             fi
           done
 
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Dar a las funciones permiso para leer GEMINI_API_KEY
+        # Si la clave se borra y se vuelve a crear en Secret Manager, el permiso se pierde y el despliegue de «coach» falla.
+        run: |
+          N=$(gcloud projects describe cadencia-11cb6 --format='value(projectNumber)')
+          gcloud secrets add-iam-policy-binding GEMINI_API_KEY --project cadencia-11cb6 \
+            --member="serviceAccount:${N}-compute@developer.gserviceaccount.com" --role=roles/secretmanager.secretAccessor --condition=None >/dev/null \
+            && echo "Permiso de lectura de GEMINI_API_KEY OK" || echo "::warning::No se pudo dar permiso sobre GEMINI_API_KEY"
+
       - name: Publicar función y reglas
         run: npx --yes firebase-tools@15.34.0 deploy --only functions,firestore:rules --project cadencia-11cb6 --force --non-interactive
 
