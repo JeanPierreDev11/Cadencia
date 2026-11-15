@@ -328,7 +328,8 @@ async function obFirmado() {
       const p = obProfile(), uid = st.user.uid, hoy = todayISO();
       const ant = st.profile || {}; // cuenta antigua: conserva su punto de partida y los objetivos que el cuestionario no pregunta
       const extra = (Array.isArray(ant.objetivos) ? ant.objetivos : []).filter((g) => !['perder', 'musculo', 'mantener'].includes(g));
-      const data = { ...p, objetivos: [...p.objetivos, ...extra], firmaFecha: hoy, pesoInicial: ant.pesoInicial || p.pesoKg, fechaInicio: ant.fechaInicio || hoy, onboarded: true, onboardingCompletado: true, novVista: NOV_V };
+      const recomp = Array.isArray(ant.objetivos) && ant.objetivos.includes('perder') && ant.objetivos.includes('musculo') && p.objetivos[0] !== 'mantener'; // quien ya tenía recomposición la conserva
+      const data = { ...p, objetivos: [...(recomp ? ['perder', 'musculo'] : p.objetivos), ...extra], firmaFecha: hoy, pesoInicial: ant.pesoInicial || p.pesoKg, fechaInicio: ant.fechaInicio || hoy, onboarded: true, onboardingCompletado: true, novVista: NOV_V };
       data.calorias = CAL.resumen({ ...ant, ...data }, p.pesoKg);
       if (o.ultimoKg !== p.pesoKg) await api.addWeight(uid, hoy, p.pesoKg); // primero el peso (solo si cambió respecto al último)…
       await api.saveProfile(uid, data);        // …y el perfil con la marca al final: si algo falla antes, la marca NO queda puesta
@@ -487,6 +488,24 @@ function pesoGuiaHTML(cm, sexo, objetivos, ctx, comp, actual, oculto) {
   if (isFinite(actual) && actual != null && Math.abs(actual - r.ideal) < 0.05) return '';
   return `<p class="sug small muted" id="sug">Recomendado para ti: <b>${nf(r.ideal, 1)} kg</b> ${r.magra ? '(según tu músculo)' : '(orientativo)'} · <button type="button" class="link" data-act="sug-ignorar" data-ctx="${ctx}">Ignorar</button></p>`;
 }
+
+// Guía de peso objetivo en Perfil › Detalles personales. Con «Perder grasa» + «Ganar músculo» marcados es una recomposición corporal
+// (OB.pesoRecomp) con botón para usar ese peso; si no, la recomendación de siempre. Lee lo escrito en el formulario (st.pf.f) y los objetivos marcados.
+function pfGuiaHTML() {
+  const p = st.profile, goals = st.editGoals || p.objetivos || [];
+  if (!(goals.includes('perder') && goals.includes('musculo'))) return pesoGuiaHTML(p.alturaCm, p.sexo, goals, 'perfil', grasaActual(), p.pesoObjetivo, p.hideWeightSuggestion === true);
+  const g = grasaActual();
+  const r = OB.pesoRecomp({ kg: num(pfV('pesoKg', currentKg() || '')), alturaCm: num(pfV('alturaCm', p.alturaCm || '')), sexo: pfV('sexo', p.sexo === 'mujer' ? 'mujer' : 'hombre'),
+    edad: CAL.edadDe({ fechaNac: pfV('fechaNac', p.fechaNac || ''), edad: p.edad }), grasaPct: g ? g.pct : null });
+  if (!r) return '<p class="sug small muted">Recomposición corporal: rellena estatura, peso y fecha de nacimiento para estimar tu peso objetivo.</p>';
+  const txt = r.yaEnForma
+    ? `Ya estás en un % de grasa bueno (${nf(r.bfActual, 0)} %): mantén tu peso y gana unos <b>${nf(r.musculo, 1)} kg</b> de músculo.`
+    : `Perderás unos <b>${nf(r.grasa, 1)} kg</b> de grasa y ganarás unos <b>${nf(r.musculo, 1)} kg</b> de músculo, hasta un ${nf(r.bfMeta, 0)} % de grasa.`;
+  return `<div class="recomp" id="recomp"><p class="small"><b>Recomposición corporal</b> · peso estimado: <b>${nf(r.objetivo, 1)} kg</b>. ${txt}
+    <span class="muted">${r.medido ? 'Calculado con tu % de grasa.' : 'Estimado sin medir tu grasa: añádela al registrar tu peso para afinarlo.'}</span></p>
+    <button type="button" class="btn ghost small" data-act="recomp-usar" data-v="${r.objetivo}">Usar ${nf(r.objetivo, 1)} kg como objetivo</button></div>`;
+}
+const refrescarGuia = () => { const el = document.getElementById('pf-guia'); if (el && st.pf && st.pf.v === 'detalles') el.innerHTML = pfGuiaHTML(); };
 
 // Unidad en la que se escribe la composición (grasa, músculo, agua y hueso): '%' del peso o kilos. Se guarda igual que siempre:
 // grasa y agua en %, músculo y hueso en kg, así que aquí se convierte según el peso del registro.
@@ -909,7 +928,7 @@ function pfCuerpo(v) {
       <label class="field"><span>Peso objetivo (kg)</span><input class="input" name="pesoObjetivo" inputmode="decimal" value="${esc(pfV('pesoObjetivo', p.pesoObjetivo ? nf(p.pesoObjetivo, 1) : ''))}" placeholder="Opcional"></label>
       <div class="field"><span>Objetivos</span><div class="choices">${GOALS.map((g) => `<button type="button" class="choice" data-act="pgoal" data-v="${g.id}" aria-pressed="${goals.includes(g.id)}">
         <span class="ico">${goalIcon(g)}</span><span class="t">${g.t}</span><span class="tick">${goals.includes(g.id) ? I.check : ''}</span></button>`).join('')}</div></div>
-      ${pesoGuiaHTML(p.alturaCm, p.sexo, goals, 'perfil', grasaActual(), p.pesoObjetivo, p.hideWeightSuggestion === true)}
+      <div id="pf-guia">${pfGuiaHTML()}</div>
       ${pfGuardarBtn()}</form>`;
   }
   if (v === 'prefs') {
@@ -1254,13 +1273,17 @@ root.addEventListener('click', async (e) => {
   else if (act === 'comp-ver') { st.pesoComp = v; st.pesoModo = 'kg'; render(); scrollTo(0, 0); }
   else if (act === 'comp-close') { st.pesoComp = null; render(); }
   else if (act === 'comp-modo') { st.pesoModo = v; render(); }
-  else if (act === 'psex') { const f = b.closest('form'); f.sexo.value = v; if (st.pf) { st.pf.f.sexo = v; pfBtn(); } b.parentElement.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); }
+  else if (act === 'psex') { const f = b.closest('form'); f.sexo.value = v; if (st.pf) { st.pf.f.sexo = v; pfBtn(); refrescarGuia(); } b.parentElement.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); }
   else if (act === 'pgoal') {
     const g = st.editGoals || [...(st.profile.objetivos || [])];
     st.editGoals = g.includes(v) ? g.filter((x) => x !== v) : [...g, v];
     b.setAttribute('aria-pressed', String(st.editGoals.includes(v)));
     b.querySelector('.tick').innerHTML = st.editGoals.includes(v) ? I.check : '';
-    if (st.pf) pfBtn();
+    if (st.pf) { pfBtn(); refrescarGuia(); }
+  }
+  else if (act === 'recomp-usar') {
+    const f = b.closest('form'), inp = f && f.pesoObjetivo;
+    if (inp) { inp.value = nf(Number(v), 1); if (st.pf) { st.pf.f.pesoObjetivo = inp.value; pfBtn(); } }
   }
   else if (act === 'cfg-cic') {
     const on = !M.tieneBici(); st.profile.ciclismo = on;
@@ -1300,7 +1323,7 @@ root.addEventListener('input', (e) => {
     return;
   }
   if (e.target.closest && e.target.closest('form[data-form="addweight"]')) { if (e.target.dataset && e.target.dataset.comp) e.target.dataset.tocado = '1'; pesoHints(); return; }
-  if (st.pf && e.target.name && e.target.closest('form[data-form^="pf-"]')) { st.pf.f[e.target.name] = e.target.value; pfBtn(); }
+  if (st.pf && e.target.name && e.target.closest('form[data-form^="pf-"]')) { st.pf.f[e.target.name] = e.target.value; pfBtn(); if (['alturaCm', 'pesoKg', 'fechaNac'].includes(e.target.name)) refrescarGuia(); }
   if (st.view === 'main' && M.input(e.target)) return;
   const k = e.target.dataset && e.target.dataset.ob;
   if (!k || !st.ob) return;

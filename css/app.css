@@ -1640,3 +1640,8 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .sheet.ai-sheet .ai-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; touch-action: pan-y; align-content: start; }
 .sheet-head { touch-action: none; }
 .sheet-head .iconbtn { touch-action: manipulation; }
+
+/* 2026-11-15 · Recomposición corporal en Perfil › Detalles personales */
+.recomp { display: grid; gap: 10px; padding: 12px 14px; border-left: 3px solid #F2BE1A; background: var(--card-bg, var(--surface)); color: var(--card-ink, var(--ink)); border-radius: 2px; }
+.recomp p { margin: 0; line-height: 1.4; }
+.recomp .muted { display: block; margin-top: 4px; }

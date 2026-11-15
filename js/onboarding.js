@@ -75,15 +75,38 @@ export function termometro(actual, meta) {
   return { nivel, pct, dif, txt };
 }
 
-// Fecha orientativa (mockup de «Proyección IA»): 0,94 % del peso por semana al bajar (≈ 0,75 kg/semana con 80 kg) y 0,39 % al subir. Entre 4 semanas y 2 años.
-const RITMO_BAJAR = 0.0094, RITMO_SUBIR = 0.0039;
+// Fecha orientativa (mockup de «Proyección IA»): ritmo fijo en kg por semana, 0,6 kg al bajar y 0,25 kg al subir (≈ 1 kg al mes, subida limpia). Entre 4 semanas y 2 años.
+export const KG_SEMANA_BAJAR = 0.6, KG_SEMANA_SUBIR = 0.25;
 export function estimarMeta(actual, meta, hoyISO) {
   const dif = Math.abs(meta - actual);
   if (!(actual > 0) || !(meta > 0) || dif < 0.5) return null;
-  const sem = Math.min(104, Math.max(4, Math.ceil(dif / (actual * (meta < actual ? RITMO_BAJAR : RITMO_SUBIR)))));
+  const sem = Math.min(104, Math.max(4, Math.ceil(dif / (meta < actual ? KG_SEMANA_BAJAR : KG_SEMANA_SUBIR))));
   const fecha = new Date(`${hoyISO}T12:00:00`);
   fecha.setDate(fecha.getDate() + sem * 7);
   return { semanas: sem, fecha };
+}
+
+// Recomposición corporal (perder grasa y ganar músculo a la vez): a qué peso debería quedar la persona.
+// Masa magra actual (con su % de grasa; si no lo ha medido, se estima con la fórmula de Deurenberg a partir del IMC, la edad y el sexo)
+// + una ganancia razonable de músculo (3 % de la masa magra) y un % de grasa «en forma» (15 % hombres, 24 % mujeres) → peso objetivo.
+// Si ya está en ese % de grasa, el objetivo es mantener el peso (solo gana músculo). Devuelve null si faltan datos.
+export const RECOMP_MUSCULO = 0.03, RECOMP_GRASA = { hombre: 0.15, mujer: 0.24 };
+export function pesoRecomp({ kg, alturaCm, sexo, edad, grasaPct }) {
+  if (!(kg >= 30 && kg <= 300) || !(alturaCm >= 120 && alturaCm <= 230)) return null;
+  const mujer = sexo === 'mujer', medido = grasaPct > 2 && grasaPct < 60;
+  let bf;
+  if (medido) bf = grasaPct / 100;
+  else {
+    if (!(edad >= 14 && edad <= 100)) return null;
+    const imc = kg / ((alturaCm / 100) ** 2);
+    bf = Math.min(0.5, Math.max(0.05, (1.2 * imc + 0.23 * edad - 10.8 * (mujer ? 0 : 1) - 5.4) / 100));
+  }
+  const meta = RECOMP_GRASA[mujer ? 'mujer' : 'hombre'], magra = kg * (1 - bf), musculo = magra * RECOMP_MUSCULO;
+  const r = (v) => Math.round(v * 2) / 2;
+  const yaEnForma = bf <= meta + 0.01;
+  const objetivo = yaEnForma ? r(kg) : Math.min(r(kg), r((magra + musculo) / (1 - meta)));
+  const grasaBaja = yaEnForma ? 0 : Math.max(0, kg * bf - (objetivo - (magra + musculo)));
+  return { objetivo, bfActual: Math.round(bf * 1000) / 10, bfMeta: Math.round(meta * 100), musculo: Math.round(musculo * 10) / 10, grasa: Math.round(grasaBaja * 10) / 10, yaEnForma, medido };
 }
 const fechaLarga = (d) => d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
 const fechaCorta = (d) => d.toLocaleDateString('es-ES', { month: 'short', year: 'numeric' }).replace('.', '');
