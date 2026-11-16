@@ -993,7 +993,7 @@ details.comp { border: 1px solid var(--bd); border-radius: 2px; }
 .cg { background: var(--bg); border: 0; border-radius: 0; color: var(--ink); text-align: left; padding: 16px; display: grid; grid-template-columns: 1fr auto; grid-template-areas: "l s" "v s" "h s"; align-items: end; column-gap: 8px; min-height: 150px; cursor: pointer; font: inherit; }
 .cg:active { background: var(--surface); }
 .cg .label { grid-area: l; align-self: start; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
-.cg .sil { grid-area: s; width: 44px; height: 88px; align-self: center; }
+.cg .metric-mannequin { grid-area: s; align-self: center; }
 .cg .val { grid-area: v; font-size: 30px; font-weight: 900; line-height: 1; }
 .cg .val em { font-size: .45em; font-style: normal; color: var(--accent-text); margin-left: 3px; }
 .cg .hint { grid-area: h; font-size: 12px; color: var(--muted); margin-top: 4px; }
@@ -1005,7 +1005,7 @@ details.comp { border: 1px solid var(--bd); border-radius: 2px; }
 .det-val em { font-size: .3em; font-style: normal; color: var(--accent-text); margin-left: 6px; text-transform: none; }
 .det-sub { text-align: center; color: var(--muted); margin: 2px 0 6px; font-size: 14px; }
 .det-sil { display: flex; justify-content: center; padding: 14px 0 22px; }
-.sil.big { width: 150px; height: 300px; }
+.metric-mannequin.big { --mh: 300px; width: 150px; height: 300px; }
 .chg.up { color: var(--up); } .chg.down { color: var(--down); } .chg.neu { color: var(--muted); }
 .chg.small { font-weight: 800; font-size: 16px; }
 .det .seg button { font-size: 12px; padding: 13px 4px; }
@@ -1795,3 +1795,20 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .c3-hint { margin: 0; padding-top: 6px; text-align: center; }
 .c3-leg { margin-top: 0; justify-content: center; }
 .c3-sheet .c3-leg i { margin-left: 10px; }
+
+/* 2026-11-17 · Maniquí de composición corporal (Agua, Músculo, Grasa, Hueso) */
+.metric-mannequin { --mh: 120px; --tint: #E0E0E0; position: relative; display: block; width: 60px; height: var(--mh); isolation: isolate; }
+.metric-mannequin.m-agua { --tint: #00E5FF; }
+.metric-mannequin.m-musculo { --tint: #00FF66; }
+.metric-mannequin.m-grasa { --tint: #FF3366; }
+.metric-mannequin.m-hueso { --tint: #E0E0E0; }
+.metric-mannequin img { display: block; width: 100%; height: var(--mh); object-fit: contain; object-position: center; user-select: none; -webkit-user-drag: none; }
+.mannequin-bg { position: absolute; inset: 0; opacity: .2; filter: grayscale(100%); }
+.mannequin-fill-container { position: absolute; bottom: 0; left: 0; width: 100%; height: var(--fill); overflow: hidden; isolation: isolate; transition: height 1s ease-out; animation: mqFill 1s ease-out; }
+.mannequin-fill-container > * { position: absolute; left: 0; bottom: 0; width: 100%; height: var(--mh); }
+/* Color liso con la silueta del cuerpo… */
+.mannequin-color { background: var(--tint); -webkit-mask: var(--mq) center / contain no-repeat; mask: var(--mq) center / contain no-repeat; filter: drop-shadow(0 0 3px var(--tint)); }
+/* …y la imagen gris multiplicada encima: conserva sombras y relieve del modelo 3D. */
+.mannequin-relief { mix-blend-mode: multiply; }
+@keyframes mqFill { from { height: 0; } }
+@media (prefers-reduced-motion: reduce) { .mannequin-fill-container { animation: none; transition: none; } }

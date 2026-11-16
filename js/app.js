@@ -986,14 +986,14 @@ const sgn = (d) => (d > 0 ? '+' : d < 0 ? '−' : '±');
 const pctOf = (c, w) => (c.u === '%' ? w[c.k] : w.kg ? (w[c.k] / w.kg) * 100 : null);
 const kgOf = (c, w) => (c.u === 'kg' ? w[c.k] : w.kg ? (w.kg * w[c.k]) / 100 : null);
 
-// Silueta humana de puntos: se rellena de abajo arriba con el % indicado.
-function silueta(fill, id, cls = '') {
-  const f = Math.max(0, Math.min(100, fill == null ? 0 : fill)), y0 = 200 - (f / 100) * 200;
-  return `<svg class="sil ${cls}" viewBox="0 0 100 200" role="img" aria-hidden="true">
-    <defs><pattern id="d-${id}" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="4" height="4" x="1" y="1" style="fill:var(--sil-off)"/></pattern><pattern id="y-${id}" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="4" height="4" x="1" y="1" fill="#F2BE1A"/></pattern>
-      <clipPath id="c-${id}"><circle cx="50" cy="20" r="14"/><path d="M30 42H70L88 50L95 112L84 114L78 70L74 70L72 112L74 198H54L50 130L46 198H26L28 112L26 70L22 70L16 114L5 112L12 50Z"/></clipPath></defs>
-    <g clip-path="url(#c-${id})"><rect width="100" height="200" fill="url(#d-${id})"/><rect y="${y0.toFixed(1)}" width="100" height="${(200 - y0).toFixed(1)}" fill="url(#y-${id})"/></g>
-  </svg>`;
+// Maniquí 3D que se llena de abajo arriba con el % indicado (el relieve sale de la imagen; el color, de la métrica: agua, músculo, grasa, hueso).
+// Capas: fondo gris apagado · color liso recortado con la forma del cuerpo · la misma imagen en gris multiplicada encima (da el relieve).
+function silueta(fill, k, cls = '') {
+  const f = Math.max(0, Math.min(100, fill == null ? 0 : fill)), src = `/models/maniqui-${st.profile && st.profile.sexo === 'mujer' ? 'mujer' : 'hombre'}-1.png`;
+  return `<span class="metric-mannequin m-${k} ${cls}" style="--fill:${f.toFixed(1)}%;--mq:url(${src})" role="img" aria-hidden="true">
+    <img class="mannequin-bg" src="${src}" alt="" draggable="false" decoding="async">
+    <span class="mannequin-fill-container"><span class="mannequin-color"></span><img class="mannequin-relief" src="${src}" alt="" draggable="false" decoding="async"></span>
+  </span>`;
 }
 
 // Dial semicircular con el peso actual en el centro.
@@ -1025,10 +1025,10 @@ function compCardHTML(ws) {
   const ord = ['agua', 'musculo', 'grasa', 'hueso'].map((k) => COMP.find((c) => c.k === k));
   return `<div class="cgrid">${ord.map((c) => {
     const con = ws.filter((w) => w[c.k] != null);
-    if (!con.length) return `<button type="button" class="cg" data-act="comp-ver" data-v="${c.k}"><span class="label">${c.t}</span>${silueta(0, 'g' + c.k)}<span class="val num">—</span><span class="hint">Sin datos todavía</span></button>`;
+    if (!con.length) return `<button type="button" class="cg" data-act="comp-ver" data-v="${c.k}"><span class="label">${c.t}</span>${silueta(0, c.k)}<span class="val num">—</span><span class="hint">Sin datos todavía</span></button>`;
     const last = con[con.length - 1], p = pctOf(c, last), k = kgOf(c, last);
     const sec = c.u === '%' ? (k != null ? `≈ ${nf(k, 1)} kg` : '') : (p != null ? `${nf(p, 1)} % del peso` : '');
-    return `<button type="button" class="cg" data-act="comp-ver" data-v="${c.k}"><span class="label">${c.t}</span>${silueta(p == null ? 0 : Math.max(p, 6), 'g' + c.k)}
+    return `<button type="button" class="cg" data-act="comp-ver" data-v="${c.k}"><span class="label">${c.t}</span>${silueta(p == null ? 0 : Math.max(p, 6), c.k)}
       <span class="val num">${nf(last[c.k], 1)}<em>${c.u}</em></span><span class="hint">${sec}</span></button>`;
   }).join('')}</div>`;
 }
@@ -1053,7 +1053,7 @@ function pesoDetalleHTML() {
   }
   return `<section class="det">${back}
     <div class="det-val num">${top}</div><p class="det-sub">${sub}</p>
-    <div class="det-sil">${silueta(p == null ? 0 : Math.max(p, 4), 'det', 'big')}</div>
+    <div class="det-sil">${silueta(p == null ? 0 : Math.max(p, 4), c.k, 'big')}</div>
     <div class="seg" role="group" aria-label="Forma de verlo">${[['kg', 'En kilogramos'], ['pct', 'Como porcentaje'], ['cambio', '¿Qué cambió?']].map(([v, t]) => `<button type="button" data-act="comp-modo" data-v="${v}" aria-pressed="${modo === v}">${t}</button>`).join('')}</div>
   </section>`;
 }
