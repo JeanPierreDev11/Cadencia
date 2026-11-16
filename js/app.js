@@ -96,7 +96,7 @@ const heroHTML = (tag = 'h1') => `<svg class="logo-mark" viewBox="0 0 64 64" ari
       <${tag} class="wordmark">${esc(APP_NAME)}</${tag}>${tag === 'h1' ? '<p class="tagline">Tu peso, tus objetivos y tu bici, en un mismo sitio.</p>' : ''}
       ${heroProfile()}`;
 
-// Sin sesión: primero la bienvenida (el cuestionario empieza SIN cuenta); «Ingresar» lleva al formulario de acceso.
+// Sin sesión: primero la bienvenida (el cuestionario empieza SIN cuenta); «Iniciar sesión» lleva al formulario de acceso.
 function viewAuth() {
   if (st.authMode !== 'login') return OB.bienvenidaHTML(heroHTML('p'), (() => { const g = obAnonLeer(); return !!g && (g.step !== 'nombre' || !!(g.nombre || g.apellidos)); })()) + (st.legal ? legalSheetHTML() : '');
   const m = st.authMsg;
@@ -224,7 +224,7 @@ function metaOb(p, ultimoKg) {
   if (g.includes('musculo')) return 'volumen';
   return p.pesoObjetivo > 0 && kg > 0 && Math.abs(p.pesoObjetivo - kg) >= 0.5 ? (p.pesoObjetivo < kg ? 'perder' : 'volumen') : '';
 }
-// Respuestas de «¿Te sientes identificado?» ya guardadas: solo se aceptan las frases conocidas con valor booleano.
+// Respuestas de «¿Te suena alguna de estas situaciones?» ya guardadas: solo se aceptan las frases conocidas con valor booleano.
 const psicoOb = (x) => { const r = {}; if (x && typeof x === 'object') OB.PSICO.forEach((q) => { if (typeof x[q.id] === 'boolean') r[q.id] = x[q.id]; }); return r; };
 // `anon`: el cuestionario se hace SIN cuenta (no hay `st.user`); al final, `registro` crea la cuenta y guarda todo. Con cuenta (sesión iniciada pero sin cuestionario hecho) se hace como antes, sin `registro`.
 function startOnboarding(ultimoKg = null, { anon = false } = {}) {
@@ -269,7 +269,7 @@ function viewOnboarding() {
   else if (s === 'ritmo') body = OB.ritmoHTML(o, todayISO()); // ritmo elegido (kg/semana) + fecha en vivo
   else if (s === 'obstaculos') body = OB.obstaculosHTML(o);   // mayor obstáculo
   else if (s === 'psicologia') { body = OB.psicologiaHTML(o); nextLabel = 'Continuar'; } // 4 frases Sí / No
-  else if (s === 'historia') { body = OB.historiaHTML(o); nextLabel = 'Continuar'; } // «No es tu culpa» (fondo oscuro)
+  else if (s === 'historia') { body = OB.historiaHTML(o); nextLabel = 'Continuar'; } // «Es normal sentirse así» (fondo oscuro)
   else if (s === 'carga') body = OB.cargaHTML(o);              // pantalla de carga: sin menú ni botón, avanza sola
   else if (s === 'plan') { body = OB.planHTML(o, obProfile(), todayISO()); nextLabel = 'Aceptar mi plan'; }
   else body = OB.firmaHTML(o, `${o.nombre.trim()} ${o.apellidos.trim()}`.replace(/\s+/g, ' '));
@@ -468,7 +468,7 @@ async function obRegistrar(via) {
 }
 
 /* ---------- paywall en cascada: justo tras registrarse, a pantalla completa ---------- */
-// Solo se ve al venir del cuestionario (`st.ob.justRegistered`). La X abre un aviso (no cierra); «Continuar sin plan personalizado» entra en la app gratuita.
+// Solo se ve al venir del cuestionario (`st.ob.justRegistered`). La X abre un aviso (no cierra); «Continuar sin mi plan» entra en la app gratuita.
 const PRECIO_SEMANA = '0,77 €'; // plan anual (39,99 € / 52 semanas)
 function viewPaywall() {
   return `<div class="screen pw-full">
@@ -480,13 +480,13 @@ function viewPaywall() {
 }
 function pwAvisoHTML() {
   return `<div class="sheet-back sheet-back-top" data-act="pw-aviso-cerrar"></div>
-    <div class="sheet short pw-aviso" role="dialog" aria-modal="true" aria-label="Antes de salir">
+    <div class="sheet short pw-aviso" role="dialog" aria-modal="true" aria-label="Espera, antes de salir">
       <div class="sheet-grab"></div>
       <div class="pw-aviso-b">
-        <h2>Antes de salir</h2>
-        <p>Con Cadencia PRO tu plan se queda con el Coach AI y todas las funciones desbloqueadas. Empieza hoy por solo ${PRECIO_SEMANA} / semana (plan anual, 39,99 € al año).</p>
+        <h2>Espera, antes de salir</h2>
+        <p>Tu plan queda guardado en tu cuenta, pero sin PRO entrarás sin el Coach AI y sin el resto de funciones. Llévatelo por solo ${PRECIO_SEMANA} / semana (plan anual, 39,99 € al año).</p>
         <button type="button" class="btn block" data-act="pw-aviso-cerrar">Obtener Plan</button>
-        <button type="button" class="btn ghost block pw-ghost" data-act="pw-seguir">Continuar sin plan personalizado</button>
+        <button type="button" class="btn ghost block pw-ghost" data-act="pw-seguir">Continuar sin mi plan</button>
       </div>
     </div>`;
 }

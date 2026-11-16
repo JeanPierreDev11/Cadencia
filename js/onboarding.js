@@ -39,23 +39,23 @@ export const MATERIAL_GYM = [
 ];
 export const MATERIAL_TODOS = [...MATERIAL, ...MATERIAL_GYM];
 export const esGym = (id) => MATERIAL_GYM.some((m) => m.id === id);
-// «¿Cuánto tiempo tienes para entrenar?» (minutos por sesión; 90 = 90 o más).
-export const TIEMPOS = [[15, 'Express'], [30, 'Eficiente'], [45, 'En serio'], [60, 'Intenso'], [90, 'Obsesivo']];
+// «¿Cuánto dura tu sesión ideal?» (minutos por sesión; 90 = 90 o más).
+export const TIEMPOS = [[15, 'Relámpago'], [30, 'Directo al grano'], [45, 'Equilibrado'], [60, 'Entreno completo'], [90, 'Modo Bestia']];
 export const tiempoTxt = (m) => `${m}${m >= 90 ? '+' : ''} min`;
-// «¿Qué te impide alcanzar este objetivo?» (selección única). Los ids son los que se guardan en `obstaculo`.
+// «¿Cuál es tu mayor enemigo al entrenar?» (selección única). Los ids son los que se guardan en `obstaculo` (no cambian: el servidor los lee).
 export const OBSTACULOS = [
-  { id: 'tiempo', t: 'Falta de tiempo', ico: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>' },
-  { id: 'conocimiento', t: 'Falta de conocimiento', ico: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21V5M9 7h6"/>' },
-  { id: 'motivacion', t: 'Motivación baja', ico: '<path d="M13 3L5 14h6l-1 7 8-11h-6z"/>' },
-  { id: 'lesiones', t: 'Lesiones o molestias físicas', ico: '<path d="M8.5 15.5l7-7M5 12a3.5 3.5 0 0 1 0-5l2-2a3.5 3.5 0 0 1 5 0l7 7a3.5 3.5 0 0 1 0 5l-2 2a3.5 3.5 0 0 1-5 0z"/>' },
-  { id: 'equipamiento', t: 'Falta de equipamiento', ico: '<path d="M4 10v4M7 7v10M17 7v10M20 10v4M7 12h10"/><path d="M3 3l18 18"/>' },
+  { id: 'tiempo', t: 'Falta de tiempo libre', ico: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>' },
+  { id: 'conocimiento', t: 'No saber qué rutinas seguir', ico: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21V5M9 7h6"/>' },
+  { id: 'motivacion', t: 'Me desmotivo rápido', ico: '<path d="M13 3L5 14h6l-1 7 8-11h-6z"/>' },
+  { id: 'lesiones', t: 'Molestias articulares o lesiones', ico: '<path d="M8.5 15.5l7-7M5 12a3.5 3.5 0 0 1 0-5l2-2a3.5 3.5 0 0 1 5 0l7 7a3.5 3.5 0 0 1 0 5l-2 2a3.5 3.5 0 0 1-5 0z"/>' },
+  { id: 'equipamiento', t: 'Poco material a mano', ico: '<path d="M4 10v4M7 7v10M17 7v10M20 10v4M7 12h10"/><path d="M3 3l18 18"/>' },
 ];
-// «¿Te sientes identificado?»: cuatro frases con Sí / No. Se guardan como booleanos en `psico` { [id]: true|false }.
+// «¿Te suena alguna de estas situaciones?»: cuatro frases con Sí / No. Se guardan como booleanos en `psico` { [id]: true|false }.
 export const PSICO = [
-  { id: 'constancia', t: 'Me cuesta entrenar de forma constante sin fallar.' },
-  { id: 'eleccion', t: 'No sé elegir los entrenamientos adecuados para mí.' },
-  { id: 'eficiencia', t: 'A veces dudo si mi rutina es eficiente.' },
-  { id: 'motivacion', t: 'Necesito motivación externa para seguir mi plan.' },
+  { id: 'constancia', t: 'Empiezo con motivación pero siempre acabo dejándolo.' },
+  { id: 'eleccion', t: 'Llego a entrenar y no tengo claro qué ejercicios hacer.' },
+  { id: 'eficiencia', t: 'Siento que me esfuerzo mucho para los resultados que veo.' },
+  { id: 'motivacion', t: 'Me cuesta arrancar si no tengo a alguien empujándome.' },
 ];
 // Mismos ids que `RW_EXP` del asistente de rutinas (nuevo · anio · anios), para precargarlo.
 export const EXPS = [
@@ -240,12 +240,12 @@ export function bienvenidaHTML(hero, hayAvance) {
   return `<div class="screen bv">
     <div class="auth-hero">${hero}</div>
     <div class="bv-body">
-      <h1 class="ob-title">Consigue el cuerpo de tus sueños</h1>
+      <h1 class="ob-title">Construye tu mejor versión</h1>
       <p class="ob-sub">Responde unas preguntas y te preparamos un plan hecho para ti.</p>
     </div>
     <div class="bv-foot">
       <button type="button" class="btn block" data-act="ob-empezar">${hayAvance ? 'SEGUIR DONDE LO DEJÉ' : 'EMPEZAR'}</button>
-      <button type="button" class="link bv-in" data-act="auth-ingresar">¿Ya tienes cuenta? Ingresar</button>
+      <button type="button" class="link bv-in" data-act="auth-ingresar">¿Ya tienes cuenta? Iniciar sesión</button>
     </div>
   </div>`;
 }
@@ -253,8 +253,8 @@ export function bienvenidaHTML(hero, hayAvance) {
 // Último paso (cuestionario sin cuenta): crear la cuenta guarda TODO lo respondido. `o.regEmail` despliega el formulario de email.
 export function registroHTML(o) {
   const ocupado = !!o.saving;
-  return `<h1 class="ob-title">Regístrate para no perder tu progreso</h1>
-    <p class="ob-sub">Tranqui, no compartiremos tus datos con nadie.</p>
+  return `<h1 class="ob-title">Regístrate para guardar tu plan personalizado</h1>
+    <p class="ob-sub">No compartimos tus datos.</p>
     <label class="check"><input type="checkbox" data-ob="acepto" ${o.acepto ? 'checked' : ''}><span>Acepto los <button type="button" class="link" data-act="legal-open">Términos de Uso, la Política de Privacidad y el aviso de salud</button></span></label>
     <div class="reg-btns">
       <button type="button" class="btn block" data-act="reg-google" ${ocupado ? 'disabled' : ''}>Continuar con Google</button>
@@ -293,26 +293,26 @@ export function diasHTML(o) {
       <span class="ico num">${n}</span><span class="t">${n} días<small>${t}</small></span>${tick(o.freq === n)}</button>`).join('')}</div>`;
 }
 
-// «¿Cuánto tiempo tienes para entrenar?» (selección única, `data-act="ob-tiempo"`).
+// «¿Cuánto dura tu sesión ideal?» (selección única, `data-act="ob-tiempo"`).
 export function tiempoHTML(o) {
-  return `<h1 class="ob-title">¿Cuánto tiempo tienes para entrenar?</h1>
+  return `<h1 class="ob-title">¿Cuánto dura tu sesión ideal?</h1>
     <p class="ob-sub">Por sesión. Ajustaremos el volumen de tu plan a ese tiempo.</p>
     <div class="choices tight">${TIEMPOS.map(([m, t]) => `<button type="button" class="choice freq" data-act="ob-tiempo" data-v="${m}" aria-pressed="${o.tiempo === m}">
       <span class="ico num min">${m >= 90 ? '90+' : m}</span><span class="t"><span>${tiempoTxt(m)} <small>(${t})</small></span></span>${tick(o.tiempo === m)}</button>`).join('')}</div>`;
 }
 
-// «¿Qué te impide alcanzar este objetivo?» (selección única, `data-act="ob-obst"`).
+// «¿Cuál es tu mayor enemigo al entrenar?» (selección única, `data-act="ob-obst"`).
 export function obstaculosHTML(o) {
-  return `<h1 class="ob-title">¿Qué te impide alcanzar este objetivo?</h1>
-    <p class="ob-sub">Elige el mayor obstáculo. Lo tendremos en cuenta en tu plan.</p>
+  return `<h1 class="ob-title">¿Cuál es tu mayor enemigo al entrenar?</h1>
+    <p class="ob-sub">Elige el que más te frena. Lo tendremos en cuenta en tu plan.</p>
     <div class="choices">${OBSTACULOS.map((x) => `<button type="button" class="choice" data-act="ob-obst" data-v="${x.id}" aria-pressed="${o.obstaculo === x.id}">
       <span class="ico">${svg(x.ico)}</span><span class="t">${x.t}</span>${tick(o.obstaculo === x.id)}</button>`).join('')}</div>`;
 }
 
-// «¿Te sientes identificado?»: cuatro frases en lista con Sí / No (`data-act="ob-psico"`, `data-k` = id de la frase, `data-v` = 1 | 0). Hay que contestar las cuatro.
+// «¿Te suena alguna de estas situaciones?»: cuatro frases en lista con Sí / No (`data-act="ob-psico"`, `data-k` = id de la frase, `data-v` = 1 | 0). Hay que contestar las cuatro.
 export function psicologiaHTML(o) {
   const ps = o.psico || {};
-  return `<h1 class="ob-title">¿Te sientes identificado?</h1>
+  return `<h1 class="ob-title">¿Te suena alguna de estas situaciones?</h1>
     <p class="ob-sub">Responde con sinceridad: así Cadencia IA te acompaña mejor.</p>
     <div class="psico-list">${PSICO.map((p) => `<div class="psico-q" role="group" aria-label="${esc(p.t)}"><p>${esc(p.t)}</p>
       <div class="psico-btns">${[[1, 'Sí'], [0, 'No']].map(([v, l]) => `<button type="button" class="choice" data-act="ob-psico" data-k="${p.id}" data-v="${v}" aria-pressed="${ps[p.id] === (v === 1)}">${l}</button>`).join('')}</div></div>`).join('')}</div>`;
@@ -422,11 +422,11 @@ export function planHTML(o, p, hoyISO) {
 }
 const I_SPARK = '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/>';
 
-// «No es tu culpa»: pantalla de pausa entre el cuestionario y el plan. Botón del pie «Continuar» (lo pinta app.js).
+// «Es normal sentirse así»: pantalla de pausa entre el cuestionario y el plan. Botón del pie «Continuar» (lo pinta app.js).
 export function historiaHTML(o) {
   return `<div class="historia">
-    <h1 class="ob-title historia-t">No es tu culpa. <span>Necesitas un sistema que realmente funcione</span></h1>
-    <p class="historia-p">Las personas que consiguen resultados no son diferentes a ti. Solo tienen algo que tú no has tenido: un sistema que les dice exactamente qué hacer paso a paso.</p>
+    <h1 class="ob-title historia-t">Es normal sentirse así. <span>El problema no es tu fuerza de voluntad.</span></h1>
+    <p class="historia-p">El problema es intentar avanzar sin un mapa. Quienes logran el físico que buscan simplemente siguen un sistema que elimina las excusas.</p>
   </div>`;
 }
 
@@ -462,8 +462,8 @@ export function iniciarCarga(root, o, alTerminar) {
 }
 
 // Pausa dramática antes de firmar: [texto, empieza (s), dura (s)]. Solo CSS (`.pausa-t`, `@keyframes pausaTxt`); app.js pone el temporizador (`pausaFirma`).
-export const PAUSA = [['Recuerda...', 0, 1], ['Nada cambia...', 1, 1], ['Si tú no cambias.', 2, 1.5]];
-export const PAUSA_MS = 3700;
+export const PAUSA = [['La disciplina...', 0, 1.2], ['es elegir entre lo que quieres ahora...', 1.2, 2], ['y lo que quieres de verdad.', 3.2, 2.2]];
+export const PAUSA_MS = 5600; // = fin del último texto (3,2 + 2,2 s) + 0,2 s
 
 const HUELLA = '<path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/>';
 export const FIRMA_TXT = 'Mantén pulsado para firmar';
@@ -472,12 +472,12 @@ export function firmaHTML(o, nombre) {
   if (o.pausaT0 && !o.pausaFin) { // pausa dramática: el botón NO existe todavía. El retraso de cada texto resta el tiempo ya pasado (`--el`), así que si algo redibuja no se reinicia.
     const el = Math.max(0, (performance.now() - o.pausaT0) / 1000);
     return `<div class="pausa" style="--el:${el.toFixed(2)}s">
-      <p class="sr-only">Recuerda... Nada cambia... Si tú no cambias.</p>
+      <p class="sr-only">La disciplina... es elegir entre lo que quieres ahora... y lo que quieres de verdad.</p>
       ${PAUSA.map(([t, d, dur]) => `<p class="ob-title pausa-t" aria-hidden="true" style="--d:${d}s;--dur:${dur}s">${t}</p>`).join('')}
     </div>`;
   }
   const hecho = !!o.firmado;
-  return `<h1 class="ob-title">Haz una promesa contigo mismo</h1>
+  return `<h1 class="ob-title">Sella tu compromiso.</h1>
     <p class="ob-sub">Firmarlo te ayuda a cumplirlo. Léelo y mantén pulsado.</p>
     <blockquote class="pact">
       <p>Prometo entrenar con Cadencia <b>${o.freq} veces a la semana</b>. Sin excusas.</p>

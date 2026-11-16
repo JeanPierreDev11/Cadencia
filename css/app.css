@@ -1669,7 +1669,7 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .ritmo-pf .ritmo-val span { font-size: 15px; }
 .ritmo-pf #pf-ritmo-txt { display: grid; gap: 6px; }
 
-/* 2026-11-16 · Cuestionario Fase 1: tiempo por sesión, obstáculos, «¿Te sientes identificado?», material de gimnasio y fecha en vivo del ritmo */
+/* 2026-11-16 · Cuestionario Fase 1: tiempo por sesión, obstáculos, «¿Te suena alguna de estas situaciones?», material de gimnasio y fecha en vivo del ritmo */
 .ob-q.sm { margin: 16px 0 8px; font-size: 16px; }
 .choice.freq .ico.num.min { font-size: 16px; }
 .choice.freq .t > span small { display: inline; font-size: 15px; }
@@ -1734,3 +1734,7 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .pw-aviso-b h2 { margin: 0; font-size: 22px; font-weight: 800; font-stretch: 125%; }
 .pw-aviso-b p { margin: 0; font-size: 16px; line-height: 1.45; color: var(--muted); }
 .btn.pw-ghost { border-color: transparent; background: transparent; color: var(--muted); font-weight: 600; min-height: 44px; }
+
+/* 2026-11-16 · Fase 3 (textos de marca): la pausa antes de firmar usa frases largas (se reparten en líneas equilibradas) y los títulos de bienvenida/registro/historia también */
+.pausa-t { padding: 0 6px; text-wrap: balance; }
+.historia-t, .bv-body .ob-title { text-wrap: balance; }
