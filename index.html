@@ -43,6 +43,17 @@
   <div id="toast" class="toast" role="status" hidden></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js" integrity="sha384-jrOgQzBlDeUNdmQn3rUt/PZD+pdcRBdWd/HWRqRo+n2OR2QtGyjSaJC0GiCeH+ir" crossorigin="anonymous" defer></script>
+  <script>
+    // Si tras 12 s sigue la pantalla de arranque (p. ej. una copia vieja de esta página apuntando a archivos que ya no existen), se borra la caché y el service worker y se recarga UNA vez.
+    setTimeout(function () {
+      var viejo = false; try { viejo = !!sessionStorage.getItem('cadencia-curar'); } catch (e) { /* nada */ }
+      if (!document.getElementById('boot') || viejo) return;
+      try { sessionStorage.setItem('cadencia-curar', '1'); } catch (e) { /* nada */ }
+      var ir = function () { location.replace(location.pathname + '?r=' + Date.now()); };
+      var rs = navigator.serviceWorker ? navigator.serviceWorker.getRegistrations().then(function (l) { return Promise.all(l.map(function (r) { return r.unregister(); })); }) : Promise.resolve();
+      rs.then(function () { return window.caches ? caches.keys().then(function (k) { return Promise.all(k.map(function (n) { return caches.delete(n); })); }) : 0; }).then(ir, ir);
+    }, 12000);
+  </script>
   <script type="module" src="/js/app.js"></script>
 </body>
 </html>
