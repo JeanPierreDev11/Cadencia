@@ -1,7 +1,8 @@
 rules_version = '2';
 // Cada persona solo puede leer y escribir sus propios datos.
 // Excepción: «isPro», los datos de Stripe, «ultimoEscaneo» (límite diario de la IA gratis) y el aviso «strava» solo los cambia el servidor (stripeWebhook y strava),
-// para que nadie pueda hacerse Pro ni falsear la conexión desde la app. Los tokens de Strava viven en la colección
+// para que nadie pueda hacerse Pro ni falsear la conexión desde la app. Lo mismo con los referidos (refCode, referidos, recompensas, codigoUsado, proCaduca):
+// los gestionan las funciones miCodigo, canjearCodigo y reclamarReferido. La colección «refCodes» (código → dueño) tampoco tiene reglas: solo el servidor. Los tokens de Strava viven en la colección
 // «stravaTokens», sin ninguna regla: la app no puede leerla ni escribirla (solo el servidor).
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -25,6 +26,11 @@ service cloud.firestore {
         && !('stripeSubscriptionId' in request.resource.data)
         && !('strava' in request.resource.data)
         && !('ultimoEscaneo' in request.resource.data)
+        && !('refCode' in request.resource.data)
+        && !('codigoUsado' in request.resource.data)
+        && !('proCaduca' in request.resource.data)
+        && request.resource.data.get('referidos', 0) == 0
+        && request.resource.data.get('recompensas', []).size() == 0
         && request.resource.data.get('proPlan', 'none') == 'none'; // al crear, `proPlan` solo puede faltar o valer 'none'; los planes de pago los pone el servidor
       allow update: if request.auth != null && request.auth.uid == uid
         && request.resource.data.get('isPro', false) == resource.data.get('isPro', false)
@@ -33,6 +39,11 @@ service cloud.firestore {
         && request.resource.data.get('strava', null) == resource.data.get('strava', null)
         && request.resource.data.get('ultimoEscaneo', null) == resource.data.get('ultimoEscaneo', null)
         && request.resource.data.get('proPlan', null) == resource.data.get('proPlan', null)
+        && request.resource.data.get('refCode', null) == resource.data.get('refCode', null)
+        && request.resource.data.get('referidos', 0) == resource.data.get('referidos', 0)
+        && request.resource.data.get('recompensas', []) == resource.data.get('recompensas', [])
+        && request.resource.data.get('codigoUsado', false) == resource.data.get('codigoUsado', false)
+        && request.resource.data.get('proCaduca', null) == resource.data.get('proCaduca', null)
         // Límite gratuito: sin Pro, rutinas y ejercicios propios no pueden pasar de 3 (quien ya tenga más puede mantenerlos o borrar, no añadir).
         && (resource.data.get('isPro', false) == true
           || ((request.resource.data.get('rutinas', []).size() <= 3 || request.resource.data.get('rutinas', []).size() <= resource.data.get('rutinas', []).size())

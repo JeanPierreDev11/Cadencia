@@ -34,7 +34,9 @@ const hoyMadrid = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Mad
 const usoRef = (uid, dia) => db.doc(`iaUso/${uid}_${dia}`);
 const globalRef = (dia) => db.doc(`iaGlobal/${dia}`);
 const userRef = (uid) => db.doc(`users/${uid}`);
-const esPro = async (uid) => { const d = await userRef(uid).get(); return d.exists && d.data().isPro === true; };
+// Pro vigente: isPro y, si son días regalados por referidos (proCaduca), que no hayan caducado.
+const proVigente = (d) => !!d && d.isPro === true && !(Number(d.proCaduca) > 0 && Number(d.proCaduca) <= Date.now());
+const esPro = async (uid) => { const d = await userRef(uid).get(); return d.exists && proVigente(d.data()); };
 
 /* ------------------------------------------------------------------ */
 /* Foto del plato                                                      */
@@ -383,7 +385,7 @@ exports.coach = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 60, memory: '2
   if (!/^[\w-]{1,80}$/.test(id)) throw new HttpsError('invalid-argument', 'Petición no válida.');
   const [usr, doc] = await Promise.all([userRef(uid).get(), db.doc(`users/${uid}/entrenos/${id}`).get()]);
   const p = usr.exists ? usr.data() : {};
-  if (p.isPro !== true) throw new HttpsError('permission-denied', 'El Coach AI es de Cadencia Pro.', { codigo: 'pro-requerido' });
+  if (!proVigente(p)) throw new HttpsError('permission-denied', 'El Coach AI es de Cadencia Pro.', { codigo: 'pro-requerido' });
   if (!doc.exists) throw new HttpsError('failed-precondition', 'No encontramos ese entreno. Actualiza la app y prueba otra vez.');
   const w = doc.data();
   if (Number.isFinite(Number(w.aiNota)) && w.aiDemo !== true) return devolverCoach(w); // ya analizado: no se gasta nada
@@ -516,6 +518,7 @@ async function procesarEvento(stripe, ev) {
       const fin = sub && (sub.current_period_end || (sub.items && sub.items.data && sub.items.data[0] && sub.items.data[0].current_period_end));
       extra = { stripeCustomerId: o.customer || null, stripeSubscriptionId: o.subscription || null, proPlan: sub ? planDe(sub) : null, proRenueva: fin ? fin * 1000 : null, proCancela: false };
     }
+    extra.proCaduca = null; // el plan de pago sustituye a los días regalados por referidos
     await ponerPro(uid, true, extra);
     // Si cambió de plan (o compró «Para siempre»), cancelamos la suscripción anterior para no cobrarle dos veces.
     if (antes && antes !== 'siempre' && antes !== extra.stripeSubscriptionId) {
@@ -532,7 +535,7 @@ async function procesarEvento(stripe, ev) {
       if (esVitalicio(d)) continue; // «Para siempre»: ninguna suscripción le cambia el plan ni le quita Pro
       if (d.stripeSubscriptionId && d.stripeSubscriptionId !== o.id) continue; // es una suscripción antigua
       const fin = o.current_period_end || (o.items && o.items.data && o.items.data[0] && o.items.data[0].current_period_end) || null; // segundos
-      await ponerPro(uid, activa, activa ? { stripeCustomerId: o.customer, stripeSubscriptionId: o.id, proRenueva: fin ? fin * 1000 : null, proCancela: !!(o.cancel_at_period_end || o.cancel_at), proPlan: planDe(o) } : { proCancela: false });
+      await ponerPro(uid, activa, activa ? { stripeCustomerId: o.customer, stripeSubscriptionId: o.id, proRenueva: fin ? fin * 1000 : null, proCancela: !!(o.cancel_at_period_end || o.cancel_at), proPlan: planDe(o), proCaduca: null } : { proCancela: false });
     }
   }
 }
@@ -766,4 +769,93 @@ exports.recordatorios = onSchedule({ schedule: '0,30 * * * *', timeZone: 'Europe
     r.forEach((x) => { if (x.status === 'fulfilled') enviados += x.value; else { errores += 1; console.error('recordatorio falló', x.reason && x.reason.message); } });
   }
   console.log(`recordatorios: ${snap.size} personas con avisos activos, ${enviados} enviados, ${errores} errores`);
+});
+
+/* ------------------------------------------------------------------ */
+/* Referidos: 1 semana de Pro por amigo invitado (máximo 10 invitados) */
+/* ------------------------------------------------------------------ */
+// Todo ocurre aquí, en el servidor, porque el invitado no puede (ni debe) editar el perfil de quien lo invitó.
+// Las reglas de Firestore impiden a la app tocar refCode, referidos, recompensas, codigoUsado y proCaduca.
+//   users/{uid}: refCode (su código), referidos (amigos que han usado su código), recompensas (hitos 1..10 ya reclamados),
+//                codigoUsado (true si ya canjeó un código), proCaduca (ms: hasta cuándo dura el Pro regalado).
+//   refCodes/{codigo}: { uid } para saber de quién es cada código y que no se repita (la app no puede leerla ni escribirla).
+const MAX_REFERIDOS = 10;
+const SEMANA_MS = 7 * 24 * 60 * 60 * 1000; // 7 días exactos
+const ALFABETO_REF = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin I, O, 0, 1 para que no se confundan al dictarlo
+const codigoRef = () => Array.from(require('crypto').randomBytes(6), (b) => ALFABETO_REF[b % ALFABETO_REF.length]).join('');
+const tienePagado = (d) => d.isPro === true && !(Number(d.proCaduca) > 0) && !!(d.stripeSubscriptionId || d.proPlan === 'siempre'); // Pro de pago activo: la semana regalada no le sirve
+// Fin del Pro regalado tras sumar 7 días: desde hoy, o desde la caducidad actual si todavía le queda Pro regalado.
+const masUnaSemana = (d) => Math.max(Date.now(), proVigente(d) && Number(d.proCaduca) > 0 ? Number(d.proCaduca) : 0) + SEMANA_MS;
+const exigirSesion = (req) => { if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión para continuar.'); return req.auth.uid; };
+
+// Devuelve el código de invitación de la persona; si aún no tiene (cuentas nuevas o anteriores a los referidos), lo crea. Idempotente.
+exports.miCodigo = onCall({ memory: '256MiB', timeoutSeconds: 30, concurrency: 10 }, async (req) => {
+  const uid = exigirSesion(req);
+  return db.runTransaction(async (tx) => {
+    const ref = userRef(uid), snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('failed-precondition', 'Tu perfil aún se está creando. Vuelve a probar en unos segundos.');
+    const d = snap.data();
+    if (/^[A-Z0-9]{6}$/.test(d.refCode || '')) return { refCode: d.refCode };
+    let codigo = null;
+    for (let i = 0; i < 12 && !codigo; i += 1) { const c = codigoRef(); if (!(await tx.get(db.doc(`refCodes/${c}`))).exists) codigo = c; }
+    if (!codigo) throw new HttpsError('aborted', 'No pudimos crear tu código. Vuelve a probar.');
+    tx.set(db.doc(`refCodes/${codigo}`), { uid, creado: FieldValue.serverTimestamp() });
+    tx.set(ref, { refCode: codigo, referidos: Number.isInteger(d.referidos) ? d.referidos : 0, recompensas: Array.isArray(d.recompensas) ? d.recompensas : [] }, { merge: true });
+    return { refCode: codigo };
+  });
+});
+
+// El invitado canjea el código de un amigo: +7 días de Pro para él y +1 en «referidos» del dueño.
+exports.canjearCodigo = onCall({ memory: '256MiB', timeoutSeconds: 30, concurrency: 10 }, async (req) => {
+  const uid = exigirSesion(req);
+  const codigo = String((req.data && req.data.codigo) || '').trim().toUpperCase().replace(/[\s-]/g, '');
+  if (!/^[A-Z0-9]{6}$/.test(codigo)) throw new HttpsError('invalid-argument', 'El código tiene 6 letras y números.', { codigo: 'ref-formato' });
+  return db.runTransaction(async (tx) => {
+    const reg = await tx.get(db.doc(`refCodes/${codigo}`));
+    if (!reg.exists) throw new HttpsError('not-found', 'Ese código no existe. Revísalo y vuelve a probar.', { codigo: 'ref-no-existe' });
+    const dueno = reg.data().uid;
+    if (dueno === uid) throw new HttpsError('failed-precondition', 'No puedes usar tu propio código.', { codigo: 'ref-propio' });
+    const [yo, el] = await Promise.all([tx.get(userRef(uid)), tx.get(userRef(dueno))]);
+    if (!yo.exists) throw new HttpsError('failed-precondition', 'Tu perfil aún se está creando. Vuelve a probar en unos segundos.');
+    if (!el.exists) throw new HttpsError('not-found', 'Ese código ya no está disponible.', { codigo: 'ref-no-existe' });
+    const m = yo.data(), o = el.data();
+    if (m.codigoUsado === true) throw new HttpsError('already-exists', 'Ya has usado un código de invitación en esta cuenta.', { codigo: 'ref-usado' });
+    if (tienePagado(m)) throw new HttpsError('failed-precondition', 'Ya tienes Cadencia PRO de pago: la semana de regalo no te haría falta.', { codigo: 'ref-pro-pago' });
+    if ((o.referidos || 0) >= MAX_REFERIDOS) throw new HttpsError('resource-exhausted', 'Este código ya ha llegado a su límite de invitados.', { codigo: 'ref-lleno' });
+    const caduca = masUnaSemana(m);
+    tx.set(userRef(uid), { isPro: true, proCaduca: caduca, codigoUsado: true, proActualizado: FieldValue.serverTimestamp() }, { merge: true });
+    tx.set(userRef(dueno), { referidos: FieldValue.increment(1) }, { merge: true });
+    return { proCaduca: caduca };
+  });
+});
+
+// El dueño reclama la semana de un hito (1..10): suma 7 días a su Pro regalado (o desde hoy si no era Pro) y apunta el hito.
+exports.reclamarReferido = onCall({ memory: '256MiB', timeoutSeconds: 30, concurrency: 10 }, async (req) => {
+  const uid = exigirSesion(req);
+  const hito = Number(req.data && req.data.hito);
+  if (!Number.isInteger(hito) || hito < 1 || hito > MAX_REFERIDOS) throw new HttpsError('invalid-argument', 'Recompensa no válida.');
+  return db.runTransaction(async (tx) => {
+    const ref = userRef(uid), snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('failed-precondition', 'Tu perfil aún se está creando. Vuelve a probar en unos segundos.');
+    const d = snap.data(), rec = Array.isArray(d.recompensas) ? d.recompensas : [];
+    if (rec.includes(hito)) throw new HttpsError('already-exists', 'Esa semana ya está reclamada.', { codigo: 'ref-reclamado' });
+    if ((d.referidos || 0) < hito) throw new HttpsError('failed-precondition', `Aún no has invitado a ${hito} ${hito === 1 ? 'amigo' : 'amigos'}.`, { codigo: 'ref-faltan' });
+    if (tienePagado(d)) throw new HttpsError('failed-precondition', 'Ya tienes Cadencia PRO de pago. Reclama la semana cuando tu plan termine: no se pierde.', { codigo: 'ref-pro-pago' });
+    const caduca = masUnaSemana(d), recompensas = [...rec, hito].sort((a, b) => a - b);
+    tx.set(ref, { isPro: true, proCaduca: caduca, recompensas, proActualizado: FieldValue.serverTimestamp() }, { merge: true });
+    return { proCaduca: caduca, recompensas };
+  });
+});
+
+// Cada hora retira el Pro regalado que ya ha caducado (nunca toca planes de pago: esos llevan proCaduca vacío).
+exports.caducarPro = onSchedule({ schedule: '15 * * * *', timeZone: 'Europe/Madrid', memory: '256MiB', timeoutSeconds: 120, maxInstances: 1, retryCount: 0 }, async () => {
+  const snap = await db.collection('users').where('proCaduca', '<=', Date.now()).limit(400).get();
+  let quitados = 0;
+  for (const doc of snap.docs) {
+    const d = doc.data();
+    if (!(Number(d.proCaduca) > 0)) continue;
+    await doc.ref.set({ isPro: false, proCaduca: FieldValue.delete(), proActualizado: FieldValue.serverTimestamp() }, { merge: true });
+    quitados += 1;
+  }
+  console.log(`caducarPro: ${snap.size} perfiles con fecha vencida, ${quitados} sin Pro`);
 });

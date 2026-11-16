@@ -1,5 +1,5 @@
 import './br.js'; // Fórmulas de Bilbao Ride (globalThis.BR): debe cargarse antes que secciones.js
-import { createBackend, errorText } from './data.js';
+import { createBackend, errorText, REF_MAX } from './data.js';
 import { APP_NAME } from './config.js';
 import * as E from './entreno.js';
 import { crearSecciones, NOV_V } from './secciones.js';
@@ -62,7 +62,7 @@ try { matchMedia('(prefers-color-scheme: light)').addEventListener('change', () 
 let api = null;
 const st = {
   view: 'boot', user: null, profile: null, weights: [],
-  authMode: 'welcome', authMsg: null, busy: false, registering: false, vieneDeRegistro: false,
+  authMode: 'welcome', authMsg: null, busy: false, registering: false, vieneDeRegistro: false, codigo: null, refBusy: false,
   ob: null, tab: lsGet('cadencia-tab') || 'inicio', editGoals: null,
   workouts: [], wkTab: lsGet('cadencia-wktab') || 'semana', wk: null, rw: null, re: null, live: null, liveMin: false, lib: null,
 };
@@ -78,7 +78,7 @@ function render() {
   document.body.dataset.view = st.view;
   document.title = APP_NAME;
   if (M) M.afterRender();
-  document.body.classList.toggle('noscroll', !!(st.limite || st.liveFin || st.calentar || st.pf || st.proInfo || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.resumen || st.legal || st.del || st.pro || st.proWelcome || st.recAsk));
+  document.body.classList.toggle('noscroll', !!(st.limite || st.liveFin || st.calentar || st.pf || st.proInfo || st.codigo || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.resumen || st.legal || st.del || st.pro || st.proWelcome || st.recAsk));
 }
 
 /* ================================================================== */
@@ -475,8 +475,101 @@ function viewPaywall() {
     <h1 class="ob-title">Tu plan está listo</h1>
     <p class="ob-sub">Desbloquéalo con Cadencia PRO: Coach AI, rutinas ilimitadas y todas las funciones.</p>
     ${suscripcionHTML()}
-  </div>${st.proInfo ? proInfoHTML() : ''}${st.pwAviso ? pwAvisoHTML() : ''}`;
+    ${st.profile && st.profile.codigoUsado === true ? '' : '<button type="button" class="btn ghost block pw-codigo" data-act="cod-open">🎁 Tengo un código de invitación</button>'}
+  </div>${st.proInfo ? proInfoHTML() : ''}${st.pwAviso ? pwAvisoHTML() : ''}${st.codigo ? codigoSheetHTML() : ''}`;
 }
+/* ---------- referidos: 1 semana de Pro por amigo invitado (máx. 10) ---------- */
+// Todo lo decide el servidor (Cloud Functions miCodigo, canjearCodigo y reclamarReferido): aquí solo se pide y se pinta.
+const diaPro = (ms) => fmtDate(new Date(ms).toISOString().slice(0, 10));
+const proRegalo = (pr) => (pr && pr.isPro === true && Number(pr.proCaduca) > Date.now() ? Number(pr.proCaduca) : 0); // fin del Pro regalado, o 0
+function codigoSheetHTML() {
+  const c = st.codigo;
+  return `<div class="sheet-back sheet-back-top" data-act="cod-close"></div>
+    <div class="sheet short pw-aviso cod-sheet" role="dialog" aria-modal="true" aria-label="Código de invitación">
+      <div class="sheet-grab"></div>
+      <form class="pw-aviso-b" data-form="codigo" novalidate>
+        <h2>🎁 Código de invitación</h2>
+        <p>Si un amigo te ha invitado, escribe su código y recibirás <b>7 días de Cadencia PRO</b>. Solo se puede usar un código por cuenta.</p>
+        <input class="input cod-input" name="codigo" value="${esc(c.val || '')}" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" placeholder="Ej. CAD67X" aria-label="Código de invitación">
+        ${c.msg ? `<p class="cod-msg" role="alert">${esc(c.msg)}</p>` : ''}
+        <button type="submit" class="btn block"${c.busy ? ' disabled' : ''}>${c.busy ? '<span class="spinner"></span>' : 'Canjear código'}</button>
+        <button type="button" class="btn ghost block pw-ghost" data-act="cod-close">Ahora no</button>
+      </form>
+    </div>`;
+}
+async function canjearCodigo(codigo) {
+  const c = st.codigo; if (!c || c.busy) return;
+  const cod = String(codigo || '').trim().toUpperCase().replace(/[\s-]/g, '');
+  c.val = cod;
+  if (!/^[A-Z0-9]{6}$/.test(cod)) { c.msg = 'El código tiene 6 letras y números.'; return render(); }
+  c.busy = true; c.msg = ''; render();
+  try {
+    const r = await api.canjearCodigo(cod);
+    st.profile = { ...st.profile, isPro: true, proCaduca: r.proCaduca, codigoUsado: true };
+    const enPaywall = st.view === 'paywall';
+    st.codigo = null;
+    toast(`¡Listo! Tienes Cadencia PRO hasta el ${diaPro(r.proCaduca)}`);
+    if (enPaywall) return pwSalir();
+    render();
+  } catch (e) { c.busy = false; c.msg = errorText(e); render(); }
+}
+// Hito i (1..10) de la hoja: reclamado (gris) / reclamable (amarillo) / bloqueado (borde, desactivado).
+function refHitoHTML(i, ref, rec) {
+  const hecho = rec.includes(i), listo = !hecho && ref >= i, txt = `${i} ${i === 1 ? 'amigo' : 'amigos'}`;
+  const btn = hecho ? '<button type="button" class="btn small ref-btn is-done" disabled>Reclamado</button>'
+    : listo ? `<button type="button" class="btn small ref-btn"${st.refBusy ? ' disabled' : ''} data-act="ref-reclamar" data-v="${i}">Reclamar 1 semana</button>`
+    : `<button type="button" class="btn ghost small ref-btn" disabled>Invita a ${txt}</button>`;
+  return `<li class="ref-hito${hecho ? ' is-done' : listo ? ' is-ready' : ''}"><span class="ref-n" aria-hidden="true">${i}</span><span class="ref-t"><b>${txt}</b><small>+1 semana de PRO</small></span>${btn}</li>`;
+}
+function referidosSheetHTML() {
+  const p = st.profile || {}, ref = Math.min(REF_MAX, Math.max(0, Number(p.referidos) || 0)), rec = Array.isArray(p.recompensas) ? p.recompensas : [];
+  const fin = proRegalo(p), lleno = ref >= REF_MAX;
+  return `<div class="sheet-list ref-body">
+    <p class="small muted">Tu amigo recibe <b>7 días de Cadencia PRO</b> al canjear tu código y tú ganas <b>1 semana</b> por cada amigo que lo use, hasta ${REF_MAX} amigos. Las semanas se reclaman a mano y se suman a tu PRO.</p>
+    <section class="ref-code"><span class="small muted">Tu código</span>
+      ${p.refCode ? `<b class="ref-cod" id="ref-cod">${esc(p.refCode)}</b>
+      <div class="ref-acts"><button type="button" class="btn small" data-act="ref-copy">Copiar código</button>${navigator.share ? '<button type="button" class="btn ghost small" data-act="ref-share">Compartir</button>' : ''}</div>`
+      : '<b class="ref-cod ref-cod-no">Generando…</b><span class="small muted">Un momento, estamos creando tu código.</span>'}</section>
+    <section class="ref-prog" aria-label="Progreso de invitaciones"><p><b>Has invitado a ${ref}/${REF_MAX} amigos</b></p>
+      <div class="ref-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${REF_MAX}" aria-valuenow="${ref}"><i style="width:${ref * 100 / REF_MAX}%"></i></div>
+      ${lleno ? '<p class="small muted">Has llegado al máximo de invitados. Puedes reclamar las semanas que te queden.</p>' : ''}
+      ${fin ? `<p class="small muted">Tu PRO de regalo dura hasta el <b>${diaPro(fin)}</b>.</p>` : ''}</section>
+    <ol class="ref-lista">${Array.from({ length: REF_MAX }, (_, k) => refHitoHTML(k + 1, ref, rec)).join('')}</ol>
+    ${p.codigoUsado === true ? '' : '<button type="button" class="btn ghost block" data-act="cod-open">🎁 Tengo un código de invitación</button>'}
+    <p class="small muted">Si ya pagas Cadencia PRO, reclama tus semanas cuando termine tu plan: no se pierden. Cada persona solo puede canjear un código.</p>
+  </div>`;
+}
+async function reclamarReferido(hito) {
+  if (st.refBusy) return;
+  const h = Number(hito); if (!Number.isInteger(h)) return;
+  st.refBusy = true; render();
+  try {
+    const r = await api.reclamarReferido(h);
+    st.profile = { ...st.profile, isPro: true, proCaduca: r.proCaduca, recompensas: r.recompensas };
+    st.refBusy = false; render();
+    toast(`¡+1 semana de PRO! Ya tienes Cadencia PRO hasta el ${diaPro(r.proCaduca)}`);
+  } catch (e) { st.refBusy = false; render(); toast(errorText(e)); }
+}
+// Al abrir la hoja: pide el código si aún no lo tiene y refresca el número de invitados (otros amigos pueden haberlo usado desde la última vez).
+async function refAbrir() {
+  const u = st.user; if (!u) return;
+  try {
+    if (!st.profile.refCode) { const r = await api.miCodigo(); st.profile.refCode = r.refCode; }
+    const p = await api.getProfile(u.uid);
+    if (p) st.profile = { ...st.profile, referidos: p.referidos || 0, recompensas: p.recompensas || [], isPro: p.isPro, proCaduca: p.proCaduca, refCode: p.refCode || st.profile.refCode, codigoUsado: p.codigoUsado };
+    if (st.pf && st.pf.v === 'referidos') render();
+  } catch (e) { /* sin conexión: se ve lo que ya había */ }
+}
+async function refCopiar() {
+  const c = st.profile && st.profile.refCode; if (!c) return;
+  try { await navigator.clipboard.writeText(c); toast('Código copiado'); }
+  catch (e) { const el = document.getElementById('ref-cod'); if (el && window.getSelection) { const r = document.createRange(); r.selectNodeContents(el); const g = window.getSelection(); g.removeAllRanges(); g.addRange(r); } toast('Mantén pulsado el código para copiarlo'); }
+}
+async function refCompartir() {
+  const c = st.profile && st.profile.refCode; if (!c) return;
+  try { await navigator.share({ title: APP_NAME, text: `Prueba ${APP_NAME} con mi código de invitación ${c} y empieza con 7 días de PRO.`, url: location.origin }); } catch (e) { /* cancelado */ }
+}
+
 function pwAvisoHTML() {
   return `<div class="sheet-back sheet-back-top" data-act="pw-aviso-cerrar"></div>
     <div class="sheet short pw-aviso" role="dialog" aria-modal="true" aria-label="¿Seguro que quieres irte?">
@@ -498,7 +591,7 @@ function pwVigilar(u) {
 }
 function pwQuitar() { if (pwParar) { try { pwParar(); } catch (e) { /* ya estaba parado */ } pwParar = null; } }
 async function pwSalir() {
-  pwQuitar(); st.vieneDeRegistro = false; st.pwAviso = false; st.pf = null; st.proInfo = null;
+  pwQuitar(); st.vieneDeRegistro = false; st.pwAviso = false; st.pf = null; st.proInfo = null; st.codigo = null;
   try { await entrarApp(st.user, { fade: true }); } catch (e) { st.errText = errorText(e); st.view = 'error'; render(); }
 }
 function pwSeguir() { return pwSalir(); }
@@ -526,7 +619,7 @@ let stravaRet = leerRetorno(); // si venimos de la pantalla de permisos de Strav
 
 const gearHTML = () => `<button type="button" class="gear" data-act="cfg-open" aria-label="Configuración">${I.gear}</button>`;
 function viewMain() {
-  const sheet = st.limite ? limiteSheetHTML() : st.proInfo ? proInfoHTML() : st.legal ? legalSheetHTML() : st.pf ? pfSheetHTML() : st.liveFin && st.live ? finSheetHTML() : st.calentar ? calentarSheetHTML() : st.rutShare ? rutShareSheetHTML() : st.modoSel ? modoSheetHTML() : st.resumen ? resumenSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.rutDelAsk ? rutDelSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
+  const sheet = st.codigo ? codigoSheetHTML() : st.limite ? limiteSheetHTML() : st.proInfo ? proInfoHTML() : st.legal ? legalSheetHTML() : st.pf ? pfSheetHTML() : st.liveFin && st.live ? finSheetHTML() : st.calentar ? calentarSheetHTML() : st.rutShare ? rutShareSheetHTML() : st.modoSel ? modoSheetHTML() : st.resumen ? resumenSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.rutDelAsk ? rutDelSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
   if (st.rw) return viewRutWizard() + sheet;
   if (st.live && !st.liveMin) return viewLive() + sheet;
   if (st.wk) return viewWkForm();
@@ -993,7 +1086,8 @@ async function delWeight(fecha) {
 function planCardHTML() {
   const pr = st.profile || {}, pro = pr.isPro === true;
   const dia = (ms) => fmtDate(new Date(ms).toISOString().slice(0, 10));
-  const renueva = pro && pr.proRenueva ? (pr.proCancela ? `Tu suscripción está cancelada: sigues con Pro hasta el <b>${dia(pr.proRenueva)}</b>.` : `Próxima renovación: <b>${dia(pr.proRenueva)}</b>.`) : '';
+  const regalo = proRegalo(pr);
+  const renueva = regalo ? `Tu PRO de regalo (referidos) dura hasta el <b>${dia(regalo)}</b>.` : pro && pr.proRenueva ? (pr.proCancela ? `Tu suscripción está cancelada: sigues con Pro hasta el <b>${dia(pr.proRenueva)}</b>.` : `Próxima renovación: <b>${dia(pr.proRenueva)}</b>.`) : '';
   if (!pro) return `<section class="card" id="plan-card">
       <div class="card-head"><h2>Tu plan</h2><span class="tag" id="plan-tag">Gratuita</span></div>
       <p class="small muted">El registro manual, las rutinas, las rutas y el resto de la app son gratis. Con Pro desbloqueas la IA: Escanear alimento y recomendaciones del Taller.</p>
@@ -1015,6 +1109,7 @@ const tienePass = () => { try { return api.providers().includes('password'); } c
 
 /* ---------- Perfil: lista de ajustes y una vista (hoja) por apartado ---------- */
 const PF_IC = {
+  gift: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v9H5v-9M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5"/>',
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
   globe: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/>',
@@ -1050,6 +1145,7 @@ function viewPerfil() {
       <button type="button" class="btn ghost small" data-act="pf-open" data-v="editar">Editar perfil</button></header>
     ${planCardHTML()}
     ${pfGrupo('Cuenta', [
+      pfRow('gift', 'Invita a tus amigos', { act: 'pf-open', v: 'referidos', val: `${Math.min(REF_MAX, Number(p.referidos) || 0)}/${REF_MAX}` }),
       pfRow('crown', 'Administrar suscripción', { act: 'pf-open', v: 'suscripcion', val: p.isPro === true ? 'PRO' : 'Gratuita' }),
       pfRow('user', 'Detalles personales', { act: 'pf-open', v: 'detalles' }),
       pfRow('sliders', 'Preferencias', { act: 'pf-open', v: 'prefs', val: tema }),
@@ -1072,7 +1168,7 @@ function viewPerfil() {
     <p class="small muted pf-foot">${api.mode === 'firebase' ? 'Tus datos se guardan en la nube y los verás en cualquier dispositivo.' : 'Modo prueba: tus datos se guardan solo en este dispositivo.'}</p>`;
 }
 
-const PF_TITULO = { editar: 'Editar perfil', detalles: 'Detalles personales', prefs: 'Preferencias', idioma: 'Idioma', suscripcion: 'Administrar suscripción', integraciones: 'Integraciones', func: 'Solicitar una función', faq: 'Preguntas frecuentes', terminos: 'Términos y condiciones', privacidad: 'Política de privacidad' };
+const PF_TITULO = { referidos: 'Invita a tus amigos', editar: 'Editar perfil', detalles: 'Detalles personales', prefs: 'Preferencias', idioma: 'Idioma', suscripcion: 'Administrar suscripción', integraciones: 'Integraciones', func: 'Solicitar una función', faq: 'Preguntas frecuentes', terminos: 'Términos y condiciones', privacidad: 'Política de privacidad' };
 const pfV = (k, d) => (st.pf.f && k in st.pf.f ? st.pf.f[k] : d); // lo escrito se conserva si la hoja se redibuja (p. ej. tras cambiar la foto)
 // El texto legal es uno solo (legal.js); cada vista toma las secciones que le tocan.
 const pfLegal = (re) => `<div class="sheet-list legal">${legalHTML().split(/(?=<h3>)/).filter((x) => re.test(x.slice(0, 60))).join('')}</div>`;
@@ -1084,6 +1180,7 @@ const pfBtn = () => { const b = document.getElementById('pf-save'); if (b && st.
 
 function pfCuerpo(v) {
   const p = st.profile;
+  if (v === 'referidos') return referidosSheetHTML();
   if (v === 'editar') {
     const [nom, ape] = nomApe(p);
     st.pf.ini = { nombre: nom, apellidos: ape, usuario: p.usuario || '' };
@@ -1190,7 +1287,7 @@ function suscripcionHTML() {
   return `<div class="sheet-list sub">
     <section class="sub-sec"><h3 class="pf-title">Suscripción actual</h3>
       <div class="sub-cur ${pro ? 'is-pro' : ''}"><b>${pro ? `Cadencia PRO${nomAct ? ` <span class="sub-dot">• ${nomAct}</span>` : ''}` : 'Suscripción Gratuita'}</b>
-        <span class="small muted">${pro ? 'Tienes todas las funciones Pro desbloqueadas.' : 'Pásate a PRO para desbloquear todas las funciones.'}</span></div></section>
+        <span class="small muted">${pro ? (proRegalo(st.profile) ? `Tu PRO de regalo dura hasta el ${diaPro(proRegalo(st.profile))}.` : 'Tienes todas las funciones Pro desbloqueadas.') : 'Pásate a PRO para desbloquear todas las funciones.'}</span></div></section>
     <section class="sub-sec"><h3 class="pf-title">Planes PRO</h3>
       <div class="sub-plans" role="radiogroup" aria-label="Planes PRO">${PLANES.map((x) => { const on = act === x.id, lock = act === 'siempre' && RECURRENTES.includes(x.id); return `<button type="button" class="sub-plan${on ? ' is-active' : ''}${lock ? ' is-locked' : ''}" role="radio" aria-checked="${sel === x.id}"${lock ? ' aria-disabled="true"' : ''} data-act="plan-sel" data-v="${x.id}">
         <span class="sub-radio" aria-hidden="true"></span><span class="sub-pt"><b>${x.n}</b><small>${x.nota}</small></span>${on ? '<span class="sub-price sub-now">Plan actual</span>' : `<span class="sub-price">${x.precio}</span>`}</button>`; }).join('')}</div>
@@ -1371,7 +1468,7 @@ async function enter(u) {
   if (u && st.view === 'paywall' && st.vieneDeRegistro) return; // aviso de sesión repetido mientras se ve el paywall: no entrar en la app todavía
   st.user = u; st.busy = false;
   if (!u && M) M.pararPro();
-  if (!u) { pwQuitar(); st.vieneDeRegistro = false; const anon = st.ob && st.ob.anon && !st.ob.justRegistered ? st.ob : null; /* un cuestionario sin cuenta en marcha NO se pierde por un aviso «sin sesión» */ st.cfg = st.pwd = st.pf = st.proInfo = st.rutShare = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = anon && st.view === 'onboarding' ? 'onboarding' : 'auth'; st.ob = anon; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
+  if (!u) { pwQuitar(); st.vieneDeRegistro = false; const anon = st.ob && st.ob.anon && !st.ob.justRegistered ? st.ob : null; /* un cuestionario sin cuenta en marcha NO se pierde por un aviso «sin sesión» */ st.cfg = st.pwd = st.pf = st.proInfo = st.rutShare = st.codigo = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = anon && st.view === 'onboarding' ? 'onboarding' : 'auth'; st.ob = anon; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
   try {
     // PUERTA OBLIGATORIA: antes de pintar la app (y antes de pedir entrenos, peso, racha…) se lee el perfil.
     // Sin `onboardingCompletado: true` solo se ve el cuestionario: nada de cabecera, barra inferior ni secciones.
@@ -1410,6 +1507,7 @@ async function entrarApp(u, { fade = false } = {}) {
   if (stravaRet) { const r = stravaRet; stravaRet = null; S.vuelta(r); }
   else if (irPendiente) { const d = irPendiente; irPendiente = null; st.tab = d.tab; lsSet('cadencia-tab', d.tab); if (d.hoja === 'peso') st.pesoSheet = true; render(); }
   R.mantener();
+  if (!st.profile.refCode) api.miCodigo().then((r) => { if (st.profile) st.profile.refCode = r.refCode; }).catch(() => { /* se pedirá al abrir «Invita a tus amigos» */ });
   if (!llegoConDestino) R.preguntar();
 }
 
@@ -1437,7 +1535,12 @@ root.addEventListener('click', async (e) => {
   else if (act === 'pw-seguir') pwSeguir();
   else if (act === 'legal-open') { if (st.view === 'auth') { const f = root.querySelector('form'); st.authKeep = f && f.email ? { email: f.email.value, pass: f.pass.value } : null; } st.legal = true; render(); if (st.authKeep) keepForm(st.authKeep); }
   else if (act === 'legal-close') { st.legal = false; render(); if (st.view === 'auth' && st.authKeep) { keepForm(st.authKeep); st.authKeep = null; } }
-  else if (act === 'pf-open') { st.pf = { v, f: {}, busy: false }; st.editGoals = null; render(); }
+  else if (act === 'pf-open') { st.pf = { v, f: {}, busy: false }; st.editGoals = null; render(); if (v === 'referidos') refAbrir(); }
+  else if (act === 'cod-open') { st.codigo = { val: '', msg: '', busy: false }; render(); const i = root.querySelector('.cod-input'); if (i) i.focus(); }
+  else if (act === 'cod-close') { st.codigo = null; render(); }
+  else if (act === 'ref-reclamar') reclamarReferido(v);
+  else if (act === 'ref-copy') refCopiar();
+  else if (act === 'ref-share') refCompartir();
   else if (act === 'plan-sel') { if (planActivo() === 'siempre' && RECURRENTES.includes(v)) return; const actual = (st.pf && st.pf.plan) || planActivo() || 'anual'; if (v === actual) return; if (st.pf && PLANES.some((x) => x.id === v)) { st.pf.plan = v; if (!pintarSeleccion(v)) render(); } }
   else if (act === 'plan-go') { const pa = planActivo(), el = (st.pf && st.pf.plan) || pa || 'anual'; if (subCta(el, pa).act !== 'plan-go') return; const url = planUrl((st.pf && st.pf.plan) || 'anual', st.user); if (!url) { toast('La suscripción estará disponible muy pronto.'); return; } const w = window.open(url, '_blank'); if (!w) location.assign(url); }
   else if (act === 'pro-info-open') { st.proInfo = true; render(); }
@@ -1565,6 +1668,7 @@ root.addEventListener('submit', async (e) => {
   else if (kind === 'ob') obNext();
   else if (kind === 'addweight') saveWeight(f.fecha.value, f.kg.value, { grasa: f.grasa.value, musculo: f.musculo.value, agua: f.agua.value, hueso: f.hueso.value }, pesoUnit(), !!f.dataset.edit, keepEdit(f));
   else if (kind.startsWith('pf-')) pfGuardar(kind, f);
+  else if (kind === 'codigo') canjearCodigo(f.codigo.value);
   else if (kind === 'delacc') borrarCuenta();
   else if (kind === 'pwd') guardarPwd(f);
   else if (kind === 'wk') wkSave();

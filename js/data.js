@@ -3,13 +3,20 @@
 // Cuentas gratuitas sin `proPlan` (anteriores a este campo): se ven con `proPlan: 'none'`, igual que las nuevas.
 const conPlan = (p) => {
   if (!p) return p;
-  if (p.isPro === true) return ['mensual', 'anual', 'siempre'].includes(p.proPlan) ? p : { ...p, proPlan: 'mensual' };
+  if (p.isPro === true && Number(p.proCaduca) > 0 && Number(p.proCaduca) <= Date.now()) p = { ...p, isPro: false }; // días de Pro regalados (referidos) ya caducados: el servidor lo confirma en menos de una hora
+  if (p.isPro === true) return ['mensual', 'anual', 'siempre'].includes(p.proPlan) || Number(p.proCaduca) > 0 ? p : { ...p, proPlan: 'mensual' }; // el Pro regalado (proCaduca) no es un plan de pago
   return p.proPlan ? p : { ...p, proPlan: 'none' };
 };
 
 import { FIREBASE_CONFIG } from './config.js';
 
 const FB = 'https://www.gstatic.com/firebasejs/10.14.1/';
+// Referidos: 1 semana de Pro por amigo invitado (máx. 10). Mismas cifras que las Cloud Functions miCodigo / canjearCodigo / reclamarReferido.
+export const REF_MAX = 10;
+export const REF_SEMANA_MS = 7 * 24 * 60 * 60 * 1000;
+const REF_ALFABETO = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const refNuevo = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => REF_ALFABETO[b % REF_ALFABETO.length]).join('');
+const refCodigoLimpio = (c) => String(c || '').trim().toUpperCase().replace(/[\s-]/g, '');
 // Código corto para compartir rutinas: 6 caracteres sin letras que se confunden (I, O) ni 0/1.
 const nuevoCodigo = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]).join('');
 
@@ -37,6 +44,16 @@ async function firebaseBackend(config) {
 
   const err = (code) => { const e = new Error(code); e.code = code; return e; };
   const toUser = (u) => (u ? { uid: u.uid, email: u.email, name: u.displayName || '' } : null);
+  // Llama a una Cloud Function de referidos y traduce sus errores (los mensajes de la IA no valen aquí).
+  const llamar = async (nombre, data) => {
+    const Fn = await import(/* @vite-ignore */ FB + 'firebase-functions.js');
+    try { return (await Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), nombre, { timeout: 30000 })(data || {})).data; }
+    catch (e) {
+      const c = String((e && e.code) || ''), hayMsg = e && e.details && e.details.codigo;
+      const msg = hayMsg ? e.message : c === 'functions/not-found' ? 'Los referidos todavía no están activados en el servidor.' : c === 'functions/unauthenticated' ? 'Inicia sesión otra vez para continuar.' : c === 'functions/failed-precondition' || c === 'functions/invalid-argument' || c === 'functions/already-exists' || c === 'functions/resource-exhausted' ? e.message : 'No se ha podido completar ahora mismo. Prueba más tarde.';
+      throw Object.assign(new Error(msg), { code: 'ref/' + (hayMsg || c) });
+    }
+  };
   let iaFn = null, stravaFn = null; // funciones «ia» y «strava» en Cloud Functions (europe-west1), se cargan la primera vez
 
   return {
@@ -46,7 +63,8 @@ async function firebaseBackend(config) {
       const cred = await A.createUserWithEmailAndPassword(auth, email, pass);
       if (name) await A.updateProfile(cred.user, { displayName: name });
       const nombre = (name || '').trim().split(/\s+/)[0] || '';
-      await F.setDoc(userRef(cred.user.uid), { nombre, nombreCompleto: (name || '').trim(), email, creado: F.serverTimestamp(), onboarded: false, onboardingCompletado: false, isPro: false, proPlan: 'none' }, { merge: true });
+      await F.setDoc(userRef(cred.user.uid), { nombre, nombreCompleto: (name || '').trim(), email, creado: F.serverTimestamp(), onboarded: false, onboardingCompletado: false, isPro: false, proPlan: 'none', referidos: 0, recompensas: [] }, { merge: true });
+      llamar('miCodigo').catch(() => {}); // el servidor le asigna su código de invitación (si falla, se pide al abrir la app)
       return toUser(cred.user);
     },
     async login(email, pass) { return toUser((await A.signInWithEmailAndPassword(auth, email, pass)).user); },
@@ -153,6 +171,10 @@ async function firebaseBackend(config) {
       }
       return (await stravaFn(data)).data;
     },
+    // Referidos (todo lo decide el servidor): su código, canjear el de un amigo y reclamar una semana por hito.
+    miCodigo() { return llamar('miCodigo'); },
+    canjearCodigo(codigo) { return llamar('canjearCodigo', { codigo }); },
+    reclamarReferido(hito) { return llamar('reclamarReferido', { hito }); },
     // Sesión del portal de Stripe (cambiar tarjeta / cancelar). Devuelve { url }.
     async portal(volver) {
       const Fn = await import(/* @vite-ignore */ FB + 'firebase-functions.js');
@@ -199,6 +221,10 @@ function localBackend() {
   };
   const emit = () => { const u = current(); listeners.forEach((cb) => cb(u)); };
   const byUid = (s, uid) => Object.values(s.users).find((u) => u.uid === uid);
+  const refNuevoLocal = (s) => { let c; do c = refNuevo(); while (Object.values(s.users).some((u) => u.profile.refCode === c)); return c; };
+  const refErr = (c, m) => Object.assign(new Error(m), { code: 'ref/' + c });
+  const refPagado = (p) => p.isPro === true && !(Number(p.proCaduca) > 0);
+  const refMas = (p) => Math.max(Date.now(), p.isPro === true && Number(p.proCaduca) > Date.now() ? Number(p.proCaduca) : 0) + REF_SEMANA_MS;
   const validEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
   return {
@@ -211,7 +237,7 @@ function localBackend() {
       const s = read();
       if (s.users[email]) throw err('auth/email-already-in-use');
       const uid = 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-      s.users[email] = { uid, email, pass: await hash(pass), profile: { nombre: (name || '').trim().split(/\s+/)[0] || '', nombreCompleto: (name || '').trim(), email, onboarded: false, onboardingCompletado: false, creado: Date.now(), isPro: false, proPlan: 'none' }, pesos: {} };
+      s.users[email] = { uid, email, pass: await hash(pass), profile: { nombre: (name || '').trim().split(/\s+/)[0] || '', nombreCompleto: (name || '').trim(), email, onboarded: false, onboardingCompletado: false, creado: Date.now(), isPro: false, proPlan: 'none', refCode: refNuevoLocal(s), referidos: 0, recompensas: [] }, pesos: {} };
       s.session = email;
       write(s); emit();
       return current();
@@ -277,6 +303,38 @@ function localBackend() {
       throw err('local/no-ia');
     },
     async portal() { throw err('local/no-portal'); },
+    // Referidos en modo prueba: misma lógica que las Cloud Functions, pero con las cuentas guardadas en este dispositivo.
+    async miCodigo() {
+      const s = read(), u = s.session && s.users[s.session]; if (!u) throw err('auth/no-current-user');
+      if (!u.profile.refCode) { u.profile = { ...u.profile, refCode: refNuevoLocal(s), referidos: u.profile.referidos || 0, recompensas: u.profile.recompensas || [] }; write(s); }
+      return { refCode: u.profile.refCode };
+    },
+    async canjearCodigo(codigo) {
+      const s = read(), yo = s.session && s.users[s.session]; if (!yo) throw err('auth/no-current-user');
+      const c = refCodigoLimpio(codigo);
+      if (!/^[A-Z0-9]{6}$/.test(c)) throw refErr('ref-formato', 'El código tiene 6 letras y números.');
+      const el = Object.values(s.users).find((u) => u.profile.refCode === c);
+      if (!el) throw refErr('ref-no-existe', 'Ese código no existe. Revísalo y vuelve a probar.');
+      if (el.uid === yo.uid) throw refErr('ref-propio', 'No puedes usar tu propio código.');
+      if (yo.profile.codigoUsado === true) throw refErr('ref-usado', 'Ya has usado un código de invitación en esta cuenta.');
+      if (refPagado(yo.profile)) throw refErr('ref-pro-pago', 'Ya tienes Cadencia PRO de pago: la semana de regalo no te haría falta.');
+      if ((el.profile.referidos || 0) >= REF_MAX) throw refErr('ref-lleno', 'Este código ya ha llegado a su límite de invitados.');
+      const caduca = refMas(yo.profile);
+      yo.profile = { ...yo.profile, isPro: true, proCaduca: caduca, codigoUsado: true };
+      el.profile = { ...el.profile, referidos: (el.profile.referidos || 0) + 1 };
+      write(s); return { proCaduca: caduca };
+    },
+    async reclamarReferido(hito) {
+      const s = read(), u = s.session && s.users[s.session]; if (!u) throw err('auth/no-current-user');
+      const h = Number(hito), p = u.profile, rec = p.recompensas || [];
+      if (!Number.isInteger(h) || h < 1 || h > REF_MAX) throw refErr('ref-formato', 'Recompensa no válida.');
+      if (rec.includes(h)) throw refErr('ref-reclamado', 'Esa semana ya está reclamada.');
+      if ((p.referidos || 0) < h) throw refErr('ref-faltan', `Aún no has invitado a ${h} ${h === 1 ? 'amigo' : 'amigos'}.`);
+      if (refPagado(p)) throw refErr('ref-pro-pago', 'Ya tienes Cadencia PRO de pago. Reclama la semana cuando tu plan termine: no se pierde.');
+      const caduca = refMas(p), recompensas = [...rec, h].sort((a, b) => a - b);
+      u.profile = { ...p, isPro: true, proCaduca: caduca, recompensas };
+      write(s); return { proCaduca: caduca, recompensas };
+    },
     local: true, // modo prueba: el Coach AI devuelve un ejemplo y lo guarda la propia app
     async coach() { throw err('local/no-ia'); },
     // En modo prueba no hay servidor: Strava solo responde si una prueba automática lo simula.

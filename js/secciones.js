@@ -1243,14 +1243,14 @@ export function crearSecciones(ctx) {
       [I.check, '10 consultas de IA al día', 'Se reparten entre fotos y recomendaciones, y se renuevan cada día.'],
   ];
   function proWelcomeSheet() {
-    const ventajas = proVentajas();
+    const ventajas = proVentajas(), pr = st.profile || {}, regalo = Number(pr.proCaduca) > Date.now() ? fmtDate(new Date(Number(pr.proCaduca)).toISOString().slice(0, 10)) : '';
     return `<div class="sheet-back" data-act="pro-welcome-close"></div>
       <div class="sheet short paywall" role="dialog" aria-modal="true" aria-label="Bienvenida a Cadencia Pro">
         <div class="sheet-grab"></div>
         <div class="sheet-list pw welcome">
           <div class="pw-ico">${ICO.spark}</div>
           <h3>¡Bienvenido a Cadencia Pro!</h3>
-          <p>Gracias por apoyar Cadencia. Esto es lo que ya tienes desbloqueado:</p>
+          <p>${regalo ? `Tienes Cadencia Pro de regalo hasta el <b>${regalo}</b>. Esto es lo que ya tienes desbloqueado:` : 'Gracias por apoyar Cadencia. Esto es lo que ya tienes desbloqueado:'}</p>
           <ul class="pw-list">${ventajas.map(([ic, t, d]) => `<li><span class="pw-li-i">${ic}</span><span><b>${t}</b><small>${d}</small></span></li>`).join('')}</ul>
           <button type="button" class="btn block" data-act="pro-welcome-go">Probar Escanear alimento</button>
           <button type="button" class="btn ghost block" data-act="pro-welcome-close">Empezar</button>

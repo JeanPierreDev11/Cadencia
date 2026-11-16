@@ -1738,3 +1738,29 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 /* 2026-11-16 · Fase 3 (textos de marca): la pausa antes de firmar usa frases largas (se reparten en líneas equilibradas) y los títulos de bienvenida/registro/historia también */
 .pausa-t { padding: 0 6px; text-wrap: balance; }
 .historia-t, .bv-body .ob-title { text-wrap: balance; }
+
+/* ---------- Referidos: hoja «Invita a tus amigos», código y modal de canje ---------- */
+.pw-codigo { margin-top: 12px; }
+.ref-body { display: grid; grid-auto-rows: max-content; align-content: start; gap: 16px; padding-bottom: 24px; }
+.ref-body p { margin: 0; }
+.ref-code { display: grid; gap: 8px; justify-items: center; text-align: center; padding: 16px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); }
+.ref-cod { font-size: 34px; letter-spacing: .22em; padding-left: .22em; font-weight: 800; font-stretch: 125%; color: var(--accent-text, var(--accent)); user-select: all; -webkit-user-select: all; }
+.ref-cod-no { font-size: 20px; letter-spacing: 0; color: var(--muted); }
+.ref-acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.ref-prog { display: grid; gap: 8px; }
+.ref-bar { height: 10px; border-radius: 2px; background: var(--surface2); overflow: hidden; }
+.ref-bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; transition: width .35s ease; }
+.ref-lista { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; min-height: max-content; }
+.ref-hito { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-top: 1px solid var(--line); }
+.ref-hito:first-child { border-top: 0; }
+.ref-n { flex: none; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; font-size: 14px; font-weight: 800; background: var(--surface2); color: var(--muted); }
+.ref-hito.is-ready .ref-n { background: var(--accent); color: #000; }
+.ref-t { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.ref-t b { font-size: 15px; }
+.ref-t small { font-size: 12px; color: var(--muted); }
+.ref-btn { flex: none; min-width: 132px; white-space: nowrap; padding-left: 10px; padding-right: 10px; }
+.ref-btn.is-done { background: var(--surface2); color: var(--muted); border: 0; opacity: 1; }
+.ref-hito.is-done .ref-t b { color: var(--muted); }
+.cod-input { text-align: center; text-transform: uppercase; letter-spacing: .2em; font-size: 22px; font-weight: 700; }
+.cod-msg { color: var(--bad); font-size: 14px; }
+.pw-aviso-b .cod-msg { color: var(--bad); }
