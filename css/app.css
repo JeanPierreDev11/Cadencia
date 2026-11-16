@@ -1765,3 +1765,33 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .cod-msg { color: var(--bad); font-size: 14px; }
 .pw-aviso-b .cod-msg { color: var(--bad); }
 .ref-link { word-break: break-all; user-select: all; -webkit-user-select: all; text-align: center; }
+
+/* 2026-11-17 · Cuerpo 3D (Recuperación muscular y Esta semana) */
+.rcv-body { all: unset; box-sizing: border-box; position: relative; display: flex; justify-content: center; gap: 4px; width: 100%; background: var(--card-bg); border-radius: 8px; padding: 12px 8px 10px; cursor: pointer; box-shadow: var(--card-sh); -webkit-tap-highlight-color: transparent; }
+.rcv-body:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rcv-body:active { transform: scale(.995); }
+.c3-fig { display: block; width: 48%; max-width: 190px; aspect-ratio: 1 / 2; }
+.c3-fig img, .c3-fig .anat { display: block; width: 100%; height: 100%; object-fit: contain; }
+.c3-fig:not(.listo) .anat { opacity: .9; }
+.c3-fig.listo img { animation: c3In .35s ease both; }
+@keyframes c3In { from { opacity: 0; } to { opacity: 1; } }
+.rcv-3d { position: absolute; top: 8px; right: 8px; font: 800 .68rem Archivo, sans-serif; letter-spacing: .08em; color: var(--accent-ink); background: var(--accent); padding: 3px 7px; border-radius: 2px; pointer-events: none; }
+.rcv-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.rcv-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--card-bg); color: var(--card-ink); border-radius: 999px; padding: 5px 10px; font-size: .78rem; box-shadow: var(--card-sh); }
+.rcv-chip i { width: 8px; height: 8px; border-radius: 50%; }
+.rcv-chip b { font-weight: 800; }
+.c3-sheet .c3-body { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; padding: 10px 14px calc(14px + env(safe-area-inset-bottom, 0px)); }
+.c3-vivo { position: relative; flex: 1; min-height: 240px; background: var(--card-bg); border-radius: 8px; overflow: hidden; }
+.c3-host { position: absolute; inset: 0; }
+.c3-fallo { color: var(--bad); font-size: .85rem; margin: 0; }
+.c3-lados { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.c3-lados .btn { padding: 10px 6px; }
+.c3-info { min-height: 62px; background: var(--card-bg); color: var(--card-ink); border-radius: 8px; padding: 10px 12px; }
+.c3-nom { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0; }
+.c3-nom b { font-size: 1rem; }
+.c3-nom span { display: inline-flex; align-items: center; gap: 6px; font-size: .82rem; color: var(--card-mute, var(--muted)); }
+.c3-nom i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.c3-det, .c3-hint { margin: 4px 0 0; font-size: .78rem; color: var(--card-mute, var(--muted)); }
+.c3-hint { margin: 0; padding-top: 6px; text-align: center; }
+.c3-leg { margin-top: 0; justify-content: center; }
+.c3-sheet .c3-leg i { margin-left: 10px; }

@@ -13,6 +13,7 @@ import { crearStrava } from './strava-ui.js';
 import { iniciarInstalar } from './instalar.js';
 import * as UI from './ui.js';
 import * as OB from './onboarding.js';
+import * as C3 from './cuerpo.js';
 
 /* ================================================================== */
 /* Utilidades                                                          */
@@ -98,7 +99,8 @@ function render() {
   document.body.dataset.view = st.view;
   document.title = APP_NAME;
   if (M) M.afterRender();
-  document.body.classList.toggle('noscroll', !!(st.limite || st.liveFin || st.calentar || st.pf || st.proInfo || st.codigo || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.resumen || st.legal || st.del || st.pro || st.proWelcome || st.recAsk));
+  C3.enganchar(root);
+  document.body.classList.toggle('noscroll', !!(st.limite || st.liveFin || st.calentar || st.pf || st.proInfo || st.codigo || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.resumen || st.cuerpo3d || st.legal || st.del || st.pro || st.proWelcome || st.recAsk));
 }
 
 /* ================================================================== */
@@ -178,7 +180,7 @@ async function borrarCuenta() {
     await api.deleteAccount(D.pass);
     // Limpia lo que la app guarda en este móvil (salvo el tema claro u oscuro).
     try { Object.keys(localStorage).filter((k) => k.startsWith('cadencia-') && k !== 'cadencia-theme' && k !== 'cadencia-local-v1').forEach((k) => localStorage.removeItem(k)); } catch (e) { /* nada */ }
-    st.del = null; st.modoSel = null; st.resumen = null; st.limite = null; st.calentar = null; st.liveFin = null; st.live = null; st.tab = 'inicio'; st.authMode = 'login';
+    st.del = null; st.modoSel = null; st.resumen = null; st.cuerpo3d = null; st.limite = null; st.calentar = null; st.liveFin = null; st.live = null; st.tab = 'inicio'; st.authMode = 'login';
     obAnonBorrar();
     st.authMsg = { ok: true, text: 'Tu cuenta y todos tus datos se han borrado.' };
     if (st.user) enter(null); else render();
@@ -655,7 +657,7 @@ function focusFirst() {
 /* ================================================================== */
 // Entreno vive en entreno-ui.js; Nutrición, Rutas, Taller, Progreso y Objetivos en secciones.js.
 const W = crearEntreno({ st, root, get api() { return api; }, render, get M() { return M; }, currentKg: () => currentKg(), goalById: (id) => goalById(id), stravaBtn: () => S.syncBtnHTML() });
-const { rutinaOf, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, regSheetHTML, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, limiteSheetHTML, calentarSheetHTML, resumenSheetHTML, recuperacionHTML, rutShareSheetHTML, finSheetHTML } = W;
+const { rutinaOf, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, regSheetHTML, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, limiteSheetHTML, calentarSheetHTML, resumenSheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML, finSheetHTML } = W;
 const M = crearSecciones({
   st, get api() { return api; }, render, toast, esc, num, nf, todayISO, fmtDate, lsGet, lsSet, I, E, errorText,
   currentKg: () => currentKg(), rutinaOf: () => rutinaOf(), viewPeso: (sub) => viewPeso(sub),
@@ -668,7 +670,7 @@ let stravaRet = leerRetorno(); // si venimos de la pantalla de permisos de Strav
 
 const gearHTML = () => `<button type="button" class="gear" data-act="cfg-open" aria-label="Configuración">${I.gear}</button>`;
 function viewMain() {
-  const sheet = st.codigo ? codigoSheetHTML() : st.limite ? limiteSheetHTML() : st.proInfo ? proInfoHTML() : st.legal ? legalSheetHTML() : st.pf ? pfSheetHTML() : st.liveFin && st.live ? finSheetHTML() : st.calentar ? calentarSheetHTML() : st.rutShare ? rutShareSheetHTML() : st.modoSel ? modoSheetHTML() : st.resumen ? resumenSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.rutDelAsk ? rutDelSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
+  const sheet = st.cuerpo3d ? cuerpoSheetHTML() : st.codigo ? codigoSheetHTML() : st.limite ? limiteSheetHTML() : st.proInfo ? proInfoHTML() : st.legal ? legalSheetHTML() : st.pf ? pfSheetHTML() : st.liveFin && st.live ? finSheetHTML() : st.calentar ? calentarSheetHTML() : st.rutShare ? rutShareSheetHTML() : st.modoSel ? modoSheetHTML() : st.resumen ? resumenSheetHTML() : st.del ? delSheetHTML() : st.lib ? libSheetHTML() : st.rutDelAsk ? rutDelSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
   if (st.rw) return viewRutWizard() + sheet;
   if (st.live && !st.liveMin) return viewLive() + sheet;
   if (st.wk) return viewWkForm();

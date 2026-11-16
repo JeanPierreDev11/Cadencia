@@ -518,29 +518,90 @@ export function seriesPorMusculo(w) {
   if (w.tipo === 'bici') { const v = Math.min(12, (Number(w.min) || 0) / 10); add('qu', v); add('gl', v); add('ca', v); add('ha', v / 2); }
   return o;
 }
-const HORAS_REC = 72;
-// % de recuperación por músculo (solo los que aún no están al 100). Sin hora en el entreno → hoy cuenta como ahora; otros días, las 12:00.
-// Baja a 0 % con ≥6 series efectivas (20 % si menos) y sube lineal hasta 100 % a las 72 h (≈33 % cada 24 h).
-export function recuperacion(ws, ahora = new Date()) {
-  const r = {};
-  for (const w of ws || []) {
-    const h = w.fecha === toISO(ahora) ? 0 : Math.max(0, (ahora - new Date(`${w.fecha}T12:00:00`)) / 36e5); // hoy = hace un momento
-    if (!(h < HORAS_REC)) continue;
-    for (const [k, v] of Object.entries(seriesPorMusculo(w))) {
-      const p0 = v >= 6 ? 0 : 20, pct = p0 + (100 - p0) * (h / HORAS_REC);
-      r[k] = Math.min(r[k] ?? 100, pct);
+// ── Fatiga real por músculo ──
+// No cuenta solo series: pesa cuánto te acercaste al fallo (RIR), cuánta carga usaste respecto a tu mejor marca de ese
+// ejercicio y si hubo drop-sets. Sin RIR apuntado se supone un esfuerzo medio.
+const ESF_RIR = [1, 0.85, 0.7, 0.55, 0.4]; // RIR 0, 1, 2, 3, 4 o más
+export const esfuerzoSerie = (s) => {
+  const r = s && s.rir != null && s.rir !== '' ? Math.round(Number(s.rir)) : null;
+  const e = r == null || !(r >= 0) ? 0.65 : ESF_RIR[Math.min(4, r)];
+  return s && s.isDropSet ? Math.min(1.15, e + 0.15) : e;
+};
+// 1RM estimado de una serie (Brzycki hasta 12 reps, Epley por encima).
+const e1rmSerie = (kg, reps) => {
+  kg = Number(kg); reps = Math.round(Number(reps));
+  if (!(kg > 0) || !(reps >= 1)) return 0;
+  return reps <= 12 ? kg * (36 / (37 - reps)) : kg * (1 + Math.min(reps, 30) / 30);
+};
+// Mejor 1RM estimado de cada ejercicio en todo el historial.
+function mejoresE1RM(ws) {
+  const m = new Map();
+  for (const w of ws || []) for (const e of w.ejercicios || []) {
+    if (exCardio(e)) continue;
+    const k = canon(e.n).toLowerCase();
+    for (const s of trabajo(e.series)) { const v = e1rmSerie(s.kg, s.reps); if (v > (m.get(k) || 0)) m.set(k, v); }
+  }
+  return m;
+}
+// Peso de la carga: 0,7 (≤50 % de tu mejor marca) → 1,3 (≥95 %). Sin peso (cuerpo) o sin marca → 1.
+const factorCarga = (kg, mejor) => {
+  kg = Number(kg);
+  if (!(kg > 0) || !(mejor > 0)) return 1;
+  return 0.7 + 0.6 * Math.max(0, Math.min(1, (Math.min(1, kg / mejor) - 0.5) / 0.45));
+};
+// Carga de un entreno por músculo: { k: { S (esfuerzo), n (series efectivas), rirS, rirN } }
+function cargaEntreno(w, mejores) {
+  const o = {}, get = (k) => (o[k] || (o[k] = { S: 0, n: 0, rirS: 0, rirN: 0 }));
+  for (const e of w.ejercicios || []) {
+    if (exCardio(e)) { // cardio dentro del entreno: carga piernas por minutos, más suave que la fuerza
+      const v = Math.min(8, (e.series || []).reduce((a, s) => a + (Number(cv(s, 'min')) || 0), 0) / 10) * 0.6;
+      if (v > 0) { get('qu').S += v; get('gl').S += v / 2; get('ca').S += v; get('ha').S += v / 2; }
+      continue;
+    }
+    const x = ejercicio(e.n), series = trabajo(e.series);
+    if (!x || !series.length) continue;
+    let { p, s } = musculosDet(x);
+    if (!p.length && GRUPO_DET[x.m]) p = [GRUPO_DET[x.m]];
+    const mejor = mejores.get(canon(e.n).toLowerCase()) || 0;
+    for (const q of series) {
+      const f = esfuerzoSerie(q) * factorCarga(q.kg, mejor), tieneRir = q.rir != null && q.rir !== '';
+      const dar = (k, peso) => { const c = get(k); c.S += f * peso; c.n += peso; if (tieneRir) { c.rirS += Number(q.rir) * peso; c.rirN += peso; } };
+      p.forEach((k) => dar(k, 1)); s.forEach((k) => dar(k, 0.5));
     }
   }
-  return r;
+  if (w.tipo === 'bici') { const v = Math.min(12, (Number(w.min) || 0) / 10) * 0.6; if (v > 0) { get('qu').S += v; get('gl').S += v; get('ca').S += v; get('ha').S += v / 2; } }
+  return o;
 }
+// Análisis completo para el mapa del cuerpo.
+//  rec[k]  → % de recuperación (0–100) de lo que aún no está al 100 %.
+//  sem[k]  → 0‑1: esfuerzo acumulado en los últimos 7 días (≈10 de esfuerzo = máximo).
+//  info[k] → { series (efectivas, 7 días), rir (medio de la última sesión o null), horas (para recuperarse del todo), fecha (último entreno) }
+// Un entreno deja una fatiga inicial de 0‑100 % según su esfuerzo (F0 = 100·(1 − e^(−S/3,2))) que se va a 0 en 24‑72 h (más cuanto más fatiga);
+// si hay varios entrenos recientes, la fatiga se combina. Hoy cuenta como «hace un momento»; otros días, las 12:00.
+export function analisisMusculos(ws, ahora = new Date(), hoy = toISO(ahora)) {
+  const mejores = mejoresE1RM(ws), desde = addDays(hoy, -6), resto = {}, tot = {}, info = {};
+  for (const w of ws || []) {
+    if (!w.fecha || w.fecha > hoy) continue;
+    const h = w.fecha === hoy ? 0 : Math.max(0, (ahora - new Date(`${w.fecha}T12:00:00`)) / 36e5);
+    for (const [k, c] of Object.entries(cargaEntreno(w, mejores))) {
+      const i = info[k] || (info[k] = { series: 0, rir: null, horas: 0, fecha: '' });
+      if (w.fecha >= desde) { tot[k] = (tot[k] || 0) + c.S; i.series += c.n; }
+      if (w.fecha >= i.fecha) { i.fecha = w.fecha; i.rir = c.rirN ? c.rirS / c.rirN : null; }
+      const F0 = 100 * (1 - Math.exp(-c.S / 3.2)), T = 24 + 48 * (F0 / 100);
+      if (h < T && F0 > 0.5) { resto[k] = (resto[k] ?? 1) * (1 - (F0 * (1 - h / T)) / 100); i.horas = Math.max(i.horas, T - h); }
+    }
+  }
+  const rec = {}, sem = {};
+  for (const k of Object.keys(resto)) rec[k] = 100 * resto[k];
+  for (const k of Object.keys(tot)) sem[k] = Math.min(1, tot[k] / 10);
+  return { rec, sem, info };
+}
+// % de recuperación por músculo (solo los que aún no están al 100).
+export const recuperacion = (ws, ahora = new Date()) => analisisMusculos(ws, ahora).rec;
 // % de un grupo = el del músculo peor recuperado
 export const recGrupo = (rec, g) => Math.round(Math.min(...g.m.map((k) => rec[k] ?? 100)));
-// Intensidad 0‑1 por músculo con las series efectivas de los últimos 7 días (hoy incluido); 12 series ≈ máximo.
-export function semana(ws, hoy) {
-  const desde = addDays(hoy, -6), tot = {};
-  for (const w of ws || []) if (w.fecha >= desde && w.fecha <= hoy) for (const [k, v] of Object.entries(seriesPorMusculo(w))) tot[k] = (tot[k] || 0) + v;
-  return Object.fromEntries(Object.entries(tot).map(([k, v]) => [k, Math.min(1, v / 12)]));
-}
+// Intensidad 0‑1 por músculo con el esfuerzo de los últimos 7 días (hoy incluido).
+export const semana = (ws, hoy) => analisisMusculos(ws, new Date(`${hoy}T12:00:00`), hoy).sem;
 // ¿Tiene sentido hacerlo con un lado cada vez? (máquinas, poleas, mancuernas…; no barras ni los que ya son a una mano)
 export function puedeUnilateral(n) {
   const x = ejercicio(n);

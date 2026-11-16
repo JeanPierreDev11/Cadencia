@@ -22,6 +22,8 @@ const OFUSCAR = {
   simplify: true,
   numbersToExpressions: true,
   stringArray: true,
+  // Los nombres de los trozos cargados bajo demanda (zxing, cuerpo3d) llevan una marca de Rollup que se sustituye DESPUÉS de ofuscar: si va dentro de la tabla de textos, la carga falla.
+  reservedStrings: ['!~\\{\\d+\\}~'],
   stringArrayEncoding: ['base64'],
   stringArrayThreshold: 0.75,
   stringArrayRotate: true,
@@ -43,7 +45,7 @@ function ofuscar() {
     name: 'cadencia-ofuscar',
     apply: 'build',
     renderChunk(code, chunk) {
-      // zxing es una librería pública (MIT/Apache): no merece la pena ofuscarla y es muy grande.
+      // zxing y three.js (cuerpo3d) son librerías públicas y muy grandes: no se ofuscan.
       if (chunk.facadeModuleId && chunk.facadeModuleId.includes('/vendor/')) return null;
       const r = JavaScriptObfuscator.obfuscate(code, { ...OFUSCAR, sourceType: 'module' });
       return { code: r.getObfuscatedCode(), map: null };
@@ -59,7 +61,7 @@ function serviceWorker() {
     apply: 'build',
     generateBundle(_opts, bundle) {
       const publicos = ['manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
-      const propios = Object.keys(bundle).filter((f) => !f.includes('zxing') && !f.endsWith('.map') && f !== 'index.html');
+      const propios = Object.keys(bundle).filter((f) => !f.includes('zxing') && !f.includes('cuerpo3d') && !f.endsWith('.map') && f !== 'index.html');
       const archivos = ['./', './index.html', ...[...propios, ...publicos].map((f) => './' + f)];
       const huella = createHash('sha256').update(archivos.join('|')).digest('hex').slice(0, 10);
       let sw = readFileSync(new URL('./sw.js', import.meta.url), 'utf8');

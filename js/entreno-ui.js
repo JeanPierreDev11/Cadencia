@@ -5,6 +5,7 @@ import { errorText } from './data.js';
 import * as E from './entreno.js';
 import * as CAL from './calorias.js';
 import { analizarEntreno } from './coach.js';
+import * as C3 from './cuerpo.js';
 
 export function crearEntreno(ctx) {
   const { st, root } = ctx;
@@ -1735,6 +1736,10 @@ root.addEventListener('click', async (e) => {
   if (act === 'rest-saltar') { st.rest = null; restPaint(); return; }
 
   // modo de entreno de fuerza
+  if (act === 'c3-open') { if (!esPro()) return abrirSuscripcion(); st.cuerpo3d = { modo: v === 'sem' ? 'sem' : 'rec', sel: null }; return render(); }
+  if (act === 'c3-close') { st.cuerpo3d = null; return render(); }
+  if (act === 'c3-modo' && st.cuerpo3d) { st.cuerpo3d.modo = v === 'sem' ? 'sem' : 'rec'; st.cuerpo3d.sel = null; C3.elegir(null); return render(); }
+  if (act === 'c3-lado') return C3.girarA(v);
   if (act === 'sum-close') { st.resumen = null; return render(); }
   if (act === 'fin-close') { st.liveFin = null; return render(); }
   if (act === 'fin-ok' && st.liveFin && st.live) return void liveFinish();
@@ -1877,32 +1882,39 @@ root.addEventListener('change', async (e) => {
 });
 
 // ── Recuperación muscular y mapa de la semana (Forma física) ──
-const recColor = (p) => (p >= 100 ? '#3DDC84' : p >= 50 ? '#FFB020' : '#FF453A');
+const recColor = (p) => C3.colFatiga(100 - p);
+const sexoCuerpo = () => (st.profile && st.profile.sexo === 'mujer' ? 'mujer' : 'hombre');
+const datosCuerpo = () => C3.datos((st.workouts || []).filter((w) => w.tipo === 'gym' || w.tipo === 'bici'), esPro(), todayISO());
+// Dibujo plano de siempre (mientras llega el modelo 3D, o si no se puede cargar) con los mismos colores.
+const planoCuerpo = (cols, lado, nombre) => figura(cols, lado, nombre);
+// Cuerpo de frente + espalda: al tocarlo se abre la hoja 3D.
+function cuerpoHTML(modo, d, titulo) {
+  const cols = C3.colores(modo, d), sexo = sexoCuerpo();
+  const lado = (l, n) => C3.fig(sexo, modo, l, cols, planoCuerpo(cols, l, n), `${titulo}: ${n}`);
+  return `<button type="button" class="rcv-body" data-act="c3-open" data-v="${modo}" aria-label="${esc(titulo)}: ver el cuerpo en 3D">${lado('front', 'frente')}${lado('back', 'espalda')}<span class="rcv-3d">3D</span></button>`;
+}
 function recuperacionHTML() {
-  const ws = (st.workouts || []).filter((w) => w.tipo === 'gym' || w.tipo === 'bici');
-  const pro = esPro();
-  // Sin Pro NO se calcula nada real: todo 100 % fresco (verde) y sin semana, para que el blur no deje deducir la fatiga.
-  const rec = pro ? E.recuperacion(ws, new Date()) : {}, sem = pro ? E.semana(ws, todayISO()) : {};
-  const tarjetas = E.MUSC_GRUPOS.map((g) => {
-    const pct = pro ? E.recGrupo(rec, g) : 100, c = recColor(pct), fills = {};
-    g.m.forEach((k) => { fills[k] = [c, 0.95]; });
-    return `<div class="rcv-card">${figura(fills, g.side, g.n)}<b>${g.n}</b><span class="rcv-pill" style="background:${c}">${pct}%</span></div>`;
+  const pro = esPro(), d = datosCuerpo();
+  const chips = E.MUSC_GRUPOS.map((g) => {
+    const pct = pro ? E.recGrupo(d.rec, g) : 100;
+    return `<span class="rcv-chip"><i style="background:${recColor(pct)}"></i>${g.n}<b>${pct}%</b></span>`;
   }).join('');
-  const heat = {};
-  Object.entries(sem).forEach(([k, v]) => { heat[k] = ['#F2BE1A', (0.25 + 0.75 * v).toFixed(2)]; });
-  const hay = pro && Object.keys(heat).length;
-  const cuerpo = `<div class="rcv-row">${tarjetas}</div>
+  const hay = pro && Object.keys(d.sem).length;
+  const cuerpo = `${cuerpoHTML('rec', d, 'Recuperación muscular')}
+    <div class="rcv-chips">${chips}</div>
     <div class="rcv-leg"><i style="background:#3DDC84"></i>Listo <i style="background:#FFB020"></i>Descansando <i style="background:#FF453A"></i>Fatigado</div>
+    <p class="rcv-sub rcv-note">Se calcula con tus series, lo cerca que llegaste al fallo (RIR) y la carga que usaste.</p>
     <h2>Esta semana</h2><p class="rcv-sub">Mira qué músculos entrenaste</p>
-    <div class="rcv-week">${figura(heat, 'front', 'Frente')}${figura(heat, 'back', 'Espalda')}</div>
-    <p class="rcv-sub rcv-note">${hay ? 'Cuanto más intenso el amarillo, más volumen.' : 'Aún no has entrenado esta semana.'}</p>`;
+    ${cuerpoHTML('sem', d, 'Entrenado esta semana')}
+    <p class="rcv-sub rcv-note">${hay ? 'Cuanto más intenso el amarillo, más esfuerzo acumulado.' : 'Aún no has entrenado esta semana.'}</p>`;
   // Muro de cristal: sin Pro se ve borroso y un candado encima abre la suscripción.
   const muro = `<div class="pro-wall">
       <div class="pro-blur-overlay" aria-hidden="true" inert>${cuerpo}</div>
       <button type="button" class="pro-lock" data-act="pro-open" data-v="recuperacion" aria-label="Desbloquea tu mapa de fatiga con Pro">${I.lock}<b>Desbloquea tu mapa de fatiga con Pro</b></button>
     </div>`;
-  return `<section class="rcv"><h2>Recuperación muscular</h2><p class="rcv-sub">Mira qué músculos están listos para entrenar</p>
+  return `<section class="rcv"><h2>Recuperación muscular</h2><p class="rcv-sub">Toca el cuerpo para verlo en 3D y girarlo</p>
     ${esPro() ? cuerpo : muro}</section>`;
 }
-  return { finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, limiteSheetHTML, calentarSheetHTML, recuperacionHTML, rutShareSheetHTML };
+function cuerpoSheetHTML() { return C3.sheetHTML(st.cuerpo3d, sexoCuerpo(), datosCuerpo(), todayISO()); }
+  return { finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, limiteSheetHTML, calentarSheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML };
 }
