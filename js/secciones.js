@@ -7,6 +7,7 @@ import * as CAL from './calorias.js';
 import { leerGPX, MAX_BYTES } from './gpx.js';
 import { trazado, IDA_Y_VUELTA } from './trazados.js';
 import { crearMapa } from './mapa.js';
+import { neon } from './util.js';
 
 const BR = globalThis.BR || {};
 const T = BR.training, RF = BR.routeFuel, RT = BR.routes, BD = BR.body, GS = BR.groupsets;
@@ -197,8 +198,8 @@ export function crearSecciones(ctx) {
       </div>
     <section class="nd">
       <div class="nd-main"><div class="nd-t"><b class="num ${left < 0 ? 'bad' : ''}">${nf(od ? Math.abs(left) : eaten)}</b><span class="nd-l">${od ? (left >= 0 ? 'Calorías restantes' : 'Calorías sobrantes') : 'Calorías tomadas'}</span></div>
-        ${ring(od ? eaten / od.target : 0, 112, 10, `<span class="ring-ico">${ICO.llama}</span>`)}</div>
-      <div class="nd-macs">${mac('Proteína', '🍗', tot.p, od && od.macros.p)}${mac('Hidratos', '🌾', tot.c, od && od.macros.c)}${mac('Grasas', '🥑', tot.f, od && od.macros.f)}</div>
+        ${ring(od ? eaten / od.target : 0, 112, 10, `<span class="ring-ico">${neon('fire-streak-flame-icon', 'neon-icon')}</span>`)}</div>
+      <div class="nd-macs">${mac('Proteína', neon('protein-macro-molecule-icon'), tot.p, od && od.macros.p)}${mac('Hidratos', neon('carbs-wheat-icon'), tot.c, od && od.macros.c)}${mac('Grasas', neon('fat-drop-icon'), tot.f, od && od.macros.f)}</div>
       ${od ? `<p class="small muted">Objetivo = ${nf(od.PL.tdee)} de gasto diario${od.PL.pl.dailyDeficit ? ` − ${nf(od.PL.pl.dailyDeficit)} de déficit` : ''}${od.PL.surplus ? ` + ${nf(od.PL.surplus)} para ganar músculo` : ''}.</p>`
         : `<p class="small">Completa edad y estatura en tu <button class="link" data-act="tab" data-v="perfil">perfil</button> para calcular tu objetivo.</p>`}
     </section>`;
@@ -206,7 +207,7 @@ export function crearSecciones(ctx) {
     // Comidas
     const prev = dia(E.addDays(d, -1)).items, ayerTxt = d === t ? 'ayer' : 'el día anterior';
     if (st.iaQuedan == null) setTimeout(() => iaEstado(), 0);
-    const mac3 = (x) => `<span class="mc-m"><span>🍗 ${nf(x.p, 0)}g</span><span>🌾 ${nf(x.c, 0)}g</span><span>🥑 ${nf(x.f, 0)}g</span></span>`;
+    const mac3 = (x) => `<span class="mc-m"><span>${neon('protein-macro-molecule-icon')}${nf(x.p, 0)}g</span><span>${neon('carbs-wheat-icon')}${nf(x.c, 0)}g</span><span>${neon('fat-drop-icon')}${nf(x.f, 0)}g</span></span>`;
     // Una tarjeta por comida registrada: lo escaneado con IA (un grupo) lleva su foto; lo manual, un emoji.
     const tarjetas = (i, arr) => {
       const grupos = [], vistos = {};
@@ -219,7 +220,7 @@ export function crearSecciones(ctx) {
         const tot = g.items.reduce((a, x) => ({ k: a.k + x.k, p: a.p + x.p, c: a.c + x.c, f: a.f + x.f }), { k: 0, p: 0, c: 0, f: 0 }), foto = (g.items.find((x) => x.foto) || {}).foto;
         const nom = g.items.map((x) => x.n.split(' · ')[0]).join(', ');
         return `<button type="button" class="mcard" data-act="meal-open" data-v="${i}" aria-label="${esc(nom)}: ${nf(tot.k)} kcal, ver detalle"><span class="mc-th">${foto ? `<img src="${esc(foto)}" alt="">` : g.ia ? '🍽️' : '🥣'}</span>
-          <span class="mc-b"><b class="mc-n">${esc(nom)}</b><span class="mc-k num">${ICO.llama}${nf(tot.k)} kcal</span>${mac3(tot)}</span></button>`;
+          <span class="mc-b"><b class="mc-n">${esc(nom)}</b><span class="mc-k num">${neon('fire-streak-flame-icon')}${nf(tot.k)} kcal</span>${mac3(tot)}</span></button>`;
       }).join('');
     };
     // Tarjeta «skeleton» mientras la IA estima las porciones (o aviso si falló).

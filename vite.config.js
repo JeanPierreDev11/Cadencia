@@ -6,7 +6,7 @@
 // - sw.js (service worker) se genera en dist/ con la lista real de archivos y una versión nueva en cada build.
 // - Todo nuestro JS se ofusca con javascript-obfuscator (menos js/vendor/zxing.js, que es una librería de terceros).
 import { defineConfig } from 'vite';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import JavaScriptObfuscator from 'javascript-obfuscator';
 
@@ -58,7 +58,7 @@ function serviceWorker() {
     name: 'cadencia-sw',
     apply: 'build',
     generateBundle(_opts, bundle) {
-      const publicos = ['manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
+      const publicos = ['manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', ...readdirSync(new URL('./public/icons/neon/', import.meta.url)).map((f) => 'icons/neon/' + f)];
       const propios = Object.keys(bundle).filter((f) => !f.includes('zxing') && !f.endsWith('.map') && f !== 'index.html');
       const archivos = ['./', './index.html', ...[...propios, ...publicos].map((f) => './' + f)];
       const huella = createHash('sha256').update(archivos.join('|')).digest('hex').slice(0, 10);

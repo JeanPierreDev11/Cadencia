@@ -1,6 +1,6 @@
 // Entreno: tarjeta de Inicio, pestaña Entreno (semana, historial, rutinas), asistente de rutinas,
 // biblioteca de ejercicios, entrenamiento en directo y registro de bici, cardio y otros.
-import { esc, num, nf, todayISO, fmtDate, lsSet, lsGet, toast, I } from './util.js';
+import { esc, num, nf, todayISO, fmtDate, lsSet, lsGet, toast, I, neon } from './util.js';
 import { errorText } from './data.js';
 import * as E from './entreno.js';
 import * as CAL from './calorias.js';
@@ -76,7 +76,7 @@ const EQ_ICO = {
   banda: '<path d="M4 17c4-9 12-9 16 0"/><path d="M4 12c4-7 12-7 16 0"/>',
   corporal: '<circle cx="12" cy="4.5" r="2"/><path d="M12 7v7M7 10l5-1.5 5 1.5M8.5 21l3.5-7 3.5 7"/>',
 };
-const eqIcon = (eq) => `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${EQ_ICO[eq] || EQ_ICO.corporal}</svg>`;
+const eqIcon = (eq) => eq === 'mancuernas' ? neon('minimalist-dumbbell-icon') : `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${EQ_ICO[eq] || EQ_ICO.corporal}</svg>`;
 
 /* ---------- tarjeta en Inicio ---------- */
 // Racha: días entrenados seguidos (los descansos programados no la rompen). Color según días: 0 gris, 1-3 amarillo, 4-6 naranja, 7+ rojo «On Fire».
@@ -86,8 +86,7 @@ function rachaActual() {
 }
 function fuegoHTML(n, grande = false) {
   const nivel = n >= 7 ? 'fire' : n >= 4 ? 'hot' : n >= 1 ? 'on' : 'off';
-  const fill = { off: '#333333', on: '#F2BE1A', hot: '#FF6A00', fire: 'url(#fg-fire)' }[nivel];
-  const svg = `<svg viewBox="0 0 48 60" aria-hidden="true" focusable="false"><defs><linearGradient id="fg-fire" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC21A"/><stop offset=".45" stop-color="#FF5A1F"/><stop offset="1" stop-color="#E0161B"/></linearGradient></defs><path fill="${fill}" d="M24 1c2 13 17 19 17 36 0 12-7 22-17 22S7 49 7 37c0-8 4-13 8-19 1 6 4 8 6 8 0-8-2-17 3-25z"/></svg>`;
+  const svg = neon('fire-streak-flame-icon', 'neon-icon'); // el nivel (apagada / encendida / On Fire) lo marca la clase .flame.off|on|hot|fire en el CSS
   return `<span class="flame ${nivel} ${grande ? 'lg' : ''}" role="img" aria-label="Racha de ${n} ${n === 1 ? 'día' : 'días'}">${svg}<b class="num">${n}</b></span>`;
 }
 
@@ -160,7 +159,7 @@ function wkSemana() {
     <section class="card"><h2>Tu semana</h2><div class="weekstrip">${cells}</div></section>
     ${diaHTML(sel, today)}
     <div class="stats" aria-label="Métricas del ${esc(sel === today ? 'día de hoy' : fmtDate(sel, { weekday: 'long', day: 'numeric' }))}">
-      <section class="stat"><span class="label">Tiempo</span><span class="val num nowrap">${fmtDur(hoy.min).replace(' min', '')}${hoy.min % 60 ? '<em>min</em>' : ''}</span></section>
+      <section class="stat"><span class="label">${neon('stopwatch-icon')}Tiempo</span><span class="val num nowrap">${fmtDur(hoy.min).replace(' min', '')}${hoy.min % 60 ? '<em>min</em>' : ''}</span></section>
       ${caja2}
       ${caja3}
       <section class="stat"><span class="label">Calorías</span><span class="val num">${nf(hoy.kcal)}<em>kcal</em></span><span class="hint">Estimadas según tu peso</span></section>
@@ -211,7 +210,7 @@ function aiHTML(w, compacto = false) {
   if (ai) {
     const pct = Math.max(0, Math.min(100, ai.nota * 10));
     return `<div class="ai-res ${compacto ? 'sm' : ''}">
-      <span class="ai-lbl">🧠 Coach AI${ai.demo ? ' <em class="ai-demo">Ejemplo</em>' : ''}</span>
+      <span class="ai-lbl ai-lbl-brain">${neon('glowing-ai-brain-icon', compacto ? 'neon-icon-small' : 'neon-icon')}Coach AI${ai.demo ? ' <em class="ai-demo">Ejemplo</em>' : ''}</span>
       <div class="ai-score ${compacto ? 'sm' : ''}" style="--p:${pct.toFixed(0)}"><b class="num">${nf(ai.nota, 1)}</b><span>/ 10</span></div>
       <p class="ai-tit">${esc(ai.titulo)}</p>
       <section class="ai-box"><span class="ai-lbl">Análisis</span><p>${esc(ai.analisis)}</p>
@@ -219,7 +218,7 @@ function aiHTML(w, compacto = false) {
   }
   if (pend === 'cargando') return `<div class="ai-load" role="status"><span class="ai-spin" aria-hidden="true"></span><span class="small muted">Analizando…</span></div>`;
   return `${pend && pend.error ? `<p class="small muted" role="alert">${esc(pend.error)}</p>` : ''}
-    <button type="button" class="btn block ai-btn ${pro ? '' : 'is-locked'}" data-act="ai-pedir" data-v="${esc(w.id)}">Solicitar Análisis AI 🧠${pro ? '' : ' <span class="protag">Pro</span>'}</button>`;
+    <button type="button" class="btn block ai-btn ${pro ? '' : 'is-locked'}" data-act="ai-pedir" data-v="${esc(w.id)}">Solicitar Análisis AI ${neon('glowing-ai-brain-icon')}${pro ? '' : ' <span class="protag">Pro</span>'}</button>`;
 }
 // Pide el análisis (solo al pulsar el botón); el servidor lo guarda en el documento del entreno (en modo prueba, la app) y repinta. Si ya está guardado, no vuelve a pedirlo.
 async function pedirCoach(id) {
@@ -985,7 +984,7 @@ function empezarFuerza(fecha) {
   if (st.live) return startLive(fecha);
   st.modoSel = { fecha }; render();
 }
-// Pro: resumen al terminar (st.resumen = { id, nombre, vol, sets, min, record }). El Coach AI NO se pide solo: botón «Solicitar Análisis AI 🧠».
+// Pro: resumen al terminar (st.resumen = { id, nombre, vol, sets, min, record }). El Coach AI NO se pide solo: botón «Solicitar Análisis AI» (con el icono del cerebro).
 function resumenSheetHTML() {
   const r = st.resumen, w = st.workouts.find((x) => x.id === r.id);
   return `<div class="sheet-back" data-act="sum-close"></div>
@@ -1184,7 +1183,7 @@ function viewLive() {
       <button type="button" class="btn small" data-act="live-fin">${plano ? 'Guardar' : 'Finalizar'}</button>
     </div>
     <div class="live-stats ${plano ? 'two' : ''}">
-      ${plano ? '' : `<div><span>Duración</span><b class="num" id="live-dur">${today ? fmtClock(Date.now() - L.start) : 'Estimada'}</b></div>`}
+      ${plano ? '' : `<div><span>${neon('stopwatch-icon')}Duración</span><b class="num" id="live-dur">${today ? fmtClock(Date.now() - L.start) : 'Estimada'}</b></div>`}
       <div><span>Volumen</span><b class="num" id="live-vol">${nf(t.vol)} kg</b></div>
       <div><span>Series</span><b class="num" id="live-sets">${t.sets}</b></div>
     </div>
@@ -1239,7 +1238,7 @@ function restHTML() {
   return `<div class="restbar ${R.done ? 'fin' : ''}" id="restbar" role="timer" aria-live="off">
     <div class="rest-prog"><i id="rest-prog" style="width:${R.done ? 100 : Math.max(0, 100 - (left / R.dur) * 100).toFixed(1)}%"></i></div>
     <div class="rest-row">
-      <span class="rest-t"><small>${R.done ? '¡Listo!' : 'Descanso'}</small><b class="num" id="rest-t">${R.done ? 'Siguiente serie' : mmss(left)}</b></span>
+      <span class="rest-t"><small>${R.done ? '¡Listo!' : `${neon('stopwatch-icon')}Descanso`}</small><b class="num" id="rest-t">${R.done ? 'Siguiente serie' : mmss(left)}</b></span>
       ${R.done ? '' : `<button type="button" class="restbtn" data-act="rest-menos" aria-label="Quitar 30 segundos">−30s</button><button type="button" class="restbtn" data-act="rest-mas" aria-label="Añadir 30 segundos">+30s</button>`}
       <button type="button" class="restbtn skip" data-act="rest-saltar">${R.done ? 'Cerrar' : 'Saltar'}</button>
     </div>
