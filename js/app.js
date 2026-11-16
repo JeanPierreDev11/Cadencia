@@ -62,7 +62,7 @@ try { matchMedia('(prefers-color-scheme: light)').addEventListener('change', () 
 let api = null;
 const st = {
   view: 'boot', user: null, profile: null, weights: [],
-  authMode: 'welcome', authMsg: null, busy: false, registering: false,
+  authMode: 'welcome', authMsg: null, busy: false, registering: false, vieneDeRegistro: false,
   ob: null, tab: lsGet('cadencia-tab') || 'inicio', editGoals: null,
   workouts: [], wkTab: lsGet('cadencia-wktab') || 'semana', wk: null, rw: null, re: null, live: null, liveMin: false, lib: null,
 };
@@ -458,7 +458,7 @@ async function obRegistrar(via) {
     await api.saveProfile(u.uid, data);        // …y el perfil con la marca al final: si algo falla antes, la marca NO queda puesta
     st.profile = { ...ant, ...data };
     obAnonBorrar();
-    st.registering = false; o.saving = false; o.justRegistered = true;
+    st.registering = false; o.saving = false; o.justRegistered = true; st.vieneDeRegistro = true;
     st.pf = { v: 'suscripcion', plan: 'anual', f: {}, busy: false }; st.pwAviso = false;
     st.view = 'paywall'; render(); window.scrollTo(0, 0);
     pwVigilar(u);
@@ -468,8 +468,7 @@ async function obRegistrar(via) {
 }
 
 /* ---------- paywall en cascada: justo tras registrarse, a pantalla completa ---------- */
-// Solo se ve al venir del cuestionario (`st.ob.justRegistered`). La X abre un aviso (no cierra); «Continuar sin mi plan» entra en la app gratuita.
-const PRECIO_SEMANA = '0,77 €'; // plan anual (39,99 € / 52 semanas)
+// Solo se ve al venir del registro (`st.vieneDeRegistro === true`). La X NO cierra: abre el aviso de fricción; solo «Continuar con la versión básica» apaga la marca y entra en la app gratuita.
 function viewPaywall() {
   return `<div class="screen pw-full">
     <div class="pw-top"><button type="button" class="iconbtn" data-act="pw-cerrar" aria-label="Cerrar"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
@@ -480,13 +479,13 @@ function viewPaywall() {
 }
 function pwAvisoHTML() {
   return `<div class="sheet-back sheet-back-top" data-act="pw-aviso-cerrar"></div>
-    <div class="sheet short pw-aviso" role="dialog" aria-modal="true" aria-label="Espera, antes de salir">
+    <div class="sheet short pw-aviso" role="dialog" aria-modal="true" aria-label="¿Seguro que quieres irte?">
       <div class="sheet-grab"></div>
       <div class="pw-aviso-b">
-        <h2>Espera, antes de salir</h2>
-        <p>Tu plan queda guardado en tu cuenta, pero sin PRO entrarás sin el Coach AI y sin el resto de funciones. Llévatelo por solo ${PRECIO_SEMANA} / semana (plan anual, 39,99 € al año).</p>
-        <button type="button" class="btn block" data-act="pw-aviso-cerrar">Obtener Plan</button>
-        <button type="button" class="btn ghost block pw-ghost" data-act="pw-seguir">Continuar sin mi plan</button>
+        <h2>⚠️ ¿Seguro que quieres irte?</h2>
+        <p>Tu plan de entrenamiento está guardado, pero sin Cadencia PRO no tendrás acceso al Coach IA ni a las analíticas de progreso. No dejes tu potencial a medias.</p>
+        <button type="button" class="btn block" data-act="pw-aviso-cerrar">Activar Cadencia PRO</button>
+        <button type="button" class="btn ghost block pw-ghost" data-act="pw-seguir">Continuar con la versión básica</button>
       </div>
     </div>`;
 }
@@ -499,7 +498,7 @@ function pwVigilar(u) {
 }
 function pwQuitar() { if (pwParar) { try { pwParar(); } catch (e) { /* ya estaba parado */ } pwParar = null; } }
 async function pwSalir() {
-  pwQuitar(); st.pwAviso = false; st.pf = null; st.proInfo = null;
+  pwQuitar(); st.vieneDeRegistro = false; st.pwAviso = false; st.pf = null; st.proInfo = null;
   try { await entrarApp(st.user, { fade: true }); } catch (e) { st.errText = errorText(e); st.view = 'error'; render(); }
 }
 function pwSeguir() { return pwSalir(); }
@@ -1369,10 +1368,10 @@ function viewError() {
 /* Entrada y eventos                                                   */
 /* ================================================================== */
 async function enter(u) {
-  if (u && st.view === 'paywall' && st.ob && st.ob.justRegistered) return; // aviso de sesión repetido mientras se ve el paywall: no entrar en la app todavía
+  if (u && st.view === 'paywall' && st.vieneDeRegistro) return; // aviso de sesión repetido mientras se ve el paywall: no entrar en la app todavía
   st.user = u; st.busy = false;
   if (!u && M) M.pararPro();
-  if (!u) { pwQuitar(); const anon = st.ob && st.ob.anon && !st.ob.justRegistered ? st.ob : null; /* un cuestionario sin cuenta en marcha NO se pierde por un aviso «sin sesión» */ st.cfg = st.pwd = st.pf = st.proInfo = st.rutShare = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = anon && st.view === 'onboarding' ? 'onboarding' : 'auth'; st.ob = anon; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
+  if (!u) { pwQuitar(); st.vieneDeRegistro = false; const anon = st.ob && st.ob.anon && !st.ob.justRegistered ? st.ob : null; /* un cuestionario sin cuenta en marcha NO se pierde por un aviso «sin sesión» */ st.cfg = st.pwd = st.pf = st.proInfo = st.rutShare = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = anon && st.view === 'onboarding' ? 'onboarding' : 'auth'; st.ob = anon; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
   try {
     // PUERTA OBLIGATORIA: antes de pintar la app (y antes de pedir entrenos, peso, racha…) se lee el perfil.
     // Sin `onboardingCompletado: true` solo se ve el cuestionario: nada de cabecera, barra inferior ni secciones.
@@ -1433,7 +1432,7 @@ root.addEventListener('click', async (e) => {
   else if (act === 'reg-google') obRegistrar('google');
   else if (act === 'reg-apple') obRegistrar('apple');
   else if (act === 'reg-email') { st.ob.regEmail = true; st.ob.msg = ''; render(); const i = root.querySelector('[data-ob="regEmail"]'); if (i) i.focus(); }
-  else if (act === 'pw-cerrar') { st.pwAviso = true; render(); }
+  else if (act === 'pw-cerrar') { if (st.vieneDeRegistro) { st.pwAviso = true; render(); } else pwSalir(); }
   else if (act === 'pw-aviso-cerrar') { st.pwAviso = false; render(); }
   else if (act === 'pw-seguir') pwSeguir();
   else if (act === 'legal-open') { if (st.view === 'auth') { const f = root.querySelector('form'); st.authKeep = f && f.email ? { email: f.email.value, pass: f.pass.value } : null; } st.legal = true; render(); if (st.authKeep) keepForm(st.authKeep); }
