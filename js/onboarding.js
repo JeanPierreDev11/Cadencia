@@ -1,7 +1,7 @@
 // Cuestionario inicial (rediseño 2026-11-15). Aquí viven los textos, los cálculos y el HTML de cada pantalla.
 // No guarda estado: app.js tiene `st.ob` y llama a estas funciones. Pantallas (en orden):
 //   perfil → donde → material (siempre; con Gimnasio sale su lista pre-marcada) → dias → tiempo → peso (actual + qué quiere lograr) → meta (peso objetivo)
-//   → ritmo (con la fecha en vivo) → obstaculos → plan → psicologia → firma
+//   → ritmo (con la fecha en vivo) → obstaculos → psicologia → historia → carga (sin menú ni botón, se salta sola) → plan → firma (con pausa dramática)
 import { esc, nf, num, I } from './util.js';
 
 /* ---------- datos ---------- */
@@ -64,8 +64,9 @@ export const EXPS = [
 ];
 export const FREQ = [[2, 'Para arrancar'], [3, 'Constante'], [4, 'Comprometido'], [5, 'Increíble'], [6, 'Sin excusas'], [7, 'Imparable']];
 // Número de paso que se enseña («Paso 2 de 10»); «perfil» es la pantalla previa con tus datos. Si cambias `flujo`, cambia esto a la vez.
-export const PASO = { donde: 1, material: 1, dias: 2, tiempo: 3, peso: 4, meta: 5, ritmo: 6, obstaculos: 7, plan: 8, psicologia: 9, firma: 10 };
-export const PASOS = 10;
+// `carga` NO tiene número (no enseña el menú superior).
+export const PASO = { donde: 1, material: 1, dias: 2, tiempo: 3, peso: 4, meta: 5, ritmo: 6, obstaculos: 7, psicologia: 8, historia: 9, plan: 10, firma: 11 };
+export const PASOS = 11;
 // Versión del cuestionario (se guarda en `onboardingVersion` al firmar). Quien lo firmó con una versión MENOR lo repite una vez (puerta en app.js: `onboardingHecho`).
 // Súbela SOLO cuando las preguntas nuevas importen de verdad: obliga a TODAS las cuentas a repetirlo. 1 = sin campo (15-11) · 2 = Fase 1 (16-11).
 export const VERSION = 2;
@@ -85,7 +86,7 @@ const expDe = (id) => EXPS.find((e) => e.id === id);
 
 /* ---------- lógica ---------- */
 // `material` sale SIEMPRE (con solo Gimnasio también: lista de gimnasio pre-marcada). `meta` va ANTES de `ritmo` para poder calcular la fecha en vivo al deslizar.
-export const flujo = (o) => ['perfil', 'donde', 'material', 'dias', 'tiempo', 'peso', 'meta', 'ritmo', 'obstaculos', 'plan', 'psicologia', 'firma'];
+export const flujo = (o) => ['perfil', 'donde', 'material', 'dias', 'tiempo', 'peso', 'meta', 'ritmo', 'obstaculos', 'psicologia', 'historia', 'carga', 'plan', 'firma'];
 
 export function puedeSeguir(o) {
   switch (o.step) {
@@ -331,19 +332,25 @@ export function metaHTML(o) {
 }
 
 function graficaHTML(actual, meta, est) {
-  const x0 = 26, x1 = 294, top = 30, bot = 100, baja = meta < actual, igual = !est;
-  const y0 = igual ? 65 : baja ? top : bot, y1 = igual ? 65 : baja ? bot : top, mx = (x0 + x1) / 2;
+  const x0 = 26, x1 = 294, top = 36, bot = 96, axis = 118, baja = meta < actual, igual = !est;
+  const y0 = igual ? 66 : baja ? top : bot, y1 = igual ? 66 : baja ? bot : top, mx = (x0 + x1) / 2;
   const d = `M${x0} ${y0} C${mx} ${y0} ${mx} ${y1} ${x1} ${y1}`;
-  const mes = (f) => `<line x1="${x0 + (x1 - x0) * f}" x2="${x0 + (x1 - x0) * f}" y1="112" y2="116" stroke="currentColor" opacity=".35"/>`;
-  return `<svg viewBox="0 0 320 150" role="img" aria-label="Línea de tiempo de tu peso, de ${nf(actual, 1)} kg hoy a ${nf(meta, 1)} kg${est ? ` hacia el ${fechaLarga(est.fecha)}` : ''}">
-    <line x1="${x0}" x2="${x1}" y1="114" y2="114" stroke="currentColor" opacity=".25"/>${mes(0.25)}${mes(0.5)}${mes(0.75)}
-    <path class="ar" d="${d} L${x1} 114 L${x0} 114 Z"/>
+  // «Sin Cadencia IA» (ilustración, no un dato): casi plana y con una ligera deriva hacia el lado equivocado (si quiere bajar, sube; si quiere subir, baja).
+  const yS = baja ? y0 - 9 : y0 + 9, dS = `M${x0} ${y0} C${x0 + 95} ${y0} ${x1 - 95} ${yS} ${x1} ${yS}`;
+  const mes = (f) => `<line x1="${x0 + (x1 - x0) * f}" x2="${x0 + (x1 - x0) * f}" y1="${axis - 2}" y2="${axis + 2}" stroke="currentColor" opacity=".35"/>`;
+  const vs = igual ? '' : `<path class="sn" d="${dS}" stroke-dasharray="5,5"/>
+    <text class="tl tl-sin" x="${x1}" y="${baja ? yS + 16 : yS - 8}" text-anchor="end">Sin Cadencia IA</text>
+    <text class="tl tl-con" x="${x1}" y="${baja ? y1 + 17 : y1 - 28}" text-anchor="end">Con Cadencia IA</text>`;
+  return `<svg viewBox="0 0 320 150" role="img" aria-label="Comparación de tu peso con y sin Cadencia IA: con Cadencia, de ${nf(actual, 1)} kg hoy a ${nf(meta, 1)} kg${est ? ` hacia el ${fechaLarga(est.fecha)}` : ''}; sin Cadencia, la línea punteada se estanca">
+    <line x1="${x0}" x2="${x1}" y1="${axis}" y2="${axis}" stroke="currentColor" opacity=".25"/>${mes(0.25)}${mes(0.5)}${mes(0.75)}
+    <path class="ar" d="${d} L${x1} ${axis} L${x0} ${axis} Z"/>
+    ${vs}
     <path class="ln" d="${d}" pathLength="1"/>
     <circle class="dot" cx="${x0}" cy="${y0}" r="5"/><circle class="dot fin" cx="${x1}" cy="${y1}" r="7"/>
     <text x="${x0}" y="${y0 - 11}" text-anchor="start" class="v">${nf(actual, 1)} kg</text>
     <text x="${x1}" y="${y1 - 13}" text-anchor="end" class="v">${nf(meta, 1)} kg</text>
-    <text x="${x0}" y="134" text-anchor="start">Hoy</text>
-    <text x="${x1}" y="134" text-anchor="end">${est ? fechaCorta(est.fecha) : 'Meta'}</text></svg>`;
+    <text x="${x0}" y="138" text-anchor="start">Hoy</text>
+    <text x="${x1}" y="138" text-anchor="end">${est ? fechaCorta(est.fecha) : 'Meta'}</text></svg>`;
 }
 
 export function planHTML(o, p, hoyISO) {
@@ -366,17 +373,67 @@ export function planHTML(o, p, hoyISO) {
       <span class="plan-chip">${svg(I_SPARK, 14, 2.4)}Proyección Cadencia IA</span>
       <div class="proy-graf">${graficaHTML(p.pesoKg, p.pesoObjetivo, est)}</div>
       <p class="proy-txt">${frase}</p>
-      ${est ? `<p class="small muted">Unas ${est.semanas} semanas. Es una estimación orientativa: cada cuerpo es distinto.</p>` : ''}
+      ${est ? `<p class="small muted">Unas ${est.semanas} semanas. Es una estimación orientativa: cada cuerpo es distinto. La línea punteada es solo una ilustración.</p>` : ''}
     </section>`;
 }
 const I_SPARK = '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/>';
+
+// «No es tu culpa»: pantalla de pausa entre el cuestionario y el plan. Botón del pie «Continuar» (lo pinta app.js).
+export function historiaHTML(o) {
+  return `<div class="historia">
+    <h1 class="ob-title historia-t">No es tu culpa. <span>Necesitas un sistema que realmente funcione</span></h1>
+    <p class="historia-p">Las personas que consiguen resultados no son diferentes a ti. Solo tienen algo que tú no has tenido: un sistema que les dice exactamente qué hacer paso a paso.</p>
+  </div>`;
+}
+
+// «Pantalla de carga» (efecto laboriosidad): es solo visual, no calcula nada. Sin menú ni botón; se llena en CARGA_MS y avanza sola (iniciarCarga).
+export const CARGA_MS = 4500;
+export const cargaTexto = (pct) => (pct < 30 ? 'Analizando tu perfil...' : pct < 70 ? 'Ajustando intensidad y volumen...' : 'Finalizando tu plan...');
+const cargaPct = (o) => Math.min(100, Math.max(0, Math.floor(((performance.now() - (o.cargaT0 || performance.now())) / CARGA_MS) * 100)));
+export function cargaHTML(o) {
+  const p = cargaPct(o); // si algo redibuja a mitad, sigue desde donde iba (el tiempo sale de `o.cargaT0`, no del DOM)
+  return `<div class="carga">
+    <div class="carga-pct" aria-hidden="true"><b id="ob-carga-n">${p}</b><span>%</span></div>
+    <div class="carga-bar" id="ob-carga-bar" role="progressbar" aria-label="Preparando tu plan" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${p}"><i style="width:${p}%"></i></div>
+    <p class="carga-txt" id="ob-carga-txt" aria-live="polite">${cargaTexto(p)}</p>
+  </div>`;
+}
+// Se llama justo después de pintar la pantalla `carga`. Anima tocando el DOM (nada de render() mientras corre) y al llegar al 100 % espera un instante y llama a `alTerminar` (obNext).
+// Si la pantalla desaparece (cerrar sesión…), se para sola.
+export function iniciarCarga(root, o, alTerminar) {
+  if (o.cargaRaf) return;
+  const tic = () => {
+    const bar = root.querySelector('#ob-carga-bar');
+    if (!bar) { o.cargaRaf = 0; return; }
+    const p = cargaPct(o), n = root.querySelector('#ob-carga-n'), tx = root.querySelector('#ob-carga-txt'), i = bar.firstElementChild;
+    if (n) n.textContent = p;
+    if (i) i.style.width = p + '%';
+    bar.setAttribute('aria-valuenow', p);
+    if (tx) { const t = cargaTexto(p); if (tx.textContent !== t) tx.textContent = t; }
+    if (p < 100) { o.cargaRaf = requestAnimationFrame(tic); return; }
+    o.cargaRaf = 0; o.cargaVista = true;
+    setTimeout(alTerminar, 350); // deja ver el 100 %
+  };
+  o.cargaRaf = requestAnimationFrame(tic);
+}
+
+// Pausa dramática antes de firmar: [texto, empieza (s), dura (s)]. Solo CSS (`.pausa-t`, `@keyframes pausaTxt`); app.js pone el temporizador (`pausaFirma`).
+export const PAUSA = [['Recuerda...', 0, 1], ['Nada cambia...', 1, 1], ['Si tú no cambias.', 2, 1.5]];
+export const PAUSA_MS = 3700;
 
 const HUELLA = '<path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/>';
 export const FIRMA_TXT = 'Mantén pulsado para firmar';
 
 export function firmaHTML(o, nombre) {
+  if (o.pausaT0 && !o.pausaFin) { // pausa dramática: el botón NO existe todavía. El retraso de cada texto resta el tiempo ya pasado (`--el`), así que si algo redibuja no se reinicia.
+    const el = Math.max(0, (performance.now() - o.pausaT0) / 1000);
+    return `<div class="pausa" style="--el:${el.toFixed(2)}s">
+      <p class="sr-only">Recuerda... Nada cambia... Si tú no cambias.</p>
+      ${PAUSA.map(([t, d, dur]) => `<p class="ob-title pausa-t" aria-hidden="true" style="--d:${d}s;--dur:${dur}s">${t}</p>`).join('')}
+    </div>`;
+  }
   const hecho = !!o.firmado;
-  return `<h1 class="ob-title">Tu compromiso</h1>
+  return `<h1 class="ob-title">Haz una promesa contigo mismo</h1>
     <p class="ob-sub">Firmarlo te ayuda a cumplirlo. Léelo y mantén pulsado.</p>
     <blockquote class="pact">
       <p>Prometo entrenar con Cadencia <b>${o.freq} veces a la semana</b>. Sin excusas.</p>

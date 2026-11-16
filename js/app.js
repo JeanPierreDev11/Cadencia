@@ -270,20 +270,23 @@ function viewOnboarding() {
   else if (s === 'ritmo') body = OB.ritmoHTML(o, todayISO()); // ritmo elegido (kg/semana) + fecha en vivo
   else if (s === 'obstaculos') body = OB.obstaculosHTML(o);   // mayor obstáculo
   else if (s === 'psicologia') { body = OB.psicologiaHTML(o); nextLabel = 'Continuar'; } // 4 frases Sí / No
+  else if (s === 'historia') { body = OB.historiaHTML(o); nextLabel = 'Continuar'; } // «No es tu culpa» (fondo oscuro)
+  else if (s === 'carga') body = OB.cargaHTML(o);              // pantalla de carga: sin menú ni botón, avanza sola
   else if (s === 'plan') { body = OB.planHTML(o, obProfile(), todayISO()); nextLabel = 'Aceptar mi plan'; }
   else body = OB.firmaHTML(o, `${o.nombre.trim()} ${o.apellidos.trim()}`.replace(/\s+/g, ' '));
 
   const paso = OB.PASO[s];
-  return `<form class="screen" data-form="ob" novalidate>
-    <div class="ob-top">
+  const sinMenu = s === 'carga';
+  return `<form class="screen${s === 'historia' ? ' ob-dark' : ''}${sinMenu ? ' ob-carga' : ''}" data-form="ob" novalidate>
+    ${sinMenu ? '' : `<div class="ob-top">
       ${i > 0 && !o.saving ? `<button type="button" class="ob-back" data-act="ob-back" aria-label="Atrás">${I.back}</button>` : ''}
       <div class="ob-track" aria-hidden="true"><i style="width:${pct}%"></i></div>
       <span class="ob-count">${paso ? `Paso ${paso} de ${OB.PASOS}` : 'Tus datos'}</span>
-    </div>
+    </div>`}
     <div class="ob-body">${body}
       ${o.msg ? `<div class="msg" role="alert">${esc(o.msg)}</div>` : ''}
     </div>
-    ${s === 'firma' ? '' : `<div class="ob-foot"><button class="btn block" type="submit" data-next ${OB.puedeSeguir(o) ? '' : 'disabled'}>${nextLabel}</button></div>`}
+    ${s === 'firma' || sinMenu ? '' : `<div class="ob-foot"><button class="btn block" type="submit" data-next ${OB.puedeSeguir(o) ? '' : 'disabled'}>${nextLabel}</button></div>`}
   </form>`;
 }
 
@@ -337,13 +340,26 @@ function obNext() {
   if (!nxt) return;
   if (nxt === 'material') Object.assign(o, OB.materialInicial(o)); // con Gimnasio: lista pre-marcada (solo la primera vez); quita lo que ya no corresponde
   if (nxt === 'meta' && o.meta === 'recomp' && !o.pesoObjetivo.trim()) { const r = OB.recompDe(o); if (r) o.pesoObjetivo = nf(r.objetivo, 1); } // recomposición: propone el peso estimado
-  o.step = nxt; render(); window.scrollTo(0, 0); focusFirst();
+  if (nxt === 'carga' && o.cargaVista) return obNextA(o, flow[flow.indexOf('carga') + 1]); // ya la vio (volvió atrás): no se repite
+  if (nxt === 'carga') { o.cargaT0 = performance.now(); o.cargaRaf = 0; }
+  if (nxt === 'firma' && !o.pausaVista && !matchMedia('(prefers-reduced-motion: reduce)').matches) { o.pausaT0 = performance.now(); o.pausaFin = false; pausaFirma(o); } // pausa dramática (una vez)
+  obNextA(o, nxt);
+}
+function obNextA(o, nxt) {
+  o.step = nxt; render(); window.scrollTo(0, 0);
+  if (nxt === 'carga') OB.iniciarCarga(root, o, () => { if (st.ob === o && o.step === 'carga') obNext(); }); // a mano: el botón no existe
+  else focusFirst();
+}
+// Pausa antes de la firma: pasados OB.PAUSA_MS enseña la promesa y el botón de golpe. Se marca como vista aunque el usuario haya vuelto atrás.
+function pausaFirma(o) {
+  setTimeout(() => { o.pausaFin = true; o.pausaVista = true; if (st.ob === o && o.step === 'firma') render(); }, OB.PAUSA_MS);
 }
 
 function obBack() {
   const o = st.ob, flow = OB.flujo(o), i = flow.indexOf(o.step);
   if (i <= 0 || o.saving) return;
-  o.step = flow[i - 1]; o.msg = ''; render(); window.scrollTo(0, 0);
+  const prev = flow[i - 1] === 'carga' ? flow[i - 2] : flow[i - 1]; // la pantalla de carga nunca se vuelve a visitar hacia atrás
+  o.step = prev; o.msg = ''; render(); window.scrollTo(0, 0);
 }
 
 // Se llama al completar la firma (mantener pulsado 2 s). Guarda TODO el perfil y, solo si la escritura sale bien,
