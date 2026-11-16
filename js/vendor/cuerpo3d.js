@@ -45,7 +45,7 @@ export function cargar(sexo) {
         .replace('#include <color_fragment>', `#include <color_fragment>
           int zid = int(floor(texture2D(tZ, vZ).r * 255.0 + 0.5)) / 2;
           vec3 fc = uCol[zid]; float fm = uMix[zid];
-          diffuseColor.rgb = mix(diffuseColor.rgb, fc, fm);
+          vec3 tint = fc * (0.45 + 1.1 * dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722))); diffuseColor.rgb = mix(diffuseColor.rgb, tint, fm * 0.85);
           if (float(zid) == uSel) diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0), 0.3);`);
     };
     const raiz = new Group(); raiz.add(gltf.scene);
