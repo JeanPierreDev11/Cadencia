@@ -62,7 +62,7 @@ try { matchMedia('(prefers-color-scheme: light)').addEventListener('change', () 
 let api = null;
 const st = {
   view: 'boot', user: null, profile: null, weights: [],
-  authMode: 'login', authMsg: null, busy: false, registering: false,
+  authMode: 'welcome', authMsg: null, busy: false, registering: false,
   ob: null, tab: lsGet('cadencia-tab') || 'inicio', editGoals: null,
   workouts: [], wkTab: lsGet('cadencia-wktab') || 'semana', wk: null, rw: null, re: null, live: null, liveMin: false, lib: null,
 };
@@ -70,7 +70,8 @@ const st = {
 function render() {
   const antesUI = UI.antes(root);
   if (st.view === 'auth') root.innerHTML = viewAuth();
-  else if (st.view === 'onboarding') root.innerHTML = viewOnboarding();
+  else if (st.view === 'onboarding') { root.innerHTML = viewOnboarding() + (st.legal ? legalSheetHTML() : ''); obGuardarAnon(); }
+  else if (st.view === 'paywall') root.innerHTML = viewPaywall();
   else if (st.view === 'main') root.innerHTML = viewMain();
   else if (st.view === 'error') root.innerHTML = viewError();
   UI.despues(root, antesUI);
@@ -91,32 +92,32 @@ function heroProfile() {
   </svg>`;
 }
 
+const heroHTML = (tag = 'h1') => `<svg class="logo-mark" viewBox="0 0 64 64" aria-hidden="true" fill="currentColor"><path d="M12 8H56V22H28V42H56V56H12Z" transform="translate(6.8 0) skewX(-12)"/></svg>
+      <${tag} class="wordmark">${esc(APP_NAME)}</${tag}>${tag === 'h1' ? '<p class="tagline">Tu peso, tus objetivos y tu bici, en un mismo sitio.</p>' : ''}
+      ${heroProfile()}`;
+
+// Sin sesión: primero la bienvenida (el cuestionario empieza SIN cuenta); «Ingresar» lleva al formulario de acceso.
 function viewAuth() {
-  const reg = st.authMode === 'register';
+  if (st.authMode !== 'login') return OB.bienvenidaHTML(heroHTML('p'), (() => { const g = obAnonLeer(); return !!g && (g.step !== 'nombre' || !!(g.nombre || g.apellidos)); })()) + (st.legal ? legalSheetHTML() : '');
   const m = st.authMsg;
   return `<div class="screen">
-    <div class="auth-hero">
-      <svg class="logo-mark" viewBox="0 0 64 64" aria-hidden="true" fill="currentColor"><path d="M12 8H56V22H28V42H56V56H12Z" transform="translate(6.8 0) skewX(-12)"/></svg>
-      <h1 class="wordmark">${esc(APP_NAME)}</h1>
-      <p class="tagline">Tu peso, tus objetivos y tu bici, en un mismo sitio.</p>
-      ${heroProfile()}
-    </div>
+    <div class="auth-hero">${heroHTML()}</div>
     <div class="auth-card">
-      <div class="seg" role="group" aria-label="Acceso">
-        <button type="button" data-act="mode" data-v="login" aria-pressed="${!reg}">Iniciar sesión</button>
-        <button type="button" data-act="mode" data-v="register" aria-pressed="${reg}">Crear cuenta</button>
-      </div>
-      <form data-form="${reg ? 'register' : 'login'}" class="form-grid" novalidate>
-        ${reg ? `<label class="field"><span>Nombres y apellidos</span><input class="input" name="name" autocomplete="name" required placeholder="Tu nombre y tus apellidos"></label>` : ''}
+      <h2 class="auth-h">Iniciar sesión</h2>
+      <form data-form="login" class="form-grid" novalidate>
         <label class="field"><span>Email</span><input class="input" type="email" name="email" autocomplete="email" inputmode="email" autocapitalize="off" required placeholder="tu@email.com"></label>
         <label class="field"><span>Contraseña</span>
-          <div class="pass-wrap"><input class="input" type="password" name="pass" autocomplete="${reg ? 'new-password' : 'current-password'}" required minlength="6" placeholder="${reg ? 'Mínimo 6 caracteres' : ''}"><button type="button" data-act="peek">Ver</button></div>
+          <div class="pass-wrap"><input class="input" type="password" name="pass" autocomplete="current-password" required minlength="6"><button type="button" data-act="peek">Ver</button></div>
         </label>
-        ${reg ? `<label class="check"><input type="checkbox" name="acepto" required><span>Acepto los <button type="button" class="link" data-act="legal-open">Términos de Uso, la Política de Privacidad y el aviso de salud</button></span></label>` : ''}
         ${m ? `<div class="msg ${m.ok ? 'ok' : ''}" role="alert">${esc(m.text)}</div>` : ''}
-        <button class="btn block" type="submit" ${st.busy ? 'disabled' : ''}>${st.busy ? '<span class="spinner"></span>' : reg ? 'Crear cuenta' : 'Entrar'}</button>
-        ${reg ? '' : '<button type="button" class="link" data-act="forgot">He olvidado mi contraseña</button>'}
+        <button class="btn block" type="submit" ${st.busy ? 'disabled' : ''}>${st.busy ? '<span class="spinner"></span>' : 'Entrar'}</button>
+        <button type="button" class="link" data-act="forgot">He olvidado mi contraseña</button>
       </form>
+      <div class="auth-or"><span>o</span></div>
+      <button type="button" class="btn block quiet" data-act="login-google" ${st.busy ? 'disabled' : ''}>Continuar con Google</button>
+      <button type="button" class="btn block quiet" data-act="login-apple" ${st.busy ? 'disabled' : ''}>Continuar con Apple</button>
+      <p class="small muted">¿Todavía no tienes cuenta? Vuelve atrás y pulsa «Empezar»: la creas al final del cuestionario. Si entras con Google o Apple por primera vez aquí, aceptas los <button type="button" class="link" data-act="legal-open">Términos de Uso, la Política de Privacidad y el aviso de salud</button>.</p>
+      <button type="button" class="link" data-act="auth-volver">← Volver</button>
       ${api.mode === 'local' ? `<p class="note"><span>●</span><span><b>Modo prueba.</b> Las cuentas y los datos se guardan solo en este dispositivo hasta que conectes Firebase.</span></p>` : ''}
     </div>
   </div>${st.legal ? legalSheetHTML() : ''}`;
@@ -158,6 +159,7 @@ async function borrarCuenta() {
     // Limpia lo que la app guarda en este móvil (salvo el tema claro u oscuro).
     try { Object.keys(localStorage).filter((k) => k.startsWith('cadencia-') && k !== 'cadencia-theme' && k !== 'cadencia-local-v1').forEach((k) => localStorage.removeItem(k)); } catch (e) { /* nada */ }
     st.del = null; st.modoSel = null; st.resumen = null; st.limite = null; st.calentar = null; st.liveFin = null; st.live = null; st.tab = 'inicio'; st.authMode = 'login';
+    obAnonBorrar();
     st.authMsg = { ok: true, text: 'Tu cuenta y todos tus datos se han borrado.' };
     if (st.user) enter(null); else render();
   } catch (e) {
@@ -174,22 +176,13 @@ async function onLogin(form) {
   try { await api.login(email, pass); } catch (e) { st.authMsg = { text: errorText(e) }; st.busy = false; render(); keepForm({ email }); }
 }
 
-async function onRegister(form) {
-  const name = form.name.value.trim(), email = form.email.value.trim(), pass = form.pass.value;
-  if (name.split(/\s+/).filter(Boolean).length < 2) { st.authMsg = { text: 'Escribe tus nombres y apellidos.' }; render(); return keepForm({ name, email }); }
-  if (!email) { st.authMsg = { text: 'Escribe tu email.' }; render(); return keepForm({ name }); }
-  if (pass.length < 6) { st.authMsg = { text: 'La contraseña necesita al menos 6 caracteres.' }; render(); return keepForm({ name, email }); }
-  if (!form.acepto.checked) { st.authMsg = { text: 'Para crear la cuenta tienes que aceptar los Términos de Uso, la Política de Privacidad y el aviso de salud.' }; render(); return keepForm({ name, email, pass }); }
-  st.busy = true; st.authMsg = null; st.registering = true; render();
+// Entrar con Google o Apple desde la pantalla de acceso (cuentas que ya existen; si es la primera vez, se crea y pasa por el cuestionario).
+async function onSocial(prov) {
+  st.busy = true; st.authMsg = null; render();
   try {
-    const u = await api.register(name, email, pass);
-    // Consentimiento expreso (datos de salud): qué versión aceptó y cuándo.
-    try { await api.saveProfile(u.uid, { legal: { v: LEGAL_V, fecha: new Date().toISOString() } }); } catch (e) { /* se reintenta en el siguiente guardado */ }
-    st.registering = false;
-    await enter(u);
-  } catch (e) {
-    st.registering = false; st.busy = false; st.authMsg = { text: errorText(e) }; render(); keepForm({ name, email });
-  }
+    const u = prov === 'google' ? await api.loginGoogle() : await api.loginApple();
+    try { const p = await api.getProfile(u.uid); if (!p || !p.legal) await api.saveProfile(u.uid, { legal: { v: LEGAL_V, fecha: new Date().toISOString(), via: 'continuar' } }); } catch (e) { /* se reintenta en el siguiente guardado */ }
+  } catch (e) { st.busy = false; st.authMsg = { text: errorText(e) }; render(); }
 }
 
 function keepForm(vals) {
@@ -233,10 +226,12 @@ function metaOb(p, ultimoKg) {
 }
 // Respuestas de «¿Te sientes identificado?» ya guardadas: solo se aceptan las frases conocidas con valor booleano.
 const psicoOb = (x) => { const r = {}; if (x && typeof x === 'object') OB.PSICO.forEach((q) => { if (typeof x[q.id] === 'boolean') r[q.id] = x[q.id]; }); return r; };
-function startOnboarding(ultimoKg = null) {
+// `anon`: el cuestionario se hace SIN cuenta (no hay `st.user`); al final, `registro` crea la cuenta y guarda todo. Con cuenta (sesión iniciada pero sin cuestionario hecho) se hace como antes, sin `registro`.
+function startOnboarding(ultimoKg = null, { anon = false } = {}) {
+  if (anon) { const g = obAnonLeer(); if (g) { st.ob = g; st.view = 'onboarding'; return render(); } } // hay un avance guardado en este móvil: se sigue donde se dejó
   const p = st.profile || {}, [nom, ape] = nomApe(p, st.user && st.user.name);
   st.ob = {
-    step: 'perfil', uid: st.user && st.user.uid,
+    step: 'nombre', uid: st.user && st.user.uid, anon,
     nombre: nom, apellidos: ape, usuario: p.usuario || '',
     sexo: p.sexo || '', edad: p.edad ? String(p.edad) : '', alturaCm: p.alturaCm ? String(p.alturaCm) : '',
     exp: OB.EXPS.some((e) => e.id === p.experiencia) ? p.experiencia : '',
@@ -256,11 +251,15 @@ function startOnboarding(ultimoKg = null) {
 
 function viewOnboarding() {
   const o = st.ob, flow = OB.flujo(o), i = Math.max(0, flow.indexOf(o.step)), s = o.step;
-  const name = (st.profile && st.profile.nombre) || (st.user && st.user.name) || '';
   const pct = ((i + 1) / flow.length) * 100;
   let body = '', nextLabel = 'Siguiente';
 
-  if (s === 'perfil') body = OB.perfilHTML(o, name);
+  if (s === 'nombre') body = OB.nombreHTML(o);                 // «Tus datos», una pregunta por pantalla
+  else if (s === 'sexo') body = OB.sexoHTML(o);
+  else if (s === 'edad') body = OB.edadHTML(o);
+  else if (s === 'altura') body = OB.alturaHTML(o);
+  else if (s === 'exp') body = OB.expHTML(o);
+  else if (s === 'registro') body = OB.registroHTML(o);        // solo sin cuenta: crea la cuenta y guarda todo
   else if (s === 'donde') body = OB.dondeHTML(o);
   else if (s === 'material') body = OB.materialHTML(o);
   else if (s === 'dias') body = OB.diasHTML(o);
@@ -279,14 +278,14 @@ function viewOnboarding() {
   const sinMenu = s === 'carga';
   return `<form class="screen${s === 'historia' ? ' ob-dark' : ''}${sinMenu ? ' ob-carga' : ''}" data-form="ob" novalidate>
     ${sinMenu ? '' : `<div class="ob-top">
-      ${i > 0 && !o.saving ? `<button type="button" class="ob-back" data-act="ob-back" aria-label="Atrás">${I.back}</button>` : ''}
+      ${(i > 0 || o.anon) && !o.saving && s !== 'registro' ? `<button type="button" class="ob-back" data-act="ob-back" aria-label="Atrás">${I.back}</button>` : ''}
       <div class="ob-track" aria-hidden="true"><i style="width:${pct}%"></i></div>
-      <span class="ob-count">${paso ? `Paso ${paso} de ${OB.PASOS}` : 'Tus datos'}</span>
+      <span class="ob-count">${paso ? `Paso ${paso} de ${OB.PASOS}` : s === 'registro' ? 'Último paso' : 'Tus datos'}</span>
     </div>`}
     <div class="ob-body">${body}
       ${o.msg ? `<div class="msg" role="alert">${esc(o.msg)}</div>` : ''}
     </div>
-    ${s === 'firma' || sinMenu ? '' : `<div class="ob-foot"><button class="btn block" type="submit" data-next ${OB.puedeSeguir(o) ? '' : 'disabled'}>${nextLabel}</button></div>`}
+    ${s === 'firma' || s === 'registro' || sinMenu ? '' : `<div class="ob-foot"><button class="btn block" type="submit" data-next ${OB.puedeSeguir(o) ? '' : 'disabled'}>${nextLabel}</button></div>`}
   </form>`;
 }
 
@@ -294,7 +293,7 @@ function obProfile() {
   const o = st.ob, act = num(o.pesoKg), obj = num(o.pesoObjetivo);
   const nombre = o.nombre.trim().replace(/\s+/g, ' '), apellidos = o.apellidos.trim().replace(/\s+/g, ' ');
   return {
-    nombre, apellidos, nombreCompleto: `${nombre} ${apellidos}`, usuario: o.usuario.trim(),
+    nombre, apellidos, nombreCompleto: `${nombre} ${apellidos}`, usuario: o.usuario.trim() || genUsuario(o),
     objetivos: OB.objetivosDe(o.meta), ritmoKgSemana: o.ritmo, sexo: o.sexo, edad: Math.round(num(o.edad)),
     alturaCm: Math.round(num(o.alturaCm)), pesoKg: Math.round(act * 10) / 10,
     pesoObjetivo: isFinite(obj) ? Math.round(obj * 10) / 10 : null,
@@ -306,11 +305,12 @@ function obProfile() {
 
 function obValidate() {
   const o = st.ob, s = o.step;
-  if (s === 'perfil') {
+  if (s === 'nombre') {
     if (!o.nombre.trim()) return 'Escribe tu nombre.';
     if (!o.apellidos.trim()) return 'Escribe tus apellidos.';
-    const ue = userErr(o.usuario.trim()); if (ue) return ue;
-    const e = num(o.edad); if (!(e >= 14 && e <= 100)) return 'Escribe una edad entre 14 y 100 años.';
+  }
+  if (s === 'edad') { const e = num(o.edad); if (!(e >= 14 && e <= 100)) return 'Escribe una edad entre 14 y 100 años.'; }
+  if (s === 'altura') {
     const h = num(o.alturaCm);
     if (h > 1 && h < 2.5) o.alturaCm = String(Math.round(h * 100)); // escribió metros
     else if (!(h >= 120 && h <= 230)) return 'Escribe tu estatura en centímetros, entre 120 y 230.';
@@ -332,6 +332,7 @@ function obValidate() {
 
 function obNext() {
   const o = st.ob;
+  if (o.step === 'registro') return obRegistrar('email'); // el único botón con «submit» de esta pantalla es el de crear la cuenta con email
   if (!OB.puedeSeguir(o)) return;
   const err = obValidate();
   if (err) { o.msg = err; return render(); }
@@ -357,7 +358,8 @@ function pausaFirma(o) {
 
 function obBack() {
   const o = st.ob, flow = OB.flujo(o), i = flow.indexOf(o.step);
-  if (i <= 0 || o.saving) return;
+  if (o.saving) return;
+  if (i <= 0) { if (o.anon) { obGuardarAnon(); st.view = 'auth'; st.authMode = 'welcome'; render(); } return; } // sin cuenta: vuelve a la bienvenida (lo respondido se conserva)
   const prev = flow[i - 1] === 'carga' ? flow[i - 2] : flow[i - 1]; // la pantalla de carga nunca se vuelve a visitar hacia atrás
   o.step = prev; o.msg = ''; render(); window.scrollTo(0, 0);
 }
@@ -367,6 +369,12 @@ function obBack() {
 async function obFirmado() {
   const o = st.ob;
   if (!o || o.saving) return;
+  if (o.anon) { // sin cuenta todavía: no se guarda nada; tras el ✓ pasa a crear la cuenta (`registro`)
+    if (o.firmado) return;
+    o.firmado = true; render();
+    setTimeout(() => { if (st.ob !== o || o.step !== 'firma') return; o.step = 'registro'; render(); window.scrollTo(0, 0); }, 900);
+    return;
+  }
   o.firmado = true; o.saving = true; o.msg = '';
   setTimeout(async () => { // deja ver el ✓ un instante antes de redibujar
     if (st.ob !== o) return;
@@ -388,6 +396,113 @@ async function obFirmado() {
     catch (e) { st.errText = errorText(e); st.view = 'error'; render(); } // el perfil ya está guardado: «Reintentar» entra directo
   }, 450);
 }
+
+/* ---------- cuestionario SIN cuenta: avance guardado en este móvil, usuario automático y alta final ---------- */
+// El estado del cuestionario vive en `st.ob`; además se copia a localStorage (sin contraseña ni datos de la pantalla de carga/pausa) por si se recarga la página o el navegador cierra la pestaña.
+// Se borra al guardarlo en la cuenta. Es una copia local en el propio móvil de la persona; no se envía a ningún servidor.
+const OB_ANON_KEY = 'cadencia-ob-anon', OB_NO_GUARDAR = ['regPass', 'regEmailV', 'regEmail', 'msg', 'saving', 'cuenta', 'justRegistered', 'cargaT0', 'cargaRaf', 'cargaVista', 'pausaT0', 'pausaFin', 'pausaVista'];
+function obGuardarAnon() {
+  const o = st.ob;
+  if (!o || !o.anon || o.justRegistered) return;
+  try { const c = {}; Object.keys(o).forEach((k) => { if (!OB_NO_GUARDAR.includes(k)) c[k] = o[k]; }); lsSet(OB_ANON_KEY, JSON.stringify(c)); } catch (e) { /* sin espacio: se sigue en memoria */ }
+}
+function obAnonLeer() {
+  try {
+    const c = JSON.parse(lsGet(OB_ANON_KEY) || 'null');
+    if (!c || typeof c !== 'object' || !c.anon || !OB.flujo(c).includes(c.step)) return null;
+    if (c.step === 'carga') c.step = 'historia'; // la carga es solo un efecto: no se retoma a medias
+    return { ...c, msg: '', saving: false };
+  } catch (e) { return null; }
+}
+function obAnonBorrar() { try { lsSet(OB_ANON_KEY, null); } catch (e) { /* nada */ } }
+// Usuario automático (letras, números, _ y -; 3–20): nombre + inicial del apellido + 3 cifras. Se cambia luego en Perfil. Se fija la primera vez para que no cambie entre reintentos.
+function genUsuario(o) {
+  if (o.usuarioAuto) return o.usuarioAuto;
+  const limpia = (t) => (t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const base = (limpia((o.nombre || '').trim().split(/\s+/)[0]).slice(0, 12) || 'cadencia') + limpia((o.apellidos || '').trim()).slice(0, 1);
+  o.usuarioAuto = `${base}_${String(Math.floor(Math.random() * 900) + 100)}`.slice(0, 20);
+  return o.usuarioAuto;
+}
+
+// Último paso del cuestionario sin cuenta. `via`: 'google' | 'apple' | 'email'. La cuenta se crea AQUÍ y el cuestionario entero se guarda en su perfil; si falla el guardado, la cuenta ya existe (`o.cuenta`) y el reintento solo vuelve a guardar.
+async function obRegistrar(via) {
+  const o = st.ob;
+  if (!o || !o.anon || o.saving) return;
+  o.msg = '';
+  if (!o.acepto) { o.msg = 'Para crear la cuenta tienes que aceptar los Términos de Uso, la Política de Privacidad y el aviso de salud.'; return render(); }
+  let email = '', pass = '';
+  if (via === 'email' && !o.cuenta) {
+    email = (o.regEmailV || '').trim(); pass = o.regPass || '';
+    if (!email) { o.msg = 'Escribe tu email.'; return render(); }
+    if (pass.length < 6) { o.msg = 'La contraseña necesita al menos 6 caracteres.'; return render(); }
+  }
+  o.saving = true; st.registering = true; render();
+  try {
+    let u = o.cuenta;
+    if (!u) {
+      const completo = `${o.nombre.trim()} ${o.apellidos.trim()}`.replace(/\s+/g, ' ');
+      u = via === 'google' ? await api.loginGoogle() : via === 'apple' ? await api.loginApple() : await api.register(completo, email, pass);
+      o.cuenta = u;
+    }
+    st.user = u;
+    const previo = await api.getProfile(u.uid);
+    if (via !== 'email' && onboardingHecho(previo)) { // la cuenta de Google/Apple ya existía y estaba completa: se entra en ella y lo respondido se descarta
+      st.registering = false; st.ob = null; obAnonBorrar(); toast('Ya tenías cuenta: hemos entrado en ella');
+      return enter(u);
+    }
+    const p = obProfile(), hoy = todayISO(), ant = previo || {};
+    const extra = (Array.isArray(ant.objetivos) ? ant.objetivos : []).filter((g) => !['perder', 'musculo', 'mantener'].includes(g));
+    const data = { ...p, email: u.email || ant.email || '', objetivos: [...p.objetivos, ...extra], firmaFecha: hoy, pesoInicial: ant.pesoInicial || p.pesoKg, fechaInicio: ant.fechaInicio || hoy, onboarded: true, onboardingCompletado: true, onboardingVersion: OB.VERSION, novVista: NOV_V, legal: { v: LEGAL_V, fecha: new Date().toISOString() } };
+    data.calorias = CAL.resumen({ ...ant, ...data }, p.pesoKg);
+    await api.addWeight(u.uid, hoy, p.pesoKg); // primero el peso…
+    await api.saveProfile(u.uid, data);        // …y el perfil con la marca al final: si algo falla antes, la marca NO queda puesta
+    st.profile = { ...ant, ...data };
+    obAnonBorrar();
+    st.registering = false; o.saving = false; o.justRegistered = true;
+    st.pf = { v: 'suscripcion', plan: 'anual', f: {}, busy: false }; st.pwAviso = false;
+    st.view = 'paywall'; render(); window.scrollTo(0, 0);
+    pwVigilar(u);
+  } catch (e) {
+    st.registering = false; o.saving = false; o.msg = errorText(e); render();
+  }
+}
+
+/* ---------- paywall en cascada: justo tras registrarse, a pantalla completa ---------- */
+// Solo se ve al venir del cuestionario (`st.ob.justRegistered`). La X abre un aviso (no cierra); «Continuar sin plan personalizado» entra en la app gratuita.
+const PRECIO_SEMANA = '0,77 €'; // plan anual (39,99 € / 52 semanas)
+function viewPaywall() {
+  return `<div class="screen pw-full">
+    <div class="pw-top"><button type="button" class="iconbtn" data-act="pw-cerrar" aria-label="Cerrar"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <h1 class="ob-title">Tu plan está listo</h1>
+    <p class="ob-sub">Desbloquéalo con Cadencia PRO: Coach AI, rutinas ilimitadas y todas las funciones.</p>
+    ${suscripcionHTML()}
+  </div>${st.proInfo ? proInfoHTML() : ''}${st.pwAviso ? pwAvisoHTML() : ''}`;
+}
+function pwAvisoHTML() {
+  return `<div class="sheet-back sheet-back-top" data-act="pw-aviso-cerrar"></div>
+    <div class="sheet short pw-aviso" role="dialog" aria-modal="true" aria-label="Antes de salir">
+      <div class="sheet-grab"></div>
+      <div class="pw-aviso-b">
+        <h2>Antes de salir</h2>
+        <p>Con Cadencia PRO tu plan se queda con el Coach AI y todas las funciones desbloqueadas. Empieza hoy por solo ${PRECIO_SEMANA} / semana (plan anual, 39,99 € al año).</p>
+        <button type="button" class="btn block" data-act="pw-aviso-cerrar">Obtener Plan</button>
+        <button type="button" class="btn ghost block pw-ghost" data-act="pw-seguir">Continuar sin plan personalizado</button>
+      </div>
+    </div>`;
+}
+// Si paga y vuelve (el servidor activa Pro), entra solo en la app.
+let pwParar = null;
+function pwVigilar(u) {
+  pwQuitar();
+  if (typeof api.watchProfile !== 'function') return;
+  pwParar = api.watchProfile(u.uid, (p) => { if (st.view === 'paywall' && p && p.isPro === true) { st.profile = { ...st.profile, ...p }; toast('¡Bienvenido a Cadencia PRO!'); pwSalir(); } });
+}
+function pwQuitar() { if (pwParar) { try { pwParar(); } catch (e) { /* ya estaba parado */ } pwParar = null; } }
+async function pwSalir() {
+  pwQuitar(); st.pwAviso = false; st.pf = null; st.proInfo = null;
+  try { await entrarApp(st.user, { fade: true }); } catch (e) { st.errText = errorText(e); st.view = 'error'; render(); }
+}
+function pwSeguir() { return pwSalir(); }
 
 function focusFirst() {
   const i = root.querySelector('.big-input input');
@@ -1254,9 +1369,10 @@ function viewError() {
 /* Entrada y eventos                                                   */
 /* ================================================================== */
 async function enter(u) {
+  if (u && st.view === 'paywall' && st.ob && st.ob.justRegistered) return; // aviso de sesión repetido mientras se ve el paywall: no entrar en la app todavía
   st.user = u; st.busy = false;
   if (!u && M) M.pararPro();
-  if (!u) { st.cfg = st.pwd = st.pf = st.proInfo = st.rutShare = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = 'auth'; st.ob = null; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
+  if (!u) { pwQuitar(); const anon = st.ob && st.ob.anon && !st.ob.justRegistered ? st.ob : null; /* un cuestionario sin cuenta en marcha NO se pierde por un aviso «sin sesión» */ st.cfg = st.pwd = st.pf = st.proInfo = st.rutShare = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = anon && st.view === 'onboarding' ? 'onboarding' : 'auth'; st.ob = anon; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
   try {
     // PUERTA OBLIGATORIA: antes de pintar la app (y antes de pedir entrenos, peso, racha…) se lee el perfil.
     // Sin `onboardingCompletado: true` solo se ve el cuestionario: nada de cabecera, barra inferior ni secciones.
@@ -1309,8 +1425,18 @@ root.addEventListener('click', async (e) => {
   if (R.click(act, v)) return; // sin esperar a nada: el permiso de notificaciones debe pedirse al instante del toque
   if (await S.click(act, v)) return;
   if (await M.click(act, v, b)) return;
-  if (act === 'mode') { st.authMode = v; st.authMsg = null; const f = root.querySelector('form'); const email = f && f.email.value; render(); keepForm({ email }); }
-  else if (act === 'legal-open') { if (st.view === 'auth') { const f = root.querySelector('form'); st.authKeep = f ? { name: f.name ? f.name.value : '', email: f.email.value, pass: f.pass.value, acepto: f.acepto ? f.acepto.checked : false } : null; } st.legal = true; render(); if (st.authKeep) keepForm(st.authKeep); }
+  if (act === 'auth-ingresar') { st.authMode = 'login'; st.authMsg = null; render(); }
+  else if (act === 'auth-volver') { st.authMode = 'welcome'; st.authMsg = null; render(); }
+  else if (act === 'login-google') onSocial('google');
+  else if (act === 'login-apple') onSocial('apple');
+  else if (act === 'ob-empezar') startOnboarding(null, { anon: true });
+  else if (act === 'reg-google') obRegistrar('google');
+  else if (act === 'reg-apple') obRegistrar('apple');
+  else if (act === 'reg-email') { st.ob.regEmail = true; st.ob.msg = ''; render(); const i = root.querySelector('[data-ob="regEmail"]'); if (i) i.focus(); }
+  else if (act === 'pw-cerrar') { st.pwAviso = true; render(); }
+  else if (act === 'pw-aviso-cerrar') { st.pwAviso = false; render(); }
+  else if (act === 'pw-seguir') pwSeguir();
+  else if (act === 'legal-open') { if (st.view === 'auth') { const f = root.querySelector('form'); st.authKeep = f && f.email ? { email: f.email.value, pass: f.pass.value } : null; } st.legal = true; render(); if (st.authKeep) keepForm(st.authKeep); }
   else if (act === 'legal-close') { st.legal = false; render(); if (st.view === 'auth' && st.authKeep) { keepForm(st.authKeep); st.authKeep = null; } }
   else if (act === 'pf-open') { st.pf = { v, f: {}, busy: false }; st.editGoals = null; render(); }
   else if (act === 'plan-sel') { if (planActivo() === 'siempre' && RECURRENTES.includes(v)) return; const actual = (st.pf && st.pf.plan) || planActivo() || 'anual'; if (v === actual) return; if (st.pf && PLANES.some((x) => x.id === v)) { st.pf.plan = v; if (!pintarSeleccion(v)) render(); } }
@@ -1389,7 +1515,7 @@ root.addEventListener('click', async (e) => {
     if (b.dataset.ctx === 'ob' && st.ob) st.ob.hideSug = true;
     else { try { await api.saveProfile(st.user.uid, { hideWeightSuggestion: true }); st.profile.hideWeightSuggestion = true; } catch (e) { toast(errorText(e)); } }
   }
-  else if (act === 'logout') { st.tab = 'inicio'; st.authMode = 'login'; st.authMsg = null; lsSet('cadencia-tab', null); await api.logout(); }
+  else if (act === 'logout') { st.tab = 'inicio'; st.authMode = 'welcome'; st.authMsg = null; obAnonBorrar(); lsSet('cadencia-tab', null); await api.logout(); }
   else if (act === 'retry') { st.view = 'boot'; enter(st.user); }
 });
 
@@ -1422,7 +1548,8 @@ root.addEventListener('input', (e) => {
     const fe = document.getElementById('ob-ritmo-fecha'); if (fe) fe.innerHTML = OB.ritmoFechaHTML(st.ob, todayISO()); // fecha en vivo al deslizar
     return;
   }
-  st.ob[k] = e.target.value;
+  st.ob[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+  obGuardarAnon();
   // activar/desactivar «Siguiente» sin redibujar (para no perder el foco del teclado)
   const o = st.ob, next = root.querySelector('[data-next]');
   if (next) next.disabled = !OB.puedeSeguir(o);
@@ -1436,7 +1563,6 @@ root.addEventListener('submit', async (e) => {
   const f = e.target, kind = f.dataset.form;
   if (await M.submit(kind, f)) return;
   if (kind === 'login') onLogin(f);
-  else if (kind === 'register') onRegister(f);
   else if (kind === 'ob') obNext();
   else if (kind === 'addweight') saveWeight(f.fecha.value, f.kg.value, { grasa: f.grasa.value, musculo: f.musculo.value, agua: f.agua.value, hueso: f.hueso.value }, pesoUnit(), !!f.dataset.edit, keepEdit(f));
   else if (kind.startsWith('pf-')) pfGuardar(kind, f);

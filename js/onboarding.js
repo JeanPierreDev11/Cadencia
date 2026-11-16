@@ -1,7 +1,8 @@
 // Cuestionario inicial (rediseño 2026-11-15). Aquí viven los textos, los cálculos y el HTML de cada pantalla.
 // No guarda estado: app.js tiene `st.ob` y llama a estas funciones. Pantallas (en orden):
 //   perfil → donde → material (siempre; con Gimnasio sale su lista pre-marcada) → dias → tiempo → peso (actual + qué quiere lograr) → meta (peso objetivo)
-//   → ritmo (con la fecha en vivo) → obstaculos → psicologia → historia → carga (sin menú ni botón, se salta sola) → plan → firma (con pausa dramática)
+//   → ritmo (con la fecha en vivo) → obstaculos → psicologia → historia → carga (sin menú ni botón, se salta sola) → plan → firma (con pausa dramática) → registro (solo si el cuestionario se hizo SIN cuenta: `o.anon`)
+// Desde la Fase 3 el cuestionario se hace ANTES de crear la cuenta; «Tus datos» se reparte en pantallas sueltas (nombre, sexo, edad, altura, exp), sin número de paso.
 import { esc, nf, num, I } from './util.js';
 
 /* ---------- datos ---------- */
@@ -86,11 +87,15 @@ const expDe = (id) => EXPS.find((e) => e.id === id);
 
 /* ---------- lógica ---------- */
 // `material` sale SIEMPRE (con solo Gimnasio también: lista de gimnasio pre-marcada). `meta` va ANTES de `ritmo` para poder calcular la fecha en vivo al deslizar.
-export const flujo = (o) => ['perfil', 'donde', 'material', 'dias', 'tiempo', 'peso', 'meta', 'ritmo', 'obstaculos', 'psicologia', 'historia', 'carga', 'plan', 'firma'];
+export const flujo = (o) => ['nombre', 'sexo', 'edad', 'altura', 'exp', 'donde', 'material', 'dias', 'tiempo', 'peso', 'meta', 'ritmo', 'obstaculos', 'psicologia', 'historia', 'carga', 'plan', 'firma', ...(o && o.anon ? ['registro'] : [])];
 
 export function puedeSeguir(o) {
   switch (o.step) {
-    case 'perfil': return !!(o.sexo && o.edad && o.nombre.trim() && o.apellidos.trim() && o.usuario && o.alturaCm && o.exp);
+    case 'nombre': return !!(o.nombre.trim() && o.apellidos.trim());
+    case 'sexo': return !!o.sexo;
+    case 'edad': return !!String(o.edad).trim();
+    case 'altura': return !!String(o.alturaCm).trim();
+    case 'exp': return !!o.exp;
     case 'donde': return o.donde.length > 0;
     case 'material': return o.material.length > 0;
     case 'dias': return o.freq >= 2 && o.freq <= 7;
@@ -202,24 +207,63 @@ const fechaLarga = (d) => d.toLocaleDateString('es-ES', { day: 'numeric', month:
 const fechaCorta = (d) => d.toLocaleDateString('es-ES', { month: 'short', year: 'numeric' }).replace('.', '');
 
 /* ---------- pantallas ---------- */
-export function perfilHTML(o, name) {
-  return `<h1 class="ob-title">${name ? `${esc(name)}, cuéntanos` : 'Cuéntanos'} sobre ti</h1>
-    <p class="ob-sub">Con esto calculamos cuánta energía gasta tu cuerpo y adaptamos tu plan.</p>
+// «Tus datos» en pantallas sueltas y rápidas (una pregunta por pantalla).
+export function nombreHTML(o) {
+  return `<h1 class="ob-title">¿Cómo te llamas?</h1>
+    <p class="ob-sub">Así personalizamos tu plan y tu compromiso.</p>
     <label class="field"><span>Nombre</span><input class="input" data-ob="nombre" value="${esc(o.nombre)}" maxlength="40" autocomplete="given-name" required></label>
-    <label class="field"><span>Apellidos</span><input class="input" data-ob="apellidos" value="${esc(o.apellidos)}" maxlength="60" autocomplete="family-name" required></label>
-    <label class="field"><span>Nombre de usuario</span><input class="input" data-ob="usuario" value="${esc(o.usuario)}" maxlength="20" autocapitalize="none" autocomplete="username" placeholder="ej. jean_ramirez" required><small>Letras, números, _ y -, sin espacios.</small></label>
-    <div class="field"><span>Sexo</span>
-      <div class="pair">
-        <button type="button" class="choice" data-act="sex" data-v="hombre" aria-pressed="${o.sexo === 'hombre'}"><span class="ico">${I.male}</span>Hombre</button>
-        <button type="button" class="choice" data-act="sex" data-v="mujer" aria-pressed="${o.sexo === 'mujer'}"><span class="ico">${I.female}</span>Mujer</button>
-      </div>
+    <label class="field"><span>Apellidos</span><input class="input" data-ob="apellidos" value="${esc(o.apellidos)}" maxlength="60" autocomplete="family-name" required></label>`;
+}
+export function sexoHTML(o) {
+  return `<h1 class="ob-title">¿Cuál es tu sexo?</h1>
+    <p class="ob-sub">Lo usamos para calcular cuánta energía gasta tu cuerpo.</p>
+    <div class="pair">
+      <button type="button" class="choice" data-act="sex" data-v="hombre" aria-pressed="${o.sexo === 'hombre'}"><span class="ico">${I.male}</span>Hombre</button>
+      <button type="button" class="choice" data-act="sex" data-v="mujer" aria-pressed="${o.sexo === 'mujer'}"><span class="ico">${I.female}</span>Mujer</button>
+    </div>`;
+}
+export function edadHTML(o) {
+  return `<h1 class="ob-title">¿Cuántos años tienes?</h1>
+    <label class="field"><span class="sr-only">Edad</span><div class="big-input"><input name="edad" inputmode="numeric" pattern="[0-9]*" maxlength="3" value="${esc(o.edad)}" placeholder="30" data-ob="edad" autofocus><em>años</em></div></label>`;
+}
+export function alturaHTML(o) {
+  return `<h1 class="ob-title">¿Cuánto mides?</h1>
+    <label class="field"><span class="sr-only">Estatura</span><div class="big-input"><input name="alturaCm" inputmode="decimal" maxlength="4" value="${esc(o.alturaCm)}" placeholder="175" data-ob="alturaCm" autofocus><em>cm</em></div></label>`;
+}
+export function expHTML(o) {
+  return `<h1 class="ob-title">¿Cuánta experiencia tienes entrenando?</h1>
+    <div class="exp3">${EXPS.map((e) => `<button type="button" class="choice" data-act="ob-exp" data-v="${e.id}" aria-pressed="${o.exp === e.id}">${e.t}<small>${e.s}</small></button>`).join('')}</div>`;
+}
+
+// Primera pantalla de quien NO tiene sesión: el cuestionario empieza sin cuenta (los botones los gestiona app.js).
+export function bienvenidaHTML(hero, hayAvance) {
+  return `<div class="screen bv">
+    <div class="auth-hero">${hero}</div>
+    <div class="bv-body">
+      <h1 class="ob-title">Consigue el cuerpo de tus sueños</h1>
+      <p class="ob-sub">Responde unas preguntas y te preparamos un plan hecho para ti.</p>
     </div>
-    <div class="ob-grid2">
-      <label class="field"><span>Edad</span><div class="big-input sm"><input name="edad" inputmode="numeric" pattern="[0-9]*" maxlength="3" value="${esc(o.edad)}" placeholder="30" data-ob="edad"><em>años</em></div></label>
-      <label class="field"><span>Estatura</span><div class="big-input sm"><input name="alturaCm" inputmode="decimal" maxlength="4" value="${esc(o.alturaCm)}" placeholder="175" data-ob="alturaCm"><em>cm</em></div></label>
+    <div class="bv-foot">
+      <button type="button" class="btn block" data-act="ob-empezar">${hayAvance ? 'SEGUIR DONDE LO DEJÉ' : 'EMPEZAR'}</button>
+      <button type="button" class="link bv-in" data-act="auth-ingresar">¿Ya tienes cuenta? Ingresar</button>
     </div>
-    <div class="field"><span>Experiencia entrenando</span>
-      <div class="exp3">${EXPS.map((e) => `<button type="button" class="choice" data-act="ob-exp" data-v="${e.id}" aria-pressed="${o.exp === e.id}">${e.t}<small>${e.s}</small></button>`).join('')}</div>
+  </div>`;
+}
+
+// Último paso (cuestionario sin cuenta): crear la cuenta guarda TODO lo respondido. `o.regEmail` despliega el formulario de email.
+export function registroHTML(o) {
+  const ocupado = !!o.saving;
+  return `<h1 class="ob-title">Regístrate para no perder tu progreso</h1>
+    <p class="ob-sub">Tranqui, no compartiremos tus datos con nadie.</p>
+    <label class="check"><input type="checkbox" data-ob="acepto" ${o.acepto ? 'checked' : ''}><span>Acepto los <button type="button" class="link" data-act="legal-open">Términos de Uso, la Política de Privacidad y el aviso de salud</button></span></label>
+    <div class="reg-btns">
+      <button type="button" class="btn block" data-act="reg-google" ${ocupado ? 'disabled' : ''}>Continuar con Google</button>
+      <button type="button" class="btn block" data-act="reg-apple" ${ocupado ? 'disabled' : ''}>Continuar con Apple</button>
+      ${o.regEmail ? `<div class="reg-email">
+        <label class="field"><span>Email</span><input class="input" type="email" data-ob="regEmailV" value="${esc(o.regEmailV || '')}" autocomplete="email" inputmode="email" autocapitalize="off" placeholder="tu@email.com"></label>
+        <label class="field"><span>Contraseña</span><div class="pass-wrap"><input class="input" type="password" data-ob="regPass" value="${esc(o.regPass || '')}" autocomplete="new-password" minlength="6" placeholder="Mínimo 6 caracteres"><button type="button" data-act="peek">Ver</button></div></label>
+        <button type="submit" class="btn block" ${ocupado ? 'disabled' : ''}>${ocupado ? '<span class="spinner"></span>' : 'Crear cuenta'}</button>
+      </div>` : `<button type="button" class="btn block quiet" data-act="reg-email" ${ocupado ? 'disabled' : ''}>Continuar con Email</button>`}
     </div>`;
 }
 
@@ -444,7 +488,7 @@ export function firmaHTML(o, nombre) {
         <svg class="ring" viewBox="0 0 100 100" aria-hidden="true"><circle class="trk" cx="50" cy="50" r="46"/><circle class="bar" cx="50" cy="50" r="46" pathLength="100" style="stroke-dashoffset:${hecho ? 0 : 100}"/></svg>
         <span class="sign-in">${hecho ? svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 64, 2.6) : svg(HUELLA, 64, 1.6)}<span class="sign-lbl" data-lbl="${FIRMA_TXT}">${hecho ? '¡Firmado!' : FIRMA_TXT}</span></span>
       </button>
-      <p class="small muted">${hecho ? 'Guardando tu plan…' : 'Mantén el dedo 2 segundos. Si lo sueltas antes, se reinicia.'}</p>
+      <p class="small muted">${hecho ? (o.anon ? 'Un último paso…' : 'Guardando tu plan…') : 'Mantén el dedo 2 segundos. Si lo sueltas antes, se reinicia.'}</p>
     </div>`;
 }
 

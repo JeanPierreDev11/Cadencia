@@ -1714,3 +1714,23 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .pausa { flex: 1; display: grid; place-items: center; text-align: center; min-height: 55dvh; }
 .pausa-t { grid-area: 1 / 1; opacity: 0; margin: 0; animation: pausaTxt var(--dur) linear calc(var(--d) - var(--el, 0s)) both; }
 @keyframes pausaTxt { 0% { opacity: 0; } 25% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
+
+/* 2026-11-16 · Cuestionario Fase 3: bienvenida sin cuenta, registro al final y paywall en cascada */
+.bv { justify-content: space-between; gap: 18px; }
+.bv-body { display: grid; gap: 14px; align-content: center; flex: 1; }
+.bv-foot { display: grid; gap: 6px; justify-items: center; padding-bottom: 4px; }
+.bv-in { justify-self: center; color: var(--muted); font-weight: 600; font-size: 15px; padding: 10px 8px; }
+.bv .wordmark { margin: 0; }
+.auth-h { font-size: 22px; font-weight: 800; font-stretch: 125%; }
+.auth-or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; }
+.auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.reg-btns { display: grid; gap: 10px; }
+.reg-email { display: grid; gap: 12px; }
+.pw-full { gap: 14px; padding-bottom: calc(var(--safe-b) + 28px); }
+.pw-top { display: flex; justify-content: flex-end; min-height: 44px; }
+.pw-full .sheet-list { margin: 0; padding: 0; overflow: visible; }
+.sheet.pw-aviso { z-index: 91; }
+.pw-aviso-b { display: grid; gap: 12px; padding: 4px 4px 12px; }
+.pw-aviso-b h2 { margin: 0; font-size: 22px; font-weight: 800; font-stretch: 125%; }
+.pw-aviso-b p { margin: 0; font-size: 16px; line-height: 1.45; color: var(--muted); }
+.btn.pw-ghost { border-color: transparent; background: transparent; color: var(--muted); font-weight: 600; min-height: 44px; }

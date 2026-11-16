@@ -50,6 +50,9 @@ async function firebaseBackend(config) {
       return toUser(cred.user);
     },
     async login(email, pass) { return toUser((await A.signInWithEmailAndPassword(auth, email, pass)).user); },
+    // Entrar o crear la cuenta con Google / Apple (ventana emergente). Requieren el proveedor activado en Firebase Authentication (Apple, además, la configuración de Apple Developer).
+    async loginGoogle() { return toUser((await A.signInWithPopup(auth, new A.GoogleAuthProvider())).user); },
+    async loginApple() { const p = new A.OAuthProvider('apple.com'); p.addScope('email'); p.addScope('name'); return toUser((await A.signInWithPopup(auth, p)).user); },
     async logout() { await A.signOut(auth); },
     // Cuenta: proveedores de acceso, contraseña, Google y foto de perfil (Firebase Storage).
     providers() { return ((auth.currentUser && auth.currentUser.providerData) || []).map((p) => p.providerId); },
@@ -221,6 +224,8 @@ function localBackend() {
       s.session = email; write(s); emit();
       return current();
     },
+    async loginGoogle() { throw err('local/no-social'); },
+    async loginApple() { throw err('local/no-social'); },
     async logout() { const s = read(); s.session = null; write(s); emit(); },
     providers() { return ['password']; },
     async changePassword(actual, nueva) {
@@ -315,6 +320,8 @@ const MESSAGES = {
   'unavailable': 'Sin conexión con la base de datos. Se guardará al volver la conexión.',
   'auth/no-current-user': 'No hay ninguna sesión iniciada.',
   'auth/requires-recent-login': 'Por seguridad, vuelve a escribir tu contraseña.',
+  'local/no-social': 'Google y Apple solo funcionan con la app conectada a Firebase. En modo prueba usa el email.',
+  'auth/account-exists-with-different-credential': 'Ya existe una cuenta con ese email y otro método de acceso. Entra con ese método.',
   'local/no-google': 'Vincular Google solo funciona con la app conectada a Firebase.',
   'local/foto': 'No se ha podido leer la foto.',
   'auth/credential-already-in-use': 'Esa cuenta de Google ya está vinculada a otra cuenta de Cadencia.',
