@@ -1764,3 +1764,4 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .cod-input { text-align: center; text-transform: uppercase; letter-spacing: .2em; font-size: 22px; font-weight: 700; }
 .cod-msg { color: var(--bad); font-size: 14px; }
 .pw-aviso-b .cod-msg { color: var(--bad); }
+.ref-link { word-break: break-all; user-select: all; -webkit-user-select: all; text-align: center; }

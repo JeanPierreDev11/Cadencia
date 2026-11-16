@@ -56,6 +56,26 @@ const applyTheme = () => {
 applyTheme();
 try { matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if (themePref() === 'system') applyTheme(); }); } catch (e) { /* navegador antiguo */ }
 
+/* ---------- enlace de invitación: https://cadencia-11cb6.web.app/?ref=CÓDIGO ---------- */
+// Al abrir la app se lee `ref`, se guarda en localStorage (`cadencia-ref`, para que sobreviva al cuestionario) y se quita de la barra de direcciones.
+// Solo se quita `ref`: el resto de parámetros (`ir` de los avisos, `code` de Strava…) los siguen leyendo `push.js` y `strava.js`, por eso esto va ANTES de ellos.
+const REF_URL = 'https://cadencia-11cb6.web.app/';
+const REF_TEXTO = 'Únete a Cadencia, la app de entrenamiento con IA. Usa mi enlace y llévate 1 semana PRO gratis.';
+const REF_CLAVE = 'cadencia-ref';
+let refMem = ''; // copia en memoria por si el navegador no deja usar localStorage
+(function capturarRef() {
+  try {
+    const u = new URL(location.href);
+    if (!u.searchParams.has('ref')) return;
+    const c = (u.searchParams.get('ref') || '').trim().toUpperCase();
+    if (/^[A-Z0-9]{6}$/.test(c)) { refMem = c; lsSet(REF_CLAVE, c); }
+    u.searchParams.delete('ref');
+    history.replaceState(history.state, '', u.pathname + u.search + u.hash);
+  } catch (e) { /* sin URL o sin historial: no pasa nada */ }
+})();
+const refGuardado = () => { const c = String(lsGet(REF_CLAVE) || refMem || '').trim().toUpperCase(); return /^[A-Z0-9]{6}$/.test(c) ? c : ''; };
+const refLimpiar = () => { refMem = ''; lsSet(REF_CLAVE, null); };
+
 /* ================================================================== */
 /* Estado                                                              */
 /* ================================================================== */
@@ -458,7 +478,12 @@ async function obRegistrar(via) {
     await api.saveProfile(u.uid, data);        // …y el perfil con la marca al final: si algo falla antes, la marca NO queda puesta
     st.profile = { ...ant, ...data };
     obAnonBorrar();
-    st.registering = false; o.saving = false; o.justRegistered = true; st.vieneDeRegistro = true;
+    // Si llegó con el enlace de un amigo, se canjea solo (esperando como mucho 4 s; si tarda más, sigue por detrás y `pwVigilar` lo recoge).
+    const canje = refAutoCanje();
+    const aplicado = await Promise.race([canje, new Promise((ok) => setTimeout(() => ok(null), 4000))]);
+    st.registering = false; o.saving = false; o.justRegistered = true;
+    if (aplicado === true) return pwSalir(); // ya tiene PRO de regalo: entra directo a la app (el aviso de éxito ya salió)
+    st.vieneDeRegistro = true;
     st.pf = { v: 'suscripcion', plan: 'anual', f: {}, busy: false }; st.pwAviso = false;
     st.view = 'paywall'; render(); window.scrollTo(0, 0);
     pwVigilar(u);
@@ -513,6 +538,22 @@ async function canjearCodigo(codigo) {
     render();
   } catch (e) { c.busy = false; c.msg = errorText(e); render(); }
 }
+// Auto-canje del enlace de un amigo (se llama al terminar el registro). Devuelve true si se aplicó. Los errores definitivos
+// (código inexistente, lleno, propio…) borran el código guardado y avisan; los de red lo dejan para el botón «Tengo un código».
+const REF_DEFINITIVOS = ['ref/ref-formato', 'ref/ref-no-existe', 'ref/ref-propio', 'ref/ref-usado', 'ref/ref-pro-pago', 'ref/ref-lleno'];
+async function refAutoCanje() {
+  const cod = refGuardado(); if (!cod) return false;
+  try {
+    const r = await api.canjearCodigo(cod);
+    refLimpiar();
+    st.profile = { ...st.profile, isPro: true, proCaduca: r.proCaduca, codigoUsado: true };
+    toast('🎁 ¡Código de amigo aplicado! Tienes 1 semana PRO gratis');
+    return true;
+  } catch (e) {
+    if (REF_DEFINITIVOS.includes(e && e.code)) { refLimpiar(); toast(`No se ha podido aplicar el código de tu amigo. ${errorText(e)}`); }
+    return false;
+  }
+}
 // Hito i (1..10) de la hoja: reclamado (gris) / reclamable (amarillo) / bloqueado (borde, desactivado).
 function refHitoHTML(i, ref, rec) {
   const hecho = rec.includes(i), listo = !hecho && ref >= i, txt = `${i} ${i === 1 ? 'amigo' : 'amigos'}`;
@@ -525,10 +566,11 @@ function referidosSheetHTML() {
   const p = st.profile || {}, ref = Math.min(REF_MAX, Math.max(0, Number(p.referidos) || 0)), rec = Array.isArray(p.recompensas) ? p.recompensas : [];
   const fin = proRegalo(p), lleno = ref >= REF_MAX;
   return `<div class="sheet-list ref-body">
-    <p class="small muted">Tu amigo recibe <b>7 días de Cadencia PRO</b> al canjear tu código y tú ganas <b>1 semana</b> por cada amigo que lo use, hasta ${REF_MAX} amigos. Las semanas se reclaman a mano y se suman a tu PRO.</p>
+    <p class="small muted">Comparte tu enlace: tu amigo recibe <b>7 días de Cadencia PRO</b> al registrarse con él (o al escribir tu código) y tú ganas <b>1 semana</b> por cada amigo, hasta ${REF_MAX} amigos. Las semanas se reclaman a mano y se suman a tu PRO.</p>
     <section class="ref-code"><span class="small muted">Tu código</span>
       ${p.refCode ? `<b class="ref-cod" id="ref-cod">${esc(p.refCode)}</b>
-      <div class="ref-acts"><button type="button" class="btn small" data-act="ref-copy">Copiar código</button>${navigator.share ? '<button type="button" class="btn ghost small" data-act="ref-share">Compartir</button>' : ''}</div>`
+      <div class="ref-acts"><button type="button" class="btn small" data-act="ref-share">Invitar amigos</button><button type="button" class="btn ghost small" data-act="ref-copy">Copiar código</button></div>
+      <span class="small muted ref-link" id="ref-link">${esc(REF_URL)}?ref=${esc(p.refCode)}</span>`
       : '<b class="ref-cod ref-cod-no">Generando…</b><span class="small muted">Un momento, estamos creando tu código.</span>'}</section>
     <section class="ref-prog" aria-label="Progreso de invitaciones"><p><b>Has invitado a ${ref}/${REF_MAX} amigos</b></p>
       <div class="ref-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${REF_MAX}" aria-valuenow="${ref}"><i style="width:${ref * 100 / REF_MAX}%"></i></div>
@@ -560,14 +602,21 @@ async function refAbrir() {
     if (st.pf && st.pf.v === 'referidos') render();
   } catch (e) { /* sin conexión: se ve lo que ya había */ }
 }
-async function refCopiar() {
-  const c = st.profile && st.profile.refCode; if (!c) return;
-  try { await navigator.clipboard.writeText(c); toast('Código copiado'); }
-  catch (e) { const el = document.getElementById('ref-cod'); if (el && window.getSelection) { const r = document.createRange(); r.selectNodeContents(el); const g = window.getSelection(); g.removeAllRanges(); g.addRange(r); } toast('Mantén pulsado el código para copiarlo'); }
+// Copia un texto; si el navegador no deja, selecciona el enlace visible para copiarlo a mano.
+async function refCopiarTexto(txt, ok) {
+  try { await navigator.clipboard.writeText(txt); toast(ok); }
+  catch (e) { const el = document.getElementById('ref-link') || document.getElementById('ref-cod'); if (el && window.getSelection) { const r = document.createRange(); r.selectNodeContents(el); const g = window.getSelection(); g.removeAllRanges(); g.addRange(r); } toast('Mantén pulsado el texto para copiarlo'); }
 }
+const refCopiar = () => { const c = st.profile && st.profile.refCode; return c ? refCopiarTexto(c, 'Código copiado') : undefined; };
+// «Invitar amigos»: hoja de compartir del móvil (Web Share) con el enlace mágico; sin ella, copia el mensaje con el enlace.
 async function refCompartir() {
   const c = st.profile && st.profile.refCode; if (!c) return;
-  try { await navigator.share({ title: APP_NAME, text: `Prueba ${APP_NAME} con mi código de invitación ${c} y empieza con 7 días de PRO.`, url: location.origin }); } catch (e) { /* cancelado */ }
+  const url = `${REF_URL}?ref=${c}`;
+  if (navigator.share) {
+    try { await navigator.share({ title: APP_NAME, text: REF_TEXTO, url }); return; }
+    catch (e) { if (e && e.name === 'AbortError') return; /* cancelado: nada; otro error: se copia */ }
+  }
+  await refCopiarTexto(`${REF_TEXTO} ${url}`, 'Enlace copiado: pégalo en un mensaje');
 }
 
 function pwAvisoHTML() {
@@ -1518,6 +1567,8 @@ root.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-act]');
   if (!b) return;
   const act = b.dataset.act, v = b.dataset.v;
+  if (act === 'ref-share') { refCompartir(); return; } // sin esperar a nada: navigator.share y el portapapeles solo valen justo tras el toque
+  if (act === 'ref-copy') { refCopiar(); return; }
   if (b.closest('.nov-modal') && act !== 'nov-ok') M.novCerrar();
   if (R.click(act, v)) return; // sin esperar a nada: el permiso de notificaciones debe pedirse al instante del toque
   if (await S.click(act, v)) return;
@@ -1536,11 +1587,9 @@ root.addEventListener('click', async (e) => {
   else if (act === 'legal-open') { if (st.view === 'auth') { const f = root.querySelector('form'); st.authKeep = f && f.email ? { email: f.email.value, pass: f.pass.value } : null; } st.legal = true; render(); if (st.authKeep) keepForm(st.authKeep); }
   else if (act === 'legal-close') { st.legal = false; render(); if (st.view === 'auth' && st.authKeep) { keepForm(st.authKeep); st.authKeep = null; } }
   else if (act === 'pf-open') { st.pf = { v, f: {}, busy: false }; st.editGoals = null; render(); if (v === 'referidos') refAbrir(); }
-  else if (act === 'cod-open') { st.codigo = { val: '', msg: '', busy: false }; render(); const i = root.querySelector('.cod-input'); if (i) i.focus(); }
+  else if (act === 'cod-open') { st.codigo = { val: refGuardado(), msg: '', busy: false }; render(); const i = root.querySelector('.cod-input'); if (i) i.focus(); }
   else if (act === 'cod-close') { st.codigo = null; render(); }
   else if (act === 'ref-reclamar') reclamarReferido(v);
-  else if (act === 'ref-copy') refCopiar();
-  else if (act === 'ref-share') refCompartir();
   else if (act === 'plan-sel') { if (planActivo() === 'siempre' && RECURRENTES.includes(v)) return; const actual = (st.pf && st.pf.plan) || planActivo() || 'anual'; if (v === actual) return; if (st.pf && PLANES.some((x) => x.id === v)) { st.pf.plan = v; if (!pintarSeleccion(v)) render(); } }
   else if (act === 'plan-go') { const pa = planActivo(), el = (st.pf && st.pf.plan) || pa || 'anual'; if (subCta(el, pa).act !== 'plan-go') return; const url = planUrl((st.pf && st.pf.plan) || 'anual', st.user); if (!url) { toast('La suscripción estará disponible muy pronto.'); return; } const w = window.open(url, '_blank'); if (!w) location.assign(url); }
   else if (act === 'pro-info-open') { st.proInfo = true; render(); }
