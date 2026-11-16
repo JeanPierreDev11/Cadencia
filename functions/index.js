@@ -285,6 +285,10 @@ Reglas:
 - "perfil" puede traer datos del cuestionario inicial; úsalos (si faltan, ignóralos) para personalizar sin decirlos como una lista:
   · experiencia: adapta el nivel de exigencia y la progresión (principiante: técnica y constancia antes que cargas; avanzado: volumen, intensidad y RIR).
   · lugares y material: los consejos que propongan ejercicios o cambios deben ser posibles con ese equipamiento (en casa o calistenia no propongas máquinas ni poleas; sin barra o discos no propongas press con barra). Si entrena en gimnasio, cuenta con máquinas, poleas y peso libre.
+  · materialGimnasio: si viene, es lo ÚNICO que hay en su gimnasio (lo que no esté en la lista falta: no lo propongas). Si no viene y entrena en gimnasio, cuenta con todo.
+  · minutosSesion: el tiempo que tiene para cada sesión (90 = 90 o más). Los consejos deben caber en ese tiempo: con 15-30 min prioriza ejercicios multiarticulares, superseries y descansos cortos, y no propongas añadir volumen; con 60 o más puedes proponer más series o accesorios.
+  · obstaculo: lo que más le frena. Orienta UN consejo a ello: falta de tiempo → eficiencia; falta de conocimiento → explica en pocas palabras el porqué; motivación baja → una meta pequeña y concreta para la próxima sesión; lesiones o molestias → progresión prudente y técnica, sin diagnosticar ni tratar (como mucho, sugerir consultar a un profesional si hay dolor); falta de equipamiento → alternativas con lo que tiene.
+  · rasgos: cosas con las que se identifica (constancia, dudas al elegir o sobre su rutina, motivación externa). Ajusta el tono: refuerza lo que hizo bien y da seguridad con razones claras. No los cites ni hagas valoraciones psicológicas.
   · diasSemana: los días por semana que se ha comprometido a entrenar; ajusta el reparto y el volumen de la sesión a esa frecuencia (con 2-3 días se espera más trabajo por sesión; con 5-7, sesiones más repartidas).
   · pesoKg y pesoObjetivo: si el objetivo es bajar o subir de peso, enfoca la valoración y un consejo a ese camino (más gasto y densidad si baja; superávit y sobrecarga progresiva si sube). Sin dar dietas ni cifras de calorías.`;
 const ESQUEMA_COACH = {
@@ -302,7 +306,12 @@ const ESQUEMA_COACH = {
 const COACH_EXP = { nuevo: 'principiante (menos de 6 meses)', meses: 'unos meses', anio: 'intermedio (cerca de 1 año)', anios: 'avanzado (varios años)', compite: 'competidor' };
 const COACH_DONDE = { casa: 'en casa', gym: 'en gimnasio', parque: 'calistenia (barras y peso corporal)' };
 const COACH_MATERIAL = { mancuernas: 'mancuernas', dominadas: 'barra de dominadas', banda: 'bandas elásticas', kettlebell: 'kettlebells', barra: 'barra con discos', banco: 'banco', suspension: 'anillas o TRX', paralelas: 'paralelas o fondos', ninguno: 'solo su cuerpo' };
-const lista = (v, mapa) => (Array.isArray(v) ? v.filter((k) => typeof k === 'string' && mapa[k]).map((k) => mapa[k]).slice(0, 10) : []);
+// Cuestionario Fase 1 (2026-11-16): material real del gimnasio, minutos por sesión, mayor obstáculo y frases con las que se identifica.
+const COACH_GYM = { g_maquinas: 'máquinas guiadas', g_poleas: 'poleas y cables', g_barras: 'barras y discos', g_mancuernas: 'mancuernas', g_rack: 'rack o jaula de sentadillas', g_banco: 'bancos', g_dominadas: 'barra de dominadas y paralelas', g_kettlebell: 'kettlebells', g_cardio: 'máquinas de cardio' };
+const COACH_MIN = [15, 30, 45, 60, 90];
+const COACH_OBST = { tiempo: 'falta de tiempo', conocimiento: 'falta de conocimiento', motivacion: 'motivación baja', lesiones: 'lesiones o molestias físicas', equipamiento: 'falta de equipamiento' };
+const COACH_PSICO = { constancia: 'le cuesta entrenar de forma constante', eleccion: 'no sabe elegir los entrenamientos adecuados', eficiencia: 'duda de si su rutina es eficiente', motivacion: 'necesita motivación externa' };
+const lista = (v, mapa) => (Array.isArray(v) ? v.filter((k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(mapa, k)).map((k) => mapa[k]).slice(0, 10) : []);
 const perfilCoach = (p) => {
   const base = { sexo: p.sexo || '', edad: p.edad || null, pesoKg: p.pesoKg || null, objetivos: Array.isArray(p.objetivos) ? p.objetivos.slice(0, 5) : [] };
   const donde = lista(p.donde, COACH_DONDE), material = lista(p.material, COACH_MATERIAL);
@@ -311,6 +320,12 @@ const perfilCoach = (p) => {
   if (material.length) base.material = material;
   if (p.diasSemana >= 1 && p.diasSemana <= 7) base.diasSemana = Math.round(p.diasSemana);
   if (p.pesoObjetivo > 20 && p.pesoObjetivo < 300) base.pesoObjetivo = p.pesoObjetivo;
+  const gym = Array.isArray(p.donde) && p.donde.includes('gym') ? lista(p.material, COACH_GYM) : [];
+  if (gym.length) base.materialGimnasio = gym;
+  if (COACH_MIN.includes(p.minutosSesion)) base.minutosSesion = p.minutosSesion;
+  if (typeof p.obstaculo === 'string' && Object.prototype.hasOwnProperty.call(COACH_OBST, p.obstaculo)) base.obstaculo = COACH_OBST[p.obstaculo];
+  const rasgos = p.psico && typeof p.psico === 'object' ? Object.keys(COACH_PSICO).filter((k) => p.psico[k] === true).map((k) => COACH_PSICO[k]) : [];
+  if (rasgos.length) base.rasgos = rasgos;
   return base;
 };
 const resumenEntreno = (w) => ({
