@@ -359,7 +359,7 @@ async function obFirmado() {
       const p = obProfile(), uid = st.user.uid, hoy = todayISO();
       const ant = st.profile || {}; // cuenta antigua: conserva su punto de partida y los objetivos que el cuestionario no pregunta
       const extra = (Array.isArray(ant.objetivos) ? ant.objetivos : []).filter((g) => !['perder', 'musculo', 'mantener'].includes(g));
-      const data = { ...p, objetivos: [...p.objetivos, ...extra], firmaFecha: hoy, pesoInicial: ant.pesoInicial || p.pesoKg, fechaInicio: ant.fechaInicio || hoy, onboarded: true, onboardingCompletado: true, novVista: NOV_V };
+      const data = { ...p, objetivos: [...p.objetivos, ...extra], firmaFecha: hoy, pesoInicial: ant.pesoInicial || p.pesoKg, fechaInicio: ant.fechaInicio || hoy, onboarded: true, onboardingCompletado: true, onboardingVersion: OB.VERSION, novVista: NOV_V };
       data.calorias = CAL.resumen({ ...ant, ...data }, p.pesoKg);
       if (o.ultimoKg !== p.pesoKg) await api.addWeight(uid, hoy, p.pesoKg); // primero el peso (solo si cambió respecto al último)…
       await api.saveProfile(uid, data);        // …y el perfil con la marca al final: si algo falla antes, la marca NO queda puesta
@@ -1258,9 +1258,9 @@ async function enter(u) {
   }
 }
 
-// ¿Esta cuenta ya pasó por el cuestionario? Solo vale la marca `onboardingCompletado: true`. Las cuentas anteriores al 15-11 no la tienen:
+// ¿Esta cuenta ya pasó por la versión ACTUAL del cuestionario? Vale `onboardingCompletado: true` y `onboardingVersion >= OB.VERSION` (sin campo = versión 1, por eso las que lo firmaron el 15-11 lo repiten una vez con la Fase 1). Las cuentas anteriores al 15-11 no la tienen:
 // la primera vez que entran hacen el cuestionario (con sus datos ya rellenados) y al firmar queda en true, así que es una sola vez.
-const onboardingHecho = (p) => !!p && p.onboardingCompletado === true;
+const onboardingHecho = (p) => !!p && p.onboardingCompletado === true && (p.onboardingVersion || 1) >= OB.VERSION;
 
 // Carga normal de la app (peso, entrenos, racha, Pro…) y primera pantalla. `fade`: entrada suave tras firmar el cuestionario.
 async function entrarApp(u, { fade = false } = {}) {

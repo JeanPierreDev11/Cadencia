@@ -66,6 +66,9 @@ export const FREQ = [[2, 'Para arrancar'], [3, 'Constante'], [4, 'Comprometido']
 // Número de paso que se enseña («Paso 2 de 10»); «perfil» es la pantalla previa con tus datos. Si cambias `flujo`, cambia esto a la vez.
 export const PASO = { donde: 1, material: 1, dias: 2, tiempo: 3, peso: 4, meta: 5, ritmo: 6, obstaculos: 7, plan: 8, psicologia: 9, firma: 10 };
 export const PASOS = 10;
+// Versión del cuestionario (se guarda en `onboardingVersion` al firmar). Quien lo firmó con una versión MENOR lo repite una vez (puerta en app.js: `onboardingHecho`).
+// Súbela SOLO cuando las preguntas nuevas importen de verdad: obliga a TODAS las cuentas a repetirlo. 1 = sin campo (15-11) · 2 = Fase 1 (16-11).
+export const VERSION = 2;
 // Qué quiere lograr (paso 3). `obj` = objetivos que se guardan en el perfil (recomposición = perder grasa + ganar músculo).
 export const METAS = [
   { id: 'perder', t: 'Perder grasa', s: 'Bajar peso sin perder fuerza', obj: ['perder'], ico: '<path d="M12 4v14M6 12l6 6 6-6"/>' },
