@@ -1,6 +1,7 @@
 // Cuestionario inicial (rediseño 2026-11-15). Aquí viven los textos, los cálculos y el HTML de cada pantalla.
 // No guarda estado: app.js tiene `st.ob` y llama a estas funciones. Pantallas (en orden):
-//   perfil → donde → (material, solo si eliges Casa o Calistenia) → dias → peso (actual + qué quiere lograr) → ritmo → meta (peso objetivo) → plan → firma
+//   perfil → donde → material (siempre; con Gimnasio sale su lista pre-marcada) → dias → tiempo → peso (actual + qué quiere lograr) → meta (peso objetivo)
+//   → ritmo (con la fecha en vivo) → obstaculos → plan → psicologia → firma
 import { esc, nf, num, I } from './util.js';
 
 /* ---------- datos ---------- */
@@ -22,6 +23,39 @@ export const MATERIAL = [
   { id: 'paralelas', t: 'Paralelas o fondos', eq: null, ico: '<path d="M6 8h12M6 14h12M8 8v12M16 8v12"/>' },
   { id: 'ninguno', t: 'Solo mi cuerpo', eq: null, ico: '<circle cx="12" cy="4.5" r="2"/><path d="M12 7v7M7 10l5-1.5 5 1.5M8.5 21l3.5-7 3.5 7"/>' },
 ];
+// Material de GIMNASIO (Fase 1, 2026-11-15). Salen TODOS pre-marcados cuando eliges «Gimnasio»: la persona desmarca lo que no haya. Ids con prefijo `g_` para no chocar con los de casa.
+// `eq` = id equivalente del asistente de rutinas (maquina · mancuernas · barra · kettlebell); null = no cambia el equipo del asistente.
+export const MATERIAL_GYM = [
+  { id: 'g_maquinas', t: 'Máquinas guiadas', eq: 'maquina', ico: '<rect x="5" y="3" width="14" height="18" rx="1.5"/><path d="M5 9h14M12 9v7M9 16h6"/>' },
+  { id: 'g_poleas', t: 'Poleas y cables', eq: 'maquina', ico: '<circle cx="12" cy="5" r="2.2"/><path d="M12 7.2V16M8 21h8M12 16l-3 5M12 16l3 5"/>' },
+  { id: 'g_barras', t: 'Barras y discos', eq: 'barra', ico: '<path d="M2 12h20M5 8v8M8 6v12M16 6v12M19 8v8"/>' },
+  { id: 'g_mancuernas', t: 'Mancuernas', eq: 'mancuernas', ico: '<path d="M4 10v4M7 7v10M17 7v10M20 10v4M7 12h10"/>' },
+  { id: 'g_rack', t: 'Rack o jaula de sentadillas', eq: null, ico: '<path d="M5 3v18M19 3v18M5 8h14M5 14h14"/>' },
+  { id: 'g_banco', t: 'Bancos', eq: null, ico: '<path d="M3 13h18M5 13v5M19 13v5M7 13v-3h10v3"/>' },
+  { id: 'g_dominadas', t: 'Dominadas y paralelas', eq: null, ico: '<path d="M3 4h18M6 4v3M18 4v3"/><circle cx="12" cy="9" r="1.7"/><path d="M12 11v5M9 21l3-5 3 5"/>' },
+  { id: 'g_kettlebell', t: 'Kettlebells', eq: 'kettlebell', ico: '<circle cx="12" cy="14.5" r="6"/><path d="M8.5 9.5a3.5 3.5 0 0 1 7 0"/>' },
+  { id: 'g_cardio', t: 'Cardio (cintas y bicis)', eq: null, ico: '<circle cx="12" cy="4.5" r="2"/><path d="M12 7v5l3 3M12 12l-3 3v5M9 9l-3 2"/>' },
+];
+export const MATERIAL_TODOS = [...MATERIAL, ...MATERIAL_GYM];
+export const esGym = (id) => MATERIAL_GYM.some((m) => m.id === id);
+// «¿Cuánto tiempo tienes para entrenar?» (minutos por sesión; 90 = 90 o más).
+export const TIEMPOS = [[15, 'Express'], [30, 'Eficiente'], [45, 'En serio'], [60, 'Intenso'], [90, 'Obsesivo']];
+export const tiempoTxt = (m) => `${m}${m >= 90 ? '+' : ''} min`;
+// «¿Qué te impide alcanzar este objetivo?» (selección única). Los ids son los que se guardan en `obstaculo`.
+export const OBSTACULOS = [
+  { id: 'tiempo', t: 'Falta de tiempo', ico: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>' },
+  { id: 'conocimiento', t: 'Falta de conocimiento', ico: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21V5M9 7h6"/>' },
+  { id: 'motivacion', t: 'Motivación baja', ico: '<path d="M13 3L5 14h6l-1 7 8-11h-6z"/>' },
+  { id: 'lesiones', t: 'Lesiones o molestias físicas', ico: '<path d="M8.5 15.5l7-7M5 12a3.5 3.5 0 0 1 0-5l2-2a3.5 3.5 0 0 1 5 0l7 7a3.5 3.5 0 0 1 0 5l-2 2a3.5 3.5 0 0 1-5 0z"/>' },
+  { id: 'equipamiento', t: 'Falta de equipamiento', ico: '<path d="M4 10v4M7 7v10M17 7v10M20 10v4M7 12h10"/><path d="M3 3l18 18"/>' },
+];
+// «¿Te sientes identificado?»: cuatro frases con Sí / No. Se guardan como booleanos en `psico` { [id]: true|false }.
+export const PSICO = [
+  { id: 'constancia', t: 'Me cuesta entrenar de forma constante sin fallar.' },
+  { id: 'eleccion', t: 'No sé elegir los entrenamientos adecuados para mí.' },
+  { id: 'eficiencia', t: 'A veces dudo si mi rutina es eficiente.' },
+  { id: 'motivacion', t: 'Necesito motivación externa para seguir mi plan.' },
+];
 // Mismos ids que `RW_EXP` del asistente de rutinas (nuevo · anio · anios), para precargarlo.
 export const EXPS = [
   { id: 'nuevo', t: 'Principiante', s: 'Menos de 6 meses' },
@@ -29,16 +63,16 @@ export const EXPS = [
   { id: 'anios', t: 'Avanzado', s: 'Varios años' },
 ];
 export const FREQ = [[2, 'Para arrancar'], [3, 'Constante'], [4, 'Comprometido'], [5, 'Increíble'], [6, 'Sin excusas'], [7, 'Imparable']];
-// Número de paso que se enseña («Paso 2 de 7»); «perfil» es la pantalla previa con tus datos.
-export const PASO = { donde: 1, material: 1, dias: 2, peso: 3, ritmo: 4, meta: 5, plan: 6, firma: 7 };
-export const PASOS = 7;
+// Número de paso que se enseña («Paso 2 de 10»); «perfil» es la pantalla previa con tus datos. Si cambias `flujo`, cambia esto a la vez.
+export const PASO = { donde: 1, material: 1, dias: 2, tiempo: 3, peso: 4, meta: 5, ritmo: 6, obstaculos: 7, plan: 8, psicologia: 9, firma: 10 };
+export const PASOS = 10;
 // Qué quiere lograr (paso 3). `obj` = objetivos que se guardan en el perfil (recomposición = perder grasa + ganar músculo).
 export const METAS = [
   { id: 'perder', t: 'Perder grasa', s: 'Bajar peso sin perder fuerza', obj: ['perder'], ico: '<path d="M12 4v14M6 12l6 6 6-6"/>' },
   { id: 'volumen', t: 'Ganar volumen', s: 'Más músculo y más fuerza', obj: ['musculo'], ico: '<path d="M4 10v4M7 7v10M17 7v10M20 10v4M7 12h10"/>' },
   { id: 'recomp', t: 'Recomposición', s: 'Perder grasa y ganar músculo a la vez', obj: ['perder', 'musculo'], ico: '<path d="M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4"/>' },
 ];
-// Ritmo de progreso (paso 4): lo elige la persona, de 0,25 a 1 kg por semana.
+// Ritmo de progreso (paso 6, después del peso meta: la fecha en vivo necesita los dos pesos): lo elige la persona, de 0,25 a 1 kg por semana.
 export const RITMO = { min: 0.25, max: 1, step: 0.05, def: 0.5 };
 export const FIRMA_MS = 2000;
 
@@ -47,7 +81,8 @@ const tick = (on) => `<span class="tick">${on ? I.check : ''}</span>`;
 const expDe = (id) => EXPS.find((e) => e.id === id);
 
 /* ---------- lógica ---------- */
-export const flujo = (o) => ['perfil', 'donde', ...(o.donde.some((d) => d === 'casa' || d === 'parque') ? ['material'] : []), 'dias', 'peso', 'ritmo', 'meta', 'plan', 'firma'];
+// `material` sale SIEMPRE (con solo Gimnasio también: lista de gimnasio pre-marcada). `meta` va ANTES de `ritmo` para poder calcular la fecha en vivo al deslizar.
+export const flujo = (o) => ['perfil', 'donde', 'material', 'dias', 'tiempo', 'peso', 'meta', 'ritmo', 'obstaculos', 'plan', 'psicologia', 'firma'];
 
 export function puedeSeguir(o) {
   switch (o.step) {
@@ -55,6 +90,9 @@ export function puedeSeguir(o) {
     case 'donde': return o.donde.length > 0;
     case 'material': return o.material.length > 0;
     case 'dias': return o.freq >= 2 && o.freq <= 7;
+    case 'tiempo': return TIEMPOS.some(([m]) => m === o.tiempo);
+    case 'obstaculos': return OBSTACULOS.some((x) => x.id === o.obstaculo);
+    case 'psicologia': return PSICO.every((p) => typeof (o.psico || {})[p.id] === 'boolean');
     case 'peso': return !!(o.pesoKg && o.meta);
     case 'ritmo': return o.ritmo >= RITMO.min && o.ritmo <= RITMO.max;
     case 'meta': return !!o.pesoObjetivo;
@@ -74,12 +112,33 @@ export function ritmoInfo(r) {
       : { nivel: 'mid', t: 'Agresivo.', s: 'Requiere disciplina estricta.' };
 }
 
-// Material para el asistente de rutinas: el gimnasio lo trae todo; lo marcado aquí se suma; sin nada → solo peso corporal.
+// Material para el asistente de rutinas: sale de lo MARCADO (gimnasio y casa/parque); sin nada → solo peso corporal.
+// Con Gimnasio y todo marcado da maquina + mancuernas + barra + kettlebell, como antes el gimnasio completo.
 export function eqDesde(donde, material) {
-  const eq = new Set(donde.includes('gym') ? ['maquina', 'mancuernas', 'barra'] : []);
-  material.forEach((id) => { const m = MATERIAL.find((x) => x.id === id); if (m && m.eq) eq.add(m.eq); });
+  const eq = new Set();
+  material.forEach((id) => {
+    const m = MATERIAL_TODOS.find((x) => x.id === id);
+    if (!m || !m.eq) return;
+    if (esGym(id) && !donde.includes('gym')) return; // por si queda material de gimnasio de una elección anterior
+    eq.add(m.eq);
+  });
   if (!eq.size) eq.add('ninguno');
   return [...eq];
+}
+// Marcar/desmarcar un material. El de gimnasio es independiente; «Solo mi cuerpo» es excluyente solo entre el material de casa/parque.
+export function alternaMaterial(sel, id) {
+  const on = sel.includes(id);
+  if (esGym(id)) return on ? sel.filter((x) => x !== id) : [...sel, id];
+  if (id === 'ninguno') return on ? sel.filter((x) => x !== 'ninguno') : [...sel.filter(esGym), 'ninguno'];
+  return on ? sel.filter((x) => x !== id) : [...sel.filter((x) => x !== 'ninguno'), id];
+}
+// Al entrar en la pantalla de material: quita lo que ya no corresponde a los sitios elegidos y, la PRIMERA vez que hay Gimnasio, lo marca TODO
+// (la persona desmarca lo que no tenga). `gymInit` evita volver a marcar lo que ya desmarcó. Devuelve { material, gymInit }.
+export function materialInicial(o) {
+  const gym = o.donde.includes('gym'), casa = o.donde.some((d) => d === 'casa' || d === 'parque');
+  let m = o.material.filter((id) => (esGym(id) ? gym : casa)), init = gym ? !!o.gymInit : false;
+  if (gym && !init) { m = [...new Set([...m, ...MATERIAL_GYM.map((x) => x.id)])]; init = true; }
+  return { material: m, gymInit: init };
 }
 
 // Termómetro: % de cambio respecto al peso actual. < 10 verde · 10–15 naranja · > 15 rojo (se compara con 1 decimal).
@@ -168,10 +227,15 @@ export function dondeHTML(o) {
 }
 
 export function materialHTML(o) {
-  return `<h1 class="ob-title">¿Qué material tienes?</h1>
-    <p class="ob-sub">Marca todo lo que puedas usar en casa o en el parque.</p>
-    <div class="choices tight">${MATERIAL.map((m) => `<button type="button" class="choice" data-act="ob-mat" data-v="${m.id}" aria-pressed="${o.material.includes(m.id)}">
+  const gym = o.donde.includes('gym'), casa = o.donde.some((d) => d === 'casa' || d === 'parque');
+  const lista = (arr) => `<div class="choices tight">${arr.map((m) => `<button type="button" class="choice" data-act="ob-mat" data-v="${m.id}" aria-pressed="${o.material.includes(m.id)}">
       <span class="ico">${svg(m.ico, 20)}</span><span class="t">${m.t}</span>${tick(o.material.includes(m.id))}</button>`).join('')}</div>`;
+  const sub = gym && casa ? 'Desmarca lo que no haya en tu gimnasio y marca lo que tengas en casa o en el parque.'
+    : gym ? 'Desmarca lo que no haya en tu gimnasio.' : 'Marca todo lo que puedas usar en casa o en el parque.';
+  return `<h1 class="ob-title">¿Qué material tienes?</h1>
+    <p class="ob-sub">${sub}</p>
+    ${gym ? `${casa ? '<h2 class="ob-q sm">En tu gimnasio</h2>' : ''}${lista(MATERIAL_GYM)}` : ''}
+    ${casa ? `${gym ? '<h2 class="ob-q sm">En casa o en el parque</h2>' : ''}${lista(MATERIAL)}` : ''}`;
 }
 
 export function diasHTML(o) {
@@ -179,6 +243,31 @@ export function diasHTML(o) {
     <p class="ob-sub">Será tu compromiso semanal y marcará cómo cuenta tu racha.</p>
     <div class="choices tight">${FREQ.map(([n, t]) => `<button type="button" class="choice freq" data-act="ob-dias" data-v="${n}" aria-pressed="${o.freq === n}">
       <span class="ico num">${n}</span><span class="t">${n} días<small>${t}</small></span>${tick(o.freq === n)}</button>`).join('')}</div>`;
+}
+
+// «¿Cuánto tiempo tienes para entrenar?» (selección única, `data-act="ob-tiempo"`).
+export function tiempoHTML(o) {
+  return `<h1 class="ob-title">¿Cuánto tiempo tienes para entrenar?</h1>
+    <p class="ob-sub">Por sesión. Ajustaremos el volumen de tu plan a ese tiempo.</p>
+    <div class="choices tight">${TIEMPOS.map(([m, t]) => `<button type="button" class="choice freq" data-act="ob-tiempo" data-v="${m}" aria-pressed="${o.tiempo === m}">
+      <span class="ico num min">${m >= 90 ? '90+' : m}</span><span class="t"><span>${tiempoTxt(m)} <small>(${t})</small></span></span>${tick(o.tiempo === m)}</button>`).join('')}</div>`;
+}
+
+// «¿Qué te impide alcanzar este objetivo?» (selección única, `data-act="ob-obst"`).
+export function obstaculosHTML(o) {
+  return `<h1 class="ob-title">¿Qué te impide alcanzar este objetivo?</h1>
+    <p class="ob-sub">Elige el mayor obstáculo. Lo tendremos en cuenta en tu plan.</p>
+    <div class="choices">${OBSTACULOS.map((x) => `<button type="button" class="choice" data-act="ob-obst" data-v="${x.id}" aria-pressed="${o.obstaculo === x.id}">
+      <span class="ico">${svg(x.ico)}</span><span class="t">${x.t}</span>${tick(o.obstaculo === x.id)}</button>`).join('')}</div>`;
+}
+
+// «¿Te sientes identificado?»: cuatro frases en lista con Sí / No (`data-act="ob-psico"`, `data-k` = id de la frase, `data-v` = 1 | 0). Hay que contestar las cuatro.
+export function psicologiaHTML(o) {
+  const ps = o.psico || {};
+  return `<h1 class="ob-title">¿Te sientes identificado?</h1>
+    <p class="ob-sub">Responde con sinceridad: así Cadencia IA te acompaña mejor.</p>
+    <div class="psico-list">${PSICO.map((p) => `<div class="psico-q" role="group" aria-label="${esc(p.t)}"><p>${esc(p.t)}</p>
+      <div class="psico-btns">${[[1, 'Sí'], [0, 'No']].map(([v, l]) => `<button type="button" class="choice" data-act="ob-psico" data-k="${p.id}" data-v="${v}" aria-pressed="${ps[p.id] === (v === 1)}">${l}</button>`).join('')}</div></div>`).join('')}</div>`;
 }
 
 // Cajita del termómetro (se repinta sola al escribir: ver `ob-term` en app.js).
@@ -208,7 +297,13 @@ export function ritmoInfoHTML(r) {
   return `<div class="term-box ${i.nivel}"><small>≈ ${nf(r * 4.345, 1)} kg al mes</small><b>${i.t} ${i.s}</b></div>`;
 }
 export const ritmoPct = (r) => Math.round(((r - RITMO.min) / (RITMO.max - RITMO.min)) * 100);
-export function ritmoHTML(o) {
+// Fecha en vivo bajo el slider: «Llegarás a tu objetivo el [fecha]». Se repinta al deslizar (app.js, listener `input`, sin render()). Lee `o.ritmo`, `o.pesoKg` y `o.pesoObjetivo`.
+export function ritmoFechaHTML(o, hoyISO) {
+  const est = estimarMeta(num(o.pesoKg), num(o.pesoObjetivo), hoyISO, o.ritmo);
+  if (!est) return o.meta === 'recomp' ? 'Mantendrás tu peso mientras ganas músculo y pierdes grasa.' : 'Mantendrás tu peso estable.';
+  return `Llegarás a tu objetivo el <b>${fechaLarga(est.fecha)}</b>`;
+}
+export function ritmoHTML(o, hoyISO) {
   const verbo = o.meta === 'volumen' ? 'ganar' : 'perder';
   return `<h1 class="ob-title">¿A qué ritmo quieres avanzar?</h1>
     <p class="ob-sub">Elige cuántos kilos quieres ${verbo} cada semana. Más rápido exige más disciplina.</p>
@@ -216,6 +311,7 @@ export function ritmoHTML(o) {
       <div class="ritmo-val"><b class="num" id="ob-ritmo-v">${fmtRitmo(o.ritmo)}</b><span>kg / semana</span></div>
       <input type="range" class="ritmo-rng" data-ob="ritmo" min="${RITMO.min}" max="${RITMO.max}" step="${RITMO.step}" value="${o.ritmo}" style="--p:${ritmoPct(o.ritmo)}%" aria-label="Ritmo en kilos por semana">
       <div class="ritmo-ticks" aria-hidden="true"><span>0,25</span><span>0,5</span><span>0,75</span><span>1</span></div>
+      <p class="ritmo-fecha" id="ob-ritmo-fecha">${ritmoFechaHTML(o, hoyISO)}</p>
       <div id="ob-ritmo-txt" aria-live="polite">${ritmoInfoHTML(o.ritmo)}</div>
     </div>`;
 }
@@ -260,6 +356,7 @@ export function planHTML(o, p, hoyISO) {
         <dt>Peso actual</dt><dd>${nf(p.pesoKg, 1)} kg</dd>
         <dt>Peso meta</dt><dd>${nf(p.pesoObjetivo, 1)} kg</dd>
         <dt>Ritmo</dt><dd>${fmtRitmo(o.ritmo)} kg/semana</dd>
+        <dt>Sesión</dt><dd>${o.tiempo ? tiempoTxt(o.tiempo) : '–'}</dd>
       </dl>
     </div>
     <section class="proy" aria-label="Proyección">

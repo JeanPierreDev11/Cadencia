@@ -231,6 +231,8 @@ function metaOb(p, ultimoKg) {
   if (g.includes('musculo')) return 'volumen';
   return p.pesoObjetivo > 0 && kg > 0 && Math.abs(p.pesoObjetivo - kg) >= 0.5 ? (p.pesoObjetivo < kg ? 'perder' : 'volumen') : '';
 }
+// Respuestas de «¿Te sientes identificado?» ya guardadas: solo se aceptan las frases conocidas con valor booleano.
+const psicoOb = (x) => { const r = {}; if (x && typeof x === 'object') OB.PSICO.forEach((q) => { if (typeof x[q.id] === 'boolean') r[q.id] = x[q.id]; }); return r; };
 function startOnboarding(ultimoKg = null) {
   const p = st.profile || {}, [nom, ape] = nomApe(p, st.user && st.user.name);
   st.ob = {
@@ -238,8 +240,12 @@ function startOnboarding(ultimoKg = null) {
     nombre: nom, apellidos: ape, usuario: p.usuario || '',
     sexo: p.sexo || '', edad: p.edad ? String(p.edad) : '', alturaCm: p.alturaCm ? String(p.alturaCm) : '',
     exp: OB.EXPS.some((e) => e.id === p.experiencia) ? p.experiencia : '',
-    donde: dondeOb(p.donde), material: (Array.isArray(p.material) ? p.material : []).filter((k) => OB.MATERIAL.some((m) => m.id === k)),
+    donde: dondeOb(p.donde), material: (Array.isArray(p.material) ? p.material : []).filter((k) => OB.MATERIAL_TODOS.some((m) => m.id === k)),
+    gymInit: Array.isArray(p.material) && p.material.some((k) => OB.esGym(k)), // ya eligió material de gimnasio antes: no se vuelve a marcar todo
     freq: p.diasSemana >= 2 && p.diasSemana <= 7 ? p.diasSemana : 0,
+    tiempo: OB.TIEMPOS.some(([m]) => m === p.minutosSesion) ? p.minutosSesion : 0,
+    obstaculo: OB.OBSTACULOS.some((x) => x.id === p.obstaculo) ? p.obstaculo : '',
+    psico: psicoOb(p.psico),
     pesoKg: ultimoKg || p.pesoKg ? nf(ultimoKg || p.pesoKg, 1) : '', ultimoKg, pesoObjetivo: p.pesoObjetivo ? nf(p.pesoObjetivo, 1) : '',
     meta: metaOb(p, ultimoKg), ritmo: p.ritmoKgSemana >= OB.RITMO.min && p.ritmoKgSemana <= OB.RITMO.max ? OB.ritmoDe(p.ritmoKgSemana) : OB.RITMO.def,
     msg: '', saving: false, firmado: false,
@@ -258,9 +264,12 @@ function viewOnboarding() {
   else if (s === 'donde') body = OB.dondeHTML(o);
   else if (s === 'material') body = OB.materialHTML(o);
   else if (s === 'dias') body = OB.diasHTML(o);
+  else if (s === 'tiempo') body = OB.tiempoHTML(o);           // minutos por sesión
   else if (s === 'peso') body = OB.pesoHTML(o);   // peso actual + qué quiere lograr
-  else if (s === 'ritmo') body = OB.ritmoHTML(o); // ritmo elegido (kg/semana)
   else if (s === 'meta') body = OB.metaHTML(o);   // peso meta (sin recomendaciones de IMC)
+  else if (s === 'ritmo') body = OB.ritmoHTML(o, todayISO()); // ritmo elegido (kg/semana) + fecha en vivo
+  else if (s === 'obstaculos') body = OB.obstaculosHTML(o);   // mayor obstáculo
+  else if (s === 'psicologia') { body = OB.psicologiaHTML(o); nextLabel = 'Continuar'; } // 4 frases Sí / No
   else if (s === 'plan') { body = OB.planHTML(o, obProfile(), todayISO()); nextLabel = 'Aceptar mi plan'; }
   else body = OB.firmaHTML(o, `${o.nombre.trim()} ${o.apellidos.trim()}`.replace(/\s+/g, ' '));
 
@@ -287,6 +296,8 @@ function obProfile() {
     alturaCm: Math.round(num(o.alturaCm)), pesoKg: Math.round(act * 10) / 10,
     pesoObjetivo: isFinite(obj) ? Math.round(obj * 10) / 10 : null,
     experiencia: o.exp, donde: o.donde, material: o.material, eqSel: OB.eqDesde(o.donde, o.material), diasSemana: o.freq,
+    // Fase 1 (variables para el Coach AI): minutos por sesión, mayor obstáculo y respuestas Sí/No (booleanos por frase).
+    minutosSesion: o.tiempo, obstaculo: o.obstaculo, psico: { ...o.psico },
   };
 }
 
@@ -324,6 +335,7 @@ function obNext() {
   o.msg = '';
   const flow = OB.flujo(o), nxt = flow[flow.indexOf(o.step) + 1];
   if (!nxt) return;
+  if (nxt === 'material') Object.assign(o, OB.materialInicial(o)); // con Gimnasio: lista pre-marcada (solo la primera vez); quita lo que ya no corresponde
   if (nxt === 'meta' && o.meta === 'recomp' && !o.pesoObjetivo.trim()) { const r = OB.recompDe(o); if (r) o.pesoObjetivo = nf(r.objetivo, 1); } // recomposición: propone el peso estimado
   o.step = nxt; render(); window.scrollTo(0, 0); focusFirst();
 }
@@ -1296,8 +1308,11 @@ root.addEventListener('click', async (e) => {
   else if (act === 'peek') { const i = b.previousElementSibling; i.type = i.type === 'password' ? 'text' : 'password'; b.textContent = i.type === 'password' ? 'Ver' : 'Ocultar'; }
   else if (act === 'forgot') onForgot();
   else if (act === 'ob-donde') { const g = st.ob.donde; st.ob.donde = g.includes(v) ? g.filter((x) => x !== v) : [...g, v]; render(); }
-  else if (act === 'ob-mat') { const g = st.ob.material; st.ob.material = v === 'ninguno' ? (g.includes(v) ? [] : ['ninguno']) : g.includes(v) ? g.filter((x) => x !== v) : [...g.filter((x) => x !== 'ninguno'), v]; render(); }
+  else if (act === 'ob-mat') { st.ob.material = OB.alternaMaterial(st.ob.material, v); render(); }
   else if (act === 'ob-dias') { st.ob.freq = Number(v); render(); }
+  else if (act === 'ob-tiempo') { st.ob.tiempo = Number(v); render(); }
+  else if (act === 'ob-obst') { st.ob.obstaculo = v; render(); }
+  else if (act === 'ob-psico') { st.ob.psico = { ...st.ob.psico, [b.dataset.k]: v === '1' }; render(); }
   else if (act === 'ob-exp') { st.ob.exp = v; render(); }
   else if (act === 'ob-meta') { st.ob.meta = v; render(); }
   else if (act === 'ob-recomp-usar') { st.ob.pesoObjetivo = nf(Number(v), 1); st.ob.msg = ''; render(); }
@@ -1388,6 +1403,7 @@ root.addEventListener('input', (e) => {
     e.target.style.setProperty('--p', OB.ritmoPct(r) + '%');
     const v = document.getElementById('ob-ritmo-v'), tx = document.getElementById('ob-ritmo-txt');
     if (v) v.textContent = OB.fmtRitmo(r); if (tx) tx.innerHTML = OB.ritmoInfoHTML(r);
+    const fe = document.getElementById('ob-ritmo-fecha'); if (fe) fe.innerHTML = OB.ritmoFechaHTML(st.ob, todayISO()); // fecha en vivo al deslizar
     return;
   }
   st.ob[k] = e.target.value;
