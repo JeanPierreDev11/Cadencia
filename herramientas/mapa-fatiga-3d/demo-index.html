@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Cadencia · Mapa de fatiga 3D (prueba)</title>
+<style>
+:root{--bg:#000;--card:#1A1A1A;--ink:#F5F5F5;--mut:#9a9a9a;--acc:#F2BE1A}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{display:flex;flex-direction:column;height:100dvh;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+header{padding:14px 18px 6px}h1{margin:0;font-size:17px;letter-spacing:.06em;text-transform:uppercase}
+header p{margin:4px 0 0;font-size:13px;color:var(--mut)}
+#v{flex:1;min-height:0;position:relative}
+#v canvas{display:block;width:100%;height:100%}
+#info{position:absolute;left:14px;right:14px;bottom:10px;background:rgba(26,26,26,.92);border:1px solid #2c2c2c;border-radius:6px;padding:10px 14px;display:flex;flex-direction:column;gap:3px;font-size:14px;min-height:48px;justify-content:center}
+#info b{font-size:16px}#info span{color:var(--mut);display:flex;align-items:center;gap:8px}#info i{width:10px;height:10px;border-radius:50%;display:inline-block}
+#cara{position:absolute;right:14px;top:8px;background:var(--card);color:var(--ink);border:1px solid #333;border-radius:6px;padding:8px 12px;font-size:13px}
+#chips{display:flex;gap:8px;padding:10px 14px 12px;overflow-x:auto}
+.chip{flex:none;background:var(--card);color:var(--ink);border:1px solid #333;border-radius:6px;padding:9px 14px;font-size:13px}
+.chip.on{border-color:var(--acc);color:var(--acc)}
+.leg{display:flex;gap:14px;padding:0 18px 4px;font-size:12px;color:var(--mut)}.leg i{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:5px}
+</style></head><body>
+<header><h1>Mapa de fatiga 3D</h1><p>Prueba con datos de ejemplo. Gira con el dedo y toca un músculo.</p></header>
+<div class="leg"><span><i style="background:#3DDC84"></i>Listo</span><span><i style="background:#FFB020"></i>Descansando</span><span><i style="background:#FF453A"></i>Fatigado</span></div>
+<div id="v"><button id="cara">Girar 180°</button><div id="info"><span>Cargando modelo…</span></div></div>
+<div id="chips"></div>
+<script type="module" src="app.js"></script>
+</body></html>
