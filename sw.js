@@ -55,6 +55,14 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
+  // Imágenes de ejercicios (nunca cambian de contenido): primero la copia guardada, así no se vuelven a pedir.
+  if (url.origin === self.location.origin && url.pathname.startsWith('/ejercicios/db/')) {
+    e.respondWith(
+      caches.match(req).then((hit) => hit || fetch(req).then((res) => { if (res.ok) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); } return res; }))
+    );
+    return;
+  }
+
   // Archivos propios: primero la red (siempre la última versión); sin conexión, la copia guardada.
   if (url.origin === self.location.origin) {
     e.respondWith(

@@ -1,4 +1,4 @@
-import { IMG_CUR, EXTRA, IMGDB } from './ejercicios.js';
+import { IMG_CUR, EXTRA, IMGDB, DBX } from './ejercicios.js';
 // Lógica del entrenamiento: solo cálculos y datos, sin pantalla.
 
 export const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -389,7 +389,11 @@ export const BIBLIOTECA = TABLA.trim().split('\n').map((l) => {
   const [n, m, p, eq] = l.split('|'), c = IMG_CUR[n];
   return { n, m, p, eq, img: c ? c[0] : '', mu: c ? c[1] : GRUPO_DET[m], base: true, tipo: 'fuerza' };
 });
-const RESTO = EXTRA.map(([n, m, eq, img, mu, cat]) => ({ n, m, p: null, eq, img, mu, cat, tipo: 'fuerza' }));
+const RESTO = EXTRA.map(([n, m, eq, img, mu, cat]) => ({ n, m, p: null, eq, img, mu, cat, tipo: 'fuerza' }))
+// Ejercicios nuevos de ExerciseDB (js/ejercicios-db.js): sin imagen antigua; la animación sale de IMGDB. `en` = nombre en inglés para el buscador.
+const NUEVOS_DB = DBX.map(([n, m, eq, mu, id, en, cm]) => (cm
+  ? { n, m, p: null, eq, img: '', mu, en, tipo: 'cardio', cm, ...(cm === 'aire' ? { int: 'correr' } : {}) }
+  : { n, m, p: null, eq, img: '', mu, en, tipo: 'fuerza' }));
 
 /* ---------- cardio dentro del entreno ---------- */
 // cm = cómo se apunta cada bloque. Cada campo: k (clave guardada), t (cabecera), im (teclado), ph (ejemplo), lo/hi (rango válido).
@@ -423,7 +427,7 @@ export const esCinta = (e) => exCardio(e) && modoCardio(e.n) === 'cinta';
 let PROPIOS = [];
 let INDICE = null;
 export const setPropios = (l) => { PROPIOS = (l || []).filter((x) => x && x.n).map((x) => ({ n: x.n, m: x.m || 'core', p: null, eq: x.eq || 'corporal', img: '', mu: GRUPO_DET[x.m] || '', propio: true, tipo: x.m === 'cardio' ? 'cardio' : 'fuerza', ...(x.m === 'cardio' ? { cm: 'aire', int: 'correr' } : {}) })); INDICE = null; };
-export const todosEjercicios = () => [...PROPIOS, ...BIBLIOTECA, ...CARDIO, ...RESTO];
+export const todosEjercicios = () => [...PROPIOS, ...BIBLIOTECA, ...CARDIO, ...RESTO, ...NUEVOS_DB];
 
 // ---------- Buscador: sin acentos ni mayúsculas, con erratas y también en inglés ----------
 // El nombre en inglés sale del id de la imagen (p. ej. «Barbell_Deadlift»); estos son los que no tienen imagen y los apodos más comunes.
@@ -449,7 +453,7 @@ const dist = (a, b, max) => {
 const palabras = (t) => normTxt(t).replace(/[^a-z0-9ñ]+/g, ' ').split(' ').filter(Boolean);
 export function textoEnIngles(x) {
   const k = normTxt(x.n);
-  return ALIAS_EN[k] || (x.img ? String(x.img).replace(/[_-]+/g, ' ') : '');
+  return ALIAS_EN[k] || x.en || (x.img ? String(x.img).replace(/[_-]+/g, ' ') : '');
 }
 // Devuelve los ejercicios que encajan con lo escrito, los más parecidos primero.
 export function buscarEjercicios(items, q, extra = () => '') {
