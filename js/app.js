@@ -504,7 +504,7 @@ function viewPaywall() {
     <h1 class="ob-title">Tu plan está listo</h1>
     <p class="ob-sub">Desbloquéalo con Cadencia PRO: Coach AI, rutinas ilimitadas y todas las funciones.</p>
     ${suscripcionHTML()}
-    ${st.profile && st.profile.codigoUsado === true ? '' : '<button type="button" class="btn ghost block pw-codigo" data-act="cod-open">${I.gift} Tengo un código de invitación</button>'}
+    ${st.profile && st.profile.codigoUsado === true ? '' : `<button type="button" class="btn ghost block pw-codigo" data-act="cod-open">${I.gift} Tengo un código de invitación</button>`}
   </div>${st.proInfo ? proInfoHTML() : ''}${st.pwAviso ? pwAvisoHTML() : ''}${st.codigo ? codigoSheetHTML() : ''}`;
 }
 /* ---------- referidos: 1 semana de Pro por amigo invitado (máx. 10) ---------- */
@@ -581,7 +581,7 @@ function referidosSheetHTML() {
       ${lleno ? '<p class="small muted">Has llegado al máximo de invitados. Puedes reclamar las semanas que te queden.</p>' : ''}
       ${fin ? `<p class="small muted">Tu PRO de regalo dura hasta el <b>${diaPro(fin)}</b>.</p>` : ''}</section>
     <ol class="ref-lista">${Array.from({ length: REF_MAX }, (_, k) => refHitoHTML(k + 1, ref, rec)).join('')}</ol>
-    ${p.codigoUsado === true ? '' : '<button type="button" class="btn ghost block" data-act="cod-open">${I.gift} Tengo un código de invitación</button>'}
+    ${p.codigoUsado === true ? '' : `<button type="button" class="btn ghost block" data-act="cod-open">${I.gift} Tengo un código de invitación</button>`}
     <p class="small muted">Si ya pagas Cadencia PRO, reclama tus semanas cuando termine tu plan: no se pierden. Cada persona solo puede canjear un código.</p>
   </div>`;
 }
@@ -1248,7 +1248,7 @@ function viewPerfil() {
   return `
     <header class="perfil-hero">${fotoHTML(true)}
       <h2 class="pf-user">${p.usuario ? `@${esc(p.usuario)}` : esc((p.nombreCompleto || p.nombre || st.user.name || 'Tu perfil').trim())}</h2>
-      ${p.isPro === true ? '<span class="pro-badge">${I.crown} PRO</span>' : ''}
+      ${p.isPro === true ? `<span class="pro-badge">${I.crown} PRO</span>` : ''}
       <p class="small muted">${esc(st.user.email || '')}</p>
       <button type="button" class="btn ghost small" data-act="pf-open" data-v="editar">Editar perfil</button></header>
     ${planCardHTML()}
