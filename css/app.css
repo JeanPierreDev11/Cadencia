@@ -1954,3 +1954,11 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .ring-ico .mi-w svg { width: 46px; height: 46px; }
 .mc-m > span { display: inline-flex; align-items: center; gap: 4px; }
 .mc-m .mi-w svg { width: 14px; height: 14px; }
+
+/* 2026-11-17 · Iconos SVG del Coach AI (cerebro) y de la sesión (mancuerna) */
+.ai-lbl-top { display: grid; justify-items: inherit; gap: 6px; }
+.ai-res .ai-lbl-top { justify-items: center; }
+.ai-res.sm .ai-lbl-top { justify-items: start; }
+.coach-ico { width: 40px; height: 40px; filter: drop-shadow(0 0 4px rgba(255, 46, 147, .45)); }
+.ai-res.sm .coach-ico { width: 32px; height: 32px; }
+.sesion-ico { width: 24px; height: 24px; display: block; }

@@ -69,6 +69,8 @@ const diaSel = () => {
   return hechos.length ? hechos[hechos.length - 1] : m;
 };
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const ICO_COACH = '<svg class="coach-ico" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g stroke="#FF2E93"><path d="M12 4.5C10.5 3.2 8 3.4 6.8 5 5 5.2 3.8 6.8 4.2 8.6 3 9.6 2.9 11.6 4 12.8 3.4 14.6 4.4 16.4 6.2 16.8 6.8 18.4 8.6 19.4 10.2 18.8 10.9 19.4 11.5 19.5 12 19.5"/><path d="M12 4.5C13.5 3.2 16 3.4 17.2 5 19 5.2 20.2 6.8 19.8 8.6 21 9.6 21.1 11.6 20 12.8 20.6 14.6 19.6 16.4 17.8 16.8 17.2 18.4 15.4 19.4 13.8 18.8 13.1 19.4 12.5 19.5 12 19.5"/><path d="M12 4.5v15"/><path d="M12 9.5H9.5L8 8M12 14.5H9.5L8 13M12 8h2.5L16 9.5M12 12.5h3l1.5 1.5"/></g><g fill="#fff" stroke="none"><circle cx="7.4" cy="7.4" r=".8"/><circle cx="7.4" cy="12.5" r=".8"/><circle cx="16.6" cy="10" r=".8"/><circle cx="17.1" cy="14.5" r=".8"/></g></svg>';
+const ICO_MANCUERNA = '<svg class="sesion-ico" viewBox="0 0 24 24" fill="none" stroke="var(--accent-text)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11M3.5 12h3M17.5 12h3"/></svg>';
 const tipoIcon = (t) => (t === 'bici' ? I.bike : t === 'cardio' ? I.heart : t === 'otro' ? I.ball : I.dumb);
 const goalsKind = () => E.planKind(st.profile && st.profile.objetivos);
 const sesDuracion = (s) => (s.t === 'fuerza' ? `${(s.ej || []).length} ejercicios` : fmtDur(s.min));
@@ -248,7 +250,7 @@ function aiHTML(w, compacto = false) {
   if (ai) {
     const pct = Math.max(0, Math.min(100, ai.nota * 10));
     return `<div class="ai-res ${compacto ? 'sm' : ''}">
-      <span class="ai-lbl">🧠 Coach AI${ai.demo ? ' <em class="ai-demo">Ejemplo</em>' : ''}</span>
+      <span class="ai-lbl ai-lbl-top">${ICO_COACH}<span>Coach AI${ai.demo ? ' <em class="ai-demo">Ejemplo</em>' : ''}</span></span>
       <div class="ai-score ${compacto ? 'sm' : ''}" style="--p:${pct.toFixed(0)}"><b class="num">${nf(ai.nota, 1)}</b><span>/ 10</span></div>
       <p class="ai-tit">${esc(ai.titulo)}</p>
       <section class="ai-box"><span class="ai-lbl">Análisis</span><p>${esc(ai.analisis)}</p>
@@ -291,7 +293,7 @@ function wkRow(w, mod) {
   if (w.fuente === 'strava') sub.push('Strava');
   const ne = (w.ejercicios || []).length; if (ne) sub.push(`${ne} ${ne === 1 ? 'ejercicio' : 'ejercicios'}`);
   const icoT = w.tipo === 'gym' ? 'fuerza' : w.tipo;
-  return `<div class="row wrow"><span class="wico">${tipoIcon(icoT)}</span>
+  return `<div class="row wrow"><span class="wico">${icoT === 'fuerza' ? ICO_MANCUERNA : tipoIcon(icoT)}</span>
     <span class="wtxt"><b>${esc(w.nombre || E.TIPOS[w.tipo] || 'Entreno')}</b><span class="muted small">${esc(sub.join(' · '))}</span></span>
     <span class="wkcal muted small">${w.kcal ? nf(w.kcal) + ' kcal' : ''}</span>
     ${mod ? `<button type="button" class="iconbtn" data-act="wk-edit" data-v="${esc(w.id)}" aria-label="Editar entreno">${I.pencil}</button><button type="button" class="iconbtn bad" data-act="wk-del-ask" data-v="${esc(w.id)}" aria-label="Borrar entreno">${I.trash}</button>` : ''}</div>`;
