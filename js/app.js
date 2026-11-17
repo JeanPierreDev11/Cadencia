@@ -504,7 +504,7 @@ function viewPaywall() {
     <h1 class="ob-title">Tu plan está listo</h1>
     <p class="ob-sub">Desbloquéalo con Cadencia PRO: Coach AI, rutinas ilimitadas y todas las funciones.</p>
     ${suscripcionHTML()}
-    ${st.profile && st.profile.codigoUsado === true ? '' : '<button type="button" class="btn ghost block pw-codigo" data-act="cod-open">🎁 Tengo un código de invitación</button>'}
+    ${st.profile && st.profile.codigoUsado === true ? '' : '<button type="button" class="btn ghost block pw-codigo" data-act="cod-open">${I.gift} Tengo un código de invitación</button>'}
   </div>${st.proInfo ? proInfoHTML() : ''}${st.pwAviso ? pwAvisoHTML() : ''}${st.codigo ? codigoSheetHTML() : ''}`;
 }
 /* ---------- referidos: 1 semana de Pro por amigo invitado (máx. 10) ---------- */
@@ -517,7 +517,7 @@ function codigoSheetHTML() {
     <div class="sheet short pw-aviso cod-sheet" role="dialog" aria-modal="true" aria-label="Código de invitación">
       <div class="sheet-grab"></div>
       <form class="pw-aviso-b" data-form="codigo" novalidate>
-        <h2>🎁 Código de invitación</h2>
+        <h2>${I.gift} Código de invitación</h2>
         <p>Si un amigo te ha invitado, escribe su código y recibirás <b>7 días de Cadencia PRO</b>. Solo se puede usar un código por cuenta.</p>
         <input class="input cod-input" name="codigo" value="${esc(c.val || '')}" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" placeholder="Ej. CAD67X" aria-label="Código de invitación">
         ${c.msg ? `<p class="cod-msg" role="alert">${esc(c.msg)}</p>` : ''}
@@ -551,7 +551,7 @@ async function refAutoCanje() {
     const r = await api.canjearCodigo(cod);
     refLimpiar();
     st.profile = { ...st.profile, isPro: true, proCaduca: r.proCaduca, codigoUsado: true };
-    toast('🎁 ¡Código de amigo aplicado! Tienes 1 semana PRO gratis');
+    toast('¡Código de amigo aplicado! Tienes 1 semana PRO gratis');
     return true;
   } catch (e) {
     if (REF_DEFINITIVOS.includes(e && e.code)) { refLimpiar(); toast(`No se ha podido aplicar el código de tu amigo. ${errorText(e)}`); }
@@ -581,7 +581,7 @@ function referidosSheetHTML() {
       ${lleno ? '<p class="small muted">Has llegado al máximo de invitados. Puedes reclamar las semanas que te queden.</p>' : ''}
       ${fin ? `<p class="small muted">Tu PRO de regalo dura hasta el <b>${diaPro(fin)}</b>.</p>` : ''}</section>
     <ol class="ref-lista">${Array.from({ length: REF_MAX }, (_, k) => refHitoHTML(k + 1, ref, rec)).join('')}</ol>
-    ${p.codigoUsado === true ? '' : '<button type="button" class="btn ghost block" data-act="cod-open">🎁 Tengo un código de invitación</button>'}
+    ${p.codigoUsado === true ? '' : '<button type="button" class="btn ghost block" data-act="cod-open">${I.gift} Tengo un código de invitación</button>'}
     <p class="small muted">Si ya pagas Cadencia PRO, reclama tus semanas cuando termine tu plan: no se pierden. Cada persona solo puede canjear un código.</p>
   </div>`;
 }
@@ -628,7 +628,7 @@ function pwAvisoHTML() {
     <div class="sheet short pw-aviso" role="dialog" aria-modal="true" aria-label="¿Seguro que quieres irte?">
       <div class="sheet-grab"></div>
       <div class="pw-aviso-b">
-        <h2>⚠️ ¿Seguro que quieres irte?</h2>
+        <h2>${I.warn} ¿Seguro que quieres irte?</h2>
         <p>Tu plan de entrenamiento está guardado, pero sin Cadencia PRO no tendrás acceso al Coach IA ni a las analíticas de progreso. No dejes tu potencial a medias.</p>
         <button type="button" class="btn block" data-act="pw-aviso-cerrar">Activar Cadencia PRO</button>
         <button type="button" class="btn ghost block pw-ghost" data-act="pw-seguir">Continuar con la versión básica</button>
@@ -1248,7 +1248,7 @@ function viewPerfil() {
   return `
     <header class="perfil-hero">${fotoHTML(true)}
       <h2 class="pf-user">${p.usuario ? `@${esc(p.usuario)}` : esc((p.nombreCompleto || p.nombre || st.user.name || 'Tu perfil').trim())}</h2>
-      ${p.isPro === true ? '<span class="pro-badge">👑 PRO</span>' : ''}
+      ${p.isPro === true ? '<span class="pro-badge">${I.crown} PRO</span>' : ''}
       <p class="small muted">${esc(st.user.email || '')}</p>
       <button type="button" class="btn ghost small" data-act="pf-open" data-v="editar">Editar perfil</button></header>
     ${planCardHTML()}

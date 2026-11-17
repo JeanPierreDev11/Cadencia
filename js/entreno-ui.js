@@ -33,7 +33,7 @@ const sobreLimite = (tipo) => !esPro() && (tipo === 'rutinas' ? rutinasList().le
 function avisoLimite(tipo) { st.limite = { tipo }; render(); }
 const abrirSuscripcion = () => { st.limite = null; st.pf = { v: 'suscripcion', f: {}, busy: false }; render(); };
 // 1RM estimado (Brzycki) del ejercicio con lo que lleva escrito; vacío si no hay serie válida.
-const ormHTML = (ex) => { const v = E.mejor1RM(ex.s, num); return v == null ? '' : `👑 1RM estimado: ${kgTxt(v)} kg`; };
+const ormHTML = (ex) => { const v = E.mejor1RM(ex.s, num); return v == null ? '' : `${I.crown} 1RM estimado: ${kgTxt(v)} kg`; };
 const rutinaOf = () => { const r = st.profile && st.profile.rutina; return r && Array.isArray(r.dias) && r.dias.length && r.sesiones ? r : null; };
 // Todas tus rutinas guardadas; la activa es la que usa la semana, Inicio y el entrenamiento en directo.
 function rutinasList() {
@@ -258,7 +258,7 @@ function aiHTML(w, compacto = false) {
   }
   if (pend === 'cargando') return `<div class="ai-load" role="status"><span class="ai-spin" aria-hidden="true"></span><span class="small muted">Analizando…</span></div>`;
   return `${pend && pend.error ? `<p class="small muted" role="alert">${esc(pend.error)}</p>` : ''}
-    <button type="button" class="btn block ai-btn ${pro ? '' : 'is-locked'}" data-act="ai-pedir" data-v="${esc(w.id)}">Solicitar Análisis AI 🧠${pro ? '' : ' <span class="protag">Pro</span>'}</button>`;
+    <button type="button" class="btn block ai-btn ${pro ? '' : 'is-locked'}" data-act="ai-pedir" data-v="${esc(w.id)}">Solicitar Análisis AI ${I.brain}${pro ? '' : ' <span class="protag">Pro</span>'}</button>`;
 }
 // Pide el análisis (solo al pulsar el botón); el servidor lo guarda en el documento del entreno (en modo prueba, la app) y repinta. Si ya está guardado, no vuelve a pedirlo.
 async function pedirCoach(id) {
@@ -1086,7 +1086,7 @@ function empezarFuerza(fecha) {
   if (st.live) return startLive(fecha);
   st.modoSel = { fecha }; render();
 }
-// Pro: resumen al terminar (st.resumen = { id, nombre, vol, sets, min, record }). El Coach AI NO se pide solo: botón «Solicitar Análisis AI 🧠».
+// Pro: resumen al terminar (st.resumen = { id, nombre, vol, sets, min, record }). El Coach AI NO se pide solo: botón «Solicitar Análisis AI ${I.brain}».
 function resumenSheetHTML() {
   const r = st.resumen, w = st.workouts.find((x) => x.id === r.id);
   return `<div class="sheet-back" data-act="sum-close"></div>
@@ -1125,7 +1125,7 @@ function calentarSheetHTML() {
   return `<div class="sheet-back" data-act="cal-close"></div>
     <div class="sheet short" role="dialog" aria-modal="true" aria-label="Calentamiento inteligente">
       <div class="sheet-grab"></div>
-      <div class="sheet-head"><button type="button" class="iconbtn" data-act="cal-close" aria-label="Cerrar">${I.back}</button><h2>🔥 Calentamiento</h2><span style="width:36px"></span></div>
+      <div class="sheet-head"><button type="button" class="iconbtn" data-act="cal-close" aria-label="Cerrar">${I.back}</button><h2>${I.flame} Calentamiento</h2><span style="width:36px"></span></div>
       <div class="sheet-list cal-sheet">
         <p class="small muted">${c.auto ? `Peso de trabajo de ${esc(x ? x.n : 'este ejercicio')} calculado con tus series. Puedes cambiarlo.` : `No tenemos peso de ${esc(x ? x.n : 'este ejercicio')}. ¿Con cuántos kilos vas a trabajar?`}</p>
         <label class="field"><span>Peso de trabajo (kg)</span><input class="input" data-calkg inputmode="decimal" value="${esc(c.kg)}" placeholder="Ej. 60" autocomplete="off"></label>
@@ -1256,7 +1256,7 @@ function viewLive() {
       ${i > 0 && L.ex[i - 1].superset ? '<span class="ss-tag">Superserie</span>' : ''}
       <div class="lex-head"><button type="button" class="rx-view lex-view" data-act="ex-view" data-n="${esc(e.n)}" aria-label="Ver cómo se hace ${esc(e.n)}">${exThumb(x || { eq: 'corporal' })}
         <span class="lex-t"><b>${esc(e.n)}</b><span class="small muted">${x ? E.MUSCULOS[x.m] : ''}${e.obj ? ` · Objetivo ${esc(e.obj)}` : ''}</span>${esPro() ? `<span class="orm" data-orm="${i}" ${ormHTML(e) ? '' : 'hidden'}>${ormHTML(e)}</span>` : ''}</span></button>
-        ${!L.edit && conPeso ? `<button type="button" class="warm-btn ${pro ? '' : 'is-locked'}" data-act="live-warm" data-v="${i}" aria-label="Calentamiento para ${esc(e.n)}${pro ? '' : ' (Cadencia Pro)'}">🔥 Calentar${pro ? '' : ' <span class="protag">Pro</span>'}</button>` : ''}
+        ${!L.edit && conPeso ? `<button type="button" class="warm-btn ${pro ? '' : 'is-locked'}" data-act="live-warm" data-v="${i}" aria-label="Calentamiento para ${esc(e.n)}${pro ? '' : ' (Cadencia Pro)'}">${I.flame} Calentar${pro ? '' : ' <span class="protag">Pro</span>'}</button>` : ''}
         <button type="button" class="iconbtn" data-act="live-swap" data-v="${i}" aria-label="Cambiar ${esc(e.n)}">${I.swap}</button>
         <button type="button" class="iconbtn" data-act="live-del" data-v="${i}" aria-label="Quitar ${esc(e.n)}">${I.trash}</button></div>
       ${uniOk ? `<div class="seg mini" role="group" aria-label="Lados"><button type="button" data-act="live-uni" data-v="${i}" data-u="0" aria-pressed="${!e.uni}">Ambos lados</button><button type="button" data-act="live-uni" data-v="${i}" data-u="1" aria-pressed="${!!e.uni}">Unilateral</button></div>` : ''}
@@ -1939,7 +1939,7 @@ root.addEventListener('input', (e) => {
     q[k] = t.value; liveSave();
     const tt = liveTotals(), vEl = document.getElementById('live-vol'); if (vEl) vEl.textContent = `${nf(tt.vol)} kg`;
     const oEl = esPro() && root.querySelector(`[data-orm="${i}"]`);
-    if (oEl) { const h = ormHTML(st.live.ex[Number(i)]); oEl.textContent = h; oEl.hidden = !h; }
+    if (oEl) { const h = ormHTML(st.live.ex[Number(i)]); oEl.innerHTML = h; oEl.hidden = !h; }
     return;
   }
   if (st.re && t.dataset.re) {

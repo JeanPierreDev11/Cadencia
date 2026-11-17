@@ -2,6 +2,7 @@
 // Los cálculos (calorías, carga de entreno, nutrición en ruta, ropa, presión de ruedas, % graso)
 // vienen de la librería de la app «Bilbao Ride» (js/br.js); aquí está la parte visual y los datos de cada persona.
 import { FOODS, FOODS_BY_ID, prepOf, prepVals, prepKcal100, normTxt as normFood } from './alimentos.js';
+import { I } from './util.js';
 import { PRO_LINK, PORTAL_LINK, proUrl } from './pro.js';
 import * as CAL from './calorias.js';
 import { leerGPX, MAX_BYTES } from './gpx.js';
@@ -225,13 +226,13 @@ export function crearSecciones(ctx) {
       return grupos.map((g) => {
         const tot = g.items.reduce((a, x) => ({ k: a.k + x.k, p: a.p + x.p, c: a.c + x.c, f: a.f + x.f }), { k: 0, p: 0, c: 0, f: 0 }), foto = (g.items.find((x) => x.foto) || {}).foto;
         const nom = g.items.map((x) => x.n.split(' · ')[0]).join(', ');
-        return `<button type="button" class="mcard" data-act="meal-open" data-v="${i}" aria-label="${esc(nom)}: ${nf(tot.k)} kcal, ver detalle"><span class="mc-th">${foto ? `<img src="${esc(foto)}" alt="">` : g.ia ? '🍽️' : '🥣'}</span>
+        return `<button type="button" class="mcard" data-act="meal-open" data-v="${i}" aria-label="${esc(nom)}: ${nf(tot.k)} kcal, ver detalle"><span class="mc-th">${foto ? `<img src="${esc(foto)}" alt="">` : g.ia ? I.plate : I.bowl}</span>
           <span class="mc-b"><b class="mc-n">${esc(nom)}</b><span class="mc-k num">${MAC.cal}${nf(tot.k)} kcal</span>${mac3(tot)}</span></button>`;
       }).join('');
     };
     // Tarjeta «skeleton» mientras la IA estima las porciones (o aviso si falló).
     const skeleton = (sc) => sc.fase === 'error'
-      ? `<div class="mcard sk err"><span class="mc-th">${sc.url ? `<img src="${esc(sc.url)}" alt="" class="blur">` : '⚠️'}</span><span class="mc-b"><b class="mc-n">No se ha podido analizar</b><span class="small muted">${esc(sc.msg)}</span><span class="mc-acts">${sc.b64 ? `<button type="button" class="link" data-act="scan-reintentar" data-v="${sc.id}">Reintentar</button>` : ''}<button type="button" class="link" data-act="scan-quitar" data-v="${sc.id}">Quitar</button></span></span></div>`
+      ? `<div class="mcard sk err"><span class="mc-th">${sc.url ? `<img src="${esc(sc.url)}" alt="" class="blur">` : I.warn}</span><span class="mc-b"><b class="mc-n">No se ha podido analizar</b><span class="small muted">${esc(sc.msg)}</span><span class="mc-acts">${sc.b64 ? `<button type="button" class="link" data-act="scan-reintentar" data-v="${sc.id}">Reintentar</button>` : ''}<button type="button" class="link" data-act="scan-quitar" data-v="${sc.id}">Quitar</button></span></span></div>`
       : `<div class="mcard sk" role="status" aria-label="Estimando porciones"><span class="mc-th">${sc.url ? `<img src="${esc(sc.url)}" alt="" class="blur">` : ''}</span><span class="mc-b"><b class="mc-n">Estimando porciones...</b><span class="small muted">La IA está viendo tu plato</span></span>
           <span class="sk-ring">${ring(0.28, 44, 5, `<span class="sk-pct" data-scanpct="${sc.id}">${Math.round(sc.pct)}%</span>`)}</span></div>`;
     const scans = (st.scans || []).filter((x) => x.fecha === d);
