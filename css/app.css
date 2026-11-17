@@ -1970,3 +1970,65 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 
 .link svg, .lsug svg { vertical-align: -.2em; margin-right: 2px; }
 .cmp-y, .cmp-n { display: inline-grid; place-items: center; }
+
+/* ============================================================
+   2026-11-17 · Escritorio (≥ 1024 px). Todo dentro de la media query:
+   el móvil no cambia. Sidebar, columna central y vistas a dos columnas.
+   ============================================================ */
+@media (min-width: 1024px) {
+  :root { --sb-w: 104px; --col: 800px; }
+
+  /* 1 · Barra inferior → sidebar vertical fijo a la izquierda */
+  .tabbar { top: 0; right: auto; bottom: 0; width: var(--sb-w); padding: 0; border-top: 0; border-right: 1px solid var(--line); }
+  .tabbar nav { max-width: none; margin: 0; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; justify-content: flex-start; gap: 6px; padding: 28px 8px; }
+  .tabbar nav button { padding: 16px 4px 14px; gap: 7px; align-content: center; }
+  .tabbar nav.n5 button, .tabbar nav.n6 button { font-size: 10.5px; letter-spacing: .05em; }
+  .tabbar nav button[aria-current="page"] { background: var(--surface); box-shadow: inset 3px 0 0 var(--accent); }
+  .tabbar nav button:hover { color: var(--ink); }
+
+  /* El contenido deja sitio al sidebar y se centra en el espacio que queda */
+  body:has(.tabbar) .main {
+    max-width: var(--col);
+    margin: 0 0 0 calc(var(--sb-w) + max(0px, (100% - var(--sb-w) - var(--col)) / 2));
+  }
+  .gear { right: max(14px, calc((100% - var(--sb-w) - var(--col)) / 2 + 14px)); }
+
+  /* Barras flotantes: ya no hay barra de pestañas debajo; se centran en el espacio libre */
+  .savebar { left: var(--sb-w); bottom: 16px; }
+  .livebar { left: var(--sb-w); right: 0; bottom: 16px; }
+
+  /* 2 · Entreno ancho (Semana, Rutinas, Récords, Objetivos) */
+  .main:has(> .seg.four) { --col: 1180px; }
+
+  /* 3a · Semana: métricas a la izquierda, tarjeta del día fija a la derecha */
+  .main:has(> .dia-card) {
+    grid-template-columns: minmax(0, 1fr) 380px;
+    grid-template-rows: repeat(14, auto) 1fr;
+    column-gap: 28px; align-content: start;
+  }
+  .main:has(> .dia-card) > * { grid-column: 1; }
+  .main:has(> .dia-card) > .hello, .main:has(> .dia-card) > .seg.four { grid-column: 1 / -1; }
+  .main:has(> .dia-card) > .dia-card { grid-column: 2; grid-row: span 13; align-self: start; position: sticky; top: 16px; }
+  .main:has(> .dia-card) > .stats { grid-template-columns: repeat(4, 1fr); }
+
+  /* 3b · Rutinas: lista de rutinas a la izquierda, editor de la abierta a la derecha */
+  .main:has(.rutacc) .rutacc { grid-template-columns: 300px minmax(0, 1fr); grid-template-rows: repeat(20, min-content) 1fr; column-gap: 28px; row-gap: 0; align-items: start; }
+  .rutacc .rutitem { display: contents; }
+  .rutacc .rutline { grid-column: 1; margin-bottom: 8px; }
+  .rutacc .rutitem.open .rutbody { grid-column: 2; grid-row: 1 / span 21; padding-top: 0; border-bottom: 0; }
+
+  /* 3c · Récords y Objetivos: dos columnas */
+  .main:has(> .rec-acc) { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 28px; align-content: start; align-items: start; }
+  .main:has(> .rec-acc) > .hello, .main:has(> .rec-acc) > .seg.four { grid-column: 1 / -1; }
+  .main > .metas { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+
+  /* 3d · Entreno en vivo: ejercicios a la izquierda, resumen fijo a la derecha */
+  .screen.live {
+    max-width: 1100px; display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px; grid-template-rows: auto repeat(40, min-content) 1fr;
+    column-gap: 28px; align-content: start;
+  }
+  .screen.live > * { grid-column: 1; }
+  .screen.live > .live-top { grid-column: 1 / -1; }
+  .screen.live > .live-stats { grid-column: 2; grid-row: 2 / span 41; align-self: start; position: sticky; top: 88px; }
+}
