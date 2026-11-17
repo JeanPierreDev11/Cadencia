@@ -1,0 +1,76 @@
+<!doctype html><meta charset=utf-8><script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/"}}</script>
+<body style="margin:0;background:#1a1a1a"><script type=module>
+import * as T from 'three'; import {cargarCuerpo,poseLocal} from './poser.js'; import * as EQ from './equipo.js';
+// Renderiza las fases de un ejercicio (ejercicios/<id>.json) con el modelo pedido. ?ej=<id>&m=hombre-1&w=800&h=1000&ss=2
+const q=new URLSearchParams(location.search), M=q.get('m')||'hombre-1', SS=+(q.get('ss')||2), W0=+(q.get('w')||800), H0=+(q.get('h')||1000), W=W0*SS, H=H0*SS;
+const EJ=await (await fetch('ejercicios/'+q.get('ej')+'.json?'+Date.now())).json();
+const c=await cargarCuerpo('modelos/'+M+'-rig'); c.malla.frustumCulled=false;
+// ---- material de piel con zonas resaltadas ----
+const sexo=M.startsWith('mujer')?'mujer':'hombre';
+const im=await new Promise(ok=>{const i=new Image();i.onload=()=>ok(i);i.src='/public/models/zonas-'+M+'.png'});
+const tex=new T.Texture(im);tex.flipY=false;tex.magFilter=tex.minFilter=T.NearestFilter;tex.generateMipmaps=false;tex.needsUpdate=true;
+const CL=['none','ne','sh','ch','bi','fo','ab','abd','qu','ad','ca','tp','mb','la','lb','tr','gl','ha'];
+const uCol=Array.from({length:18},()=>new T.Color(0,0,0)), uMix=new Float32Array(18);
+(EJ.zonas?.principales||[]).forEach(k=>{const i=CL.indexOf(k);if(i>0){uMix[i]=1;uCol[i].set('#F2BE1A')}});
+(EJ.zonas?.secundarias||[]).forEach(k=>{const i=CL.indexOf(k);if(i>0&&!uMix[i]){uMix[i]=.5;uCol[i].set('#F5D46A')}});
+const piel=c.malla.material.clone(); piel.color.setRGB(.74,.74,.76); piel.roughness=.58; if(piel.normalScale) piel.normalScale.set(.85,.85); // conserva el mapa de normales (relieve muscular)
+piel.onBeforeCompile=sh=>{sh.uniforms.tZ={value:tex};sh.uniforms.uCol={value:uCol};sh.uniforms.uMix={value:uMix};
+ sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 vZ;').replace('#include <begin_vertex>','#include <begin_vertex>\nvZ = uv;');
+ sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec2 vZ; uniform sampler2D tZ; uniform vec3 uCol[18]; uniform float uMix[18];')
+ .replace('#include <color_fragment>',`#include <color_fragment>
+ int zid = int(floor(texture2D(tZ, vZ).r * 255.0 + 0.5)) / 2; vec3 fc = uCol[zid]; float fm = uMix[zid];
+ vec3 tint = fc * (0.5 + 0.9 * dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722))); diffuseColor.rgb = mix(diffuseColor.rgb, tint, fm * 0.92);`);};
+c.malla.material=piel; c.malla.castShadow=c.malla.receiveShadow=true;
+// ---- utilidades sobre la malla posada ----
+const pos=c.malla.geometry.attributes.position, si=c.malla.geometry.attributes.skinIndex, sw=c.malla.geometry.attributes.skinWeight;
+const nombreHueso=c.malla.skeleton.bones.map(b=>b.name);
+function vertices(){const out=[],v=new T.Vector3();for(let i=0;i<pos.count;i++){c.malla.getVertexPosition(i,v);let bi=0,bw=-1;for(let k=0;k<4;k++){const w=sw.getComponent(i,k);if(w>bw){bw=w;bi=si.getComponent(i,k)}}out.push([v.x,v.y,v.z,nombreHueso[bi]])}return out}
+function posar(f){const tumb=!!(f.raiz&&f.raiz.rot);c.posar(poseLocal(c,f.pose||f), Object.assign({plantar:!EJ.sentado&&!tumb,piesPlanos:!tumb},f.raiz||{}));}
+// ---- escena por fase ----
+const fases=Object.entries(EJ.fases), escenas=[];
+const box=new T.Box3();
+for(const [nom,f] of fases){
+  posar(f); const vs=vertices();
+  const suelo=Math.min(...vs.map(v=>v[1]));
+  // asiento: lo más bajo de glúteos/muslo por detrás de la rodilla (solo si la pose está sentada)
+  let asiento=null; if(EJ.sentado){const kz=Math.min(c.estado.cab['shin.R'].z,c.estado.cab['shin.L'].z);asiento=Math.min(...vs.filter(v=>/^(hips|thigh)/.test(v[3])&&v[2]<kz-0.12).map(v=>v[1]))}
+  const eq=new T.Group();
+  for(const e of EJ.equipo||[]){
+    if(e.tipo==='mancuerna') for(const l of (e.manos||['R','L'])) eq.add(EQ.mancuerna(c.agarre(l),e));
+    if(e.tipo==='polea') eq.add(EQ.polea(c.agarre(e.mano||'R'),{...e,suelo}));
+    if(e.tipo==='maquina-laterales') eq.add(EQ.maquinaLaterales(c,{suelo,asiento}));
+  }
+  const bb=new T.Box3();vs.forEach(v=>bb.expandByPoint(new T.Vector3(v[0],v[1],v[2])));eq.updateMatrixWorld(true);eq.traverse(o=>{if(o.isMesh){let x=o,skip=false;while(x){if(x.userData.sinEncuadre)skip=true;x=x.parent}if(!skip)bb.union(new T.Box3().setFromObject(o))}});box.union(bb);
+  escenas.push({nom,f,eq,suelo});
+}
+// ---- cámara común a todas las fases (para que inicio y fin encajen) ----
+const cam=EJ.camara||{}; const yaw=(cam.yaw??30)*Math.PI/180, pitch=(cam.pitch??6)*Math.PI/180, fov=cam.fov??26;
+const ctr=box.getCenter(new T.Vector3()); const dir=new T.Vector3(Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),Math.cos(yaw)*Math.cos(pitch));
+const camara=new T.PerspectiveCamera(fov,W/H,.1,50);
+// distancia para que quepa la caja con margen
+const corners=[];for(const x of[box.min.x,box.max.x])for(const y of[box.min.y,box.max.y])for(const z of[box.min.z,box.max.z])corners.push(new T.Vector3(x,y,z));
+let dist=2;for(let it=0;it<40;it++){camara.position.copy(ctr).addScaledVector(dir,dist);camara.lookAt(ctr);camara.updateMatrixWorld();camara.updateProjectionMatrix();
+ const m=Math.max(...corners.map(p=>{const s=p.clone().project(camara);return Math.max(Math.abs(s.x),Math.abs(s.y))}));dist*=m/(cam.margen??0.9);}
+camara.position.copy(ctr).addScaledVector(dir,dist);camara.lookAt(ctr);
+const r=new T.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true});r.setSize(W,H);r.setPixelRatio(1);r.setClearColor(0,0);
+r.shadowMap.enabled=true;r.shadowMap.type=T.PCFShadowMap;r.toneMapping=T.ACESFilmicToneMapping;r.toneMappingExposure=1.05;r.outputColorSpace=T.SRGBColorSpace;
+document.body.appendChild(r.domElement);
+window.__out={};
+for(const e of escenas){
+  const sc=new T.Scene();
+  sc.add(new T.HemisphereLight(0xf4f6ff,0x3a3a44,1.5));
+  const key=new T.DirectionalLight(0xffffff,2.6);key.position.copy(ctr).add(new T.Vector3(Math.sin(yaw+0.7)*3,4,Math.cos(yaw+0.7)*3));key.target.position.copy(ctr);
+  key.castShadow=true;key.shadow.mapSize.set(2048,2048);const sz=Math.max(box.max.x-box.min.x,box.max.z-box.min.z,box.max.y-box.min.y)*1.3;Object.assign(key.shadow.camera,{left:-sz,right:sz,top:sz,bottom:-sz,near:.1,far:20});key.shadow.bias=-0.0004;key.shadow.normalBias=0.01;
+  sc.add(key,key.target);const rim=new T.DirectionalLight(0xc8d8ff,0.9);rim.position.copy(ctr).add(new T.Vector3(-Math.sin(yaw)*3,2,-Math.cos(yaw)*3));sc.add(rim);
+  const fill=new T.DirectionalLight(0xffffff,.6);fill.position.copy(ctr).add(new T.Vector3(Math.sin(yaw-1)*3,1,Math.cos(yaw-1)*3));sc.add(fill);
+  // suelo que solo recibe sombra + sombra de contacto
+  const pl=new T.Mesh(new T.PlaneGeometry(8,8),new T.ShadowMaterial({opacity:.32}));pl.rotation.x=-Math.PI/2;pl.position.y=e.suelo;pl.receiveShadow=true;sc.add(pl);
+  sc.add(EQ.sombra(ctr.x,ctr.z+0.02,Math.max(.55,(box.max.x-box.min.x)/2+.1),Math.max(.45,(box.max.z-box.min.z)/2+.1),e.suelo));
+  posar(e.f); sc.add(c.escena,e.eq);
+  r.render(sc,camara);
+  // reducción con suavizado (supermuestreo) y WebP con transparencia
+  const cv=document.createElement('canvas');cv.width=W0;cv.height=H0;const cx2=cv.getContext('2d');cx2.imageSmoothingEnabled=true;cx2.imageSmoothingQuality='high';cx2.drawImage(r.domElement,0,0,W0,H0);
+  window.__out[e.nom]=cv.toDataURL(q.get('fmt')==='png'?'image/png':'image/webp',0.9);
+}
+document.title='ok';
+</script>

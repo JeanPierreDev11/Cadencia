@@ -1,0 +1,99 @@
+{
+ "id": "elevacion-lateral-polea",
+ "nombre": "Elevaciones laterales en polea",
+ "app": "Elevaciones laterales en polea",
+ "zonas": {
+  "principales": [
+   "sh"
+  ],
+  "secundarias": [
+   "tp"
+  ]
+ },
+ "camara": {
+  "yaw": -24,
+  "pitch": 5,
+  "fov": 24
+ },
+ "equipo": [
+  {
+   "tipo": "polea",
+   "mano": "R",
+   "torre": [
+    -0.62,
+    0.05
+   ],
+   "alturaPolea": 0.1
+  }
+ ],
+ "fases": {
+  "inicio": {
+   "hombro": {
+    "R": {
+     "elev": 16,
+     "plano": 62
+    },
+    "L": {
+     "elev": 10,
+     "plano": 10
+    }
+   },
+   "codo": {
+    "R": {
+     "flex": 12
+    },
+    "L": {
+     "flex": 20
+    }
+   },
+   "mano": {
+    "R": "agarre",
+    "L": "relajada"
+   },
+   "cadera": {
+    "abd": 6
+   },
+   "tronco": {
+    "flex": 3,
+    "lat": -3
+   },
+   "rodilla": {
+    "flex": 5
+   }
+  },
+  "fin": {
+   "hombro": {
+    "R": {
+     "elev": 84,
+     "plano": 18
+    },
+    "L": {
+     "elev": 10,
+     "plano": 10
+    }
+   },
+   "codo": {
+    "R": {
+     "flex": 12
+    },
+    "L": {
+     "flex": 20
+    }
+   },
+   "mano": {
+    "R": "agarre",
+    "L": "relajada"
+   },
+   "cadera": {
+    "abd": 6
+   },
+   "tronco": {
+    "flex": 3,
+    "lat": -3
+   },
+   "rodilla": {
+    "flex": 5
+   }
+  }
+ }
+}

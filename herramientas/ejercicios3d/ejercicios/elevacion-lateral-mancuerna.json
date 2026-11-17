@@ -1,0 +1,63 @@
+{
+ "id": "elevacion-lateral-mancuerna",
+ "nombre": "Elevaciones laterales",
+ "app": "Elevaciones laterales",
+ "zonas": {
+  "principales": [
+   "sh"
+  ],
+  "secundarias": [
+   "tp"
+  ]
+ },
+ "camara": {
+  "yaw": 28,
+  "pitch": 5,
+  "fov": 24
+ },
+ "equipo": [
+  {
+   "tipo": "mancuerna"
+  }
+ ],
+ "fases": {
+  "inicio": {
+   "hombro": {
+    "elev": 14,
+    "plano": 22
+   },
+   "codo": {
+    "flex": 14
+   },
+   "mano": "agarre",
+   "cadera": {
+    "abd": 4
+   },
+   "tronco": {
+    "flex": 4
+   },
+   "rodilla": {
+    "flex": 5
+   }
+  },
+  "fin": {
+   "hombro": {
+    "elev": 86,
+    "plano": 22
+   },
+   "codo": {
+    "flex": 14
+   },
+   "mano": "agarre",
+   "cadera": {
+    "abd": 4
+   },
+   "tronco": {
+    "flex": 4
+   },
+   "rodilla": {
+    "flex": 5
+   }
+  }
+ }
+}

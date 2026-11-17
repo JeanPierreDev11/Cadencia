@@ -1,0 +1,173 @@
+{
+ "id": "prueba-poses",
+ "zonas": {
+  "principales": []
+ },
+ "camara": {
+  "yaw": 35,
+  "pitch": 6,
+  "fov": 30,
+  "margen": 0.95
+ },
+ "fases": {
+  "sentadilla": {
+   "hombro": {
+    "elev": 85,
+    "plano": 90
+   },
+   "codo": {
+    "flex": 5
+   },
+   "mano": "abierta",
+   "pelvis": {
+    "flex": 35
+   },
+   "cadera": {
+    "flex": 105,
+    "abd": 16,
+    "rot": 18
+   },
+   "rodilla": {
+    "flex": 112
+   },
+   "tronco": {
+    "flex": 5
+   }
+  },
+  "peso-muerto": {
+   "hombro": {
+    "elev": 4,
+    "plano": 90,
+    "mundo": true
+   },
+   "codo": {
+    "flex": 0
+   },
+   "mano": "agarre",
+   "pelvis": {
+    "flex": 55
+   },
+   "cadera": {
+    "flex": 62
+   },
+   "rodilla": {
+    "flex": 18
+   },
+   "tronco": {
+    "flex": 10
+   },
+   "cuello": {
+    "flex": -25
+   }
+  },
+  "press-militar": {
+   "hombro": {
+    "elev": 165,
+    "plano": 30
+   },
+   "codo": {
+    "flex": 10
+   },
+   "mano": "agarre"
+  },
+  "curl": {
+   "hombro": {
+    "elev": 10,
+    "plano": 60
+   },
+   "codo": {
+    "flex": 135,
+    "pron": -60
+   },
+   "mano": "agarre"
+  },
+  "zancada": {
+   "hombro": {
+    "elev": 8
+   },
+   "mano": "relajada",
+   "cadera": {
+    "R": {
+     "flex": 85
+    },
+    "L": {
+     "flex": -15
+    }
+   },
+   "rodilla": {
+    "R": {
+     "flex": 90
+    },
+    "L": {
+     "flex": 95
+    }
+   },
+   "tobillo": {
+    "R": {
+     "flex": 5
+    },
+    "L": {
+     "flex": -30
+    }
+   }
+  },
+  "plancha": {
+   "hombro": {
+    "elev": 90,
+    "plano": 90
+   },
+   "codo": {
+    "flex": 90
+   },
+   "mano": "abierta",
+   "cuello": {
+    "flex": -10
+   },
+   "raiz": {
+    "rot": [
+     90,
+     0,
+     0
+    ]
+   }
+  },
+  "remo": {
+   "hombro": {
+    "R": {
+     "elev": 25,
+     "plano": -80,
+     "mundo": true
+    },
+    "L": {
+     "elev": 4,
+     "plano": 90,
+     "mundo": true
+    }
+   },
+   "codo": {
+    "R": {
+     "flex": 95
+    },
+    "L": {
+     "flex": 5
+    }
+   },
+   "mano": "agarre",
+   "pelvis": {
+    "flex": 50
+   },
+   "cadera": {
+    "flex": 50
+   },
+   "rodilla": {
+    "flex": 15
+   },
+   "tronco": {
+    "flex": 15
+   },
+   "cuello": {
+    "flex": -20
+   }
+  }
+ }
+}

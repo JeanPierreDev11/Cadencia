@@ -1,0 +1,8 @@
+{ "id": "elevacion-lateral-maquina", "nombre": "Elevaciones laterales en máquina", "app": "Elevaciones laterales en máquina",
+  "zonas": { "principales": ["sh"], "secundarias": ["tp"] }, "sentado": true,
+  "camara": { "yaw": 32, "pitch": 8, "fov": 24 },
+  "equipo": [ { "tipo": "maquina-laterales" } ],
+  "fases": {
+    "inicio": { "hombro": { "elev": 14, "plano": 8, "rot": 0 }, "codo": { "flex": 80 }, "muneca": { "flex": 0 }, "mano": "agarre", "cadera": { "flex": 88, "abd": 10 }, "rodilla": { "flex": 86 }, "tobillo": { "flex": 0 } },
+    "fin":    { "hombro": { "elev": 84, "plano": 8, "rot": 0 }, "codo": { "flex": 80 }, "muneca": { "flex": 0 }, "mano": "agarre", "cadera": { "flex": 88, "abd": 10 }, "rodilla": { "flex": 86 }, "tobillo": { "flex": 0 } }
+  } }
