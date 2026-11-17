@@ -20,8 +20,9 @@ const uCol=Array.from({length:36},()=>new T.Color(0,0,0)), uMix=new Float32Array
 const zona=(z)=>{if(typeof z==='string'){const m=z.match(/^(\w+)(?:\.(R|L))?(?::(\w+))?$/);z=m?{zona:m[1],lado:m[2],cabeza:m[3]}:{zona:z}}return z};
 function marcar(lista,mix,col){for(const e of lista||[]){const z=zona(e),i=CL.indexOf(z.zona);if(i<=0)continue;
  for(const l of z.lado?[z.lado]:['R','L']){const k=i*2+(l==='R'?0:1);if(uMix[k]>=mix)continue;uMix[k]=mix;uCol[k].set(col);uCab[k]=CABEZAS[z.cabeza]||0}}}
-marcar(EJ.zonas?.principales,1,'#F2BE1A'); marcar(EJ.zonas?.secundarias,.5,'#F5D46A');
-const piel=c.malla.material.clone(); piel.color.setRGB(.74,.74,.76); piel.roughness=.58; if(piel.normalScale) piel.normalScale.set(.85,.85); // conserva el mapa de normales (relieve muscular)
+// principales: amarillo neón puro, opaco y con brillo propio; secundarias: ámbar suave
+marcar(EJ.zonas?.principales,1,'#FFB400'); marcar(EJ.zonas?.secundarias,.45,'#FF9A00'); // tras el tono ACES se ven como #FFCC00 / naranja
+const piel=c.malla.material.clone(); piel.color.setRGB(.56,.565,.58); /* gris medio: más contraste con el amarillo neón */ piel.roughness=.58; if(piel.normalScale) piel.normalScale.set(.85,.85); // conserva el mapa de normales (relieve muscular)
 piel.onBeforeCompile=sh=>{sh.uniforms.tZ={value:tex};sh.uniforms.uCol={value:uCol};sh.uniforms.uMix={value:uMix};sh.uniforms.uCab={value:uCab};
  sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 vZ; varying vec3 vPR; varying vec3 vNR;')
   .replace('#include <beginnormal_vertex>','#include <beginnormal_vertex>\nvNR = objectNormal;')
@@ -31,10 +32,13 @@ piel.onBeforeCompile=sh=>{sh.uniforms.tZ={value:tex};sh.uniforms.uCol={value:uCo
  int mus = int(floor(texture2D(tZ, vZ).r * 255.0 + 0.5)) / 2; float sg = vPR.x > 0.0 ? 1.0 : -1.0;
  int k = mus * 2 + (vPR.x > 0.0 ? 0 : 1); vec3 fc = uCol[k]; float fm = uMix[k]; float cab = uCab[k];
  vec3 nr = normalize(vNR);
- if (cab > 0.5 && cab < 1.5) fm *= smoothstep(0.0, 0.40, nr.x * sg + 0.35 * max(nr.y, 0.0)) * (1.0 - smoothstep(0.72, 0.95, abs(nr.z)));
+ if (cab > 0.5 && cab < 1.5) fm *= smoothstep(-0.10, 0.22, nr.x * sg + 0.35 * max(nr.y, 0.0)) * (1.0 - smoothstep(0.80, 0.97, abs(nr.z)));
  else if (cab > 1.5 && cab < 2.5) fm *= smoothstep(0.30, 0.65, nr.z);
  else if (cab > 2.5) fm *= smoothstep(0.30, 0.65, -nr.z);
- vec3 tint = fc * (0.5 + 0.9 * dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722))); diffuseColor.rgb = mix(diffuseColor.rgb, tint, fm * 0.92);`);};
+ vec3 tint = fc * (0.85 + 0.45 * dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722))); diffuseColor.rgb = mix(diffuseColor.rgb, tint, min(1.0, fm * 1.05));
+ float zFm = fm; vec3 zFc = fc;`)
+ // brillo emisivo (≈ emissiveIntensity 1,1 con exposición 0,82 en la zona activa): el músculo «emite» luz sin perder del todo las sombras del relieve
+ .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\n totalEmissiveRadiance += zFc * zFm * 1.1;');};
 c.malla.material=piel; c.malla.castShadow=c.malla.receiveShadow=true;
 // ---- utilidades sobre la malla posada ----
 const pos=c.malla.geometry.attributes.position, si=c.malla.geometry.attributes.skinIndex, sw=c.malla.geometry.attributes.skinWeight;
@@ -68,7 +72,7 @@ let dist=2;for(let it=0;it<40;it++){camara.position.copy(ctr).addScaledVector(di
  const m=Math.max(...corners.map(p=>{const s=p.clone().project(camara);return Math.max(Math.abs(s.x),Math.abs(s.y))}));dist*=m/(cam.margen??0.9);}
 camara.position.copy(ctr).addScaledVector(dir,dist);camara.lookAt(ctr);
 const r=new T.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true});r.setSize(W,H);r.setPixelRatio(1);r.setClearColor(0,0);
-r.shadowMap.enabled=true;r.shadowMap.type=T.PCFShadowMap;r.toneMapping=T.ACESFilmicToneMapping;r.toneMappingExposure=1.05;r.outputColorSpace=T.SRGBColorSpace;
+r.shadowMap.enabled=true;r.shadowMap.type=T.PCFShadowMap;r.toneMapping=T.ACESFilmicToneMapping;r.toneMappingExposure=0.82;r.outputColorSpace=T.SRGBColorSpace;
 document.body.appendChild(r.domElement);
 window.__out={};
 for(const e of escenas){
