@@ -10,7 +10,7 @@ El mapa de fatiga muscular y «entrenado esta semana» siguen con nuestro modelo
 |---|---|
 | `orden.json` | Qué debe hacer el proceso: `catalogo` (lista de ejercicios), `gifs` (solo los de `emparejamiento.json`) o `todos` (todo el catálogo). Al cambiar este archivo en la rama `ejercicios-exercisedb` se lanza el proceso de GitHub; cambia `intento` para repetir la misma acción. |
 | `descargar.mjs` | Hace las peticiones con la clave `RAPIDAPI_KEY` (secreto de GitHub). La clave solo va en la cabecera y nunca se escribe en ningún archivo. Salta lo que ya está descargado. |
-| `procesar.py` | Convierte cada GIF (fondo blanco) en un WebP **con fondo transparente**: animado de 360 px (ficha) y un fotograma fijo de 180 px (listas). Así la figura toma el color de la tarjeta en modo claro y oscuro. |
+| `procesar.py` | Convierte cada GIF (fondo blanco) en un WebP **con fondo transparente**: animado de 360 px (ficha) y un fotograma fijo de 180 px (listas). Los archivos son transparentes, pero **la app los pinta SIEMPRE sobre blanco** (`.exdb { background: #fff }`, también en modo oscuro: sobre un fondo oscuro se notaba el recorte del blanco; 17-11 (35)). Si algún día se quiere el fondo del tema, basta cambiar esa regla de CSS. |
 | `catalogo.json` | Lista completa de ExerciseDB (1.394 ejercicios: id, nombre en inglés, parte del cuerpo, músculo, secundarios, equipo). |
 | `nombres-es.json` | Nombre en español de cada ejercicio nuevo (id → nombre). |
 | `emparejamiento.json` | Ejercicios **principales** de la app (los de la tabla `TABLA`), revisados a mano: nombre en Cadencia → id de ExerciseDB. |
