@@ -15,6 +15,14 @@ export const MEALS = ['Desayuno', 'Comida', 'Merienda', 'Cena', 'Otros'];
 const BILBAO = { lat: 43.263, lon: -2.935 };
 
 const svg = (d, w = 24) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+// Iconos line-art de calorías y macros (Nutrición). Trazo principal = tinta de la tarjeta (currentColor); el detalle (.mi-d) toma el color del macro (--mi, ver css).
+const miSvg = (cls, d) => `<span class="mi-w ${cls}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${d}</svg></span>`;
+const MAC = {
+  cal: miSvg('mi-cal', '<path d="M12 2.5c.6 3.6 5.5 6 5.5 12a5.5 5.5 0 0 1-11 0c0-2.2 1-3.7 2.2-5 .2 1.4 1 2.3 2 2.6C10.2 9.3 10.4 5.6 12 2.5z"/><path class="mi-d" d="M12 19.2a2.7 2.7 0 0 0 2.7-2.7c0-1.5-1.3-2.5-2.7-4-1.4 1.5-2.7 2.5-2.7 4a2.7 2.7 0 0 0 2.7 2.7z"/>'),
+  pro: miSvg('mi-pro', '<path d="M4.5 11c0-4 3-7 7.5-7s7.5 2.8 7.5 6.5c0 4.2-3.2 8-7.8 9.5C7.2 21 4.5 15.5 4.5 11z"/><circle class="mi-d" cx="14.5" cy="9.5" r="2"/><path class="mi-d" d="M8 13c1.2 1.6 2.6 2.6 4.4 3"/>'),
+  carb: miSvg('mi-carb', '<path d="M12 22V9"/><path class="mi-d" d="M12 2c1.3 1.4 1.6 3 0 5.2C10.4 5 10.7 3.4 12 2z"/><path d="M12 10c0-2.2 1.7-3.9 4-3.9 0 2.2-1.7 3.9-4 3.9zM12 10c0-2.2-1.7-3.9-4-3.9 0 2.2 1.7 3.9 4 3.9z"/><path d="M12 14.5c0-2.2 1.7-3.9 4-3.9 0 2.2-1.7 3.9-4 3.9zM12 14.5c0-2.2-1.7-3.9-4-3.9 0 2.2 1.7 3.9 4 3.9z"/><path d="M12 19c0-2.2 1.7-3.9 4-3.9 0 2.2-1.7 3.9-4 3.9zM12 19c0-2.2-1.7-3.9-4-3.9 0 2.2 1.7 3.9 4 3.9z"/>'),
+  fat: miSvg('mi-fat', '<path d="M12 3c-2 0-3.2 1.8-3.8 4C7.4 9.6 5.5 11 5.5 14.5A6.5 6.5 0 0 0 12 21a6.5 6.5 0 0 0 6.5-6.5c0-3.5-1.9-4.9-2.7-7.5C15.2 4.8 14 3 12 3z"/><circle class="mi-d" cx="12" cy="14.5" r="2.8"/>'),
+};
 const ICO = {
   lock: svg('<rect x="5" y="11" width="14" height="9" rx="1"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),
   food: svg('<path d="M7 3v7a2 2 0 0 0 4 0V3M9 12v9M17 3c-2.2 1.6-2.2 6.4 0 8v10"/>'),
@@ -22,7 +30,6 @@ const ICO = {
   llave: svg('<path d="M14.5 6.5a4 4 0 0 0-5.3 5.3L4 17l3 3 5.2-5.2a4 4 0 0 0 5.3-5.3l-2.5 2.5-2.5-.5-.5-2.5z"/>'),
   prog: svg('<path d="M4 21h16M7 21v-8M12 21V5M17 21v-5"/>'),
   close: svg('<path d="M6 6l12 12M18 6L6 18"/>', 22),
-  llama: svg('<path d="M12 3c1 4 5 6 5 11a5 5 0 0 1-10 0c0-3 2-4 3-6 1 1 1 2 2 2 0-3-1-5 0-7z"/>', 20),
   imagen: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 9"/>', 22),
   pin: svg('<path d="M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>', 18),
   warn: svg('<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/>', 16),
@@ -197,8 +204,8 @@ export function crearSecciones(ctx) {
       </div>
     <section class="nd">
       <div class="nd-main"><div class="nd-t"><b class="num ${left < 0 ? 'bad' : ''}">${nf(od ? Math.abs(left) : eaten)}</b><span class="nd-l">${od ? (left >= 0 ? 'Calorías restantes' : 'Calorías sobrantes') : 'Calorías tomadas'}</span></div>
-        ${ring(od ? eaten / od.target : 0, 112, 10, `<span class="ring-ico">${ICO.llama}</span>`)}</div>
-      <div class="nd-macs">${mac('Proteína', '🍗', tot.p, od && od.macros.p)}${mac('Hidratos', '🌾', tot.c, od && od.macros.c)}${mac('Grasas', '🥑', tot.f, od && od.macros.f)}</div>
+        ${ring(od ? eaten / od.target : 0, 112, 10, `<span class="ring-ico">${MAC.cal}</span>`)}</div>
+      <div class="nd-macs">${mac('Proteína', MAC.pro, tot.p, od && od.macros.p)}${mac('Hidratos', MAC.carb, tot.c, od && od.macros.c)}${mac('Grasas', MAC.fat, tot.f, od && od.macros.f)}</div>
       ${od ? `<p class="small muted">Objetivo = ${nf(od.PL.tdee)} de gasto diario${od.PL.pl.dailyDeficit ? ` − ${nf(od.PL.pl.dailyDeficit)} de déficit` : ''}${od.PL.surplus ? ` + ${nf(od.PL.surplus)} para ganar músculo` : ''}.</p>`
         : `<p class="small">Completa edad y estatura en tu <button class="link" data-act="tab" data-v="perfil">perfil</button> para calcular tu objetivo.</p>`}
     </section>`;
@@ -206,7 +213,7 @@ export function crearSecciones(ctx) {
     // Comidas
     const prev = dia(E.addDays(d, -1)).items, ayerTxt = d === t ? 'ayer' : 'el día anterior';
     if (st.iaQuedan == null) setTimeout(() => iaEstado(), 0);
-    const mac3 = (x) => `<span class="mc-m"><span>🍗 ${nf(x.p, 0)}g</span><span>🌾 ${nf(x.c, 0)}g</span><span>🥑 ${nf(x.f, 0)}g</span></span>`;
+    const mac3 = (x) => `<span class="mc-m"><span>${MAC.pro}${nf(x.p, 0)}g</span><span>${MAC.carb}${nf(x.c, 0)}g</span><span>${MAC.fat}${nf(x.f, 0)}g</span></span>`;
     // Una tarjeta por comida registrada: lo escaneado con IA (un grupo) lleva su foto; lo manual, un emoji.
     const tarjetas = (i, arr) => {
       const grupos = [], vistos = {};
@@ -219,7 +226,7 @@ export function crearSecciones(ctx) {
         const tot = g.items.reduce((a, x) => ({ k: a.k + x.k, p: a.p + x.p, c: a.c + x.c, f: a.f + x.f }), { k: 0, p: 0, c: 0, f: 0 }), foto = (g.items.find((x) => x.foto) || {}).foto;
         const nom = g.items.map((x) => x.n.split(' · ')[0]).join(', ');
         return `<button type="button" class="mcard" data-act="meal-open" data-v="${i}" aria-label="${esc(nom)}: ${nf(tot.k)} kcal, ver detalle"><span class="mc-th">${foto ? `<img src="${esc(foto)}" alt="">` : g.ia ? '🍽️' : '🥣'}</span>
-          <span class="mc-b"><b class="mc-n">${esc(nom)}</b><span class="mc-k num">${ICO.llama}${nf(tot.k)} kcal</span>${mac3(tot)}</span></button>`;
+          <span class="mc-b"><b class="mc-n">${esc(nom)}</b><span class="mc-k num">${MAC.cal}${nf(tot.k)} kcal</span>${mac3(tot)}</span></button>`;
       }).join('');
     };
     // Tarjeta «skeleton» mientras la IA estima las porciones (o aviso si falló).
