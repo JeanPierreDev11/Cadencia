@@ -69,8 +69,7 @@ const diaSel = () => {
   return hechos.length ? hechos[hechos.length - 1] : m;
 };
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-const ICO_COACH = '<svg class="coach-ico" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g stroke="#FF2E93"><path d="M12 4.5C10.5 3.2 8 3.4 6.8 5 5 5.2 3.8 6.8 4.2 8.6 3 9.6 2.9 11.6 4 12.8 3.4 14.6 4.4 16.4 6.2 16.8 6.8 18.4 8.6 19.4 10.2 18.8 10.9 19.4 11.5 19.5 12 19.5"/><path d="M12 4.5C13.5 3.2 16 3.4 17.2 5 19 5.2 20.2 6.8 19.8 8.6 21 9.6 21.1 11.6 20 12.8 20.6 14.6 19.6 16.4 17.8 16.8 17.2 18.4 15.4 19.4 13.8 18.8 13.1 19.4 12.5 19.5 12 19.5"/><path d="M12 4.5v15"/><path d="M12 9.5H9.5L8 8M12 14.5H9.5L8 13M12 8h2.5L16 9.5M12 12.5h3l1.5 1.5"/></g><g fill="#fff" stroke="none"><circle cx="7.4" cy="7.4" r=".8"/><circle cx="7.4" cy="12.5" r=".8"/><circle cx="16.6" cy="10" r=".8"/><circle cx="17.1" cy="14.5" r=".8"/></g></svg>';
-const ICO_MANCUERNA = '<svg class="sesion-ico" viewBox="0 0 24 24" fill="none" stroke="var(--accent-text)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11M3.5 12h3M17.5 12h3"/></svg>';
+const ICO_COACH = '<svg class="coach-ico" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g stroke="var(--accent-text)"><path d="M12 4.5C10.5 3.2 8 3.4 6.8 5 5 5.2 3.8 6.8 4.2 8.6 3 9.6 2.9 11.6 4 12.8 3.4 14.6 4.4 16.4 6.2 16.8 6.8 18.4 8.6 19.4 10.2 18.8 10.9 19.4 11.5 19.5 12 19.5"/><path d="M12 4.5C13.5 3.2 16 3.4 17.2 5 19 5.2 20.2 6.8 19.8 8.6 21 9.6 21.1 11.6 20 12.8 20.6 14.6 19.6 16.4 17.8 16.8 17.2 18.4 15.4 19.4 13.8 18.8 13.1 19.4 12.5 19.5 12 19.5"/><path d="M12 4.5v15"/><path d="M12 9.5H9.5L8 8M12 14.5H9.5L8 13M12 8h2.5L16 9.5M12 12.5h3l1.5 1.5"/></g><g fill="var(--accent-text)" stroke="none"><circle cx="7.4" cy="7.4" r=".8"/><circle cx="7.4" cy="12.5" r=".8"/><circle cx="16.6" cy="10" r=".8"/><circle cx="17.1" cy="14.5" r=".8"/></g></svg>';
 const tipoIcon = (t) => (t === 'bici' ? I.bike : t === 'cardio' ? I.heart : t === 'otro' ? I.ball : I.dumb);
 const goalsKind = () => E.planKind(st.profile && st.profile.objetivos);
 const sesDuracion = (s) => (s.t === 'fuerza' ? `${(s.ej || []).length} ejercicios` : fmtDur(s.min));
@@ -293,7 +292,7 @@ function wkRow(w, mod) {
   if (w.fuente === 'strava') sub.push('Strava');
   const ne = (w.ejercicios || []).length; if (ne) sub.push(`${ne} ${ne === 1 ? 'ejercicio' : 'ejercicios'}`);
   const icoT = w.tipo === 'gym' ? 'fuerza' : w.tipo;
-  return `<div class="row wrow"><span class="wico">${icoT === 'fuerza' ? ICO_MANCUERNA : tipoIcon(icoT)}</span>
+  return `<div class="row wrow"><span class="wico">${tipoIcon(icoT)}</span>
     <span class="wtxt"><b>${esc(w.nombre || E.TIPOS[w.tipo] || 'Entreno')}</b><span class="muted small">${esc(sub.join(' · '))}</span></span>
     <span class="wkcal muted small">${w.kcal ? nf(w.kcal) + ' kcal' : ''}</span>
     ${mod ? `<button type="button" class="iconbtn" data-act="wk-edit" data-v="${esc(w.id)}" aria-label="Editar entreno">${I.pencil}</button><button type="button" class="iconbtn bad" data-act="wk-del-ask" data-v="${esc(w.id)}" aria-label="Borrar entreno">${I.trash}</button>` : ''}</div>`;
@@ -394,7 +393,7 @@ function rxHTML(d, i, e, s, re) {
   const key = `${d}.${i}`, x = E.ejercicio(e.n);
   // Foto y nombre abren la ficha del ejercicio (GIF grande, cómo hacerlo y músculos). «Cambiar» abre la biblioteca completa ya filtrada por alternativas de este hueco.
   return `<div class="rx">
-    <div class="rx-top"><button type="button" class="rx-view" data-act="ex-view" data-n="${esc(e.n)}" aria-label="Ver cómo se hace ${esc(e.n)}">${exThumb(x || { eq: 'corporal' })}<span class="rx-n">${esc(e.n)}<span class="small muted">${x ? E.MUSCULOS[x.m] : ''}</span></span></button><button type="button" class="iconbtn" data-act="re-del" data-v="${key}" aria-label="Quitar ${esc(e.n)}">✕</button></div>
+    <div class="rx-top"><button type="button" class="rx-view" data-act="ex-view" data-n="${esc(e.n)}" aria-label="Ver cómo se hace ${esc(e.n)}">${exThumb(x || { eq: 'corporal' })}<span class="rx-n">${esc(e.n)}<span class="small muted">${x ? E.MUSCULOS[x.m] : ''}</span></span></button><button type="button" class="iconbtn" data-act="re-del" data-v="${key}" aria-label="Quitar ${esc(e.n)}">${I.close}</button></div>
     ${E.esCinta(e) ? rxCintaHTML(d, i, e) : ''}
     <div class="rx-bot">
       ${E.esCinta(e) ? '<span></span>' : `<span class="rx-sr"><input class="input" data-re="${d}.ej.${i}.series" inputmode="numeric" value="${esc(e.series)}" aria-label="Series de ${esc(e.n)}"><span>×</span><input class="input" data-re="${d}.ej.${i}.reps" value="${esc(e.reps)}" aria-label="Repeticiones de ${esc(e.n)}"></span>`}
@@ -706,7 +705,7 @@ function viewRutWizard() {
   const showNext = volvio || (!(['tipo', 'exp', 'modo'].includes(s)) && !(s === 'n') && !(s === 'division' && o.division !== 'deporte'));
   return `<form class="screen" data-form="rw" novalidate>
     <div class="ob-top">
-      <button type="button" class="ob-back" data-act="rw-back" aria-label="${o.step === 0 ? 'Cerrar' : 'Atrás'}">${o.step === 0 ? '✕' : I.back}</button>
+      <button type="button" class="ob-back" data-act="rw-back" aria-label="${o.step === 0 ? 'Cerrar' : 'Atrás'}">${o.step === 0 ? I.close : I.back}</button>
       <div class="ob-track" aria-hidden="true" role="progressbar" aria-valuenow="${Math.round(pct)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>
       <span class="ob-count">${s !== 'editor' && o.main ? `${o.step + 1} de ${total}` : ''}</span>
     </div>
@@ -953,7 +952,7 @@ function libSheetHTML() {
   } else {
     const title = L.mode === 'swap' ? 'Cambiar ejercicio' : 'Añadir ejercicios';
     const gOpts = [...(L.mode === 'swap' ? [['alt', 'Alternativas']] : []), ...(L.rec.length ? [['rec', 'Recomendados para esta sesión']] : []), ['todos', 'Todos'], ...Object.entries(E.MUSCULOS)];
-    inner = `<div class="sheet-head"><button type="button" class="iconbtn" data-act="lib-close" aria-label="Cerrar">✕</button><h2>${title}</h2><button type="button" class="btn quiet small" data-act="lib-crear">${I.plus} Crear</button></div>
+    inner = `<div class="sheet-head"><button type="button" class="iconbtn" data-act="lib-close" aria-label="Cerrar">${I.close}</button><h2>${title}</h2><button type="button" class="btn quiet small" data-act="lib-crear">${I.plus} Crear</button></div>
       ${L.mode === 'swap' ? `<p class="small muted sheet-sub">En lugar de <b>${esc(L.from)}</b></p>` : ''}
       <input class="input" type="search" data-libq placeholder="Buscar ejercicio" value="${esc(L.q)}" aria-label="Buscar ejercicio" autocomplete="off">
       ${libChipsHTML()}
@@ -981,7 +980,7 @@ function exViewHTML() {
   return `<div class="sheet-back exv-back" data-act="ex-close"></div>
     <div class="sheet exview" role="dialog" aria-modal="true" aria-label="Ejercicio: ${esc(x.n)}">
       <div class="sheet-grab"></div>
-      <div class="sheet-head"><h2 class="det-title">${esc(x.n)}</h2><button type="button" class="iconbtn" data-act="ex-close" aria-label="Cerrar">✕</button></div>
+      <div class="sheet-head"><h2 class="det-title">${esc(x.n)}</h2><button type="button" class="iconbtn" data-act="ex-close" aria-label="Cerrar">${I.close}</button></div>
       <div class="sheet-list exv">
         <div class="exv-hero ${cardio ? 'lc-cardio' : ''}">${i3 ? `<img class="exdb" src="${esc(i3)}" alt="${esc(x.n)}">` : cardio ? I.heart : anatomia(x)}</div>
         <section class="exv-sec">
@@ -1198,7 +1197,7 @@ function sugerencia(ex, s) {
   if (!s.done || !ex.objReps || /\b(s|seg|min)\b/i.test(ex.objReps)) return '';
   const n = String(ex.objReps).match(/\d+/g), r = Math.round(num(s.reps));
   if (!n || !(r >= 1)) return '';
-  return r > Number(n[n.length - 1]) ? '↑ Sube el peso' : r < Number(n[0]) ? '↓ Baja el peso' : '';
+  return r > Number(n[n.length - 1]) ? `${I.up} Sube el peso` : r < Number(n[0]) ? `${I.dn} Baja el peso` : '';
 }
 
 function liveTitleHTML(L) {

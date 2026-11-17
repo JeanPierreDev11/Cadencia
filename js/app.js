@@ -141,7 +141,7 @@ function viewAuth() {
       <button type="button" class="btn block quiet" data-act="login-google" ${st.busy ? 'disabled' : ''}>Continuar con Google</button>
       <button type="button" class="btn block quiet" data-act="login-apple" ${st.busy ? 'disabled' : ''}>Continuar con Apple</button>
       <p class="small muted">¿Todavía no tienes cuenta? Vuelve atrás y pulsa «Empezar»: la creas al final del cuestionario. Si entras con Google o Apple por primera vez aquí, aceptas los <button type="button" class="link" data-act="legal-open">Términos de Uso, la Política de Privacidad y el aviso de salud</button>.</p>
-      <button type="button" class="link" data-act="auth-volver">← Volver</button>
+      <button type="button" class="link" data-act="auth-volver">${I.arrl} Volver</button>
       ${api.mode === 'local' ? `<p class="note"><span>●</span><span><b>Modo prueba.</b> Las cuentas y los datos se guardan solo en este dispositivo hasta que conectes Firebase.</span></p>` : ''}
     </div>
   </div>${st.legal ? legalSheetHTML() : ''}`;
@@ -754,7 +754,7 @@ function installCard(dismissable) {
       </ol>`;
   }
   return `<section class="card install">
-    <div class="card-head"><h2>Instala ${esc(APP_NAME)} en tu móvil</h2>${dismissable ? '<button class="iconbtn" data-act="install-hide" aria-label="Ocultar">✕</button>' : ''}</div>
+    <div class="card-head"><h2>Instala ${esc(APP_NAME)} en tu móvil</h2>${dismissable ? `<button class="iconbtn" data-act="install-hide" aria-label="Ocultar">${I.close}</button>` : ''}</div>
     ${inner}
   </section>`;
 }
@@ -1364,7 +1364,7 @@ const COMPARATIVA = [
   ['Modo Bestia', false, true, 'RIR, drop-sets y superseries en tus series'],
   ['Calculadora de Calentamiento', false, true, 'Series de aproximación hasta tu peso de trabajo'],
 ];
-const cmpCelda = (v) => v === true ? '<span class="cmp-y" role="img" aria-label="Incluido">✓</span>' : v === false ? '<span class="cmp-n" role="img" aria-label="No incluido">✗</span>' : `<span class="cmp-t">${v}</span>`;
+const cmpCelda = (v) => v === true ? `<span class="cmp-y" role="img" aria-label="Incluido">${I.check}</span>` : v === false ? `<span class="cmp-n" role="img" aria-label="No incluido">${I.no}</span>` : `<span class="cmp-t">${v}</span>`;
 const planActivo = () => { const pr = st.profile || {}; return pr.isPro === true && PLANES.some((x) => x.id === pr.proPlan) ? pr.proPlan : null; };
 // Botón principal de Administrar suscripción según el plan elegido (sel) y el activo (act).
 // Pro recurrente (mensual/anual) que elige otro plan recurrente → portal de Stripe (prorrateo, sin cobro doble).
@@ -1408,7 +1408,7 @@ function proInfoHTML() {
   return `<div class="sheet-back sheet-back-top" data-act="pro-info-close"></div>
     <div class="sheet pinfo" role="dialog" aria-modal="true" aria-label="Ventajas de Cadencia PRO">
       <div class="sheet-grab"></div>
-      <div class="sheet-head"><span style="width:36px"></span><h2>Gratis vs PRO</h2><button type="button" class="iconbtn" data-act="pro-info-close" aria-label="Cerrar">${I.close || '✕'}</button></div>
+      <div class="sheet-head"><span style="width:36px"></span><h2>Gratis vs PRO</h2><button type="button" class="iconbtn" data-act="pro-info-close" aria-label="Cerrar">${I.close}</button></div>
       <div class="pinfo-scroll"><table class="cmp">
         <thead><tr><th scope="col"><span class="sr">Función</span></th><th scope="col">Gratis</th><th scope="col" class="cmp-pro">PRO</th></tr></thead>
         <tbody>${COMPARATIVA.map(([f, g, p, d]) => `<tr><th scope="row">${f}${d ? `<small class="cmp-d">${d}</small>` : ''}</th><td>${cmpCelda(g)}</td><td class="cmp-pro">${cmpCelda(p)}</td></tr>`).join('')}</tbody>

@@ -1959,12 +1959,14 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .ai-lbl-top { display: grid; justify-items: inherit; gap: 6px; }
 .ai-res .ai-lbl-top { justify-items: center; }
 .ai-res.sm .ai-lbl-top { justify-items: start; }
-.coach-ico { width: 40px; height: 40px; filter: drop-shadow(0 0 4px rgba(255, 46, 147, .45)); }
+.coach-ico { width: 40px; height: 40px; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent-text) 45%, transparent)); }
 .ai-res.sm .coach-ico { width: 32px; height: 32px; }
-.sesion-ico { width: 24px; height: 24px; display: block; }
 
 /* 2026-11-17 · Iconos SVG propios en lugar de emojis (I.flame, I.gift, I.crown, I.warn, I.brain, I.plate, I.bowl) */
 .ic { width: 1.15em; height: 1.15em; vertical-align: -.2em; flex: none; }
 .mc-th .ic { width: 30px; height: 30px; color: var(--card-mute, var(--muted)); vertical-align: baseline; }
 .pro-badge { display: inline-flex; align-items: center; gap: 6px; }
 .orm .ic { width: 1.05em; height: 1.05em; }
+
+.link svg, .lsug svg { vertical-align: -.2em; margin-right: 2px; }
+.cmp-y, .cmp-n { display: inline-grid; place-items: center; }
