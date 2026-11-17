@@ -92,7 +92,7 @@ const IDEAS = {
 
 export function crearSecciones(ctx) {
   const api = new Proxy({}, { get: (_, k) => ctx.api[k] }); // el acceso a datos se crea al arrancar
-  const { st, render, toast, esc, num, nf, todayISO, fmtDate, lsGet, lsSet, I, E, errorText, currentKg, rutinaOf, viewPeso } = ctx;
+  const { st, render, toast, esc, num, nf, todayISO, fmtDate, lsGet, lsSet, I, E, errorText, currentKg, rutinaOf, viewPeso, gearHTML } = ctx;
   const r1 = (x) => Math.round(x * 10) / 10;
   const eur = (n) => nf(n, 0) + ' €';
   const sgn = (n, d = 0) => (n > 0 ? '+' : n < 0 ? '−' : '±') + nf(Math.abs(n), d);
@@ -104,10 +104,10 @@ export function crearSecciones(ctx) {
   const stat = (label, val, unit, hint, cls = '') => `<section class="stat ${cls}"><span class="label">${label}</span><span class="val num">${val}${unit ? `<em>${unit}</em>` : ''}</span>${hint ? `<span class="hint">${hint}</span>` : ''}</section>`;
   const seg = (act, opts, cur, label) => `<div class="seg" role="group" aria-label="${esc(label)}">${opts.map(([v, l]) => `<button type="button" data-act="${act}" data-v="${v}" aria-pressed="${String(cur) === String(v)}">${l}</button>`).join('')}</div>`;
   const bul = (arr, cls = '') => (arr && arr.length ? `<ul class="bul ${cls}">${arr.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '');
-  const head = (t, sub, avatar = false, extra = '') => {
+  const head = (t, sub, avatar = false, extra = '', cls = '') => {
     const name = P().nombre || st.user.name || '';
     const av = ''; // el perfil está en la barra de abajo y los ajustes en el engranaje fijo
-    return `<header class="hello"><div><h1>${t}</h1>${sub ? `<p>${sub}</p>` : ''}</div>${extra ? `<div class="hello-r">${extra}${av}</div>` : av}</header>`;
+    return `<header class="hello ${cls}"><div><h1>${t}</h1>${sub ? `<p>${sub}</p>` : ''}</div>${extra ? `<div class="hello-r">${extra}${av}</div>` : av}</header>`;
   };
 
   /* ================================================================ */
@@ -891,7 +891,8 @@ export function crearSecciones(ctx) {
   }
   function viewProgreso() {
     const sub = st.progSub || 'peso';
-    let h = head('Forma física', 'Peso, cuerpo y forma', true, sub === 'peso' ? `<button class="iconbtn hist-btn" data-act="peso-hist" aria-label="Historial de registros">${I.clock}</button>` : '');
+    // Reloj (solo en Peso) y engranaje en el mismo contenedor flex, alineados y con el mismo hueco.
+    let h = head('Forma física', 'Peso, cuerpo y forma', true, `<div class="hello-ico">${sub === 'peso' ? `<button class="iconbtn hist-btn" data-act="peso-hist" aria-label="Historial de registros">${I.clock}</button>` : ''}${gearHTML()}</div>`, 'hello-gear');
     if (sub === 'peso' && st.pesoComp) return h + viewPeso(true); // detalle de una métrica: sin pestañas, el selector de la cabecera cambia de métrica
     h += seg('p-sub', [['peso', 'Peso'], ['cuerpo', 'Cuerpo'], ['forma', 'Forma']], sub, 'Qué ver');
     if (sub === 'cuerpo') return h + subCuerpo();
@@ -1105,10 +1106,10 @@ export function crearSecciones(ctx) {
       case 'nov-wk': st.tab = 'entreno'; st.wkTab = v; lsSet('cadencia-tab', 'entreno'); lsSet('cadencia-wktab', v); render(); window.scrollTo(0, 0); return true;
       // Objetivos
       case 'meta-new': st.meta = { d: { g: 'Bici', tipo: 'bici_km_sem', valor: '', ej: '', hasta: '' } }; if (!tieneBici()) { st.meta.d.g = 'General'; st.meta.d.tipo = 'sesiones_sem'; } render(); return true;
-      case 'meta-edit': { const m = metas().find((x) => x.id === v); if (!m) return true; st.meta = { id: m.id, creado: m.creado, d: { g: metaDef(m.tipo)[1], tipo: m.tipo, valor: nf(m.valor, m.valor % 1 ? 1 : 0), ej: m.ej || '', hasta: m.hasta || '' } }; render(); return true; }
+      case 'meta-edit': { const m = metas().find((x) => x.id === v); if (!m) return true; st.meta = { id: m.id, creado: m.creado, valorTocado: true, d: { g: metaDef(m.tipo)[1], tipo: m.tipo, valor: nf(m.valor, m.valor % 1 ? 1 : 0), ej: m.ej || '', hasta: m.hasta || '' } }; render(); return true; }
       case 'meta-close': st.meta = null; render(); return true;
-      case 'meta-g': st.meta.d.g = v; st.meta.d.tipo = META_T.find((x) => x[1] === v)[0]; st.meta.msg = ''; render(); return true;
-      case 'meta-tipo': st.meta.d.tipo = v; st.meta.msg = ''; render(); return true;
+      case 'meta-g': st.meta.d.g = v; st.meta.d.tipo = META_T.find((x) => x[1] === v)[0]; st.meta.msg = ''; metaAutoPeso(); render(); return true;
+      case 'meta-tipo': st.meta.d.tipo = v; st.meta.msg = ''; metaAutoPeso(); render(); return true;
       case 'meta-save': await metaSave(); return true;
       case 'meta-del': {
         const S = st.meta;
@@ -1133,7 +1134,12 @@ export function crearSecciones(ctx) {
     }
     if (F && F.quick && t.dataset.fqk) { F.quick[t.dataset.fqk] = t.value; return true; }
     if (st.tl && t.dataset.tf) { st.tl.d[t.dataset.tf] = t.value; return true; }
-    if (st.meta && t.dataset.mf) { st.meta.d[t.dataset.mf] = t.value; return true; }
+    if (st.meta && t.dataset.mf) {
+      st.meta.d[t.dataset.mf] = t.value;
+      if (t.dataset.mf === 'valor') st.meta.valorTocado = true; // si el usuario escribe su propia meta, no se la pisamos
+      if (t.dataset.mf === 'ej') metaAutoPeso(); // al elegir el ejercicio, el peso se rellena con su último máximo
+      return true;
+    }
     if (t.dataset.iatxt != null) { st.iaTxt = t.value; return true; }
     if (st.mealDet != null && t.dataset.mcorr != null) { st.mealCorr = t.value; return true; }
     if (st.mealDet != null && t.dataset.mg) {
@@ -1590,13 +1596,24 @@ export function crearSecciones(ctx) {
     }
   }
   function mejorKg(ej) {
-    const key = normFood(ej || ''); let best = 0, fecha = null;
+    const key = normFood(E.canon(ej || '')); let best = 0, fecha = null;
     if (!key) return { best, fecha };
     st.workouts.forEach((w) => (w.ejercicios || []).forEach((x) => {
-      if (normFood(x.n) !== key) return;
+      if (normFood(E.canon(x.n)) !== key) return;
       (x.series || []).forEach((sr) => { if (sr.w) return; const kg = num(sr.kg); if (kg > best && num(sr.reps) >= 1) { best = kg; fecha = w.fecha; } });
     }));
     return { best, fecha };
+  }
+  // «Nuevo objetivo» de pesos: al elegir un ejercicio con historial, el campo de meta se rellena con el mayor peso que has registrado en él
+  // (el mismo que cuenta como récord). Solo si el campo está vacío o sin tocar, y sin repintar para no perder el teclado.
+  function metaAutoPeso() {
+    const S = st.meta;
+    if (!S || S.d.tipo !== 'fuerza_kg' || (S.valorTocado && String(S.d.valor).trim())) return;
+    const { best } = mejorKg(S.d.ej);
+    if (!(best > 0)) return;
+    S.d.valor = nf(best, best % 1 ? 1 : 0); S.valorTocado = false;
+    const el = document.querySelector('[data-mf="valor"]');
+    if (el) el.value = S.d.valor;
   }
   function metaProgreso(m) {
     const d = metaDef(m.tipo), t = todayISO(), ws = st.workouts;

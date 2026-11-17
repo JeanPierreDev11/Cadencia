@@ -625,9 +625,17 @@ export function alternativas(e, usados = [], equipo = null, todas = false) {
   const libres = todosEjercicios().filter((y) => normTxt(y.n) !== normTxt(e.n) && !u.has(normTxt(y.n)));
   // Mismo movimiento si lo conocemos; si no, los principales del mismo músculo.
   const mismo = x.p ? libres.filter((y) => y.p === x.p) : libres.filter((y) => y.m === x.m && y.base);
-  const musculo = todas ? libres.filter((y) => y.m === x.m && !mismo.includes(y)) : [];
+  if (todas) {
+    // Biblioteca (botón «Cambiar»): mismo movimiento primero y después el mismo grupo muscular. Dentro de cada bloque van antes los que
+    // comparten más músculos principales (y secundarios) con el original, los de su mismo equipo y los que puedes hacer con tu material.
+    const px = musculosDet(x), nComp = (a, b) => a.filter((k) => b.includes(k)).length;
+    const puntos = (y) => { const my = musculosDet(y); return nComp(my.p, px.p) * 20 + nComp(my.s, px.s) * 3 + (y.eq === x.eq ? 8 : 0) + tieneEq(y, equipo) * 6 + (y.base ? 2 : 0); };
+    const ordP = (l) => l.map((y) => [puntos(y), y]).sort((a, b) => b[0] - a[0] || a[1].n.localeCompare(b[1].n)).map((o) => o[1]);
+    const resto = libres.filter((y) => y.m === x.m && !mismo.includes(y));
+    return [...ordP(mismo), ...ordP(resto)].map((y) => y.n);
+  }
   const ord = (l) => l.sort((a, b) => tieneEq(b, equipo) - tieneEq(a, equipo) || (b.base ? 1 : 0) - (a.base ? 1 : 0));
-  return [...ord(mismo), ...ord(musculo)].map((y) => y.n);
+  return ord(mismo).map((y) => y.n);
 }
 
 // Ejercicios que se miden en tiempo o por lado.

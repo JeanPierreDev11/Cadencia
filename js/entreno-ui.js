@@ -6,6 +6,7 @@ import * as E from './entreno.js';
 import * as CAL from './calorias.js';
 import { analizarEntreno } from './coach.js';
 import * as C3 from './cuerpo.js';
+import { pautas } from './tecnica.js';
 
 export function crearEntreno(ctx) {
   const { st, root } = ctx;
@@ -57,7 +58,16 @@ const dayPlan = (iso) => {
 // ¿Se puede mover a hoy la sesión del día d? (ver E.moverAHoy)
 const moverInfo = (d) => E.moverAHoy(d, todayISO(), dayPlan, new Set(st.workouts.map((w) => w.fecha)), E.salvLista(st.profile));
 // Día elegido en la tira semanal (por defecto hoy; si es de otra semana, vuelve a hoy).
-const diaSel = () => { const t = todayISO(), m = E.mondayOf(t), v = st.wkDia; return v && v >= m && v <= E.addDays(m, 6) ? v : t; };
+// Semana que se ve en «Semana» (lunes ISO): la actual o una anterior elegida con el selector (st.wkSem). Nunca una futura.
+const semVista = () => { const cm = E.mondayOf(todayISO()), v = st.wkSem; return v && v < cm && E.mondayOf(v) === v ? v : cm; };
+// Día elegido en la tira. En la semana actual, hoy por defecto; en una anterior, el último día con entreno (o el lunes).
+const diaSel = () => {
+  const t = todayISO(), m = semVista(), fin = E.addDays(m, 6), v = st.wkDia;
+  if (v && v >= m && v <= fin) return v;
+  if (m === E.mondayOf(t)) return t;
+  const hechos = st.workouts.filter((w) => w.fecha >= m && w.fecha <= fin).map((w) => w.fecha).sort();
+  return hechos.length ? hechos[hechos.length - 1] : m;
+};
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const tipoIcon = (t) => (t === 'bici' ? I.bike : t === 'cardio' ? I.heart : t === 'otro' ? I.ball : I.dumb);
 const goalsKind = () => E.planKind(st.profile && st.profile.objetivos);
@@ -108,11 +118,12 @@ function viewEntreno() {
   if (!rutinaOf()) {
     return `${ctx.stravaBtn ? ctx.stravaBtn() : ''}<div class="wk-empty"><button type="button" class="addbig" data-act="rw-start"><span class="addbig-c">${I.plusBig}</span><span>Añadir rutina</span></button><button type="button" class="btn ghost" data-act="rut-imp">Importar rutina con un código</button></div>`;
   }
-  const today = todayISO(), mon = E.mondayOf(today), sun = E.addDays(mon, 6);
   const sub = ['semana', 'rutina', 'objetivos', 'records'].includes(st.wkTab) ? st.wkTab : 'semana';
+  const mon = sub === 'semana' ? semVista() : E.mondayOf(todayISO()), sun = E.addDays(mon, 6);
   const body = sub === 'rutina' ? wkRutina() : sub === 'objetivos' ? M.viewObjetivos() : sub === 'records' ? wkRecords() : wkSemana();
-  return `<header class="hello"><div><h1>Entreno</h1><p>Semana del ${esc(fmtDate(mon))} al ${esc(fmtDate(sun))}</p></div>
-      <button type="button" class="iconbtn hist-btn" data-act="wk-hist" aria-label="Historial de entrenos">${I.clock}</button></header>
+  // Reloj (historial) y engranaje comparten contenedor flex: misma línea y mismo hueco.
+  return `<header class="hello hello-gear"><div><h1>Entreno</h1><p>Semana del ${esc(fmtDate(mon))} al ${esc(fmtDate(sun))}</p></div>
+      <div class="hello-ico"><button type="button" class="iconbtn hist-btn" data-act="wk-hist" aria-label="Historial de entrenos">${I.clock}</button>${ctx.gearHTML()}</div></header>
     ${ctx.stravaBtn ? ctx.stravaBtn() : ''}
     <div class="seg four" role="group" aria-label="Secciones de entreno">
       ${[['semana', 'Semana'], ['rutina', 'Rutinas'], ['objetivos', 'Objetivos'], ['records', 'Récords']].map(([v, t]) => `<button type="button" data-act="wktab" data-v="${v}" aria-pressed="${sub === v}">${t}</button>`).join('')}
@@ -135,8 +146,18 @@ function barsChart(series) {
   </svg>`;
 }
 
+// Selector de semanas: mismo formato que el de días de Nutrición (flechas + etiqueta que abre el calendario).
+function semNavHTML(mon, curMon) {
+  const sun = E.addDays(mon, 6), corto = (d) => fmtDate(d, { day: 'numeric', month: 'short' });
+  const label = mon === curMon ? 'Esta semana' : mon === E.addDays(curMon, -7) ? 'Semana pasada' : `${corto(mon)} – ${corto(sun)}`;
+  return `<div class="daynav nd-nav wk-nav">
+      <button type="button" class="iconbtn" data-act="wk-sem" data-v="-1" aria-label="Semana anterior">${I.back}</button>
+      <label class="daypick"><b>${esc(label)}</b><input type="date" data-wksem value="${esc(mon === curMon ? todayISO() : mon)}" max="${todayISO()}" aria-label="Elegir semana"></label>
+      <button type="button" class="iconbtn flip" data-act="wk-sem" data-v="1" aria-label="Semana siguiente" ${mon >= curMon ? 'disabled' : ''}>${I.back}</button>
+    </div>`;
+}
 function wkSemana() {
-  const today = todayISO(), mon = E.mondayOf(today), ws = st.workouts, r = rutinaOf();
+  const today = todayISO(), curMon = E.mondayOf(today), mon = semVista(), pasada = mon !== curMon, ws = st.workouts, r = rutinaOf();
   const stt = E.weekStats(ws, mon), sel = diaSel();
   // Tocar un día solo lo selecciona (métricas y plan de ese día abajo); registrar se hace con el botón de la tarjeta del día.
   const cells = [0, 1, 2, 3, 4, 5, 6].map((i) => {
@@ -151,13 +172,28 @@ function wkSemana() {
   // Si tu rutina no tiene bici y sí fuerza, el panel habla de series y kilos movidos en lugar de sesiones y distancia.
   const soloFuerza = r.dias.every((d) => r.sesiones[d].t !== 'bici') && r.dias.some((d) => r.sesiones[d].t === 'fuerza');
   const hoy = E.dayStats(ws, sel);
+  // Semana anterior: las métricas son las de TODA la semana (tiempo, series, volumen y días completados).
+  if (pasada) {
+    const dias = new Set(ws.filter((w) => w.fecha >= mon && w.fecha <= E.addDays(mon, 6)).map((w) => w.fecha)).size;
+    return `${semNavHTML(mon, curMon)}
+    <section class="card"><h2>Semana del ${esc(fmtDate(mon, { day: 'numeric', month: 'short' }))}</h2><div class="weekstrip">${cells}</div></section>
+    ${diaHTML(sel, today)}
+    <div class="stats" aria-label="Resumen de la semana">
+      <section class="stat"><span class="label">Tiempo</span><span class="val num nowrap">${fmtDur(stt.min).replace(' min', '')}${stt.min % 60 ? '<em>min</em>' : ''}</span></section>
+      ${soloFuerza ? `<section class="stat"><span class="label">Series</span><span class="val num">${nf(stt.sets)}</span></section>`
+        : `<section class="stat"><span class="label">Distancia en bici</span><span class="val num">${nf(stt.km, 1)}<em>km</em></span></section>`}
+      <section class="stat"><span class="label">Volumen total</span><span class="val num">${nf(stt.vol)}<em>kg</em></span></section>
+      <section class="stat"><span class="label">Días completados</span><span class="val num">${dias}<em>de ${r.dias.length}</em></span></section>
+    </div>
+    <section class="card"><h2>Horas por semana</h2>${barsChart(E.weeksSeries(ws, mon, 8))}</section>`;
+  }
   const caja2 = soloFuerza
     ? `<section class="stat"><span class="label">Series</span><span class="val num">${nf(hoy.sets)}</span></section>`
     : `<section class="stat"><span class="label">Sesiones</span><span class="val num">${stt.n}<em>de ${r.dias.length}</em></span></section>`;
   const caja3 = soloFuerza
     ? `<section class="stat"><span class="label">Volumen total</span><span class="val num">${nf(hoy.vol)}<em>kg</em></span></section>`
     : `<section class="stat"><span class="label">Distancia en bici</span><span class="val num">${nf(stt.km, 1)}<em>km</em></span>${stt.elev ? `<span class="hint">+${nf(stt.elev)} m de desnivel</span>` : ''}</section>`;
-  return `
+  return `${semNavHTML(mon, curMon)}
     <section class="card"><h2>Tu semana</h2><div class="weekstrip">${cells}</div></section>
     ${diaHTML(sel, today)}
     <div class="stats" aria-label="Métricas del ${esc(sel === today ? 'día de hoy' : fmtDate(sel, { weekday: 'long', day: 'numeric' }))}">
@@ -263,11 +299,24 @@ function wkRow(w, mod) {
 
 /* ---------- pestaña Récords ---------- */
 // Récords personales (antes estaban dentro del Historial): fuerza (mejor serie de cada ejercicio), cardio y bici.
+// La fuerza va por grupo muscular, en acordeones: por defecto solo se ve abierto el primero que tenga récords.
+const REC_GRUPOS = [
+  ['pecho', 'Pecho', ['pecho']], ['hombro', 'Hombro', ['hombro']], ['espalda', 'Espalda', ['espalda']],
+  ['biceps', 'Bíceps', ['biceps']], ['triceps', 'Tríceps', ['triceps']],
+  ['pierna', 'Pierna', ['cuadriceps', 'femoral', 'gluteo', 'gemelos', 'aductores', 'abductores']],
+  ['core', 'Core', ['core']], ['antebrazo', 'Antebrazo', ['antebrazo']],
+];
+const grupoRecord = (n) => { const x = E.ejercicio(n), g = x && x.m; const f = REC_GRUPOS.find(([, , ms]) => ms.includes(g)); return f ? f[0] : 'otros'; };
 function wkRecords() {
   const r = E.records(st.workouts);
   const fecha = (f) => esc(fmtDate(f, { day: 'numeric', month: 'short', year: 'numeric' }));
   const fila = (t, v, f, extra = '') => `<div class="row rec-row"><span>${esc(t)}<br><span class="muted small">${fecha(f)}${extra}</span></span><b class="nowrap num">${esc(v)}</b></div>`;
-  const fuerza = r.gym.map((e) => fila(cap(e.n), e.best.kg > 0 ? `${nf(e.best.kg, 1)} kg × ${e.best.reps}` : `${e.best.reps} reps`, e.best.fecha, ` · ${e.veces} ${e.veces === 1 ? 'sesión' : 'sesiones'}`));
+  const grupos = new Map(); // id → { t, filas[] } en el orden de REC_GRUPOS
+  for (const [id, t] of REC_GRUPOS) grupos.set(id, { t, filas: [] });
+  grupos.set('otros', { t: 'Otros', filas: [] });
+  for (const e of r.gym) {
+    grupos.get(grupoRecord(e.n)).filas.push(fila(cap(e.n), e.best.kg > 0 ? `${nf(e.best.kg, 1)} kg × ${e.best.reps}` : `${e.best.reps} reps`, e.best.fecha, ` · ${e.veces} ${e.veces === 1 ? 'sesión' : 'sesiones'}`));
+  }
   const cardio = (r.cardio || []).map((c) => {
     const p = [];
     if (c.km) p.push(fila(`${c.n} · más distancia`, `${nf(c.km.v, 1)} km`, c.km.fecha));
@@ -279,11 +328,21 @@ function wkRecords() {
   if (r.bici.km) bici.push(fila('Salida más larga', `${nf(r.bici.km.v, 1)} km`, r.bici.km.fecha));
   if (r.bici.elev) bici.push(fila('Más desnivel', `${nf(r.bici.elev.v)} m`, r.bici.elev.fecha));
   if (r.bici.min) bici.push(fila('Más tiempo en bici', fmtDur(r.bici.min.v), r.bici.min.fecha));
-  if (!fuerza.length && !cardio.length && !bici.length) {
+  grupos.set('cardio', { t: 'Cardio', filas: cardio });
+  grupos.set('bici', { t: 'Bici', filas: bici });
+  const con = [...grupos].filter(([, g]) => g.filas.length);
+  if (!con.length) {
     return `<section class="card"><div class="empty"><b>Aún no hay récords</b><span>Termina un entreno y aquí verás tu mejor serie de cada ejercicio, tus marcas de cardio y tus salidas en bici.</span></div></section>`;
   }
-  const bloque = (t, filas) => (filas.length ? `<section class="card rec-card"><h2>${t}</h2><div class="list">${filas.join('')}</div></section>` : '');
-  return `${bloque('Fuerza', fuerza)}${bloque('Cardio', cardio)}${bloque('Bici', bici)}
+  const rec = st.recOpen || {}, primero = con[0][0];
+  const acordeon = ([id, g]) => {
+    const open = id in rec ? !!rec[id] : id === primero;
+    return `<section class="card rec-card rec-acc ${open ? 'open' : ''}">
+      <button type="button" class="rec-head" data-act="rec-toggle" data-v="${id}" aria-expanded="${open}" aria-controls="rec-${id}">
+        <h2>${g.t}</h2><span class="rec-n">${g.filas.length}</span><span class="chev" aria-hidden="true">${I.chev}</span></button>
+      <div class="list" id="rec-${id}" ${open ? '' : 'hidden'}>${g.filas.join('')}</div></section>`;
+  };
+  return `${con.map(acordeon).join('')}
     <p class="small muted rec-nota">En fuerza cuenta tu mejor serie (más peso para sus repeticiones). Las de calentamiento no cuentan.</p>`;
 }
 
@@ -330,18 +389,15 @@ function rxCintaHTML(d, i, e) {
   </div>`;
 }
 function rxHTML(d, i, e, s, re) {
-  const key = `${d}.${i}`, open = re.alt === key;
-  const alts = open ? E.alternativas(e, s.ej.map((x) => x.n), re.draft.equipo).slice(0, 6) : [];
-  const x = E.ejercicio(e.n);
+  const key = `${d}.${i}`, x = E.ejercicio(e.n);
+  // Foto y nombre abren la ficha del ejercicio (GIF grande, cómo hacerlo y músculos). «Cambiar» abre la biblioteca completa ya filtrada por alternativas de este hueco.
   return `<div class="rx">
-    <div class="rx-top">${exThumb(x || { eq: 'corporal' })}<span class="rx-n">${esc(e.n)}<span class="small muted">${x ? E.MUSCULOS[x.m] : ''}</span></span><button type="button" class="iconbtn" data-act="re-del" data-v="${key}" aria-label="Quitar ${esc(e.n)}">✕</button></div>
+    <div class="rx-top"><button type="button" class="rx-view" data-act="ex-view" data-n="${esc(e.n)}" aria-label="Ver cómo se hace ${esc(e.n)}">${exThumb(x || { eq: 'corporal' })}<span class="rx-n">${esc(e.n)}<span class="small muted">${x ? E.MUSCULOS[x.m] : ''}</span></span></button><button type="button" class="iconbtn" data-act="re-del" data-v="${key}" aria-label="Quitar ${esc(e.n)}">✕</button></div>
     ${E.esCinta(e) ? rxCintaHTML(d, i, e) : ''}
     <div class="rx-bot">
       ${E.esCinta(e) ? '<span></span>' : `<span class="rx-sr"><input class="input" data-re="${d}.ej.${i}.series" inputmode="numeric" value="${esc(e.series)}" aria-label="Series de ${esc(e.n)}"><span>×</span><input class="input" data-re="${d}.ej.${i}.reps" value="${esc(e.reps)}" aria-label="Repeticiones de ${esc(e.n)}"></span>`}
-      <button type="button" class="btn quiet small" data-act="re-alt" data-v="${key}" aria-expanded="${open}">${I.swap} Cambiar</button>
+      <button type="button" class="btn quiet small" data-act="re-lib-swap" data-v="${key}">${I.swap} Cambiar</button>
     </div>
-    ${open ? `<div class="alts"><span class="small muted">Alternativas que trabajan lo mismo</span><div class="chips">${alts.map((a) => `<button type="button" class="chip chipbtn" data-act="re-swap" data-v="${key}" data-n="${esc(a)}">${esc(a)}</button>`).join('')}
-      <button type="button" class="chip chipbtn more" data-act="re-lib-swap" data-v="${key}">Ver todos…</button></div></div>` : ''}
   </div>`;
 }
 
@@ -377,11 +433,17 @@ function dayCardHTML(R, d, re) {
       const ss = r.sesiones[dd], det = ss.t === 'fuerza' ? `${(ss.ej || []).length} ejercicios` : `${ss.min || ''} min`;
       return `<button type="button" class="altses" data-act="re-copy" data-v="${d}" data-rid="${esc(r.id)}" data-d="${dd}"><b>${esc(r.nombre || 'Rutina')} · ${E.DIAS_LARGO[dd]}</b><span class="small muted">${esc(ss.nombre || RT[ss.t])} · ${esc(det)}</span></button>`;
     }).join('')).join('')}</div>` : ''}</div>` : '';
-  return `<section class="card rday">
-    <div class="rd-head"><b>${E.DIAS_LARGO[d]}</b>${sel}</div>
-    <div class="rd-name"><input class="input" data-re="${d}.nombre" value="${esc(s.nombre || '')}" maxlength="40" aria-label="Nombre de la sesión del ${dl}">${minBox}</div>
-    ${body}
-    ${copiar}
+  // Cada día es un acordeón: la cabecera pliega o despliega el nombre, los ejercicios y «Copiar día». Plegado enseña un resumen.
+  const plegado = !!(re.fold && re.fold[d]);
+  const nEj = s.t === 'fuerza' ? s.ej.length : 0;
+  const resumen = s.t === 'fuerza' ? `${s.nombre ? `${s.nombre} · ` : ''}${nEj} ${nEj === 1 ? 'ejercicio' : 'ejercicios'}` : s.nombre || RT[s.t];
+  return `<section class="card rday ${plegado ? 'folded' : ''}">
+    <div class="rd-head"><button type="button" class="rd-toggle" data-act="re-fold" data-v="${d}" aria-expanded="${!plegado}" aria-controls="rd-body-${d}"><span class="chev" aria-hidden="true">${I.chev}</span><b>${E.DIAS_LARGO[d]}</b>${plegado ? `<span class="rd-sum small muted">${esc(resumen)}</span>` : ''}</button>${sel}</div>
+    <div class="rd-fold" id="rd-body-${d}" ${plegado ? 'hidden' : ''}>
+      <div class="rd-name"><input class="input" data-re="${d}.nombre" value="${esc(s.nombre || '')}" maxlength="40" aria-label="Nombre de la sesión del ${dl}">${minBox}</div>
+      ${body}
+      ${copiar}
+    </div>
   </section>`;
 }
 const editorHTML = (re) => [...re.draft.dias].sort((a, b) => a - b).map((d) => dayCardHTML(re.draft, d, re)).join('');
@@ -808,7 +870,7 @@ function libItems() {
   const L = st.lib, q = E.normTxt(L.q);
   let items;
   if (q && L.m !== 'alt') items = E.todosEjercicios().slice(); // al buscar, se busca en todos
-  else if (L.m === 'alt') items = E.alternativas({ n: L.from }, [], null, true).map(E.ejercicio).filter(Boolean);
+  else if (L.m === 'alt') items = E.alternativas({ n: L.from }, L.usados, L.equipo, true).map(E.ejercicio).filter(Boolean); // viables para este hueco: mismo movimiento y músculo, tu material primero
   else if (L.m === 'rec') items = E.todosEjercicios().filter((x) => L.rec.includes(x.m)).sort((a, b) => L.rec.indexOf(a.m) - L.rec.indexOf(b.m));
   else if (L.m === 'fav') items = E.todosEjercicios().filter((x) => favs().includes(x.n));
   else if (L.m === 'todos') items = E.todosEjercicios().slice().sort((a, b) => M_ORD.indexOf(a.m) - M_ORD.indexOf(b.m));
@@ -902,6 +964,41 @@ function libSheetHTML() {
   }
   return `<div class="sheet-back" data-act="lib-close"></div>
     <div class="sheet ${L.anim ? 'anim' : ''}" role="dialog" aria-modal="true" aria-label="Ejercicios"><div class="sheet-grab"></div>${inner}</div>`;
+}
+
+// Ficha del ejercicio (modal de cristal oscuro) que se abre al tocar la foto o el nombre de un ejercicio de una rutina.
+function exViewHTML() {
+  const n = st.exView && st.exView.n;
+  if (!n) return '';
+  const x = E.ejercicio(n) || { n, eq: 'otro' }, i3 = E.imgDb(x, 360), cardio = E.tipoEjercicio(x) === 'cardio';
+  let { p, s } = E.musculosDet(x);
+  if (!p.length && GRUPO_MAP[x.m]) p = [GRUPO_MAP[x.m]];
+  const { pasos, equipo } = pautas(x);
+  const chips = [...p.map((k) => ['mp', k]), ...s.map((k) => ['ms', k])].filter(([, k]) => E.MUSC_DET[k]);
+  const k0 = p[0] || '', lado = MUSC_ESPALDA.has(k0) ? 'back' : 'front';
+  return `<div class="sheet-back exv-back" data-act="ex-close"></div>
+    <div class="sheet exview" role="dialog" aria-modal="true" aria-label="Ejercicio: ${esc(x.n)}">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><h2 class="det-title">${esc(x.n)}</h2><button type="button" class="iconbtn" data-act="ex-close" aria-label="Cerrar">✕</button></div>
+      <div class="sheet-list exv">
+        <div class="exv-hero ${cardio ? 'lc-cardio' : ''}">${i3 ? `<img class="exdb" src="${esc(i3)}" alt="${esc(x.n)}">` : cardio ? I.heart : anatomia(x)}</div>
+        <section class="exv-sec">
+          <h3>Músculos implicados</h3>
+          <div class="exv-mus">
+            ${cardio ? '' : `<span class="exv-fig" aria-hidden="true">${anatomia(x, lado)}</span>`}
+            <div class="exv-chips">${chips.length ? chips.map(([c, k]) => `<span class="exv-chip ${c}">${esc(E.MUSC_DET[k])}</span>`).join('') : `<span class="exv-chip mp">${esc(E.MUSCULOS[x.m] || 'Cuerpo completo')}</span>`}
+              <p class="small exv-leg"><span class="dot mp"></span>Principal <span class="dot ms"></span>Secundario</p></div>
+          </div>
+          <p class="small exv-eq">Equipo: ${esc(E.EQUIPOS[x.eq] || 'Otro')}</p>
+        </section>
+        ${pasos.length ? `<section class="exv-sec">
+          <h3>Cómo realizarlo</h3>
+          <ol class="exv-steps">${pasos.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>
+          ${equipo ? `<p class="small exv-tip">${esc(equipo)}</p>` : ''}
+          <p class="small exv-note">Pautas generales para este tipo de movimiento.</p>
+        </section>` : ''}
+      </div>
+    </div>`;
 }
 
 function libApply(names) {
@@ -1417,7 +1514,7 @@ async function liveFinish() {
     st.live = null; st.liveMin = false; liveSave();
     st.tab = 'entreno'; lsSet('cadencia-tab', 'entreno');
     if (editado) st.wkHist = true; else { st.wkTab = 'semana'; lsSet('cadencia-wktab', 'semana'); }
-    st.wkDia = o.fecha;
+    st.wkDia = o.fecha; st.wkSem = E.mondayOf(o.fecha) < E.mondayOf(todayISO()) ? E.mondayOf(o.fecha) : null; // si se registró en una semana anterior, se muestra esa
     if (esPro() && !editado) st.resumen = { id: o.id, nombre: o.nombre, vol: volTotal, sets: nSets, min, record };
     render(); window.scrollTo(0, 0);
     toast(editado ? 'Entreno actualizado' : record ? '¡Nuevo récord personal!' : nSets ? `Entrenamiento guardado · ${nSets} ${nSets === 1 ? 'serie' : 'series'}` : 'Entrenamiento guardado');
@@ -1542,6 +1639,10 @@ root.addEventListener('click', async (e) => {
   const act = b.dataset.act, v = b.dataset.v;
   const w = st.wk, o = st.rw, re = st.re, L = st.lib, Lv = st.live;
 
+  // ficha del ejercicio (foto o nombre en una rutina)
+  if (act === 'ex-view') { st.exView = { n: b.dataset.n }; return render(); }
+  if (act === 'ex-close') { st.exView = null; return render(); }
+
   // panel de ejercicios
   if (L && act.startsWith('lib-')) {
     if (act === 'lib-close') { st.lib = null; return render(); }
@@ -1665,8 +1766,7 @@ root.addEventListener('click', async (e) => {
   if (re && act.startsWith('re-')) {
     const R = re.draft, kind = goalsKind();
     const touch = () => { re.dirty = true; re.msg = ''; };
-    if (act === 're-alt') re.alt = re.alt === v ? null : v;
-    else if (act === 're-swap') { const [d, i] = v.split('.').map(Number); const ex = R.sesiones[d].ej[i], n = b.dataset.n, x = E.ejercicio(n); ex.reps = E.repsPara(n, ex.reps, kind); ex.n = n; ex.m = x ? x.m : ''; re.alt = null; touch(); toast(`Cambiado por ${n}`); }
+    if (act === 're-fold') { re.fold = { ...(re.fold || {}), [v]: !(re.fold && re.fold[v]) }; return render(); } // plegar/desplegar un día no cuenta como cambio
     else if (act === 're-lib-swap') { const [d, i] = v.split('.').map(Number); re.alt = null; return libOpen({ mode: 'swap', ctx: 're', d, i }); }
     else if (act === 're-lib-add') return libOpen({ mode: 'add', ctx: 're', d: Number(v) });
     else if (act === 're-del') { const [d, i] = v.split('.').map(Number); R.sesiones[d].ej.splice(i, 1); re.alt = null; touch(); }
@@ -1773,7 +1873,16 @@ root.addEventListener('click', async (e) => {
     st.wkDia = hoy; render(); toast(`Entreno movido a hoy: ${dp ? dp.nombre : 'entrenar'}`); return;
   }
   if (act === 'ai-pedir') { if (!esPro()) { st.resumen = null; return abrirSuscripcion(); } return void pedirCoach(v); }
+  if (act === 'rec-toggle') { // acordeón de Récords: pliega o despliega ese grupo (el resto no se toca)
+    const abierto = b.getAttribute('aria-expanded') === 'true';
+    st.recOpen = { ...(st.recOpen || {}), [v]: !abierto };
+    return render();
+  }
   if (act === 'wk-dia') { st.wkDia = b.dataset.date; return render(); }
+  if (act === 'wk-sem') { // semana anterior / siguiente (nunca más allá de la actual)
+    const cm = E.mondayOf(todayISO()), nueva = E.addDays(semVista(), Number(v) * 7);
+    st.wkSem = nueva >= cm ? null : nueva; st.wkDia = null; return render();
+  }
   if (act === 'wktab') { st.wkTab = v; lsSet('cadencia-wktab', v); render(); }
   else if (act === 'wk-new') openRegistro(b.dataset.date, b.dataset.tipo);
   else if (act === 'wk-cancel') { st.wk = null; if (st.wkBack) { st.wkHist = true; st.wkBack = false; } render(); }
@@ -1861,6 +1970,10 @@ root.addEventListener('change', async (e) => {
     try { await saveRutinas(list.map((x) => (x.id === r.id ? nr : x)), r.id === rutinaOf().id ? nr : null); toast('Nombre guardado'); } catch (err) { toast(errorText(err)); }
     return render();
   }
+  if (t.dataset.wksem != null) { // calendario del selector de semanas: salta a la semana de esa fecha
+    if (!t.value || t.value > todayISO()) return;
+    const m = E.mondayOf(t.value); st.wkSem = m >= E.mondayOf(todayISO()) ? null : m; st.wkDia = null; return render();
+  }
   if (st.lib && t.dataset.libeqf != null) { st.lib.eqF = t.value; return render(); }
   if (st.live && t.dataset.livetitle != null) {
     const L = st.live;
@@ -1917,5 +2030,5 @@ function recuperacionHTML() {
     ${esPro() ? cuerpo : muro}</section>`;
 }
 function cuerpoSheetHTML() { return C3.sheetHTML(st.cuerpo3d, sexoCuerpo(), datosCuerpo(), todayISO()); }
-  return { finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, limiteSheetHTML, calentarSheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML };
+  return { exViewHTML, finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, limiteSheetHTML, calentarSheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML };
 }
