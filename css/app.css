@@ -1216,8 +1216,9 @@ details.comp { border: 1px solid var(--bd); border-radius: 2px; }
 .lcard.used { opacity: .45; }
 .lc-main { display: grid; gap: 2px; width: 100%; padding: 34px 10px 12px; background: none; border: 0; color: var(--card-ink); text-align: left; font: inherit; cursor: pointer; }
 .lc-img { display: grid; place-items: center; height: 130px; margin-bottom: 6px; }
-.lc-img .anat, .lc-img .ex3d { width: 100%; height: 100%; object-fit: contain; display: block; }
-.lc-img .ex3d { mix-blend-mode: var(--blend); } /* si la imagen trae fondo oscuro/blanco, no tapa la tarjeta */
+.lc-img .anat, .lc-img .exdb { width: 100%; height: 100%; object-fit: contain; display: block; }
+.exdb { background: #fff; border-radius: 6px; mix-blend-mode: normal; } /* los GIF de ExerciseDB traen fondo blanco: se muestran como una pequeña lámina blanca, igual en claro y oscuro */
+.lc-img .exdb { width: auto; height: 130px; aspect-ratio: 1; } /* medida fija: con 100% el GIF (360 px) estiraba la tarjeta */
 .lc-n { font-size: 14px; font-weight: 700; line-height: 1.2; color: var(--card-ink); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.4em; }
 .lc-m { font-size: 12px; color: var(--card-mute); }
 .lc-ico { position: absolute; top: 6px; width: 32px; height: 32px; display: grid; place-items: center; background: none; border: 0; color: #777; font-size: 15px; font-weight: 800; padding: 0; }
@@ -1240,10 +1241,10 @@ details.comp { border: 1px solid var(--bd); border-radius: 2px; }
 /* Miniaturas de ejercicio: cuadradas, oscuras y con la figura anatómica (sin fotos) */
 .thumb { background: var(--card-bg); border: 0; border-radius: 6px; padding: 3px; aspect-ratio: 1; }
 .thumb svg, .thumb img { display: block; width: 100%; height: 100%; object-fit: contain; }
-.thumb img.ex3d { mix-blend-mode: var(--blend); }
 .det-hero { background: var(--card-bg); border-radius: 8px; height: 220px; padding: 10px; display: grid; place-items: center; }
-.det-hero .anat, .det-hero .ex3d { width: 100%; height: 100%; object-fit: contain; }
-.det-hero .ex3d { mix-blend-mode: var(--blend); }
+.det-hero .anat { width: 100%; height: 100%; object-fit: contain; }
+.det-hero.det-hero-db { height: auto; }
+.det-hero-db .exdb { width: 100%; max-width: 300px; height: auto; aspect-ratio: 1; }
 .det-body { display: block; }
 .det-body .det-mus { display: grid; gap: 6px; }
 

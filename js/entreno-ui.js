@@ -757,7 +757,7 @@ const ANATOMIA_DEFS = `<svg width="0" height="0" style="position:absolute" aria-
 </defs></svg>`;
 document.body.insertAdjacentHTML('beforeend', ANATOMIA_DEFS);
 // Figura anatómica: cuerpo gris con relieve y los músculos del ejercicio en rojo (principal fuerte, secundarios suaves).
-// Es el sustituto hasta conectar imágenes 3D reales (ver IMG3D en ejercicios.js). lado: 'ambos' | 'front' | 'back'.
+// Es el sustituto hasta conectar imágenes 3D reales (ver IMGDB en ejercicios.js). lado: 'ambos' | 'front' | 'back'.
 // fills: { clave de músculo: [relleno, opacidad?] }. Dibuja la silueta y solo esos músculos.
 function figura(fills, lado, nombres = '') {
   const part = (parts, dx) => `<use href="#an-sil" x="${dx}" width="60" height="130"/><g transform="translate(${dx} 0)">${parts.filter(([k]) => fills[k]).map(([k, t, a, b, c, d]) => {
@@ -774,12 +774,12 @@ function anatomia(x, lado = 'ambos') {
   return figura(fills, lado, [...p, ...sec].map((k) => E.MUSC_DET[k]).filter(Boolean).join(', '));
 }
 const chipIcono = (m) => { if (m === 'cardio') return I.heart; const k = GRUPO_MAP[m]; return k ? anatomia({ m, mu: k + '|' }, MUSC_ESPALDA.has(k) ? 'back' : 'front') : ''; };
-// Miniatura cuadrada de un ejercicio: imagen 3D (IMG3D) si existe; si no, la misma figura anatómica de la Biblioteca (un solo lado, el del músculo principal).
+// Miniatura cuadrada de un ejercicio: GIF de ExerciseDB (IMGDB) si existe; si no, la misma figura anatómica de la Biblioteca (un solo lado, el del músculo principal).
 const exThumb = (x) => {
   x = x || { eq: 'corporal' };
   if (E.tipoEjercicio(x) === 'cardio') return `<span class="thumb thumb-cardio" aria-hidden="true">${I.heart}</span>`;
-  const i3 = E.img3d(x), k = E.musculosDet(x).p[0] || GRUPO_MAP[x.m];
-  return `<span class="thumb">${i3 ? `<img class="ex3d" src="${esc(i3)}" alt="" loading="lazy" decoding="async">` : anatomia(x, MUSC_ESPALDA.has(k) ? 'back' : 'front')}</span>`;
+  const i3 = E.imgDb(x, 180), k = E.musculosDet(x).p[0] || GRUPO_MAP[x.m];
+  return `<span class="thumb">${i3 ? `<img class="exdb" src="${esc(i3)}" alt="" loading="lazy" decoding="async">` : anatomia(x, MUSC_ESPALDA.has(k) ? 'back' : 'front')}</span>`;
 };
 
 // o = { mode: 'add' | 'swap', ctx: 're' | 'live', d, i }
@@ -830,10 +830,10 @@ function libListHTML() {
   for (const x of items) {
     if (grouped && x.m !== prev) { out += `<div class="lgroup">${E.MUSCULOS[x.m]}</div>`; prev = x.m; }
     const inUse = L.mode === 'add' && used.has(E.normTxt(x.n)), on = L.sel.includes(x.n), saved = fv.includes(x.n);
-    const img3d = E.img3d(x);
+    const imgdb = E.imgDb(x, 180);
     out += `<div class="lcard ${on ? 'on' : ''} ${inUse ? 'used' : ''}">
       <button type="button" class="lc-main" data-act="lib-pick" data-n="${esc(x.n)}" ${inUse ? 'disabled' : ''} aria-label="${esc(x.n)}${inUse ? ' (ya está en la sesión)' : ''}">
-        <span class="lc-img ${E.tipoEjercicio(x) === 'cardio' ? 'lc-cardio' : ''}">${img3d ? `<img class="ex3d" src="${esc(img3d)}" alt="" loading="lazy" decoding="async">` : E.tipoEjercicio(x) === 'cardio' ? I.heart : anatomia(x)}</span>
+        <span class="lc-img ${E.tipoEjercicio(x) === 'cardio' ? 'lc-cardio' : ''}">${imgdb ? `<img class="exdb" src="${esc(imgdb)}" alt="" loading="lazy" decoding="async">` : E.tipoEjercicio(x) === 'cardio' ? I.heart : anatomia(x)}</span>
         <b class="lc-n">${esc(x.n)}</b><span class="lc-m">${esc(E.MUSCULOS[x.m] || '')}${x.propio ? ' · Tuyo' : ''}</span></button>
       <button type="button" class="lc-ico lc-bm ${saved ? 'on' : ''}" data-act="lib-fav" data-n="${esc(x.n)}" aria-pressed="${saved}" aria-label="${saved ? 'Quitar de guardados' : 'Guardar'} ${esc(x.n)}">${BM_ICO(saved)}</button>
       <button type="button" class="lc-ico lc-info" data-act="lib-det" data-n="${esc(x.n)}" aria-label="Ver cómo se hace ${esc(x.n)}">?</button>
@@ -852,12 +852,12 @@ function libChipsHTML() {
 function libFootLabel() { const n = st.lib.sel.length; return n ? `Añadir ${n} ${n === 1 ? 'ejercicio' : 'ejercicios'}` : 'Elige ejercicios'; }
 
 function libDetHTML(x) {
-  const L = st.lib, { p, s } = E.musculosDet(x), i3 = E.img3d(x);
+  const L = st.lib, { p, s } = E.musculosDet(x), i3 = E.imgDb(x, 360);
   const used = L.mode === 'add' && L.usados.map(E.normTxt).includes(E.normTxt(x.n));
   const on = L.sel.includes(x.n);
   return `<div class="sheet-head"><button type="button" class="iconbtn" data-act="lib-det-close" aria-label="Volver">${I.back}</button><h2 class="det-title">${esc(x.n)}</h2><span style="width:36px"></span></div>
     <div class="sheet-list det">
-      <div class="det-hero ${E.tipoEjercicio(x) === 'cardio' ? 'lc-cardio' : ''}">${i3 ? `<img class="ex3d" src="${esc(i3)}" alt="${esc(x.n)}">` : E.tipoEjercicio(x) === 'cardio' ? I.heart : anatomia(x)}</div>
+      <div class="det-hero ${E.tipoEjercicio(x) === 'cardio' ? 'lc-cardio' : ''} ${i3 ? 'det-hero-db' : ''}">${i3 ? `<img class="exdb" src="${esc(i3)}" alt="${esc(x.n)}">` : E.tipoEjercicio(x) === 'cardio' ? I.heart : anatomia(x)}</div>
       <div class="det-body">
         <div class="det-mus">
           ${p.length ? `<p><span class="dot mp"></span><b>Principal:</b> ${esc(p.map((k) => E.MUSC_DET[k]).join(', '))}</p>` : ''}

@@ -1,4 +1,4 @@
-import { IMG_CUR, EXTRA, IMG3D } from './ejercicios.js';
+import { IMG_CUR, EXTRA, IMGDB } from './ejercicios.js';
 // Lógica del entrenamiento: solo cálculos y datos, sin pantalla.
 
 export const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -487,8 +487,8 @@ export const ejercicio = (n) => {
   const k = normTxt(n);
   return INDICE.get(k) || (ALIAS_EJ[k] ? INDICE.get(normTxt(ALIAS_EJ[k])) : null) || null;
 };
-// Imagen anatómica 3D del ejercicio (URL de IMG3D en ejercicios.js) o '' si aún no hay: entonces la tarjeta dibuja la figura propia.
-export const img3d = (x) => (x && IMG3D[x.n]) || '';
+// GIF de ExerciseDB del ejercicio (res 180 = miniaturas y tarjetas, 360 = ficha) o '' si aún no hay: entonces la tarjeta dibuja la figura propia.
+export const imgDb = (x, res = 360) => { const id = x && IMGDB[x.n]; return id ? `/ejercicios/db/${id}-${res}.gif` : ''; };
 // "ch,tr|sh" → { p: ['ch','tr'], s: ['sh'] }
 export const musculosDet = (x) => { const [p = '', s = ''] = String((x && x.mu) || '').split('|'); return { p: p ? p.split(',') : [], s: s ? s.split(',') : [] }; };
 // ── Recuperación muscular ──
