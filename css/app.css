@@ -1835,3 +1835,27 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .rg-det[open] summary::after { content: '−'; }
 .rg-det > p { margin: 8px 0; }
 .rg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* 2026-11-17 · Maniquí que se llena de pies a cabeza (pesajes SIN kg por zona; con zonas sale el mapa regional) */
+.cg .metric-mannequin { grid-area: s; align-self: center; }
+.metric-mannequin.big { --mh: 300px; width: 150px; height: 300px; }
+.metric-mannequin { --mh: 120px; --tint: #E0E0E0; position: relative; display: block; width: 60px; height: var(--mh); isolation: isolate; }
+.metric-mannequin.m-agua { --tint: #00E5FF; }
+.metric-mannequin.m-musculo { --tint: #00FF66; }
+.metric-mannequin.m-grasa { --tint: #FF3366; }
+.metric-mannequin.m-hueso { --tint: #E0E0E0; }
+.metric-mannequin img { display: block; width: 100%; height: var(--mh); object-fit: contain; object-position: center; user-select: none; -webkit-user-drag: none; }
+.mannequin-bg { position: absolute; inset: 0; opacity: .2; filter: grayscale(100%); }
+.mannequin-fill-container { position: absolute; bottom: 0; left: 0; width: 100%; height: var(--fill); overflow: hidden; isolation: isolate; transition: height 1s ease-out; animation: mqFill 1s ease-out; }
+.mannequin-fill-container > * { position: absolute; left: 0; bottom: 0; width: 100%; height: var(--mh); }
+.mannequin-color { background: var(--tint); -webkit-mask: var(--mq) center / contain no-repeat; mask: var(--mq) center / contain no-repeat; filter: drop-shadow(0 0 3px var(--tint)); }
+.mannequin-relief { mix-blend-mode: multiply; }
+@keyframes mqFill { from { height: 0; } }
+@media (prefers-reduced-motion: reduce) { .mannequin-fill-container { animation: none; transition: none; } }
+.det-zonas { margin: 0 auto; max-width: 280px; text-align: center; font-size: 12px; line-height: 1.4; color: var(--muted); }
+
+/* Zona con más concentración (solo con kg medidos por zona): borde y brillo del color de la métrica + fila destacada */
+.regional-overlay path.is-top { stroke: var(--color-metrica); stroke-width: 5; stroke-linejoin: round; }
+.regional-metrics-list li.is-top .rg-n, .regional-metrics-list li.is-top b { color: var(--color-metrica); }
+.regional-metrics-list li.is-top .rg-bar > i { box-shadow: 0 0 6px var(--color-metrica); }
+.rg-d strong { color: var(--ink); font-weight: 800; }

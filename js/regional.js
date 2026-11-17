@@ -44,12 +44,20 @@ export function idealPara({ datos, medido, total, kgCuerpo, sexo, tipo }) {
 export const OP_MIN = 0.12, OP_MAX = 0.9;
 export const opacidad = (ratio) => (ratio == null || !isFinite(ratio) ? 0 : Math.max(OP_MIN, Math.min(OP_MAX, 0.2 + (ratio - 0.5) * 0.7)));
 
+// Con kg MEDIDOS por zona se estira el contraste (más rango de opacidad) para que se note dónde se concentra más.
+export const opacidadMedida = (ratio) => (ratio == null || !isFinite(ratio) ? 0 : Math.max(0.1, Math.min(0.95, 0.1 + (ratio - 0.5))));
+// Zona donde más se concentra (mayor % sobre su ideal), solo con datos medidos y si destaca (>= 3 puntos sobre la siguiente).
+export function zonaTop(c) {
+  const z = REGIONES.map(({ k }) => [k, c[k].ratio]).filter(([, r]) => r != null).sort((a, b) => b[1] - a[1]);
+  return z.length > 1 && z[0][1] - z[1][1] >= 0.03 ? z[0][0] : z.length === 1 ? z[0][0] : null;
+}
+
 // { zona: { valor, ideal, ratio, op } } para las 5 zonas.
-export function calcular(datos, ideal) {
+export function calcular(datos, ideal, medido = false) {
   return Object.fromEntries(REGIONES.map(({ k }) => {
     const v = datos && typeof datos[k] === 'number' && isFinite(datos[k]) ? datos[k] : null, i = ideal && ideal[k] > 0 ? ideal[k] : null;
     const ratio = v != null && i != null ? v / i : null;
-    return [k, { valor: v, ideal: i, ratio, op: opacidad(ratio) }];
+    return [k, { valor: v, ideal: i, ratio, op: (medido ? opacidadMedida : opacidad)(ratio) }];
   }));
 }
 
@@ -86,9 +94,9 @@ const srcDe = (sexo) => `/models/maniqui-${sx(sexo)}-1.png`;
 
 // Maniquí con las 5 zonas. Las zonas nacen con opacidad 0 (CSS) y `pintarMapas` las enciende tras pintar, para que se vea la transición.
 // `datos` (kg por zona) e `ideal` (kg por zona) viajan en `data-regional`; sin ellos el cuerpo queda apagado (sin datos).
-export function mapaHTML({ tipo, sexo, datos = null, ideal = null, compacto = false, conNodos = false, titulo = '' }) {
+export function mapaHTML({ tipo, sexo, datos = null, ideal = null, medido = false, compacto = false, conNodos = false, titulo = '' }) {
   const d = zonas(sexo), src = srcDe(sexo);
-  const info = datos ? ` data-regional="${esc(JSON.stringify({ tipo, datos, ideal }))}"` : '';
+  const info = datos ? ` data-regional="${esc(JSON.stringify({ tipo, datos, ideal, medido: !!medido }))}"` : '';
   return `<div class="regional-mannequin-container m-${tipo}${compacto ? ' compacto' : ''}" style="--mq:url(${src})"${info} role="img" aria-label="${esc(titulo || `Mapa regional de ${tipo}`)}">
     <img class="regional-bg" src="${src}" alt="" draggable="false" decoding="async">
     <svg class="regional-overlay" viewBox="0 0 500 800" aria-hidden="true" focusable="false">${REGIONES.map(({ r }) => `<path data-region="${r}" d="${d[r]}"/>`).join('')}</svg>
@@ -99,15 +107,15 @@ export function mapaHTML({ tipo, sexo, datos = null, ideal = null, compacto = fa
 // Tarjeta de dos columnas: maniquí a la izquierda (~120 px) y lista de las 5 zonas a la derecha.
 // `medido` = el desglose viene de la báscula; si no, es un reparto estimado y se avisa.
 export function tarjetaHTML({ tipo, sexo, datos, ideal, medido, titulo }) {
-  const c = calcular(datos, ideal);
+  const c = calcular(datos, ideal, medido), top = medido ? zonaTop(c) : null;
   return `<section class="regional-card m-${tipo}" aria-label="${esc(titulo)}">
-    ${mapaHTML({ tipo, sexo, datos, ideal, conNodos: true, titulo })}
+    ${mapaHTML({ tipo, sexo, datos, ideal, medido, conNodos: true, titulo })}
     <div class="regional-side">
       <ul class="regional-metrics-list">${REGIONES.map(({ k, n }) => {
         const z = c[k], pct = z.ratio != null ? Math.round(z.ratio * 100) : null;
-        return `<li data-zona="${k}"><span class="rg-n">${n}</span><b class="num">${z.valor != null ? nf(z.valor, 1) : '—'}<em>kg</em></b>
+        return `<li data-zona="${k}"${k === top ? ' class="is-top"' : ''}><span class="rg-n">${n}</span><b class="num">${z.valor != null ? nf(z.valor, 1) : '—'}<em>kg</em></b>
           <i class="rg-bar" aria-hidden="true"><i style="width:${z.ratio != null ? Math.min(100, z.ratio * 66.7).toFixed(0) : 0}%;opacity:${(0.35 + z.op * 0.65).toFixed(2)}"></i></i>
-          ${medido && pct != null ? `<span class="rg-d">${pct} % del ideal</span>` : ''}</li>`;
+          ${medido && pct != null ? `<span class="rg-d">${pct} % del ideal${k === top ? ' · <strong>mayor concentración</strong>' : ''}</span>` : ''}</li>`;
       }).join('')}</ul>
       <p class="regional-nota">${medido ? 'Desglose medido por tu báscula.' : 'Reparto estimado a partir de tu total y de proporciones típicas; no es una medición por zonas.'}</p>
     </div>
@@ -117,12 +125,12 @@ export function tarjetaHTML({ tipo, sexo, datos, ideal, medido, titulo }) {
 /* ---------- DOM ---------- */
 // Pone el color de la métrica y la opacidad de cada zona. `datos` = kg por zona ({ tronco: 32.6, brazoI: 3.6, … }),
 // `tipo` = 'musculo' | 'grasa' | 'agua' | 'hueso'. `ideal` = kg ideal por zona (si falta, no se enciende ninguna zona).
-export function actualizarMapaRegional(datos, tipo, { ideal = null, contenedor = null } = {}) {
+export function actualizarMapaRegional(datos, tipo, { ideal = null, medido = false, contenedor = null } = {}) {
   const cont = contenedor || document.querySelector('.regional-mannequin-container');
   if (!cont) return;
   for (const el of [cont, cont.closest('.regional-card')]) if (el) { el.className = el.className.replace(/\bm-\w+/g, '').trim() + ` m-${tipo}`; } // el color base sale del CSS (--color-metrica)
-  const c = calcular(datos, ideal);
-  for (const { k, r } of REGIONES) { const p = cont.querySelector(`path[data-region="${r}"]`); if (p) p.style.opacity = c[k].op.toFixed(2); }
+  const c = calcular(datos, ideal, medido), top = medido ? zonaTop(c) : null;
+  for (const { k, r } of REGIONES) { const p = cont.querySelector(`path[data-region="${r}"]`); if (p) { p.style.opacity = c[k].op.toFixed(2); p.classList.toggle('is-top', k === top); } }
 }
 
 // Se llama tras cada render(): enciende todos los mapas de la pantalla con su transición.
@@ -130,5 +138,5 @@ export function pintarMapas(raiz) {
   const mapas = raiz.querySelectorAll('.regional-mannequin-container[data-regional]');
   if (!mapas.length) return;
   void raiz.offsetWidth; // fija opacidad 0 antes de cambiarla: así la transición se ve
-  mapas.forEach((el) => { try { const r = JSON.parse(el.dataset.regional); actualizarMapaRegional(r.datos, r.tipo, { ideal: r.ideal, contenedor: el }); } catch (e) { /* datos ilegibles: se queda apagado */ } });
+  mapas.forEach((el) => { try { const r = JSON.parse(el.dataset.regional); actualizarMapaRegional(r.datos, r.tipo, { ideal: r.ideal, medido: r.medido, contenedor: el }); } catch (e) { /* datos ilegibles: se queda apagado */ } });
 }

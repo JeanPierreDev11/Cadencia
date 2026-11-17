@@ -1029,6 +1029,23 @@ function regionalDe(c, w) {
   return { tipo: c.k, sexo, medido, datos, ideal: RG.idealPara({ datos, medido, total, kgCuerpo: w.kg, sexo, tipo: c.k }) };
 }
 
+// Maniquí 3D que se llena de abajo arriba con el % indicado (el relieve sale de la imagen; el color, de la métrica: agua, músculo, grasa, hueso).
+// Capas: fondo gris apagado · color liso recortado con la forma del cuerpo · la misma imagen en gris multiplicada encima (da el relieve).
+// Se usa cuando el pesaje NO trae kg por zona; con el desglose por zonas se pinta el mapa regional (`RG`).
+function silueta(fill, k, cls = '') {
+  const f = Math.max(0, Math.min(100, fill == null ? 0 : fill)), src = `/models/maniqui-${st.profile && st.profile.sexo === 'mujer' ? 'mujer' : 'hombre'}-1.png`;
+  return `<span class="metric-mannequin m-${k} ${cls}" style="--fill:${f.toFixed(1)}%;--mq:url(${src})" role="img" aria-hidden="true">
+    <img class="mannequin-bg" src="${src}" alt="" draggable="false" decoding="async">
+    <span class="mannequin-fill-container"><span class="mannequin-color"></span><img class="mannequin-relief" src="${src}" alt="" draggable="false" decoding="async"></span>
+  </span>`;
+}
+
+// Cabecera común: con kg por zona (`medido`) → mapa regional; si no → el maniquí que se llena de pies a cabeza con el %.
+const figuraComp = (c, w, p, compacto) => {
+  const rg = w ? regionalDe(c, w) : null;
+  return rg && rg.medido ? RG.mapaHTML({ ...rg, compacto }) : silueta(p == null ? 0 : Math.max(p, compacto ? 6 : 4), c.k, compacto ? '' : 'big');
+};
+
 // Dial semicircular con el peso actual en el centro.
 function dialPeso(ws, objetivo) {
   const cur = ws.length ? ws[ws.length - 1].kg : null, prev = ws.length > 1 ? ws[ws.length - 2].kg : null;
@@ -1058,10 +1075,10 @@ function compCardHTML(ws) {
   const ord = ['agua', 'musculo', 'grasa', 'hueso'].map((k) => COMP.find((c) => c.k === k));
   return `<div class="cgrid">${ord.map((c) => {
     const con = ws.filter((w) => w[c.k] != null);
-    if (!con.length) return `<button type="button" class="cg" data-act="comp-ver" data-v="${c.k}"><span class="label">${c.t}</span>${RG.mapaHTML({ ...regionalDe(c, null), compacto: true })}<span class="val num">—</span><span class="hint">Sin datos todavía</span></button>`;
+    if (!con.length) return `<button type="button" class="cg" data-act="comp-ver" data-v="${c.k}"><span class="label">${c.t}</span>${silueta(0, c.k)}<span class="val num">—</span><span class="hint">Sin datos todavía</span></button>`;
     const last = con[con.length - 1], p = pctOf(c, last), k = kgOf(c, last);
     const sec = c.u === '%' ? (k != null ? `≈ ${nf(k, 1)} kg` : '') : (p != null ? `${nf(p, 1)} % del peso` : '');
-    return `<button type="button" class="cg" data-act="comp-ver" data-v="${c.k}"><span class="label">${c.t}</span>${RG.mapaHTML({ ...regionalDe(c, last), compacto: true })}
+    return `<button type="button" class="cg" data-act="comp-ver" data-v="${c.k}"><span class="label">${c.t}</span>${figuraComp(c, last, p, true)}
       <span class="val num">${nf(last[c.k], 1)}<em>${c.u}</em></span><span class="hint">${sec}</span></button>`;
   }).join('')}</div>`;
 }
@@ -1086,7 +1103,9 @@ function pesoDetalleHTML() {
   }
   return `<section class="det">${back}
     <div class="det-val num">${top}</div><p class="det-sub">${sub}</p>
-    <div class="det-sil">${RG.tarjetaHTML({ ...regionalDe(c, last), titulo: `Mapa regional de ${c.t.toLowerCase()}` })}</div>
+    ${(() => { const rg = regionalDe(c, last); return rg.medido
+      ? `<div class="det-sil">${RG.tarjetaHTML({ ...rg, titulo: `Mapa regional de ${c.t.toLowerCase()}` })}</div>`
+      : `<div class="det-sil">${silueta(p == null ? 0 : Math.max(p, 4), c.k, 'big')}</div>${RG_MEDIDAS.some((m) => m.k === c.k) ? `<p class="det-zonas">Sin desglose por zonas. Apúntalo en «Añadir registro» (Músculo o Grasa por zonas) para ver aquí dónde se concentra.</p>` : ''}`; })()}
     <div class="seg" role="group" aria-label="Forma de verlo">${[['kg', 'En kilogramos'], ['pct', 'Como porcentaje'], ['cambio', '¿Qué cambió?']].map(([v, t]) => `<button type="button" data-act="comp-modo" data-v="${v}" aria-pressed="${modo === v}">${t}</button>`).join('')}</div>
   </section>`;
 }
