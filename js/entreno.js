@@ -487,8 +487,12 @@ export const ejercicio = (n) => {
   const k = normTxt(n);
   return INDICE.get(k) || (ALIAS_EJ[k] ? INDICE.get(normTxt(ALIAS_EJ[k])) : null) || null;
 };
-// Imagen anatómica 3D del ejercicio (URL de IMG3D en ejercicios.js) o '' si aún no hay: entonces la tarjeta dibuja la figura propia.
-export const img3d = (x) => (x && IMG3D[x.n]) || '';
+// Ilustración 3D del ejercicio (IMG3D en ejercicios.js) o '' si aún no hay: entonces la tarjeta dibuja la figura propia.
+// sexo: 'mujer' → modelo de mujer; cualquier otro → hombre. fase: 'fin' (posición final, la que se reconoce mejor) o 'inicio'.
+export const img3d = (x, sexo, fase = 'fin') => {
+  const id = x && IMG3D[x.n];
+  return id ? `/ejercicios/${id}-${sexo === 'mujer' ? 'm' : 'h'}-${fase}.webp` : '';
+};
 // "ch,tr|sh" → { p: ['ch','tr'], s: ['sh'] }
 export const musculosDet = (x) => { const [p = '', s = ''] = String((x && x.mu) || '').split('|'); return { p: p ? p.split(',') : [], s: s ? s.split(',') : [] }; };
 // ── Recuperación muscular ──
