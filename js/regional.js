@@ -30,14 +30,14 @@ export const idealRegional = (kgCuerpo, sexo, tipo) => Object.fromEntries(REGION
 // ¿Trae el desglose completo y válido? (kg por zona)
 export const completo = (d) => !!d && REGIONES.every(({ k }) => typeof d[k] === 'number' && isFinite(d[k]) && d[k] >= 0);
 
-// Ideal en kg de cada zona para pintar. Estimado: el reparto típico del ideal de tu peso. Medido: las básculas segmentales no siempre miden
-// «lo mismo» que el total del pesaje (p. ej. masa magra vs. masa muscular), así que se compara el REPARTO medido con el típico y se multiplica
-// por tu nivel global (total / ideal). Así, con un reparto típico, medido y estimado dan lo mismo, y un lado más fuerte que otro sí se nota.
+// Ideal en kg de cada zona para pintar. Estimado: el reparto típico del ideal de tu peso. Medido: se compara el REPARTO medido con el típico
+// (cuánto pesa cada zona sobre tu total frente a lo habitual), SIN mirar si el total es alto o bajo: las básculas miden «cosas distintas»
+// (masa magra, masa muscular…) y un total alto saturaba todas las zonas (p. ej. 182 %). Así 100 % = reparto típico, y se nota dónde te concentras más.
 export function idealPara({ datos, medido, total, kgCuerpo, sexo, tipo }) {
   const base = idealRegional(kgCuerpo, sexo, tipo);
   if (!medido) return base;
-  const idealTotal = kgCuerpo * IDEAL_PCT[sx(sexo)][tipo] / 100, nivel = idealTotal > 0 ? total / idealTotal : 0, suma = REGIONES.reduce((a, { k }) => a + datos[k], 0);
-  return nivel > 0 && suma > 0 ? Object.fromEntries(REGIONES.map(({ k }) => [k, (suma * REPARTO[sx(sexo)][tipo][k]) / nivel])) : base;
+  const suma = REGIONES.reduce((a, { k }) => a + datos[k], 0);
+  return suma > 0 ? Object.fromEntries(REGIONES.map(({ k }) => [k, suma * REPARTO[sx(sexo)][tipo][k]])) : base;
 }
 
 // Opacidad según valor/ideal: 0,5 → 0,20 · 1 (justo el ideal) → 0,55 · 1,5 o más → 0,90. Con poca masa casi no se ve; con mucha, intenso.
@@ -45,8 +45,9 @@ export const OP_MIN = 0.12, OP_MAX = 0.9;
 export const opacidad = (ratio) => (ratio == null || !isFinite(ratio) ? 0 : Math.max(OP_MIN, Math.min(OP_MAX, 0.2 + (ratio - 0.5) * 0.7)));
 
 // Con kg MEDIDOS por zona se estira el contraste (más rango de opacidad) para que se note dónde se concentra más.
-export const opacidadMedida = (ratio) => (ratio == null || !isFinite(ratio) ? 0 : Math.max(0.1, Math.min(0.95, 0.1 + (ratio - 0.5))));
-// Zona donde más se concentra (mayor % sobre su ideal), solo con datos medidos y si destaca (>= 3 puntos sobre la siguiente).
+// ratio = reparto de la zona / reparto típico (1 = habitual): 0,8 → .25 · 1 → .60 · 1,2 → .95.
+export const opacidadMedida = (ratio) => (ratio == null || !isFinite(ratio) ? 0 : Math.max(0.15, Math.min(0.95, 0.6 + (ratio - 1) * 1.75)));
+// Zona donde más se concentra (mayor % sobre el reparto habitual), solo con datos medidos y si destaca (>= 3 puntos sobre la siguiente).
 export function zonaTop(c) {
   const z = REGIONES.map(({ k }) => [k, c[k].ratio]).filter(([, r]) => r != null).sort((a, b) => b[1] - a[1]);
   return z.length > 1 && z[0][1] - z[1][1] >= 0.03 ? z[0][0] : z.length === 1 ? z[0][0] : null;
@@ -115,9 +116,9 @@ export function tarjetaHTML({ tipo, sexo, datos, ideal, medido, titulo }) {
         const z = c[k], pct = z.ratio != null ? Math.round(z.ratio * 100) : null;
         return `<li data-zona="${k}"${k === top ? ' class="is-top"' : ''}><span class="rg-n">${n}</span><b class="num">${z.valor != null ? nf(z.valor, 1) : '—'}<em>kg</em></b>
           <i class="rg-bar" aria-hidden="true"><i style="width:${z.ratio != null ? Math.min(100, z.ratio * 66.7).toFixed(0) : 0}%;opacity:${(0.35 + z.op * 0.65).toFixed(2)}"></i></i>
-          ${medido && pct != null ? `<span class="rg-d">${pct} % del ideal${k === top ? ' · <strong>mayor concentración</strong>' : ''}</span>` : ''}</li>`;
+          ${medido && pct != null ? `<span class="rg-d">${pct} % de lo habitual${k === top ? ' · <strong>mayor concentración</strong>' : ''}</span>` : ''}</li>`;
       }).join('')}</ul>
-      <p class="regional-nota">${medido ? 'Desglose medido por tu báscula.' : 'Reparto estimado a partir de tu total y de proporciones típicas; no es una medición por zonas.'}</p>
+      <p class="regional-nota">${medido ? 'Desglose medido por tu báscula. Cada zona se compara con el reparto habitual: 100 % = lo normal; resalta dónde te concentras más.' : 'Reparto estimado a partir de tu total y de proporciones típicas; no es una medición por zonas.'}</p>
     </div>
   </section>`;
 }
