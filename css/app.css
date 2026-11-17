@@ -1930,3 +1930,15 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .main.has-live { padding-bottom: calc(var(--safe-b) + 160px); }
 /* Con la barra «Guardar cambios» (fija sobre la navegación) a la vista, sí hace falta sitio para que no tape el final. */
 .main:has(.savebar:not([hidden])) { padding-bottom: calc(var(--safe-b) + 150px); }
+
+/* 2026-11-17 · Entreno activo: miniatura/nombre que abre la ficha y serie completada */
+.lex-view { min-height: 52px; }
+.lex-view:active .lex-t b { color: var(--accent-text); }
+.lex-view:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; border-radius: 2px; }
+.lset.is-done, .lset.is-w.is-done { background: color-mix(in srgb, var(--ok) 9%, transparent); box-shadow: inset 3px 0 0 color-mix(in srgb, var(--ok) 65%, transparent); }
+.lset.is-w.is-done { box-shadow: none; }
+.lset.is-done .input { background: transparent; border-color: transparent; opacity: .6; pointer-events: none; user-select: none; -webkit-user-select: none; transition: opacity .15s, background .15s; }
+.lset.is-done .input:disabled { -webkit-text-fill-color: currentColor; opacity: .6; }
+.lset.is-done .prev, .lset.is-done .sn { opacity: .65; }
+.lset.is-done .c-in i { opacity: .6; }
+.lset.is-done .chk[aria-pressed="true"] { background: var(--ok); color: #000; }

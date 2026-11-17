@@ -1226,18 +1226,18 @@ function cardioBlockHTML(e, i, plano) {
   const prevTxt = cinta ? (e.prev.length ? `${e.prev.length} ${e.prev.length === 1 ? 'intervalo' : 'intervalos'} (${e.prev.slice(0, 3).map(uno).join(' | ')}${e.prev.length > 3 ? ' …' : ''})` : '') : last ? uno(last) : '';
   const cols = campos.length, nom = cinta ? 'intervalo' : 'bloque';
   return `<section class="lex lex-cardio">
-    <div class="lex-head"><span class="thumb thumb-cardio" aria-hidden="true">${I.heart}</span>
-      <span class="lex-t"><b>${esc(e.n)}</b><span class="small muted">Cardio${e.obj ? ` · Objetivo ${esc(e.obj)}` : ''}</span></span>
+    <div class="lex-head"><button type="button" class="rx-view lex-view" data-act="ex-view" data-n="${esc(e.n)}" aria-label="Ver cómo se hace ${esc(e.n)}"><span class="thumb thumb-cardio" aria-hidden="true">${I.heart}</span>
+      <span class="lex-t"><b>${esc(e.n)}</b><span class="small muted">Cardio${e.obj ? ` · Objetivo ${esc(e.obj)}` : ''}</span></span></button>
       <button type="button" class="iconbtn" data-act="live-swap" data-v="${i}" aria-label="Cambiar ${esc(e.n)}">${I.swap}</button>
       <button type="button" class="iconbtn" data-act="live-del" data-v="${i}" aria-label="Quitar ${esc(e.n)}">${I.trash}</button></div>
     ${prevTxt ? `<p class="small muted c-prev">La última vez: ${esc(prevTxt)}</p>` : ''}
     <div class="ltab cardio c${cols} ${cinta ? 'cinta' : ''} ${plano ? 'simple' : ''}">
       <div class="lrow-h"><span>${cinta ? 'Int.' : 'Bloque'}</span>${campos.map((c) => `<span>${c.t}</span>`).join('')}${plano ? '' : '<span></span>'}</div>
-      ${e.s.map((s, j) => { const ref = refCardio(e, j); return `<div class="lset ${!plano && hecha(s) ? 'on' : ''}"><span class="num sn">${j + 1}</span>
+      ${e.s.map((s, j) => { const ref = refCardio(e, j); const fin = !plano && hecha(s), lk = fin ? ' readonly tabindex="-1" aria-readonly="true"' : ''; return `<div class="lset ${fin ? 'on is-done' : ''}"><span class="num sn">${j + 1}</span>
         ${campos.map((c) => (c.k === 'int'
-          ? `<select class="input c-int" data-lv="${i}.${j}.int" aria-label="Ritmo del bloque ${j + 1} de ${esc(e.n)}">${Object.entries(E.INTENSIDADES).map(([k, t]) => `<option value="${k}" ${s.int === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`
-          : `<label class="c-in"><input class="input" data-lv="${i}.${j}.${c.k}" inputmode="${c.im}"${c.step ? ` data-step="${c.step}"` : ''} value="${esc(s[c.k] || '')}" placeholder="${esc(ref && lleno(E.cv(ref, c.k)) ? valTxt(E.cv(ref, c.k)) : c.ph)}" aria-label="${esc(c.t)} del ${nom} ${j + 1} de ${esc(e.n)}">${c.u ? `<i aria-hidden="true">${c.u}</i>` : ''}</label>`)).join('')}
-        ${plano ? '' : `<button type="button" class="chk" data-act="live-done" data-v="${i}.${j}" aria-pressed="${hecha(s)}" aria-label="Marcar ${nom} ${j + 1} como hecho">${I.check}</button>`}
+          ? `<select class="input c-int" data-lv="${i}.${j}.int"${fin ? ' disabled' : ''} aria-label="Ritmo del bloque ${j + 1} de ${esc(e.n)}">${Object.entries(E.INTENSIDADES).map(([k, t]) => `<option value="${k}" ${s.int === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`
+          : `<label class="c-in"><input class="input" data-lv="${i}.${j}.${c.k}" inputmode="${c.im}"${c.step ? ` data-step="${c.step}"` : ''} value="${esc(s[c.k] || '')}" placeholder="${esc(ref && lleno(E.cv(ref, c.k)) ? valTxt(E.cv(ref, c.k)) : c.ph)}"${lk} aria-label="${esc(c.t)} del ${nom} ${j + 1} de ${esc(e.n)}">${c.u ? `<i aria-hidden="true">${c.u}</i>` : ''}</label>`)).join('')}
+        ${plano ? '' : `<button type="button" class="chk" data-act="live-done" data-v="${i}.${j}" aria-pressed="${hecha(s)}" aria-label="${hecha(s) ? 'Desmarcar' : 'Marcar'} ${nom} ${j + 1} como hecho">${I.check}</button>`}
       </div>`; }).join('')}
     </div>
     <div class="lex-foot"><button type="button" class="btn quiet small" data-act="live-set-add" data-v="${i}">${I.plus} Añadir ${nom}</button>
@@ -1252,20 +1252,20 @@ function viewLive() {
     const x = E.ejercicio(e.n), uniOk = E.puedeUnilateral(e.n), conPeso = !x || x.eq !== 'corporal';
     return `<section class="lex ${i > 0 && L.ex[i - 1].superset ? 'ss-next' : ''} ${e.superset ? 'ss-first' : ''}">
       ${i > 0 && L.ex[i - 1].superset ? '<span class="ss-tag">Superserie</span>' : ''}
-      <div class="lex-head">${exThumb(x || { eq: 'corporal' })}
-        <span class="lex-t"><b>${esc(e.n)}</b><span class="small muted">${x ? E.MUSCULOS[x.m] : ''}${e.obj ? ` · Objetivo ${esc(e.obj)}` : ''}</span>${esPro() ? `<span class="orm" data-orm="${i}" ${ormHTML(e) ? '' : 'hidden'}>${ormHTML(e)}</span>` : ''}</span>
+      <div class="lex-head"><button type="button" class="rx-view lex-view" data-act="ex-view" data-n="${esc(e.n)}" aria-label="Ver cómo se hace ${esc(e.n)}">${exThumb(x || { eq: 'corporal' })}
+        <span class="lex-t"><b>${esc(e.n)}</b><span class="small muted">${x ? E.MUSCULOS[x.m] : ''}${e.obj ? ` · Objetivo ${esc(e.obj)}` : ''}</span>${esPro() ? `<span class="orm" data-orm="${i}" ${ormHTML(e) ? '' : 'hidden'}>${ormHTML(e)}</span>` : ''}</span></button>
         ${!L.edit && conPeso ? `<button type="button" class="warm-btn ${pro ? '' : 'is-locked'}" data-act="live-warm" data-v="${i}" aria-label="Calentamiento para ${esc(e.n)}${pro ? '' : ' (Cadencia Pro)'}">🔥 Calentar${pro ? '' : ' <span class="protag">Pro</span>'}</button>` : ''}
         <button type="button" class="iconbtn" data-act="live-swap" data-v="${i}" aria-label="Cambiar ${esc(e.n)}">${I.swap}</button>
         <button type="button" class="iconbtn" data-act="live-del" data-v="${i}" aria-label="Quitar ${esc(e.n)}">${I.trash}</button></div>
       ${uniOk ? `<div class="seg mini" role="group" aria-label="Lados"><button type="button" data-act="live-uni" data-v="${i}" data-u="0" aria-pressed="${!e.uni}">Ambos lados</button><button type="button" data-act="live-uni" data-v="${i}" data-u="1" aria-pressed="${!!e.uni}">Unilateral</button></div>` : ''}
       <div class="ltab ${plano ? 'simple' : ''}">
         <div class="lrow-h"><span>Serie</span><span>Anterior</span><span>kg</span><span>${e.uni ? 'Reps/lado' : 'Reps'}</span>${plano ? '' : '<span></span>'}</div>
-        ${e.s.map((s, j) => { const wi = idxTrabajo(e, j), p = s.w ? null : e.prev[wi]; const sg = sugSerie(e, j); const phKg = sg ? (sg.kg ? fmtKg(sg.kg) : 'kg') : p && p.kg ? fmtKg(p.kg) : '–'; const phR = sg ? String(sg.reps) : p ? String(p.reps) : s.w ? '–' : e.objReps || '–'; const pc = sg ? ' ph-sug' : ''; const sug = plano || s.w ? '' : sugerencia(e, s); return `<div class="lset ${s.w ? 'is-w' : ''} ${!plano && s.done ? 'on' : ''}">
+        ${e.s.map((s, j) => { const wi = idxTrabajo(e, j), p = s.w ? null : e.prev[wi]; const sg = sugSerie(e, j); const phKg = sg ? (sg.kg ? fmtKg(sg.kg) : 'kg') : p && p.kg ? fmtKg(p.kg) : '–'; const phR = sg ? String(sg.reps) : p ? String(p.reps) : s.w ? '–' : e.objReps || '–'; const pc = sg ? ' ph-sug' : ''; const sug = plano || s.w ? '' : sugerencia(e, s); const fin = !plano && !!s.done, lk = fin ? ' readonly tabindex="-1" aria-readonly="true"' : ''; return `<div class="lset ${s.w ? 'is-w' : ''} ${fin ? 'on is-done' : ''}">
           ${s.w ? '<span class="num sn sn-w" title="Calentamiento" aria-label="Serie de calentamiento">W</span>' : `<span class="num sn">${wi + 1}</span>`}
           <span class="prev">${p ? `${p.kg ? fmtKg(p.kg) + ' × ' : ''}${p.reps}${p.uni ? ' /lado' : ''}` : '—'}</span>
-          <input class="input${pc}" data-lv="${i}.${j}.kg" inputmode="decimal" value="${esc(s.kg)}" placeholder="${esc(phKg)}" aria-label="Kilos serie ${j + 1} de ${esc(e.n)}">
-          <input class="input${pc}" data-lv="${i}.${j}.reps" inputmode="numeric" value="${esc(s.reps)}" placeholder="${esc(phR)}" aria-label="Repeticiones serie ${j + 1} de ${esc(e.n)}">
-          ${plano ? '' : `<button type="button" class="chk" data-act="live-done" data-v="${i}.${j}" aria-pressed="${s.done}" aria-label="Marcar serie ${j + 1} como hecha">${I.check}</button>`}
+          <input class="input${pc}" data-lv="${i}.${j}.kg" inputmode="decimal" value="${esc(s.kg)}" placeholder="${esc(phKg)}"${lk} aria-label="Kilos serie ${j + 1} de ${esc(e.n)}">
+          <input class="input${pc}" data-lv="${i}.${j}.reps" inputmode="numeric" value="${esc(s.reps)}" placeholder="${esc(phR)}"${lk} aria-label="Repeticiones serie ${j + 1} de ${esc(e.n)}">
+          ${plano ? '' : `<button type="button" class="chk" data-act="live-done" data-v="${i}.${j}" aria-pressed="${!!s.done}" aria-label="${s.done ? 'Desmarcar' : 'Marcar'} serie ${j + 1} como hecha">${I.check}</button>`}
         </div>${s.w ? '' : bestiaHTML(e, i, j, s)}${sug ? `<p class="lsug">${sug}</p>` : ''}`; }).join('')}
       </div>
       <div class="lex-foot"><button type="button" class="btn quiet small" data-act="live-set-add" data-v="${i}">${I.plus} Añadir serie</button>
@@ -1932,7 +1932,9 @@ root.addEventListener('input', (e) => {
   if (st.live && t.dataset.lv) {
     const [i, j, k] = t.dataset.lv.split('.');
     if (k === 'rir') { if (!esPro()) return; t.value = t.value.replace(/[^0-5]/g, '').slice(-1); }
-    st.live.ex[Number(i)].s[Number(j)][k] = t.value; liveSave();
+    const q = st.live.ex[Number(i)].s[Number(j)];
+    if (k !== 'rir' && !livePlano(st.live) && hecha(q)) { t.value = q[k] == null ? '' : q[k]; return; } // serie completada: bloqueada hasta desmarcar el ✓
+    q[k] = t.value; liveSave();
     const tt = liveTotals(), vEl = document.getElementById('live-vol'); if (vEl) vEl.textContent = `${nf(tt.vol)} kg`;
     const oEl = esPro() && root.querySelector(`[data-orm="${i}"]`);
     if (oEl) { const h = ormHTML(st.live.ex[Number(i)]); oEl.textContent = h; oEl.hidden = !h; }
