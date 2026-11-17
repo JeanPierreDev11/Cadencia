@@ -820,12 +820,13 @@ function libItems() {
 }
 
 const BM_ICO = (on) => `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg>`;
-const favs = () => st.profile.ejFavs || [];
+// Los favoritos guardados con un nombre antiguo (ejercicio repetido que se retiró) pasan a su nombre nuevo.
+const favs = () => [...new Set((st.profile.ejFavs || []).map(E.canon))];
 function libListHTML() {
   const L = st.lib, items = libItems();
   if (!items.length) return `<div class="empty"><b>${L.m === 'fav' && !L.q ? 'Aún no has guardado ejercicios' : 'No hay ejercicios así'}</b><span>${L.m === 'fav' && !L.q ? 'Toca el marcador de una tarjeta para guardarlo aquí.' : 'Prueba otro grupo o equipo, o créalo con «Crear».'}</span></div>`;
   const grouped = !L.q && (L.m === 'todos' || L.m === 'rec');
-  const used = new Set(L.usados.map(E.normTxt)), fv = favs();
+  const used = new Set(L.usados.map((n) => E.normTxt(E.canon(n)))), fv = favs();
   let prev = '', out = `<p class="small muted lcount">${items.length} ${items.length === 1 ? 'ejercicio' : 'ejercicios'}</p>`;
   for (const x of items) {
     if (grouped && x.m !== prev) { out += `<div class="lgroup">${E.MUSCULOS[x.m]}</div>`; prev = x.m; }
@@ -853,7 +854,7 @@ function libFootLabel() { const n = st.lib.sel.length; return n ? `Añadir ${n} 
 
 function libDetHTML(x) {
   const L = st.lib, { p, s } = E.musculosDet(x), i3 = E.imgDb(x, 360);
-  const used = L.mode === 'add' && L.usados.map(E.normTxt).includes(E.normTxt(x.n));
+  const used = L.mode === 'add' && L.usados.map((n) => E.normTxt(E.canon(n))).includes(E.normTxt(x.n));
   const on = L.sel.includes(x.n);
   return `<div class="sheet-head"><button type="button" class="iconbtn" data-act="lib-det-close" aria-label="Volver">${I.back}</button><h2 class="det-title">${esc(x.n)}</h2><span style="width:36px"></span></div>
     <div class="sheet-list det">

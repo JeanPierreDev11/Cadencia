@@ -1,4 +1,4 @@
-import { IMG_CUR, EXTRA, IMGDB, DBX } from './ejercicios.js';
+import { IMG_CUR, EXTRA, IMGDB, DBX, VIEJOS } from './ejercicios.js';
 // Lógica del entrenamiento: solo cálculos y datos, sin pantalla.
 
 export const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -486,10 +486,13 @@ export function buscarEjercicios(items, q, extra = () => '') {
 }
 export const TODOS_EJERCICIOS = BIBLIOTECA.map((x) => x.n);
 export const normTxt = (s) => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+// Ejercicios antiguos que se retiraron por estar repetidos en ExerciseDB (js/ejercicios-db.js): su nombre sigue enlazando con el nuevo.
+const ALIAS_VIEJOS = Object.fromEntries(Object.entries(VIEJOS).map(([v, n]) => [normTxt(v), n]));
 export const ejercicio = (n) => {
   if (!INDICE) { INDICE = new Map(); for (const x of todosEjercicios()) { const k = normTxt(x.n); if (!INDICE.has(k)) INDICE.set(k, x); } }
   const k = normTxt(n);
-  return INDICE.get(k) || (ALIAS_EJ[k] ? INDICE.get(normTxt(ALIAS_EJ[k])) : null) || null;
+  const al = ALIAS_EJ[k] || ALIAS_VIEJOS[k];
+  return INDICE.get(k) || (al ? INDICE.get(normTxt(al)) : null) || null;
 };
 // GIF de ExerciseDB del ejercicio (res 180 = miniaturas y tarjetas, 360 = ficha) o '' si aún no hay: entonces la tarjeta dibuja la figura propia.
 export const imgDb = (x, res = 360) => { const id = x && IMGDB[x.n]; return id ? `/ejercicios/db/${id}-${res}.webp` : ''; };

@@ -12,6 +12,7 @@ const catalogo = leer('catalogo.json');
 const nombres = leer('nombres-es.json');
 const principales = leer('emparejamiento.json');   // ejercicios principales de la app → id (revisados a mano)
 const auto = leer('emparejamiento-auto.json');     // el resto de la app → id (parecido alto)
+const dup = leer('duplicados.json');               // repetidos: «principales» toman la imagen; «viejos» se retiran y quedan como alias del nuevo
 
 // Nombres que ya existen en la app (sin las entradas de ExerciseDB generadas antes)
 const { BIBLIOTECA } = await import(join(RAIZ, 'js', 'entreno.js'));
@@ -25,6 +26,7 @@ for (const n of ['Caminadora / Cinta de correr', 'Correr al aire libre', 'Bicicl
 const IMGDB = {};
 const cubiertos = new Set();
 for (const mapa of [auto, principales]) for (const [n, id] of Object.entries(mapa)) { IMGDB[n] = id; cubiertos.add(id); }
+for (const [n, id] of Object.entries(dup.principales)) { IMGDB[n] = id; cubiertos.add(id); }
 
 const GRUPO = { pectorals: 'pecho', lats: 'espalda', 'upper back': 'espalda', spine: 'espalda', traps: 'espalda', 'levator scapulae': 'espalda', delts: 'hombro', biceps: 'biceps', triceps: 'triceps', forearms: 'antebrazo', quads: 'cuadriceps', hamstrings: 'femoral', glutes: 'gluteo', calves: 'gemelos', abs: 'core', adductors: 'aductores', abductors: 'abductores', 'serratus anterior': 'pecho' };
 const COD = { pectorals: 'ch', lats: 'la', 'upper back': 'mb', spine: 'lb', traps: 'tp', 'levator scapulae': 'ne', delts: 'sh', biceps: 'bi', triceps: 'tr', forearms: 'fo', quads: 'qu', hamstrings: 'ha', glutes: 'gl', calves: 'ca', abs: 'ab', adductors: 'ad', abductors: 'abd', 'serratus anterior': 'ch' };
@@ -99,6 +101,14 @@ for (const e of catalogo) {
   IMGDB[n] = e.id;
 }
 nuevos.sort((a, b) => a[0].localeCompare(b[0], 'es'));
+// Ejercicios antiguos repetidos: su nombre pasa a ser alias del nuevo (así el historial y las rutinas guardadas siguen enlazadas).
+const VIEJOS = {};
+for (const [viejo, id] of Object.entries(dup.viejos)) {
+  const fila = nuevos.find((f) => f[4] === id);
+  if (!fila) throw new Error(`duplicados.json: «${viejo}» apunta a ${id}, que no es un ejercicio nuevo`);
+  VIEJOS[viejo] = fila[0];
+  IMGDB[viejo] = id;
+}
 
 const claves = Object.keys(IMGDB).sort((a, b) => a.localeCompare(b, 'es'));
 const imgdb = '{' + claves.map((k) => JSON.stringify(k) + ':' + JSON.stringify(IMGDB[k])).join(',') + '}';
@@ -108,6 +118,8 @@ const salida = `// GENERADO por herramientas/exercisedb/generar.mjs — no lo ed
 // DBX: ejercicios nuevos [nombre, grupo, equipo, músculos "principales|secundarios", id, nombre en inglés, (modo de cardio)].
 export const IMGDB = ${imgdb};
 export const DBX = ${JSON.stringify(nuevos)};
+// VIEJOS: nombre antiguo (retirado de la biblioteca) → nombre del ejercicio nuevo que lo sustituye.
+export const VIEJOS = ${JSON.stringify(VIEJOS)};
 `;
 writeFileSync(join(RAIZ, 'js', 'ejercicios-db.js'), salida);
-console.log(`IMGDB: ${claves.length} · nuevos: ${nuevos.length} · nombre ya existente: ${colisiones} · repetidos: ${repetidos} · sin nombre: ${sinNombre}`);
+console.log(`IMGDB: ${claves.length} · nuevos: ${nuevos.length} · nombre ya existente: ${colisiones} · viejos retirados: ${Object.keys(VIEJOS).length} · principales con imagen: ${Object.keys(dup.principales).length} · repetidos: ${repetidos} · sin nombre: ${sinNombre}`);

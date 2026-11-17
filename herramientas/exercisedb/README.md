@@ -15,6 +15,7 @@ El mapa de fatiga muscular y «entrenado esta semana» siguen con nuestro modelo
 | `nombres-es.json` | Nombre en español de cada ejercicio nuevo (id → nombre). |
 | `emparejamiento.json` | Ejercicios **principales** de la app (los de la tabla `TABLA`), revisados a mano: nombre en Cadencia → id de ExerciseDB. |
 | `emparejamiento-auto.json` | Resto de ejercicios que ya tenía la app y coinciden claramente con uno de ExerciseDB: nombre → id. |
+| `duplicados.json` | Antiguos que son **el mismo ejercicio** que uno de ExerciseDB (revisados a mano, 17-11-2026). `principales`: siguen con su nombre y toman la imagen. `viejos`: se quitaron de `js/ejercicios.js` y su nombre queda como alias del nuevo (`VIEJOS` en `ejercicios-db.js` → `ALIAS_VIEJOS` en `entreno.js`), así el historial, las rutinas y los favoritos guardados con el nombre antiguo siguen enlazados. |
 | `generar.mjs` | Crea `js/ejercicios-db.js` (`node herramientas/exercisedb/generar.mjs`): el mapa nombre → id y los ejercicios nuevos con grupo, equipo y músculos. |
 | `fallos.json` | Ids que no se pudieron descargar en la última ejecución (si hay). |
 | `../../.github/workflows/exercisedb.yml` | El proceso de GitHub («Descargar ejercicios de ExerciseDB»). Guarda lo descargado en la misma rama. |
