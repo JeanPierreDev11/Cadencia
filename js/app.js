@@ -14,6 +14,7 @@ import { iniciarInstalar } from './instalar.js';
 import * as UI from './ui.js';
 import * as OB from './onboarding.js';
 import * as C3 from './cuerpo.js';
+import * as RG from './regional.js';
 
 /* ================================================================== */
 /* Utilidades                                                          */
@@ -100,6 +101,7 @@ function render() {
   document.title = APP_NAME;
   if (M) M.afterRender();
   C3.enganchar(root);
+  RG.pintarMapas(root);
   document.body.classList.toggle('noscroll', !!(st.limite || st.liveFin || st.calentar || st.pf || st.proInfo || st.codigo || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.resumen || st.cuerpo3d || st.legal || st.del || st.pro || st.proWelcome || st.recAsk));
 }
 
@@ -986,14 +988,15 @@ const sgn = (d) => (d > 0 ? '+' : d < 0 ? '−' : '±');
 const pctOf = (c, w) => (c.u === '%' ? w[c.k] : w.kg ? (w[c.k] / w.kg) * 100 : null);
 const kgOf = (c, w) => (c.u === 'kg' ? w[c.k] : w.kg ? (w.kg * w[c.k]) / 100 : null);
 
-// Maniquí 3D que se llena de abajo arriba con el % indicado (el relieve sale de la imagen; el color, de la métrica: agua, músculo, grasa, hueso).
-// Capas: fondo gris apagado · color liso recortado con la forma del cuerpo · la misma imagen en gris multiplicada encima (da el relieve).
-function silueta(fill, k, cls = '') {
-  const f = Math.max(0, Math.min(100, fill == null ? 0 : fill)), src = `/models/maniqui-${st.profile && st.profile.sexo === 'mujer' ? 'mujer' : 'hombre'}-1.png`;
-  return `<span class="metric-mannequin m-${k} ${cls}" style="--fill:${f.toFixed(1)}%;--mq:url(${src})" role="img" aria-hidden="true">
-    <img class="mannequin-bg" src="${src}" alt="" draggable="false" decoding="async">
-    <span class="mannequin-fill-container"><span class="mannequin-color"></span><img class="mannequin-relief" src="${src}" alt="" draggable="false" decoding="async"></span>
-  </span>`;
+// Mapa regional de una métrica (músculo, grasa, agua, hueso) en un pesaje: 5 zonas (centro, brazos, piernas) con el color de la métrica
+// y la opacidad según cuánto pesa cada una frente a su ideal. Si el pesaje trae el desglose de la báscula (`w.regional[métrica]`, kg por zona)
+// se usa; si no, se estima repartiendo el total con proporciones típicas (y la tarjeta lo avisa).
+function regionalDe(c, w) {
+  const sexo = st.profile && st.profile.sexo === 'mujer' ? 'mujer' : 'hombre', total = w ? kgOf(c, w) : null;
+  if (total == null || !isFinite(total)) return { tipo: c.k, sexo };
+  const real = w.regional && w.regional[c.k], medido = RG.completo(real);
+  const datos = medido ? real : RG.repartoEstimado(total, sexo, c.k);
+  return { tipo: c.k, sexo, medido, datos, ideal: RG.idealPara({ datos, medido, total, kgCuerpo: w.kg, sexo, tipo: c.k }) };
 }
 
 // Dial semicircular con el peso actual en el centro.
@@ -1025,10 +1028,10 @@ function compCardHTML(ws) {
   const ord = ['agua', 'musculo', 'grasa', 'hueso'].map((k) => COMP.find((c) => c.k === k));
   return `<div class="cgrid">${ord.map((c) => {
     const con = ws.filter((w) => w[c.k] != null);
-    if (!con.length) return `<button type="button" class="cg" data-act="comp-ver" data-v="${c.k}"><span class="label">${c.t}</span>${silueta(0, c.k)}<span class="val num">—</span><span class="hint">Sin datos todavía</span></button>`;
+    if (!con.length) return `<button type="button" class="cg" data-act="comp-ver" data-v="${c.k}"><span class="label">${c.t}</span>${RG.mapaHTML({ ...regionalDe(c, null), compacto: true })}<span class="val num">—</span><span class="hint">Sin datos todavía</span></button>`;
     const last = con[con.length - 1], p = pctOf(c, last), k = kgOf(c, last);
     const sec = c.u === '%' ? (k != null ? `≈ ${nf(k, 1)} kg` : '') : (p != null ? `${nf(p, 1)} % del peso` : '');
-    return `<button type="button" class="cg" data-act="comp-ver" data-v="${c.k}"><span class="label">${c.t}</span>${silueta(p == null ? 0 : Math.max(p, 6), c.k)}
+    return `<button type="button" class="cg" data-act="comp-ver" data-v="${c.k}"><span class="label">${c.t}</span>${RG.mapaHTML({ ...regionalDe(c, last), compacto: true })}
       <span class="val num">${nf(last[c.k], 1)}<em>${c.u}</em></span><span class="hint">${sec}</span></button>`;
   }).join('')}</div>`;
 }
@@ -1053,7 +1056,7 @@ function pesoDetalleHTML() {
   }
   return `<section class="det">${back}
     <div class="det-val num">${top}</div><p class="det-sub">${sub}</p>
-    <div class="det-sil">${silueta(p == null ? 0 : Math.max(p, 4), c.k, 'big')}</div>
+    <div class="det-sil">${RG.tarjetaHTML({ ...regionalDe(c, last), titulo: `Mapa regional de ${c.t.toLowerCase()}` })}</div>
     <div class="seg" role="group" aria-label="Forma de verlo">${[['kg', 'En kilogramos'], ['pct', 'Como porcentaje'], ['cambio', '¿Qué cambió?']].map(([v, t]) => `<button type="button" data-act="comp-modo" data-v="${v}" aria-pressed="${modo === v}">${t}</button>`).join('')}</div>
   </section>`;
 }
