@@ -1826,3 +1826,12 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .rg-bar > i { display: block; height: 100%; background: var(--color-metrica); transition: width .5s ease; }
 .rg-d { grid-area: d; font-size: 11px; color: var(--muted); }
 .regional-nota { margin: 0; font-size: 11.5px; line-height: 1.35; color: var(--muted); }
+
+/* 2026-11-17 · Desglose por zonas en «Añadir registro» (alimenta el mapa regional) */
+.rg-det { border-top: 1px solid var(--line); padding-top: 10px; }
+.rg-det summary { cursor: pointer; font-weight: 800; font-size: 13px; letter-spacing: .04em; list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.rg-det summary::-webkit-details-marker { display: none; }
+.rg-det summary::after { content: '+'; font-size: 18px; color: var(--accent-text); }
+.rg-det[open] summary::after { content: '−'; }
+.rg-det > p { margin: 8px 0; }
+.rg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

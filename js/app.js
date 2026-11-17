@@ -855,6 +855,35 @@ function aGuardado(c, n, kg, u) {
   if (u === 'pct' && c.u === 'kg') return (n / 100) * kg;
   return n;
 }
+// Desglose por zonas (opcional) de las dos métricas que miden las básculas segmentales: músculo y grasa, siempre en kg.
+// Alimenta el mapa regional del detalle; sin él, el mapa es una estimación. Se guarda en `regional: { musculo: {tronco, brazoI, …}, grasa: {…} }`.
+const RG_MEDIDAS = [{ k: 'musculo', t: 'Músculo' }, { k: 'grasa', t: 'Grasa' }];
+const rgCampo = (k, z) => `rg_${k}_${z}`;
+function regionalFormHTML(m, ed) {
+  const val = ed && ed.regional && ed.regional[m.k], abierto = RG.completo(val);
+  return `<details class="rg-det" ${abierto ? 'open' : ''}><summary>${m.t} por zonas (kg) <span class="muted small">opcional</span></summary>
+    <p class="small muted">Si tu báscula da el desglose por zonas, apúntalo en kilos. Rellena las 5 o ninguna. Izquierda y derecha son las de tu cuerpo, como en la báscula.</p>
+    <div class="rg-grid">${RG.REGIONES.map(({ k, n }) => `<label class="field"><span>${n}</span><input class="input" name="${rgCampo(m.k, k)}" inputmode="decimal" value="${abierto ? esc(nf(val[k], 1)) : ''}" placeholder="0,0"></label>`).join('')}</div>
+  </details>`;
+}
+// Lee los dos desgloses del formulario → { regional } listo para guardar, o { error } con el texto para la persona. `vacio` si no hay ninguno.
+function leerRegional(raw, kg) {
+  const regional = {};
+  for (const m of RG_MEDIDAS) {
+    const t = RG.REGIONES.map(({ k }) => String(raw[rgCampo(m.k, k)] || '').trim());
+    if (t.every((x) => !x)) continue;
+    if (t.some((x) => !x)) return { error: `${m.t} por zonas: rellena las 5 zonas o déjalas todas vacías` };
+    const d = {};
+    for (let i = 0; i < RG.REGIONES.length; i++) {
+      const n = num(t[i]);
+      if (!(n > 0 && n <= kg)) return { error: `${m.t} por zonas: ${RG.REGIONES[i].n} tiene que ser un número entre 0 y ${nf(kg, 1)} kg` };
+      d[RG.REGIONES[i].k] = Math.round(n * 10) / 10;
+    }
+    if (Object.values(d).reduce((a, b) => a + b, 0) > kg) return { error: `${m.t} por zonas: la suma de las 5 zonas supera tu peso (${nf(kg, 1)} kg)` };
+    regional[m.k] = d;
+  }
+  return { regional };
+}
 function pesoFormHTML(ed) {
   const u = pesoUnit(), kgBase = ed ? ed.kg : currentKg();
   return `<form class="form-grid" data-form="addweight" data-kgbase="${kgBase || ''}" ${ed ? `data-edit="${esc(ed.fecha)}"` : ''} novalidate>
@@ -872,6 +901,7 @@ function pesoFormHTML(ed) {
           <div class="two">
             ${COMP.slice(1).map((c) => `<label class="field"><span>${c.t} (<span data-ulbl>${uTxt(u)}</span>)</span><input class="input" name="${c.k}" inputmode="decimal" data-comp="${c.k}" value="${ed ? esc(aUnidad(c, ed[c.k], ed.kg, u)) : ''}" ${ed && ed[c.k] != null ? `data-orig="${ed[c.k]}"` : ''} placeholder="${PH[u][c.k]}"><small class="muted conv" data-conv="${c.k}"></small></label>`).join('')}
           </div>
+          ${RG_MEDIDAS.map((m) => regionalFormHTML(m, ed)).join('')}
         </div>
         <button class="btn block" type="submit">${ed ? 'Guardar cambios' : 'Guardar registro'}</button>
       </form>`;
@@ -1093,7 +1123,7 @@ function imcGastoHTML() {
 
 // comp: { grasa, musculo, agua, hueso } como texto (opcionales), escritos en la unidad `unit` ('pct' o 'kg').
 // Se convierten con el peso del registro y se guardan como siempre: grasa y agua en %, músculo y hueso en kg.
-async function saveWeight(fecha, raw, comp = {}, unit = 'pct', editando = false, keep = {}) {
+async function saveWeight(fecha, raw, comp = {}, unit = 'pct', editando = false, keep = {}, zonasRaw = {}) {
   const kg = num(raw);
   if (!(kg >= 30 && kg <= 250)) { toast('Escribe un peso entre 30 y 250 kg'); return false; }
   if (!fecha || fecha > todayISO()) { toast('Elige una fecha de hoy o anterior'); return false; }
@@ -1114,6 +1144,9 @@ async function saveWeight(fecha, raw, comp = {}, unit = 'pct', editando = false,
     extra[c.k] = val;
   }
   if (extra.musculo && extra.musculo >= v) { toast('El músculo tiene que ser menor que tu peso'); return false; }
+  const rz = leerRegional(zonasRaw, v);
+  if (rz.error) { toast(rz.error); return false; }
+  if (Object.keys(rz.regional).length) extra.regional = rz.regional;
   try {
     if (editando) await api.setWeight(st.user.uid, fecha, v, extra); else await api.addWeight(st.user.uid, fecha, v, extra);
     st.weights = await api.listWeights(st.user.uid);
@@ -1720,7 +1753,7 @@ root.addEventListener('submit', async (e) => {
   if (await M.submit(kind, f)) return;
   if (kind === 'login') onLogin(f);
   else if (kind === 'ob') obNext();
-  else if (kind === 'addweight') saveWeight(f.fecha.value, f.kg.value, { grasa: f.grasa.value, musculo: f.musculo.value, agua: f.agua.value, hueso: f.hueso.value }, pesoUnit(), !!f.dataset.edit, keepEdit(f));
+  else if (kind === 'addweight') saveWeight(f.fecha.value, f.kg.value, { grasa: f.grasa.value, musculo: f.musculo.value, agua: f.agua.value, hueso: f.hueso.value }, pesoUnit(), !!f.dataset.edit, keepEdit(f), Object.fromEntries(RG_MEDIDAS.flatMap((m) => RG.REGIONES.map(({ k }) => [rgCampo(m.k, k), f.elements[rgCampo(m.k, k)] ? f.elements[rgCampo(m.k, k)].value : '']))));
   else if (kind.startsWith('pf-')) pfGuardar(kind, f);
   else if (kind === 'codigo') canjearCodigo(f.codigo.value);
   else if (kind === 'delacc') borrarCuenta();
