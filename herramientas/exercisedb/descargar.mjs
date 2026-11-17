@@ -2,10 +2,13 @@
 // Lo lanza el proceso de GitHub «Descargar ejercicios de ExerciseDB»; la acción sale de orden.json.
 //
 //   {"accion": "catalogo"}  → guarda la lista completa (sin GIF) en catalogo.json
-//   {"accion": "gifs"}      → baja los GIF de los ids de emparejamiento.json
+//   {"accion": "gifs"}      → baja las imágenes de los ids de emparejamiento.json
+//   {"accion": "todos"}     → baja las imágenes de TODOS los ids de catalogo.json (≈1.400 peticiones)
 //
 // La clave solo viaja en la cabecera de cada petición. Nunca se escribe en ningún fichero ni en el registro.
-import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync, mkdtempSync, unlinkSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,7 +16,6 @@ const AQUI = dirname(fileURLToPath(import.meta.url));
 const RAIZ = join(AQUI, '..', '..');
 const HOST = 'exercisedb.p.rapidapi.com';
 const CLAVE = process.env.RAPIDAPI_KEY;
-const RESOLUCIONES = [180, 360];       // el plan Pro llega hasta 360
 const PAUSA_MS = 700;                  // límite del plan: 120 peticiones por minuto
 let peticiones = 0;
 
@@ -54,32 +56,43 @@ async function catalogo() {
   if (unicos.length < 500) { console.error('Pocos ejercicios: revisa el plan o la clave.'); process.exit(1); }
 }
 
-async function gifs() {
-  const emp = JSON.parse(readFileSync(join(AQUI, 'emparejamiento.json'), 'utf8'));
-  const ids = [...new Set(Object.values(emp).map(String))];
+// Baja el GIF de 360 px de cada id, le quita el fondo blanco (procesar.py) y guarda SOLO los WebP:
+// public/ejercicios/db/<id>-360.webp (animado, transparente) y <id>-180.webp (primer fotograma, para listas).
+async function bajar(ids) {
   const dir = join(RAIZ, 'public', 'ejercicios', 'db');
   mkdirSync(dir, { recursive: true });
+  const tmp = mkdtempSync(join(tmpdir(), 'exdb-'));
   const fallos = [];
-  let bytes = 0, nuevos = 0;
+  let nuevos = 0, bytes = 0, hechos = 0;
   for (const id of ids) {
-    for (const res of RESOLUCIONES) {
-      const fichero = join(dir, `${id}-${res}.gif`);
-      if (existsSync(fichero) && statSync(fichero).size > 1000) continue;
-      try {
-        const r = await pedir(`/image?exerciseId=${encodeURIComponent(id)}&resolution=${res}`);
-        const buf = Buffer.from(await r.arrayBuffer());
-        const esGif = buf.length > 1000 && buf.subarray(0, 3).toString() === 'GIF';
-        if (!esGif) throw new Error(`no es un GIF (${buf.length} bytes, ${r.headers.get('content-type')})`);
-        writeFileSync(fichero, buf); bytes += buf.length; nuevos++;
-      } catch (e) { fallos.push(`${id}@${res}: ${e.message}`); }
-      await dormir(PAUSA_MS);
-    }
+    const f360 = join(dir, `${id}-360.webp`), f180 = join(dir, `${id}-180.webp`);
+    if (existsSync(f360) && existsSync(f180)) continue;
+    try {
+      const r = await pedir(`/image?exerciseId=${encodeURIComponent(id)}&resolution=360`);
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (buf.length < 1000 || buf.subarray(0, 3).toString() !== 'GIF') throw new Error(`no es un GIF (${buf.length} bytes, ${r.headers.get('content-type')})`);
+      const gif = join(tmp, `${id}.gif`);
+      writeFileSync(gif, buf);
+      execFileSync('python3', [join(AQUI, 'procesar.py'), gif, f360, f180], { stdio: 'pipe' });
+      unlinkSync(gif);
+      bytes += statSync(f360).size + statSync(f180).size; nuevos++;
+    } catch (e) { fallos.push(`${id}: ${String(e.message).split('\n')[0].slice(0, 160)}`); }
+    if (++hechos % 100 === 0) console.log(`  ${hechos} ejercicios… (${nuevos} nuevos, ${fallos.length} fallos, ${peticiones} peticiones)`);
+    await dormir(PAUSA_MS);
   }
-  console.log(`GIF nuevos: ${nuevos} (${(bytes / 1048576).toFixed(1)} MB), ${peticiones} peticiones, ${fallos.length} fallos.`);
-  if (fallos.length) { console.error(fallos.join('\n')); process.exit(1); }
+  console.log(`Imágenes nuevas: ${nuevos} (${(bytes / 1048576).toFixed(1)} MB), ${peticiones} peticiones, ${fallos.length} fallos.`);
+  if (fallos.length) {
+    writeFileSync(join(AQUI, 'fallos.json'), JSON.stringify(fallos, null, 1));
+    console.error(fallos.slice(0, 30).join('\n'));
+    if (fallos.length > Math.max(5, ids.length * 0.03)) process.exit(1);   // pocos fallos: se guarda lo hecho y se repite luego
+  }
 }
+
+const gifs = () => bajar([...new Set(Object.values(JSON.parse(readFileSync(join(AQUI, 'emparejamiento.json'), 'utf8'))).map(String))]);
+const todos = () => bajar(JSON.parse(readFileSync(join(AQUI, 'catalogo.json'), 'utf8')).map((e) => e.id));
 
 const { accion } = JSON.parse(readFileSync(join(AQUI, 'orden.json'), 'utf8'));
 if (accion === 'catalogo') await catalogo();
 else if (accion === 'gifs') await gifs();
+else if (accion === 'todos') await todos();
 else { console.error(`Acción desconocida en orden.json: ${accion}`); process.exit(1); }

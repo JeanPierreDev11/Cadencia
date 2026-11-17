@@ -488,7 +488,7 @@ export const ejercicio = (n) => {
   return INDICE.get(k) || (ALIAS_EJ[k] ? INDICE.get(normTxt(ALIAS_EJ[k])) : null) || null;
 };
 // GIF de ExerciseDB del ejercicio (res 180 = miniaturas y tarjetas, 360 = ficha) o '' si aún no hay: entonces la tarjeta dibuja la figura propia.
-export const imgDb = (x, res = 360) => { const id = x && IMGDB[x.n]; return id ? `/ejercicios/db/${id}-${res}.gif` : ''; };
+export const imgDb = (x, res = 360) => { const id = x && IMGDB[x.n]; return id ? `/ejercicios/db/${id}-${res}.webp` : ''; };
 // "ch,tr|sh" → { p: ['ch','tr'], s: ['sh'] }
 export const musculosDet = (x) => { const [p = '', s = ''] = String((x && x.mu) || '').split('|'); return { p: p ? p.split(',') : [], s: s ? s.split(',') : [] }; };
 // ── Recuperación muscular ──
