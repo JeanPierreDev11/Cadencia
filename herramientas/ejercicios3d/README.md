@@ -60,6 +60,17 @@ Equipo disponible: `mancuerna` (`manos: ["R","L"]`), `polea` (`mano`, `torre: [x
 
 `ejercicios/prueba-poses.json` es una hoja de pruebas (sentadilla, peso muerto, remo, press, curl, zancada, plancha) para comprobar que el esqueleto aguanta otros movimientos: `node herramientas/ejercicios3d/render.mjs prueba-poses`.
 
+## Zonas resaltadas: lado y cabeza
+
+`"zonas": {"principales": [...], "secundarias": [...]}`. Cada entrada puede ser:
+- `"sh"`: el músculo entero, en los dos lados.
+- `{"zona": "sh", "lado": "R"}` (o `"sh.R"`): solo ese lado. **En ejercicios a una mano, pon el mismo lado que `"mano"` del equipo.** R/L son los del esqueleto (R = x > 0 del modelo); el lado se decide por la posición del vértice, no por el mapa de zonas.
+- `{"zona": "sh", "cabeza": "lateral"}` (o `"sh:lateral"`, `"sh.R:lateral"`): solo una parte del músculo según hacia dónde mira la piel en reposo: `lateral` (fuera y arriba), `anterior` (delante) o `posterior` (detrás). Pensado para el deltoides; sirve para otros músculos con caras claras.
+
+## Hombro: ritmo escapulohumeral
+
+`poser.js` sube la clavícula con el brazo (`ritmo`, 0,3 por defecto): empieza suave a partir de 20° de elevación, ≈13° a 90° y como máximo 40°. El húmero se orienta respecto al tórax, así que el brazo queda en el ángulo pedido; lo que sube es la cabeza del húmero (≈7 cm a 90°), y eso evita que el hombro se pellizque. El giro de elevación de la clavícula es −Z en su marco en **los dos lados** (hasta el 17-11 el lado R usaba el signo contrario y su hombro bajaba al levantar el brazo). `"hombro": {"elev": 90, "ritmo": 0}` lo desactiva.
+
 ## Límites conocidos
 
 - Las mallas son de baja resolución (~5.000 triángulos): en flexiones extremas (cadera > 100°, brazo por encima de la cabeza) se ven algunos pliegues en axila e ingle.

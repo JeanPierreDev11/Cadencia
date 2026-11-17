@@ -4,10 +4,10 @@
  "app": "Elevaciones laterales",
  "zonas": {
   "principales": [
-   "sh"
-  ],
-  "secundarias": [
-   "tp"
+   {
+    "zona": "sh",
+    "cabeza": "lateral"
+   }
   ]
  },
  "camara": {

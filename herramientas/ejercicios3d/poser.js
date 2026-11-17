@@ -133,9 +133,13 @@ export function poseLocal(c, pose) {
     const dl = V(d.x, -d.y, -d.z);
     const sw = new T.Quaternion().setFromUnitVectors(V(0, 1, 0), dl.normalize());
     mul('upper_arm.' + l, sw.multiply(rot(Y1, s * (h.rot ?? 0))));
-    // ritmo escapulohumeral: la clavícula sube al pasar de 30° (≈1/3 del exceso)
-    const el = Math.max(0, (h.elev ?? 8) - 30) * (h.ritmo ?? 0.28);
-    mul('shoulder.' + l, rot(Z1, s * el));
+    // ritmo escapulohumeral: la clavícula acompaña al húmero (sube ≈1° por cada 3–4° de elevación pasados ~20°).
+    // La elevación del brazo NO se suma a la de la clavícula (el húmero se orienta respecto al tórax), solo
+    // sube la cabeza del húmero, que es lo que evita que el hombro se pellizque.
+    // Ojo con el signo: en el marco de la clavícula el giro de elevación es -Z en los DOS lados
+    // (antes se usaba s·el y la clavícula derecha bajaba en vez de subir).
+    const ex = Math.max(0, (h.elev ?? 8) - 20), el = Math.min(40, ex * ex / (ex + 15) * (h.ritmo ?? 0.3));
+    mul('shoulder.' + l, rot(Z1, -el));
     const co = espejo(pose.codo, l) || {};
     mul('forearm.' + l, rot(X1, -(co.flex ?? 5)).multiply(rot(Y1, -s * (co.pron ?? 0) * 0.5)));
     const mu = espejo(pose.muneca, l) || {};

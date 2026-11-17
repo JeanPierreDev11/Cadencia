@@ -10,15 +10,30 @@ const sexo=M.startsWith('mujer')?'mujer':'hombre';
 const im=await new Promise(ok=>{const i=new Image();i.onload=()=>ok(i);i.onerror=()=>{const k=document.createElement('canvas');k.width=k.height=1;ok(k)};i.src='/public/models/zonas-'+M+'.png'}); // sin mapa de zonas (modelo nuevo): no se resalta nada
 const tex=new T.Texture(im);tex.flipY=false;tex.magFilter=tex.minFilter=T.NearestFilter;tex.generateMipmaps=false;tex.needsUpdate=true;
 const CL=['none','ne','sh','ch','bi','fo','ab','abd','qu','ad','ca','tp','mb','la','lb','tr','gl','ha'];
-const uCol=Array.from({length:18},()=>new T.Color(0,0,0)), uMix=new Float32Array(18);
-(EJ.zonas?.principales||[]).forEach(k=>{const i=CL.indexOf(k);if(i>0){uMix[i]=1;uCol[i].set('#F2BE1A')}});
-(EJ.zonas?.secundarias||[]).forEach(k=>{const i=CL.indexOf(k);if(i>0&&!uMix[i]){uMix[i]=.5;uCol[i].set('#F5D46A')}});
+// Zonas a resaltar. Cada entrada es "sh" (los dos lados, músculo entero) o un objeto/texto más preciso:
+//   {"zona":"sh","lado":"R","cabeza":"lateral"}  o  "sh.R:lateral"
+// lado: R / L del esqueleto (R = x > 0 del modelo). cabeza (solo deltoides, por ahora): lateral | anterior | posterior.
+// El lado NO sale del mapa de zonas sino de la posición de reposo del vértice (x > 0 → R), así no depende de cómo
+// se pintó cada mapa. La cabeza sale de hacia dónde mira la piel en reposo (normal): fuera, delante o detrás.
+const CABEZAS={lateral:1,anterior:2,posterior:3};
+const uCol=Array.from({length:36},()=>new T.Color(0,0,0)), uMix=new Float32Array(36), uCab=new Float32Array(36);
+const zona=(z)=>{if(typeof z==='string'){const m=z.match(/^(\w+)(?:\.(R|L))?(?::(\w+))?$/);z=m?{zona:m[1],lado:m[2],cabeza:m[3]}:{zona:z}}return z};
+function marcar(lista,mix,col){for(const e of lista||[]){const z=zona(e),i=CL.indexOf(z.zona);if(i<=0)continue;
+ for(const l of z.lado?[z.lado]:['R','L']){const k=i*2+(l==='R'?0:1);if(uMix[k]>=mix)continue;uMix[k]=mix;uCol[k].set(col);uCab[k]=CABEZAS[z.cabeza]||0}}}
+marcar(EJ.zonas?.principales,1,'#F2BE1A'); marcar(EJ.zonas?.secundarias,.5,'#F5D46A');
 const piel=c.malla.material.clone(); piel.color.setRGB(.74,.74,.76); piel.roughness=.58; if(piel.normalScale) piel.normalScale.set(.85,.85); // conserva el mapa de normales (relieve muscular)
-piel.onBeforeCompile=sh=>{sh.uniforms.tZ={value:tex};sh.uniforms.uCol={value:uCol};sh.uniforms.uMix={value:uMix};
- sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 vZ;').replace('#include <begin_vertex>','#include <begin_vertex>\nvZ = uv;');
- sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec2 vZ; uniform sampler2D tZ; uniform vec3 uCol[18]; uniform float uMix[18];')
+piel.onBeforeCompile=sh=>{sh.uniforms.tZ={value:tex};sh.uniforms.uCol={value:uCol};sh.uniforms.uMix={value:uMix};sh.uniforms.uCab={value:uCab};
+ sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 vZ; varying vec3 vPR; varying vec3 vNR;')
+  .replace('#include <beginnormal_vertex>','#include <beginnormal_vertex>\nvNR = objectNormal;')
+  .replace('#include <begin_vertex>','#include <begin_vertex>\nvZ = uv; vPR = transformed;');
+ sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec2 vZ; varying vec3 vPR; varying vec3 vNR; uniform sampler2D tZ; uniform vec3 uCol[36]; uniform float uMix[36]; uniform float uCab[36];')
  .replace('#include <color_fragment>',`#include <color_fragment>
- int zid = int(floor(texture2D(tZ, vZ).r * 255.0 + 0.5)) / 2; vec3 fc = uCol[zid]; float fm = uMix[zid];
+ int mus = int(floor(texture2D(tZ, vZ).r * 255.0 + 0.5)) / 2; float sg = vPR.x > 0.0 ? 1.0 : -1.0;
+ int k = mus * 2 + (vPR.x > 0.0 ? 0 : 1); vec3 fc = uCol[k]; float fm = uMix[k]; float cab = uCab[k];
+ vec3 nr = normalize(vNR);
+ if (cab > 0.5 && cab < 1.5) fm *= smoothstep(0.0, 0.40, nr.x * sg + 0.35 * max(nr.y, 0.0)) * (1.0 - smoothstep(0.72, 0.95, abs(nr.z)));
+ else if (cab > 1.5 && cab < 2.5) fm *= smoothstep(0.30, 0.65, nr.z);
+ else if (cab > 2.5) fm *= smoothstep(0.30, 0.65, -nr.z);
  vec3 tint = fc * (0.5 + 0.9 * dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722))); diffuseColor.rgb = mix(diffuseColor.rgb, tint, fm * 0.92);`);};
 c.malla.material=piel; c.malla.castShadow=c.malla.receiveShadow=true;
 // ---- utilidades sobre la malla posada ----

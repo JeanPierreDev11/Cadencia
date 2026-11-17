@@ -4,10 +4,11 @@
  "app": "Elevaciones laterales en polea",
  "zonas": {
   "principales": [
-   "sh"
-  ],
-  "secundarias": [
-   "tp"
+   {
+    "zona": "sh",
+    "lado": "R",
+    "cabeza": "lateral"
+   }
   ]
  },
  "camara": {
