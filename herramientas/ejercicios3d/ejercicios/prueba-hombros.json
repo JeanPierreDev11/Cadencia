@@ -1,0 +1,51 @@
+{
+ "id": "prueba-hombros",
+ "nombre": "Elevaciones laterales",
+ "app": "Elevaciones laterales",
+ "zonas": {
+  "principales": [
+   "sh"
+  ],
+  "secundarias": [
+   "tp"
+  ]
+ },
+ "camara": {
+  "yaw": 0,
+  "pitch": 0,
+  "fov": 24
+ },
+ "equipo": [],
+ "fases": {
+  "a45": {
+   "hombro": {
+    "elev": 45,
+    "plano": 0
+   },
+   "codo": {
+    "flex": 10
+   },
+   "mano": "relajada"
+  },
+  "a90": {
+   "hombro": {
+    "elev": 90,
+    "plano": 0
+   },
+   "codo": {
+    "flex": 10
+   },
+   "mano": "relajada"
+  },
+  "a130": {
+   "hombro": {
+    "elev": 130,
+    "plano": 0
+   },
+   "codo": {
+    "flex": 10
+   },
+   "mano": "relajada"
+  }
+ }
+}

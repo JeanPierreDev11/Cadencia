@@ -16,6 +16,8 @@ B = lambda p: mathutils.Vector((p[0], -p[2], p[1]))  # glTF (y arriba) → Blend
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=os.path.join(RAIZ, 'public', 'models', modelo + '.glb'))
 cuerpo = [o for o in bpy.data.objects if o.type == 'MESH'][0]
+for img in bpy.data.images:  # texturas enormes (4K): se bajan a 2048 para que el modelo pese poco en el repositorio
+    if img.size[0] > 2048: img.scale(2048, 2048)
 
 # 1) armadura con las articulaciones del JSON
 datos = bpy.data.armatures.new('esqueleto'); arm = bpy.data.objects.new('esqueleto', datos)
@@ -49,6 +51,23 @@ for v in cuerpo.data.vertices:
     for g in sold.data.vertices[i].groups:
         if g.weight > 1e-4: cuerpo.vertex_groups[grupos[g.group]].add([v.index], g.weight, 'REPLACE')
 bpy.data.objects.remove(sold)
+
+# 2b) el calor reparte el peso del brazo por todo el pecho y la espalda (por eso al subir el brazo se
+# estira el costado). Se recorta con la distancia al hueso del brazo: peso completo cerca, cero lejos.
+def dist_segmento(p, a, b):
+    ab = b - a; t = max(0.0, min(1.0, (p - a).dot(ab) / ab.length_squared)); return (p - (a + ab * t)).length
+for lado in ('R', 'L'):
+    for hueso, ini, fin, radio in (('upper_arm', 'shoulder', 'elbow', 0.55), ('shoulder', 'clav', 'shoulder', 0.65)):
+        g = cuerpo.vertex_groups.get(f'{hueso}.{lado}')
+        a, b = B(J['joints'][f'{ini}.{lado}']), B(J['joints'][f'{fin}.{lado}'])
+        r1 = (b - a).length * radio; r0 = r1 * 0.45
+        for v in cuerpo.data.vertices:
+            w = next((x.weight for x in v.groups if x.group == g.index), 0)
+            if w <= 0: continue
+            d = dist_segmento(v.co, a, b)
+            k = 1.0 if d <= r0 else max(0.0, 1.0 - (d - r0) / (r1 - r0))
+            k = k * k * (3 - 2 * k)  # suavizado
+            if k < 1.0: g.add([v.index], w * k, 'REPLACE')
 for o in bpy.data.objects: o.select_set(False)
 cuerpo.select_set(True); bpy.context.view_layer.objects.active = cuerpo
 bpy.ops.object.vertex_group_limit_total(group_select_mode='ALL', limit=4)  # three.js usa 4 influencias
@@ -57,5 +76,6 @@ cuerpo.parent = arm; m = cuerpo.modifiers.new('esqueleto', 'ARMATURE'); m.object
 
 dst = os.path.join(AQUI, '..', 'modelos', f'{modelo}-rig.glb')
 bpy.ops.export_scene.gltf(filepath=dst, export_format='GLB', export_skins=True, export_animations=False, export_yup=True,
-                          export_normals=True, export_texcoords=True, export_materials='EXPORT', export_def_bones=False)
+                          export_normals=True, export_texcoords=True, export_materials='EXPORT', export_def_bones=False,
+                          export_image_format='WEBP', export_image_quality=80)
 print('ok', os.path.relpath(dst, RAIZ))

@@ -1,0 +1,644 @@
+{
+ "model": "hombre-2",
+ "joints": {
+  "pelvis": [
+   0,
+   0.02,
+   -0.04
+  ],
+  "spine_a": [
+   0.002,
+   0.14,
+   -0.06
+  ],
+  "spine_b": [
+   0.006,
+   0.29,
+   -0.065
+  ],
+  "chest_top": [
+   0.015,
+   0.47,
+   -0.07
+  ],
+  "neck_base": [
+   0.02,
+   0.62,
+   -0.065
+  ],
+  "head_base": [
+   0.025,
+   0.72,
+   -0.03
+  ],
+  "head_top": [
+   0.025,
+   0.95,
+   0
+  ],
+  "clav.R": [
+   0.04,
+   0.575,
+   -0.01
+  ],
+  "shoulder.R": [
+   0.255,
+   0.505,
+   -0.05
+  ],
+  "elbow.R": [
+   0.335,
+   0.24,
+   0.0
+  ],
+  "wrist.R": [
+   0.36,
+   0.025,
+   0.105
+  ],
+  "thumb_cmc.R": [
+   0.345,
+   0.0,
+   0.12
+  ],
+  "thumb_mcp.R": [
+   0.3,
+   -0.035,
+   0.15
+  ],
+  "thumb_ip.R": [
+   0.28,
+   -0.07,
+   0.157
+  ],
+  "thumb_tip.R": [
+   0.268,
+   -0.105,
+   0.157
+  ],
+  "hip.R": [
+   0.105,
+   0.03,
+   0.0
+  ],
+  "knee.R": [
+   0.152,
+   -0.375,
+   0.02
+  ],
+  "ankle.R": [
+   0.193,
+   -0.84,
+   -0.01
+  ],
+  "ball.R": [
+   0.182,
+   -0.935,
+   0.156
+  ],
+  "toe.R": [
+   0.17,
+   -0.945,
+   0.24
+  ],
+  "f_index_mcp.R": [
+   0.36,
+   -0.05,
+   0.167
+  ],
+  "f_index_pip.R": [
+   0.358,
+   -0.09,
+   0.167
+  ],
+  "f_index_dip.R": [
+   0.345,
+   -0.128,
+   0.167
+  ],
+  "f_index_tip.R": [
+   0.315,
+   -0.157,
+   0.167
+  ],
+  "f_middle_mcp.R": [
+   0.36,
+   -0.05,
+   0.14
+  ],
+  "f_middle_pip.R": [
+   0.358,
+   -0.09,
+   0.14
+  ],
+  "f_middle_dip.R": [
+   0.345,
+   -0.128,
+   0.14
+  ],
+  "f_middle_tip.R": [
+   0.315,
+   -0.157,
+   0.14
+  ],
+  "f_ring_mcp.R": [
+   0.36,
+   -0.05,
+   0.113
+  ],
+  "f_ring_pip.R": [
+   0.358,
+   -0.09,
+   0.113
+  ],
+  "f_ring_dip.R": [
+   0.345,
+   -0.128,
+   0.113
+  ],
+  "f_ring_tip.R": [
+   0.315,
+   -0.157,
+   0.113
+  ],
+  "f_pinky_mcp.R": [
+   0.36,
+   -0.05,
+   0.085
+  ],
+  "f_pinky_pip.R": [
+   0.358,
+   -0.085,
+   0.085
+  ],
+  "f_pinky_dip.R": [
+   0.345,
+   -0.11,
+   0.085
+  ],
+  "f_pinky_tip.R": [
+   0.335,
+   -0.145,
+   0.085
+  ],
+  "clav.L": [
+   -0.04,
+   0.575,
+   -0.04
+  ],
+  "shoulder.L": [
+   -0.215,
+   0.51,
+   -0.125
+  ],
+  "elbow.L": [
+   -0.275,
+   0.25,
+   -0.17
+  ],
+  "wrist.L": [
+   -0.353,
+   0.025,
+   -0.097
+  ],
+  "thumb_cmc.L": [
+   -0.375,
+   -0.02,
+   -0.06
+  ],
+  "thumb_mcp.L": [
+   -0.345,
+   -0.05,
+   -0.02
+  ],
+  "thumb_ip.L": [
+   -0.325,
+   -0.07,
+   -0.003
+  ],
+  "thumb_tip.L": [
+   -0.317,
+   -0.1,
+   0.0
+  ],
+  "hip.L": [
+   -0.105,
+   0.03,
+   -0.075
+  ],
+  "knee.L": [
+   -0.126,
+   -0.375,
+   -0.079
+  ],
+  "ankle.L": [
+   -0.164,
+   -0.84,
+   -0.135
+  ],
+  "ball.L": [
+   -0.255,
+   -0.935,
+   -0.019
+  ],
+  "toe.L": [
+   -0.3,
+   -0.945,
+   0.05
+  ],
+  "f_index_mcp.L": [
+   -0.376,
+   -0.05,
+   -0.03
+  ],
+  "f_index_pip.L": [
+   -0.374,
+   -0.09,
+   -0.03
+  ],
+  "f_index_dip.L": [
+   -0.362,
+   -0.128,
+   -0.03
+  ],
+  "f_index_tip.L": [
+   -0.332,
+   -0.157,
+   -0.03
+  ],
+  "f_middle_mcp.L": [
+   -0.376,
+   -0.05,
+   -0.052
+  ],
+  "f_middle_pip.L": [
+   -0.374,
+   -0.09,
+   -0.052
+  ],
+  "f_middle_dip.L": [
+   -0.362,
+   -0.128,
+   -0.052
+  ],
+  "f_middle_tip.L": [
+   -0.332,
+   -0.157,
+   -0.052
+  ],
+  "f_ring_mcp.L": [
+   -0.376,
+   -0.05,
+   -0.075
+  ],
+  "f_ring_pip.L": [
+   -0.374,
+   -0.09,
+   -0.075
+  ],
+  "f_ring_dip.L": [
+   -0.362,
+   -0.128,
+   -0.075
+  ],
+  "f_ring_tip.L": [
+   -0.332,
+   -0.157,
+   -0.075
+  ],
+  "f_pinky_mcp.L": [
+   -0.376,
+   -0.05,
+   -0.098
+  ],
+  "f_pinky_pip.L": [
+   -0.374,
+   -0.085,
+   -0.098
+  ],
+  "f_pinky_dip.L": [
+   -0.362,
+   -0.11,
+   -0.098
+  ],
+  "f_pinky_tip.L": [
+   -0.345,
+   -0.145,
+   -0.098
+  ]
+ },
+ "bones": [
+  {
+   "n": "hips",
+   "h": "pelvis",
+   "t": "spine_a",
+   "p": null
+  },
+  {
+   "n": "spine",
+   "h": "spine_a",
+   "t": "spine_b",
+   "p": "hips"
+  },
+  {
+   "n": "chest",
+   "h": "spine_b",
+   "t": "chest_top",
+   "p": "spine"
+  },
+  {
+   "n": "upper_chest",
+   "h": "chest_top",
+   "t": "neck_base",
+   "p": "chest"
+  },
+  {
+   "n": "neck",
+   "h": "neck_base",
+   "t": "head_base",
+   "p": "upper_chest"
+  },
+  {
+   "n": "head",
+   "h": "head_base",
+   "t": "head_top",
+   "p": "neck"
+  },
+  {
+   "n": "shoulder.R",
+   "h": "clav.R",
+   "t": "shoulder.R",
+   "p": "upper_chest"
+  },
+  {
+   "n": "shoulder.L",
+   "h": "clav.L",
+   "t": "shoulder.L",
+   "p": "upper_chest"
+  },
+  {
+   "n": "upper_arm.R",
+   "h": "shoulder.R",
+   "t": "elbow.R",
+   "p": "shoulder.R"
+  },
+  {
+   "n": "upper_arm.L",
+   "h": "shoulder.L",
+   "t": "elbow.L",
+   "p": "shoulder.L"
+  },
+  {
+   "n": "forearm.R",
+   "h": "elbow.R",
+   "t": "wrist.R",
+   "p": "upper_arm.R"
+  },
+  {
+   "n": "forearm.L",
+   "h": "elbow.L",
+   "t": "wrist.L",
+   "p": "upper_arm.L"
+  },
+  {
+   "n": "hand.R",
+   "h": "wrist.R",
+   "t": "f_middle_mcp.R",
+   "p": "forearm.R"
+  },
+  {
+   "n": "hand.L",
+   "h": "wrist.L",
+   "t": "f_middle_mcp.L",
+   "p": "forearm.L"
+  },
+  {
+   "n": "thumb.01.R",
+   "h": "thumb_cmc.R",
+   "t": "thumb_mcp.R",
+   "p": "hand.R"
+  },
+  {
+   "n": "thumb.01.L",
+   "h": "thumb_cmc.L",
+   "t": "thumb_mcp.L",
+   "p": "hand.L"
+  },
+  {
+   "n": "thumb.02.R",
+   "h": "thumb_mcp.R",
+   "t": "thumb_ip.R",
+   "p": "thumb.01.R"
+  },
+  {
+   "n": "thumb.02.L",
+   "h": "thumb_mcp.L",
+   "t": "thumb_ip.L",
+   "p": "thumb.01.L"
+  },
+  {
+   "n": "thumb.03.R",
+   "h": "thumb_ip.R",
+   "t": "thumb_tip.R",
+   "p": "thumb.02.R"
+  },
+  {
+   "n": "thumb.03.L",
+   "h": "thumb_ip.L",
+   "t": "thumb_tip.L",
+   "p": "thumb.02.L"
+  },
+  {
+   "n": "thigh.R",
+   "h": "hip.R",
+   "t": "knee.R",
+   "p": "hips"
+  },
+  {
+   "n": "thigh.L",
+   "h": "hip.L",
+   "t": "knee.L",
+   "p": "hips"
+  },
+  {
+   "n": "shin.R",
+   "h": "knee.R",
+   "t": "ankle.R",
+   "p": "thigh.R"
+  },
+  {
+   "n": "shin.L",
+   "h": "knee.L",
+   "t": "ankle.L",
+   "p": "thigh.L"
+  },
+  {
+   "n": "foot.R",
+   "h": "ankle.R",
+   "t": "ball.R",
+   "p": "shin.R"
+  },
+  {
+   "n": "foot.L",
+   "h": "ankle.L",
+   "t": "ball.L",
+   "p": "shin.L"
+  },
+  {
+   "n": "toe.R",
+   "h": "ball.R",
+   "t": "toe.R",
+   "p": "foot.R"
+  },
+  {
+   "n": "toe.L",
+   "h": "ball.L",
+   "t": "toe.L",
+   "p": "foot.L"
+  },
+  {
+   "n": "f_index.01.R",
+   "h": "f_index_mcp.R",
+   "t": "f_index_pip.R",
+   "p": "hand.R"
+  },
+  {
+   "n": "f_index.01.L",
+   "h": "f_index_mcp.L",
+   "t": "f_index_pip.L",
+   "p": "hand.L"
+  },
+  {
+   "n": "f_index.02.R",
+   "h": "f_index_pip.R",
+   "t": "f_index_dip.R",
+   "p": "f_index.01.R"
+  },
+  {
+   "n": "f_index.02.L",
+   "h": "f_index_pip.L",
+   "t": "f_index_dip.L",
+   "p": "f_index.01.L"
+  },
+  {
+   "n": "f_index.03.R",
+   "h": "f_index_dip.R",
+   "t": "f_index_tip.R",
+   "p": "f_index.02.R"
+  },
+  {
+   "n": "f_index.03.L",
+   "h": "f_index_dip.L",
+   "t": "f_index_tip.L",
+   "p": "f_index.02.L"
+  },
+  {
+   "n": "f_middle.01.R",
+   "h": "f_middle_mcp.R",
+   "t": "f_middle_pip.R",
+   "p": "hand.R"
+  },
+  {
+   "n": "f_middle.01.L",
+   "h": "f_middle_mcp.L",
+   "t": "f_middle_pip.L",
+   "p": "hand.L"
+  },
+  {
+   "n": "f_middle.02.R",
+   "h": "f_middle_pip.R",
+   "t": "f_middle_dip.R",
+   "p": "f_middle.01.R"
+  },
+  {
+   "n": "f_middle.02.L",
+   "h": "f_middle_pip.L",
+   "t": "f_middle_dip.L",
+   "p": "f_middle.01.L"
+  },
+  {
+   "n": "f_middle.03.R",
+   "h": "f_middle_dip.R",
+   "t": "f_middle_tip.R",
+   "p": "f_middle.02.R"
+  },
+  {
+   "n": "f_middle.03.L",
+   "h": "f_middle_dip.L",
+   "t": "f_middle_tip.L",
+   "p": "f_middle.02.L"
+  },
+  {
+   "n": "f_ring.01.R",
+   "h": "f_ring_mcp.R",
+   "t": "f_ring_pip.R",
+   "p": "hand.R"
+  },
+  {
+   "n": "f_ring.01.L",
+   "h": "f_ring_mcp.L",
+   "t": "f_ring_pip.L",
+   "p": "hand.L"
+  },
+  {
+   "n": "f_ring.02.R",
+   "h": "f_ring_pip.R",
+   "t": "f_ring_dip.R",
+   "p": "f_ring.01.R"
+  },
+  {
+   "n": "f_ring.02.L",
+   "h": "f_ring_pip.L",
+   "t": "f_ring_dip.L",
+   "p": "f_ring.01.L"
+  },
+  {
+   "n": "f_ring.03.R",
+   "h": "f_ring_dip.R",
+   "t": "f_ring_tip.R",
+   "p": "f_ring.02.R"
+  },
+  {
+   "n": "f_ring.03.L",
+   "h": "f_ring_dip.L",
+   "t": "f_ring_tip.L",
+   "p": "f_ring.02.L"
+  },
+  {
+   "n": "f_pinky.01.R",
+   "h": "f_pinky_mcp.R",
+   "t": "f_pinky_pip.R",
+   "p": "hand.R"
+  },
+  {
+   "n": "f_pinky.01.L",
+   "h": "f_pinky_mcp.L",
+   "t": "f_pinky_pip.L",
+   "p": "hand.L"
+  },
+  {
+   "n": "f_pinky.02.R",
+   "h": "f_pinky_pip.R",
+   "t": "f_pinky_dip.R",
+   "p": "f_pinky.01.R"
+  },
+  {
+   "n": "f_pinky.02.L",
+   "h": "f_pinky_pip.L",
+   "t": "f_pinky_dip.L",
+   "p": "f_pinky.01.L"
+  },
+  {
+   "n": "f_pinky.03.R",
+   "h": "f_pinky_dip.R",
+   "t": "f_pinky_tip.R",
+   "p": "f_pinky.02.R"
+  },
+  {
+   "n": "f_pinky.03.L",
+   "h": "f_pinky_dip.L",
+   "t": "f_pinky_tip.L",
+   "p": "f_pinky.02.L"
+  }
+ ]
+}

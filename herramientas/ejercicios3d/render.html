@@ -7,7 +7,7 @@ const EJ=await (await fetch('ejercicios/'+q.get('ej')+'.json?'+Date.now())).json
 const c=await cargarCuerpo('modelos/'+M+'-rig'); c.malla.frustumCulled=false;
 // ---- material de piel con zonas resaltadas ----
 const sexo=M.startsWith('mujer')?'mujer':'hombre';
-const im=await new Promise(ok=>{const i=new Image();i.onload=()=>ok(i);i.src='/public/models/zonas-'+M+'.png'});
+const im=await new Promise(ok=>{const i=new Image();i.onload=()=>ok(i);i.onerror=()=>{const k=document.createElement('canvas');k.width=k.height=1;ok(k)};i.src='/public/models/zonas-'+M+'.png'}); // sin mapa de zonas (modelo nuevo): no se resalta nada
 const tex=new T.Texture(im);tex.flipY=false;tex.magFilter=tex.minFilter=T.NearestFilter;tex.generateMipmaps=false;tex.needsUpdate=true;
 const CL=['none','ne','sh','ch','bi','fo','ab','abd','qu','ad','ca','tp','mb','la','lb','tr','gl','ha'];
 const uCol=Array.from({length:18},()=>new T.Color(0,0,0)), uMix=new Float32Array(18);
