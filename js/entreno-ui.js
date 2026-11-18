@@ -241,11 +241,11 @@ function diaHTML(sel, today) {
 }
 
 /* ---------- Coach AI (Pro): bajo demanda y guardado en el propio entreno ---------- */
-// Campos del documento users/{uid}/entrenos/{id}: aiNota (0-10), aiTitulo, aiTexto, aiConsejos[], aiDemo, aiFecha.
-const AI_CAMPOS = ['aiNota', 'aiTitulo', 'aiTexto', 'aiConsejos', 'aiDemo', 'aiFecha'];
+// Campos del documento users/{uid}/entrenos/{id}: aiNota (0-10), aiTitulo, aiTexto (= resumen), aiParaLlegarAl10[] (2-3 puntos; análisis anteriores a 2026-11-18 no lo tienen), aiConsejos[], aiDemo, aiFecha.
+const AI_CAMPOS = ['aiNota', 'aiTitulo', 'aiTexto', 'aiParaLlegarAl10', 'aiConsejos', 'aiDemo', 'aiFecha'];
 // Análisis guardado (o null). Uno de ejemplo (aiDemo, del modo prueba o de la maqueta antigua) no vale con Firebase: se puede pedir el real.
 const aiDe = (w) => (w && Number.isFinite(Number(w.aiNota)) && !(w.aiDemo && !api.local)
-  ? { nota: Number(w.aiNota), titulo: w.aiTitulo || '', analisis: w.aiTexto || '', consejos: Array.isArray(w.aiConsejos) ? w.aiConsejos : [], demo: !!w.aiDemo } : null);
+  ? { nota: Number(w.aiNota), titulo: w.aiTitulo || '', resumen: w.aiTexto || '', llegar10: Array.isArray(w.aiParaLlegarAl10) ? w.aiParaLlegarAl10 : [], consejos: Array.isArray(w.aiConsejos) ? w.aiConsejos : [], demo: !!w.aiDemo } : null);
 const aiPosible = (w) => !!w && w.tipo === 'gym' && (w.ejercicios || []).length > 0;
 function aiHTML(w, compacto = false) {
   if (!aiPosible(w)) return '';
@@ -256,8 +256,9 @@ function aiHTML(w, compacto = false) {
       <span class="ai-lbl ai-lbl-top">${ICO_COACH}<span>Coach AI${ai.demo ? ' <em class="ai-demo">Ejemplo</em>' : ''}</span></span>
       <div class="ai-score ${compacto ? 'sm' : ''}" style="--p:${pct.toFixed(0)}"><b class="num">${nf(ai.nota, 1)}</b><span>/ 10</span></div>
       <p class="ai-tit">${esc(ai.titulo)}</p>
-      <section class="ai-box"><span class="ai-lbl">Análisis</span><p>${esc(ai.analisis)}</p>
-        ${ai.consejos.length ? `<ul>${ai.consejos.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}</section></div>`;
+      <section class="ai-box"><span class="ai-lbl">Análisis</span><p>${esc(ai.resumen)}</p></section>
+      ${ai.llegar10.length ? `<section class="ai-box ai-diez ${ai.nota >= 10 ? 'is-diez' : ''}"><span class="ai-lbl">${ai.nota >= 10 ? 'Por qué es un 10/10' : 'Qué faltó para el 10/10'}</span><ul>${ai.llegar10.map((c) => `<li>${esc(c)}</li>`).join('')}</ul></section>` : ''}
+      ${ai.consejos.length ? `<section class="ai-box"><span class="ai-lbl">Para la próxima sesión</span><ul>${ai.consejos.map((c) => `<li>${esc(c)}</li>`).join('')}</ul></section>` : ''}</div>`;
   }
   if (pend === 'cargando') return `<div class="ai-load" role="status"><span class="ai-spin" aria-hidden="true"></span><span class="small muted">Analizando…</span></div>`;
   return `${pend && pend.error ? `<p class="small muted" role="alert">${esc(pend.error)}</p>` : ''}
@@ -278,7 +279,8 @@ async function pedirCoach(id) {
     const nuevo = { ...w,
       aiNota: Math.round(Math.max(0, Math.min(10, nota)) * 10) / 10,
       aiTitulo: String(res.titulo || '').slice(0, 80),
-      aiTexto: String(res.analisis || '').slice(0, 1200),
+      aiTexto: String(res.resumen != null ? res.resumen : res.analisis || '').slice(0, 1200), // `analisis` = nombre antiguo (servidor anterior al 18-11)
+      aiParaLlegarAl10: (Array.isArray(res.paraLlegarAl10) ? res.paraLlegarAl10 : []).slice(0, 3).map((c) => String(c).slice(0, 300)),
       aiConsejos: (Array.isArray(res.consejos) ? res.consejos : []).slice(0, 5).map((c) => String(c).slice(0, 300)),
       aiDemo: !!res.demo,
       aiFecha: res.aiFecha || new Date().toISOString() };

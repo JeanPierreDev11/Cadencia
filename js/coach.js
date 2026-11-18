@@ -1,7 +1,7 @@
 // Coach AI post-entreno (Pro). Con Firebase llama a la Cloud Function «coach» (Gemini), que lee el entreno de Firestore,
-// lo analiza y GUARDA el resultado en el propio documento (aiNota, aiTitulo, aiTexto, aiConsejos, aiDemo:false, aiFecha).
+// lo analiza y GUARDA el resultado en el propio documento (aiNota, aiTitulo, aiTexto [= resumen], aiParaLlegarAl10[], aiConsejos, aiDemo:false, aiFecha).
 // En modo prueba (sin Firebase, api.local) devuelve un análisis de EJEMPLO (demo:true) que guarda la propia app.
-// Forma de la respuesta: { nota: 8.5, titulo, analisis, consejos: ['…'], demo, guardado }.
+// Forma de la respuesta: { nota: 8.5, titulo, resumen, paraLlegarAl10: ['…'], consejos: ['…'], demo, guardado } (`analisis` = alias antiguo de `resumen`).
 
 // Datos mínimos del entreno: sin uid, correo ni nombre (solo los usa el ejemplo; el servidor lee Firestore).
 export function datosParaCoach(o, extra = {}) {
@@ -20,10 +20,12 @@ async function ejemploCoach(datos) {
   const ej = ((datos && datos.ejercicios) || []).filter((e) => !e.cardio);
   const top = ej.reduce((m, e) => (!m || e.series.length > m.series.length ? e : m), null);
   const n = top ? top.n : 'Press banca';
+  const nSeries = ej.reduce((t, e) => t + e.series.length, 0);
   return {
     nota: 8.5,
     titulo: 'Sesión sólida',
-    analisis: `Buen volumen, pero para hipertrofia deberías subir de 4 repeticiones en ${n}.`,
+    resumen: `Buen trabajo hoy: has apuntado ${nSeries} series de fuerza y ${n} fue tu ejercicio con más volumen. Vas por buen camino.`,
+    paraLlegarAl10: [`Con 1-2 series más de ${n} habrías llegado a un volumen de 10/10.`, 'Apuntar el RIR en los ejercicios principales te habría dado la nota completa en intensidad.'],
     consejos: ['Mantén 1-2 repeticiones en reserva en las últimas series.', 'Descansa 90-120 s entre series de los ejercicios básicos.'],
     demo: true,
   };

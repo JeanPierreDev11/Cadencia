@@ -269,19 +269,25 @@ exports.ia = onCall({ secrets: [CLAVE], timeoutSeconds: 90, memory: '512MiB', cp
 /* Coach AI post-entreno (Pro) con Gemini                              */
 /* ------------------------------------------------------------------ */
 // La app la llama SOLO al pulsar «Solicitar Análisis AI». Lee el entreno de Firestore (no se fía de lo que mande el móvil),
-// pide la valoración a Gemini y la guarda en el propio documento (aiNota, aiTitulo, aiTexto, aiConsejos, aiDemo:false, aiFecha).
+// pide la valoración a Gemini y la guarda en el propio documento (aiNota, aiTitulo, aiTexto [= resumen], aiParaLlegarAl10[], aiConsejos, aiDemo:false, aiFecha).
 // Si el entreno ya tiene análisis, lo devuelve sin gastar nada. Contadores propios en iaUso/iaGlobal (campo «coach»).
 const GEMINI_CLAVE = defineSecret('GEMINI_API_KEY'); // al cambiar la clave en Secret Manager hay que volver a desplegar con un cambio en este archivo (si no, se salta «coach» y sigue con la versión anterior)
 const MODELO_COACH = 'gemini-3.5-flash'; // tiene nivel gratuito (3.6 no); 1.5 y 2.0 ya están apagados // cambiar aquí si Google lo retira (lista: ai.google.dev/gemini-api/docs/models)
 const LIMITE_COACH_USUARIO = 10; // análisis por persona y día (Gemini, nivel gratuito)
 const LIMITE_COACH_GLOBAL = 400; // análisis al día entre todas las personas (seguridad de gasto)
-const PROMPT_COACH = `Eres un entrenador personal experto en fuerza e hipertrofia. Analizas UN entreno de gimnasio ya terminado y devuelves una valoración breve, honesta y útil, en español de España, tuteando.
-Reglas:
-- "nota": número de 0 a 10 con un decimal (calidad del entreno para el objetivo de la persona: volumen, intensidad, rango de repeticiones, RIR si lo hay, progresión respecto a la sesión anterior si se da).
+const PROMPT_COACH = `Eres un entrenador personal experto en fuerza e hipertrofia. Analizas UN entreno de gimnasio ya terminado y devuelves una valoración breve, honesta y útil, en español de España, tuteando. Tu tono es siempre motivador, positivo y cercano (como un buen entrenador que te anima), pero sin regalar notas ni adular: la nota es honesta y se explica.
+Campos de la respuesta:
+- "nota": número de 0 a 10 con un decimal (calidad del entreno para el objetivo de la persona: volumen, intensidad, rango de repeticiones, RIR si lo hay, progresión respecto al objetivo de la rutina o a la sesión anterior si se dan, densidad de trabajo).
 - "titulo": 2 a 5 palabras, sin punto final.
-- "analisis": 1 o 2 frases (máximo 300 caracteres) con lo más importante, citando ejercicios y cifras reales.
-- "consejos": 2 o 3 consejos concretos y accionables para la próxima sesión (máximo 140 caracteres cada uno).
-- Usa solo los datos recibidos; no inventes ejercicios ni cifras. Sin consejos médicos. Si los datos son escasos, dilo con tacto y puntúa con prudencia.
+- "resumen": valoración general positiva y motivadora, 1 o 2 frases (máximo 300 caracteres). Empieza por lo que ha salido bien y cita ejercicios y cifras reales (duración, series, pesos, RIR).
+- "paraLlegarAl10": lista de 2 o 3 puntos (máximo 170 caracteres cada uno) que explican de forma clara, constructiva y accionable por qué la nota no es un 10 y qué habría hecho falta HOY para el 10/10. Cada punto debe ser un descuento concreto con datos reales, no un consejo genérico. Ejemplos de descuentos válidos: densidad baja (pocas series para el tiempo total de la sesión), series que faltaron respecto al objetivo de la rutina, RIR demasiado alto o sin apuntar en los ejercicios principales, ningún ejercicio clave con más peso o repeticiones que la sesión anterior, rango de repeticiones fuera del objetivo, un grupo muscular sin trabajar. Redáctalos en positivo («Con 2 series más de X habrías llegado al objetivo de 4×8-12»), nunca como reproche. Los puntos deben ser coherentes con la nota: cuanto más baja, más peso tienen. Si la nota es 10, esta lista explica en 2 o 3 puntos por qué ha sido un 10/10 (qué se ha cumplido, con cifras) en lugar de lo que faltó. Solo pon un 10 si de verdad no hay nada relevante que descontar.
+- "consejos": 2 o 3 consejos concretos y accionables para la próxima sesión, con cierre motivador (máximo 140 caracteres cada uno). No repitas aquí los puntos de "paraLlegarAl10": estos miran a la próxima sesión, aquellos a lo que faltó hoy.
+Reglas de datos (muy importantes):
+- Usa solo los datos recibidos; no inventes ejercicios, cifras ni tiempos. Sin consejos médicos. Si los datos son escasos, dilo con tacto y puntúa con prudencia.
+- "min" es la DURACIÓN REAL de la sesión en minutos, tal como la registró la persona. Cuando hables de tiempo usa exactamente ese valor (o su equivalente en horas y minutos). No estimes, redondees ni deduzcas otra duración, ni inventes tiempos de descanso, tiempos por serie ni horas. Si "min" es null, no menciones la duración ni la densidad.
+- "seriesTotales" es el número real de series de trabajo de fuerza (sin calentamiento) y "seriesPorHora" la densidad real (series de trabajo por hora); cítalos tal cual, no recalcules. Cada ejercicio trae sus series reales (kg, reps, rir): cita pesos, repeticiones y RIR exactos, sin sumar ni promediar de cabeza lo que no venga calculado.
+- "objetivoRutina" (dentro de cada ejercicio, si viene) es lo que mandaba la rutina para ese ejercicio, por ejemplo "4 × 8-12" (series × repeticiones). Compara las series y repeticiones reales con él. Si no viene, no hables de objetivo de la rutina ni de series faltantes respecto a ella.
+- "sesionAnterior" (si viene) es la misma sesión de la última vez: úsala para valorar la progresión (más peso, más repeticiones o más series en un ejercicio clave) con las cifras reales de ambas. Si no viene, no menciones progresión respecto a otra sesión.
 - kg = peso por serie (0 = peso corporal), uni = ejercicio unilateral, rir = repeticiones en reserva, drop = drop set.
 - Los ejercicios con cardio = true son bloques de cardio (no series de fuerza): min = minutos, km = distancia, kmh = velocidad, inc = inclinación %, nivel = resistencia de la máquina, int = ritmo (caminata, trote o correr). En la caminadora/cinta cada bloque es un INTERVALO (HIIT si alterna ritmos, LISS si es constante). Valóralos como cardio, no por kilos.
 - "perfil" puede traer datos del cuestionario inicial; úsalos (si faltan, ignóralos) para personalizar sin decirlos como una lista:
@@ -298,10 +304,11 @@ const ESQUEMA_COACH = {
   properties: {
     nota: { type: 'NUMBER' },
     titulo: { type: 'STRING' },
-    analisis: { type: 'STRING' },
+    resumen: { type: 'STRING' },
+    paraLlegarAl10: { type: 'ARRAY', items: { type: 'STRING' } },
     consejos: { type: 'ARRAY', items: { type: 'STRING' } },
   },
-  required: ['nota', 'titulo', 'analisis', 'consejos'],
+  required: ['nota', 'titulo', 'resumen', 'paraLlegarAl10', 'consejos'],
 };
 // Datos del perfil que se mandan a Gemini (nunca nombre, usuario, correo ni uid). Los del cuestionario inicial (2026-11-15) pueden faltar en cuentas que aún no lo han hecho.
 // Los ids se traducen con listas cerradas (nada de texto libre del cliente en el prompt).
@@ -330,9 +337,27 @@ const perfilCoach = (p) => {
   if (rasgos.length) base.rasgos = rasgos;
   return base;
 };
-const resumenEntreno = (w) => ({
-  fecha: w.fecha, nombre: w.nombre || '', min: w.min || null,
-  ejercicios: (w.ejercicios || []).slice(0, 20).map((e) => (e.tipo === 'cardio'
+// Objetivo de la rutina para este entreno (2026-11-18): el entreno guardado no lleva el objetivo, pero la sesión de la rutina con el MISMO nombre
+// sí (perfil.rutina / perfil.rutinas[].sesiones[dia] = { nombre, t:'fuerza', ej:[{ n, series, reps }] }). Devuelve { nombre normalizado del ejercicio: 'series × reps' } o {}.
+const normEj = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+const objetivosRutina = (p, w) => {
+  const nom = normEj(w.nombre);
+  if (!nom) return {};
+  const rutinas = [p && p.rutina, ...((p && Array.isArray(p.rutinas)) ? p.rutinas : [])].filter((r) => r && r.sesiones && typeof r.sesiones === 'object');
+  for (const r of rutinas) {
+    const ses = Object.values(r.sesiones).find((x) => x && x.t === 'fuerza' && Array.isArray(x.ej) && normEj(x.nombre) === nom);
+    if (!ses) continue;
+    const o = {};
+    for (const e of ses.ej.slice(0, 20)) {
+      const series = Math.round(Number(e && e.series)), reps = String((e && e.reps) || '').replace(/\s+/g, ' ').trim().slice(0, 20);
+      if (e && e.n && series >= 1 && series <= 20 && reps) o[normEj(e.n)] = `${series} × ${reps}`;
+    }
+    return o;
+  }
+  return {};
+};
+const resumenEntreno = (w, objetivos = {}) => {
+  const ejercicios = (w.ejercicios || []).slice(0, 20).map((e) => (e.tipo === 'cardio'
     ? { // bloque de cardio dentro del entreno (2026-11-15)
       n: String(e.n || '').slice(0, 60), cardio: true,
       series: (e.series || []).slice(0, 10).map((s) => {
@@ -346,10 +371,16 @@ const resumenEntreno = (w) => ({
     }
     : {
       n: String(e.n || '').slice(0, 60), uni: !!e.uni,
+      ...(objetivos[normEj(e.n)] ? { objetivoRutina: objetivos[normEj(e.n)] } : {}),
       series: (e.series || []).filter((s) => !s.w).slice(0, 15).map((s) => ({ kg: Number(s.kg) || 0, reps: Number(s.reps) || 0, ...(s.rir != null && s.rir !== '' && Number.isFinite(Number(s.rir)) ? { rir: Number(s.rir) } : {}), ...(s.isDropSet ? { drop: true } : {}) })),
-    })).filter((e) => e.series.length),
-});
-const devolverCoach = (w) => ({ nota: w.aiNota, titulo: w.aiTitulo || '', analisis: w.aiTexto || '', consejos: w.aiConsejos || [], demo: false, aiFecha: w.aiFecha || null });
+    })).filter((e) => e.series.length);
+  // Cifras que el modelo NO debe calcular de cabeza: series de trabajo de fuerza y densidad real (series por hora de la duración registrada).
+  const seriesTotales = ejercicios.reduce((t, e) => t + (e.cardio ? 0 : e.series.length), 0);
+  const min = Number(w.min) > 0 ? Math.round(Number(w.min)) : null;
+  return { fecha: w.fecha, nombre: w.nombre || '', min, seriesTotales, ...(min && seriesTotales ? { seriesPorHora: Math.round((seriesTotales / min) * 600) / 10 } : {}), ejercicios };
+};
+// `analisis` se mantiene como alias de `resumen` para las apps que aún no conocen el campo nuevo.
+const devolverCoach = (w) => ({ nota: w.aiNota, titulo: w.aiTitulo || '', resumen: w.aiTexto || '', analisis: w.aiTexto || '', paraLlegarAl10: w.aiParaLlegarAl10 || [], consejos: w.aiConsejos || [], demo: false, aiFecha: w.aiFecha || null });
 
 // Respaldo si el modelo principal está saturado (503) o ya no existe (404). Debe tener nivel gratuito; comprobar en ai.google.dev antes de cambiarlo.
 const MODELO_COACH_RESPALDO = 'gemini-3.5-flash-lite';
@@ -413,7 +444,8 @@ function limpiarCoach(x) {
   if (!Number.isFinite(nota)) throw new Error('nota no válida');
   const txt = (v, n) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, n);
   const consejos = (Array.isArray(x.consejos) ? x.consejos : []).map((c) => txt(c, 200)).filter(Boolean).slice(0, 3);
-  return { nota: Math.round(Math.max(0, Math.min(10, nota)) * 10) / 10, titulo: txt(x.titulo, 60) || 'Análisis del entreno', analisis: txt(x.analisis, 500), consejos };
+  const paraLlegarAl10 = (Array.isArray(x.paraLlegarAl10) ? x.paraLlegarAl10 : []).map((c) => txt(c, 230)).filter(Boolean).slice(0, 3); // puede venir vacío: la app oculta el bloque
+  return { nota: Math.round(Math.max(0, Math.min(10, nota)) * 10) / 10, titulo: txt(x.titulo, 60) || 'Análisis del entreno', resumen: txt(x.resumen != null ? x.resumen : x.analisis, 500), paraLlegarAl10, consejos };
 }
 
 exports.coach = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 120, memory: '256MiB', concurrency: 10 }, async (req) => {
@@ -426,7 +458,7 @@ exports.coach = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 120, memory: '
   if (!doc.exists) throw new HttpsError('failed-precondition', 'No encontramos ese entreno. Actualiza la app y prueba otra vez.');
   const w = doc.data();
   if (Number.isFinite(Number(w.aiNota)) && w.aiDemo !== true) return devolverCoach(w); // ya analizado: no se gasta nada
-  const ent = resumenEntreno(w);
+  const ent = resumenEntreno(w, objetivosRutina(p, w));
   if (w.tipo !== 'gym' || !ent.ejercicios.length) throw new HttpsError('failed-precondition', 'Solo se pueden analizar entrenos de fuerza con series apuntadas.');
 
   // Sesión anterior con el mismo nombre (para valorar la progresión). Si falla, se analiza sin ella.
@@ -452,7 +484,7 @@ exports.coach = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 120, memory: '
   try {
     const perfil = perfilCoach(p);
     const res = limpiarCoach(await llamarGemini(GEMINI_CLAVE.value(), { perfil, entreno: ent, sesionAnterior: anterior }));
-    const campos = { aiNota: res.nota, aiTitulo: res.titulo, aiTexto: res.analisis, aiConsejos: res.consejos, aiDemo: false, aiFecha: new Date().toISOString() };
+    const campos = { aiNota: res.nota, aiTitulo: res.titulo, aiTexto: res.resumen, aiParaLlegarAl10: res.paraLlegarAl10, aiConsejos: res.consejos, aiDemo: false, aiFecha: new Date().toISOString() };
     await doc.ref.update(campos);
     return devolverCoach(campos);
   } catch (e) {
