@@ -1997,6 +1997,37 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .ai-res.sm .ai-box ul, .ai-res.sm .ai-box p { font-size: 13px; }
 
 /* ============================================================
+   2026-11-18 · Compartir entreno (45): modal con carrusel de plantillas (canvas), barra de acciones circular y botón LISTO.
+   Va ANTES del bloque de escritorio (que tiene que seguir siendo el último).
+   ============================================================ */
+.sheet.cp-sheet { overflow: hidden; display: flex; flex-direction: column; }
+.cp-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; touch-action: pan-y; display: grid; gap: 12px; align-content: start; padding: 2px 16px 8px; }
+.cp-sub { text-align: center; color: var(--muted); font-size: 14px; margin: 0; }
+.cp-car { --cp-h: clamp(220px, 40dvh, 380px); display: flex; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; overscroll-behavior-x: contain; margin: 0 -16px; touch-action: pan-x pan-y; }
+.cp-car::-webkit-scrollbar { display: none; }
+.cp-slide { flex: 0 0 100%; scroll-snap-align: center; scroll-snap-stop: always; display: grid; place-items: center; padding: 6px 0; }
+.cp-frame { height: var(--cp-h); max-width: calc(100% - 40px); border-radius: 6px; overflow: hidden; box-shadow: 0 0 0 1px var(--line); background: #0B0B0B; }
+.cp-frame canvas { display: block; width: 100%; height: 100%; }
+/* Transparente: cuadrícula de previsualización detrás de la tarjeta (el PNG final no la lleva) */
+.cp-frame.cp-trans { background-color: #5d5d5d; background-image: linear-gradient(45deg, #7a7a7a 25%, transparent 25%, transparent 75%, #7a7a7a 75%), linear-gradient(45deg, #7a7a7a 25%, transparent 25%, transparent 75%, #7a7a7a 75%); background-size: 20px 20px; background-position: 0 0, 10px 10px; }
+.cp-dots { display: flex; justify-content: center; gap: 4px; }
+.cp-dot { width: 26px; height: 26px; border: 0; background: none; padding: 0; display: grid; place-items: center; }
+.cp-dot::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--line); transition: width .2s, background .2s; }
+.cp-dot.on::after { width: 22px; border-radius: 4px; background: var(--accent); }
+.cp-fondos { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.cp-chip { border: 1.5px solid var(--line); background: transparent; color: var(--ink); border-radius: 2px; padding: 9px 14px; font-weight: 700; font-size: 14px; min-height: 40px; }
+.cp-chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.cp-acts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 2px 0; }
+.cp-act { border: 0; background: none; color: var(--ink); display: grid; justify-items: center; gap: 7px; padding: 4px 0; font-size: 13px; font-weight: 600; }
+.cp-circ { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: var(--surface2); border: 1.5px solid var(--line); transition: transform .1s, background .15s, border-color .15s; }
+.cp-act:active .cp-circ { transform: scale(.93); }
+.cp-act.on .cp-circ { border-color: var(--accent); color: var(--accent-text); }
+.cp-lbl { color: var(--muted); }
+.cp-tag { margin: 0; text-align: center; color: var(--muted); font-size: 12.5px; }
+.cp-foot { flex: none; padding: 10px 16px calc(14px + var(--safe-b, 0px)); border-top: 1px solid var(--bd); }
+.wrow .cp-share { color: var(--accent-text); }
+
+/* ============================================================
    2026-11-17 · Escritorio (≥ 1024 px). Todo dentro de la media query:
    el móvil no cambia. Sidebar, columna central y vistas a dos columnas.
    ============================================================ */

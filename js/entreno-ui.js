@@ -7,6 +7,7 @@ import * as CAL from './calorias.js';
 import { analizarEntreno, diagnosticoCoach } from './coach.js';
 import * as C3 from './cuerpo.js';
 import { pautas } from './tecnica.js';
+import { crearCompartir } from './compartir.js';
 
 export function crearEntreno(ctx) {
   const { st, root } = ctx;
@@ -246,6 +247,10 @@ const AI_CAMPOS = ['aiNota', 'aiTitulo', 'aiTexto', 'aiParaLlegarAl10', 'aiConse
 // Análisis guardado (o null). Uno de ejemplo (aiDemo, del modo prueba o de la maqueta antigua) no vale con Firebase: se puede pedir el real.
 const aiDe = (w) => (w && Number.isFinite(Number(w.aiNota)) && !(w.aiDemo && !api.local)
   ? { nota: Number(w.aiNota), titulo: w.aiTitulo || '', resumen: w.aiTexto || '', llegar10: Array.isArray(w.aiParaLlegarAl10) ? w.aiParaLlegarAl10 : [], consejos: Array.isArray(w.aiConsejos) ? w.aiConsejos : [], demo: !!w.aiDemo } : null);
+// Compartir entreno (45): modal con plantillas dibujadas en canvas. Se abre al terminar un entreno y desde el botón de compartir de cada entreno guardado.
+const CP = crearCompartir({ st, root, render: () => render(), aiDe });
+const puedeCompartir = (w) => w.tipo === 'gym' && (w.ejercicios || []).some((e) => !E.exCardio(e));
+const compartirBtn = (w) => (puedeCompartir(w) ? `<button type="button" class="iconbtn cp-share" data-act="cp-open" data-v="${esc(w.id)}" aria-label="Compartir entreno">${I.share}</button>` : '');
 const aiPosible = (w) => !!w && w.tipo === 'gym' && (w.ejercicios || []).length > 0;
 function aiHTML(w, compacto = false) {
   if (!aiPosible(w)) return '';
@@ -301,7 +306,7 @@ function wkRow(w, mod) {
   return `<div class="row wrow"><span class="wico">${tipoIcon(icoT)}</span>
     <span class="wtxt"><b>${esc(w.nombre || E.TIPOS[w.tipo] || 'Entreno')}</b><span class="muted small">${esc(sub.join(' · '))}</span></span>
     <span class="wkcal muted small">${w.kcal ? nf(w.kcal) + ' kcal' : ''}</span>
-    ${mod ? `<button type="button" class="iconbtn" data-act="wk-edit" data-v="${esc(w.id)}" aria-label="Editar entreno">${I.pencil}</button><button type="button" class="iconbtn bad" data-act="wk-del-ask" data-v="${esc(w.id)}" aria-label="Borrar entreno">${I.trash}</button>` : ''}</div>`;
+    ${compartirBtn(w)}${mod ? `<button type="button" class="iconbtn" data-act="wk-edit" data-v="${esc(w.id)}" aria-label="Editar entreno">${I.pencil}</button><button type="button" class="iconbtn bad" data-act="wk-del-ask" data-v="${esc(w.id)}" aria-label="Borrar entreno">${I.trash}</button>` : ''}</div>`;
 }
 
 /* ---------- pestaña Récords ---------- */
@@ -1102,6 +1107,7 @@ function resumenSheetHTML() {
         <span class="sum-lbl">${esc(r.nombre)}${r.record ? ' · ¡Nuevo récord!' : ''}</span>
         <div class="ai-stats"><span><b class="num">${nf(r.vol)}</b> kg movidos</span><span><b class="num">${r.sets}</b> ${r.sets === 1 ? 'serie' : 'series'}</span><span><b class="num">${esc(fmtDur(r.min))}</b></span></div>
         ${aiHTML(w)}
+        ${w && puedeCompartir(w) ? `<button type="button" class="btn quiet block" data-act="cp-open" data-v="${esc(w.id)}">${I.share} Compartir entreno</button>` : ''}
         <button type="button" class="btn ghost block" data-act="sum-close">Listo</button>
       </div>
     </div>`;
@@ -1561,6 +1567,7 @@ async function liveFinish() {
     if (editado) st.wkHist = true; else { st.wkTab = 'semana'; lsSet('cadencia-wktab', 'semana'); }
     st.wkDia = o.fecha; st.wkSem = E.mondayOf(o.fecha) < E.mondayOf(todayISO()) ? E.mondayOf(o.fecha) : null; // si se registró en una semana anterior, se muestra esa
     if (esPro() && !editado) st.resumen = { id: o.id, nombre: o.nombre, vol: volTotal, sets: nSets, min, record };
+    if (!editado && nSets > 0) st.compartir = { id: o.id, i: 0, fondo: 'oscuro', menu: false }; // «Compartir Entreno» al terminar (para todos); al darle a LISTO sigue el resumen Pro si lo hay
     render(); window.scrollTo(0, 0);
     toast(editado ? 'Entreno actualizado' : record ? '¡Nuevo récord personal!' : nSets ? `Entrenamiento guardado · ${nSets} ${nSets === 1 ? 'serie' : 'series'}` : 'Entrenamiento guardado');
   } catch (e) { fail(`No se ha podido guardar: ${errorText(e)}`); }
@@ -1683,6 +1690,10 @@ root.addEventListener('click', async (e) => {
   if (!b) return;
   const act = b.dataset.act, v = b.dataset.v;
   const w = st.wk, o = st.rw, re = st.re, L = st.lib, Lv = st.live;
+
+  // compartir entreno (45): va el primero y antes de cualquier await (iOS exige que copiar/compartir/elegir foto salgan del gesto del toque)
+  if (act === 'cp-open') return CP.abrir(v);
+  if (act.startsWith('cp-')) return CP.click(act, b);
 
   // ficha del ejercicio (foto o nombre en una rutina)
   if (act === 'ex-view') { st.exView = { n: b.dataset.n }; return render(); }
@@ -2094,5 +2105,5 @@ function recuperacionHTML() {
     ${esPro() ? cuerpo : muro}</section>`;
 }
 function cuerpoSheetHTML() { return C3.sheetHTML(st.cuerpo3d, sexoCuerpo(), datosCuerpo(), todayISO()); }
-  return { exViewHTML, finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, limiteSheetHTML, calentarSheetHTML, moverSheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML };
+  return { exViewHTML, finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, compartirSheetHTML: CP.sheetHTML, pintarCompartir: CP.pintar, limiteSheetHTML, calentarSheetHTML, moverSheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML };
 }
