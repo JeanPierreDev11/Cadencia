@@ -55,19 +55,39 @@ function metCardio(e, s) {
 
 /* ---------- estadísticas ---------- */
 const inWeek = (w, monday) => w.fecha >= monday && w.fecha <= addDays(monday, 6);
-// Series hechas y kilos movidos (kilos × repeticiones de cada serie; ×2 en los ejercicios a un lado y en los de dos mancuernas, ver factorLados) de un entreno de fuerza.
+// Series hechas y kilos movidos de un entreno de fuerza (kg × reps; ×2 con carga «por lado»; unilateral = Izquierda + Derecha, ver volumenSerie).
 // Las series de calentamiento (w: true) se guardan en el historial pero NO cuentan en series, volumen, récords, 1RM ni fatiga.
 export const trabajo = (series) => (series || []).filter((s) => !(s && s.w));
 // Los bloques de cardio (ejercicio con tipo 'cardio') no son series de fuerza: no cuentan en series ni volumen.
 const deFuerza = (w) => (w.ejercicios || []).filter((e) => !exCardio(e));
 export const seriesDe = (w) => deFuerza(w).reduce((a, e) => a + trabajo(e.series).length, 0);
-// Mancuernas: el peso que se apunta es el de UNA mancuerna (kg c/u). Con dos mancuernas a la vez (Ambos lados) se mueve el doble, así que el volumen cuenta ×2
-// sin que la persona sume nada. Los ejercicios que se hacen con UNA sola mancuerna (goblet, pullover, un brazo…) no se duplican.
+// ---- Cómo se apunta el peso (43) ----
+// `uni` (Ambos lados | Unilateral) solo decide la ESTRUCTURA: Ambos lados = una fila por serie; Unilateral = dos filas por serie, Izquierda (kg, reps) y Derecha (kgD, repsD).
+// `carga` ('total' | 'por_lado') dice QUÉ es el kg que se escribe: 'total' = todo el peso movido; 'por_lado' = el de un lado (una mancuerna, un brazo de la máquina…).
+// Volumen: Ambos lados + total → kg × reps; Ambos lados + por_lado → kg × 2 × reps; Unilateral → cada lado por separado (I + D), sin importar la carga.
+// Mancuernas de DOS a la vez → 'por_lado' por defecto; el resto (barra, máquinas, poleas…) → 'total'. Los ejercicios de UNA sola mancuerna (goblet, pullover, un brazo…) → 'total'.
 const UNA_MANCUERNA = /mancuerna(?!s)|\ba una (mano|pierna)\b|goblet|concentrad/i;
 export const dosMancuernas = (n) => { const x = ejercicio(n); return !!x && x.eq === 'mancuernas' && !UNA_MANCUERNA.test(x.n); };
-// Multiplicador del volumen de un ejercicio: ×2 si es unilateral (reps por lado, se hacen los dos lados) o si lleva dos mancuernas a la vez; si no, ×1.
-export const factorLados = (n, uni) => (uni || dosMancuernas(n) ? 2 : 1);
-export const volumenDe = (w) => deFuerza(w).reduce((a, e) => a + trabajo(e.series).reduce((b, s) => b + (Number(s.kg) || 0) * (Number(s.reps) || 0) * factorLados(e.n, e.uni), 0), 0);
+export const cargaDefecto = (n) => (dosMancuernas(n) ? 'por_lado' : 'total');
+// Clave estable de un ejercicio para guardar su preferencia de carga en el perfil (`cargaEj`): nombre oficial sin tildes ni signos.
+export const claveEj = (n) => normTxt(canon(n)).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+// Carga con la que se apuntó un ejercicio guardado: la suya si la tiene; si no (entrenos anteriores), la de por defecto de ese ejercicio.
+export const cargaDe = (e) => (e && (e.carga === 'por_lado' || e.carga === 'total') ? e.carga : cargaDefecto(e && e.n));
+const hayD = (v) => v != null && String(v).trim() !== '';
+// Lados de una serie: [Izquierda] o, si lleva Derecha, [Izquierda, Derecha]. Lo que falte en la Derecha se toma de la Izquierda (series unilaterales antiguas: «por lado», mismo peso y reps).
+export const ladosSerie = (s, parse = Number) => {
+  const I = { kg: parse(s.kg) || 0, reps: parse(s.reps) || 0 };
+  return [I, { kg: hayD(s.kgD) ? parse(s.kgD) || 0 : I.kg, reps: hayD(s.repsD) ? parse(s.repsD) || 0 : I.reps }];
+};
+// Volumen de UNA serie de un ejercicio e = { n, uni, carga } (parse convierte textos con coma en el entreno en vivo).
+export function volumenSerie(s, e, parse = Number) {
+  const [I, D] = ladosSerie(s, parse);
+  if (e && e.uni) return I.kg * I.reps + D.kg * D.reps;
+  return I.kg * I.reps * (cargaDe(e) === 'por_lado' ? 2 : 1);
+}
+// Series «planas» para récords y 1RM: en unilateral cuentan los dos lados.
+const seriesLados = (e) => trabajo(e.series).flatMap((s) => (e.uni ? ladosSerie(s) : [{ kg: Number(s.kg) || 0, reps: Number(s.reps) || 0 }]));
+export const volumenDe = (w) => deFuerza(w).reduce((a, e) => a + trabajo(e.series).reduce((b, s) => b + volumenSerie(s, e), 0), 0);
 export function weekStats(ws, monday) {
   const list = ws.filter((w) => inWeek(w, monday));
   const sum = (k, l = list) => l.reduce((a, w) => a + (w[k] || 0), 0);
@@ -157,7 +177,7 @@ export function records(ws) {
         const e = map.get(key) || { key, n: ej.n.trim(), veces: 0, best: null, last: '' };
         e.veces++;
         if (w.fecha > e.last) e.last = w.fecha;
-        for (const s of trabajo(ej.series)) {
+        for (const s of seriesLados(ej)) {
           const reps = s.reps || 0, kg = s.kg || 0;
           if (!reps) continue;
           const score = kg > 0 ? kg * (1 + reps / 30) : reps; // 1RM estimado (Epley) o repeticiones
@@ -204,9 +224,9 @@ export function orm1(kg, reps) {
   return kg * (36 / (37 - reps));
 }
 // Mejor 1RM estimado entre las series (kg y reps escritos).
-export function mejor1RM(series, parse = Number) {
+export function mejor1RM(series, parse = Number, uni = false) {
   let best = null;
-  for (const s of trabajo(series)) { const v = orm1(parse(s.kg), parse(s.reps)); if (v != null && (best == null || v > best)) best = v; }
+  for (const s of trabajo(series)) for (const l of (uni ? ladosSerie(s, parse) : [{ kg: parse(s.kg), reps: parse(s.reps) }])) { const v = orm1(l.kg, l.reps); if (v != null && (best == null || v > best)) best = v; }
   return best;
 }
 // Pro: Calentamiento Inteligente. Según cuántas series elijas (1, 2 o 3), porcentaje del peso de trabajo × repeticiones,
@@ -559,7 +579,7 @@ function mejoresE1RM(ws) {
   for (const w of ws || []) for (const e of w.ejercicios || []) {
     if (exCardio(e)) continue;
     const k = canon(e.n).toLowerCase();
-    for (const s of trabajo(e.series)) { const v = e1rmSerie(s.kg, s.reps); if (v > (m.get(k) || 0)) m.set(k, v); }
+    for (const s of seriesLados(e)) { const v = e1rmSerie(s.kg, s.reps); if (v > (m.get(k) || 0)) m.set(k, v); }
   }
   return m;
 }

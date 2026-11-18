@@ -1608,7 +1608,7 @@ export function crearSecciones(ctx) {
     if (!key) return { best, fecha };
     st.workouts.forEach((w) => (w.ejercicios || []).forEach((x) => {
       if (normFood(E.canon(x.n)) !== key) return;
-      (x.series || []).forEach((sr) => { if (sr.w) return; const kg = num(sr.kg); if (kg > best && num(sr.reps) >= 1) { best = kg; fecha = w.fecha; } });
+      (x.series || []).forEach((sr) => { if (sr.w) return; for (const l of (x.uni ? E.ladosSerie(sr, num) : [{ kg: num(sr.kg), reps: num(sr.reps) }])) if (l.kg > best && l.reps >= 1) { best = l.kg; fecha = w.fecha; } });
     }));
     return { best, fecha };
   }

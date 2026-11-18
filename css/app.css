@@ -1973,6 +1973,16 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 
 /* 2026-11-18 · Mancuernas: micro-texto bajo el selector Ambos lados / Unilateral (kg c/u y volumen ×2) */
 .lados-nota { margin: 6px 0 2px; font-size: 12px; line-height: 1.35; }
+/* Cabecera «kg» interactiva (43): pill que alterna kg (total) ⇄ kg (por lado) */
+.lrow-h .kg-pill { justify-self: center; max-width: 100%; border: 1px solid var(--line, rgba(128,128,128,.35)); background: var(--surface2); color: var(--accent-text); border-radius: 999px; padding: 3px 6px; margin-inline: -14px; position: relative; z-index: 1; font: inherit; font-size: 10.5px; font-weight: 700; line-height: 1.2; white-space: nowrap; cursor: pointer; min-height: 26px; }
+.lrow-h .kg-pill:hover { filter: brightness(1.08); }
+.lrow-h .kgh { font-size: 11px; }
+/* Unilateral: cada serie son dos filas, Izquierda (I) y Derecha (D) */
+.lset .sn .lado-t { display: block; font-size: 10px; line-height: 1; color: var(--muted); font-weight: 700; }
+.lset-d { padding-top: 0; margin-top: -2px; }
+.lset-d .sn-d { font-size: 12px; font-weight: 700; color: var(--muted); }
+.lset-i { padding-bottom: 0; }
+
 
 /* ============================================================
    2026-11-17 · Escritorio (≥ 1024 px). Todo dentro de la media query:

@@ -33,7 +33,11 @@ const sobreLimite = (tipo) => !esPro() && (tipo === 'rutinas' ? rutinasList().le
 function avisoLimite(tipo) { st.limite = { tipo }; render(); }
 const abrirSuscripcion = () => { st.limite = null; st.pf = { v: 'suscripcion', f: {}, busy: false }; render(); };
 // 1RM estimado (Brzycki) del ejercicio con lo que lleva escrito; vacío si no hay serie válida.
-const ormHTML = (ex) => { const v = E.mejor1RM(ex.s, num); return v == null ? '' : `${I.crown} 1RM estimado: ${kgTxt(v)} kg`; };
+// Carga con la que se apunta el peso de un ejercicio en vivo: la elegida; si no, la que usó la última vez (perfil `cargaEj`) o la de por defecto (dos mancuernas → por lado; resto → total).
+const cargaGuardada = (n) => { const c = ((st.profile && st.profile.cargaEj) || {})[E.claveEj(n)]; return c === 'por_lado' || c === 'total' ? c : E.cargaDefecto(n); };
+const cargaLive = (e) => (e.carga === 'por_lado' || e.carga === 'total' ? e.carga : cargaGuardada(e.n));
+const cargaNota = (e) => (e.uni ? 'Peso de cada lado · Volumen = Izq. + Der.' : cargaLive(e) === 'por_lado' ? 'Peso por lado · Volumen ×2' : 'Peso total de la carga');
+const ormHTML = (ex) => { const v = E.mejor1RM(ex.s, num, ex.uni); return v == null ? '' : `${I.crown} 1RM estimado: ${kgTxt(v)} kg`; };
 const rutinaOf = () => { const r = st.profile && st.profile.rutina; return r && Array.isArray(r.dias) && r.dias.length && r.sesiones ? r : null; };
 // Todas tus rutinas guardadas; la activa es la que usa la semana, Inicio y el entrenamiento en directo.
 function rutinasList() {
@@ -1063,7 +1067,7 @@ function liveEx(n, nSets, obj, ej) {
     return { ...base, s: [bloqueCardio(int)] };
   }
   const objReps = obj ? obj.split('×')[1].trim() : '';
-  return { n, m: x ? x.m : '', obj: obj || '', objReps, uni: false, superset: false, prev, s: Array.from({ length: Math.max(1, Math.min(10, nSets || 3)) }, () => ({ kg: '', reps: '', done: false, rir: '', dropset: false })) };
+  return { n, m: x ? x.m : '', obj: obj || '', objReps, uni: false, carga: cargaGuardada(n), superset: false, prev, s: Array.from({ length: Math.max(1, Math.min(10, nSets || 3)) }, () => ({ kg: '', reps: '', done: false, rir: '', dropset: false })) };
 }
 // Sesiones que puede elegir como título: las de su rutina y las de su tipo de entrenamiento.
 function liveOpciones() {
@@ -1181,7 +1185,7 @@ const serieCuenta = (s, ex) => (ex && ex.tipo === 'cardio' ? (ex.cm === 'cinta' 
   : s.w && !livePlano(st.live) ? !!s.done : s.done || String(s.reps).trim() !== '' || String(s.kg).trim() !== '');
 function liveTotals() {
   let vol = 0, sets = 0;
-  for (const ex of st.live.ex) if (ex.tipo !== 'cardio') for (const s of ex.s) if (s.done && !s.w) { sets++; vol += (num(s.kg) || 0) * (num(s.reps) || 0) * E.factorLados(ex.n, ex.uni); }
+  for (const ex of st.live.ex) if (ex.tipo !== 'cardio') { const e = { n: ex.n, uni: ex.uni, carga: cargaLive(ex) }; for (const s of ex.s) if (s.done && !s.w) { sets++; vol += E.volumenSerie(s, e, num); } }
   return { vol: Math.round(vol), sets };
 }
 // Rellena un bloque de cardio vacío con lo de la última vez. true si tiene tiempo o distancia.
@@ -1265,7 +1269,7 @@ function viewLive() {
   const fmtKg = (v) => (v ? String(v).replace('.', ',') : '');
   const blocks = L.ex.map((e, i) => {
     if (e.tipo === 'cardio') return cardioBlockHTML(e, i, plano);
-    const x = E.ejercicio(e.n), uniOk = E.puedeUnilateral(e.n), conPeso = !x || x.eq !== 'corporal', dos = E.dosMancuernas(e.n); // dos: lleva dos mancuernas, se apunta el peso de UNA (c/u)
+    const x = E.ejercicio(e.n), uniOk = E.puedeUnilateral(e.n), conPeso = !x || x.eq !== 'corporal', car = cargaLive(e); // car: 'total' | 'por_lado' (qué es el kg que se escribe)
     return `<section class="lex ${i > 0 && L.ex[i - 1].superset ? 'ss-next' : ''} ${e.superset ? 'ss-first' : ''}">
       ${i > 0 && L.ex[i - 1].superset ? '<span class="ss-tag">Superserie</span>' : ''}
       <div class="lex-head"><button type="button" class="rx-view lex-view" data-act="ex-view" data-n="${esc(e.n)}" aria-label="Ver cómo se hace ${esc(e.n)}">${exThumb(x || { eq: 'corporal' })}
@@ -1273,16 +1277,29 @@ function viewLive() {
         ${!L.edit && conPeso ? `<button type="button" class="warm-btn ${pro ? '' : 'is-locked'}" data-act="live-warm" data-v="${i}" aria-label="Calentamiento para ${esc(e.n)}${pro ? '' : ' (Cadencia Pro)'}">${I.flame} Calentar${pro ? '' : ' <span class="protag">Pro</span>'}</button>` : ''}
         <button type="button" class="iconbtn" data-act="live-swap" data-v="${i}" aria-label="Cambiar ${esc(e.n)}">${I.swap}</button>
         <button type="button" class="iconbtn" data-act="live-del" data-v="${i}" aria-label="Quitar ${esc(e.n)}">${I.trash}</button></div>
-      ${uniOk ? `<div class="seg mini" role="group" aria-label="Lados"><button type="button" data-act="live-uni" data-v="${i}" data-u="0" aria-pressed="${!e.uni}">Ambos lados</button><button type="button" data-act="live-uni" data-v="${i}" data-u="1" aria-pressed="${!!e.uni}">Unilateral</button></div>${dos ? `<p class="lados-nota small muted">${e.uni ? 'Peso y reps de un lado · Volumen ×2 automático' : 'Peso de 1 mancuerna · Volumen ×2 automático'}</p>` : ''}` : ''}
+      ${uniOk ? `<div class="seg mini" role="group" aria-label="Lados"><button type="button" data-act="live-uni" data-v="${i}" data-u="0" aria-pressed="${!e.uni}">Ambos lados</button><button type="button" data-act="live-uni" data-v="${i}" data-u="1" aria-pressed="${!!e.uni}">Unilateral</button></div>` : ''}
+      ${conPeso || e.uni ? `<p class="lados-nota small muted">${cargaNota(e)}</p>` : ''}
       <div class="ltab ${plano ? 'simple' : ''}">
-        <div class="lrow-h"><span>Serie</span><span>Anterior</span><span>${dos ? 'kg (c/u)' : 'kg'}</span><span>${e.uni ? 'Reps/lado' : 'Reps'}</span>${plano ? '' : '<span></span>'}</div>
-        ${e.s.map((s, j) => { const wi = idxTrabajo(e, j), p = s.w ? null : e.prev[wi]; const sg = sugSerie(e, j); const phKg = sg ? (sg.kg ? fmtKg(sg.kg) : 'kg') : p && p.kg ? fmtKg(p.kg) : '–'; const phR = sg ? String(sg.reps) : p ? String(p.reps) : s.w ? '–' : e.objReps || '–'; const pc = sg ? ' ph-sug' : ''; const sug = plano || s.w ? '' : sugerencia(e, s); const fin = !plano && !!s.done, lk = fin ? ' readonly tabindex="-1" aria-readonly="true"' : ''; return `<div class="lset ${s.w ? 'is-w' : ''} ${fin ? 'on is-done' : ''}">
-          ${s.w ? '<span class="num sn sn-w" title="Calentamiento" aria-label="Serie de calentamiento">W</span>' : `<span class="num sn">${wi + 1}</span>`}
-          <span class="prev">${p ? `${p.kg ? fmtKg(p.kg) + ' × ' : ''}${p.reps}${p.uni ? ' /lado' : ''}` : '—'}</span>
-          <input class="input${pc}" data-lv="${i}.${j}.kg" inputmode="decimal" value="${esc(s.kg)}" placeholder="${esc(phKg)}"${lk} aria-label="Kilos${dos ? ' de cada mancuerna' : ''} serie ${j + 1} de ${esc(e.n)}">
-          <input class="input${pc}" data-lv="${i}.${j}.reps" inputmode="numeric" value="${esc(s.reps)}" placeholder="${esc(phR)}"${lk} aria-label="Repeticiones serie ${j + 1} de ${esc(e.n)}">
-          ${plano ? '' : `<button type="button" class="chk" data-act="live-done" data-v="${i}.${j}" aria-pressed="${!!s.done}" aria-label="${s.done ? 'Desmarcar' : 'Marcar'} serie ${j + 1} como hecha">${I.check}</button>`}
-        </div>${s.w ? '' : bestiaHTML(e, i, j, s)}${sug ? `<p class="lsug">${sug}</p>` : ''}`; }).join('')}
+        <div class="lrow-h"><span>Serie</span><span>Anterior</span>${e.uni ? '<span class="kgh">kg (por lado)</span>' : conPeso ? `<button type="button" class="kg-pill" data-act="live-carga" data-v="${i}" aria-label="Los kilos son ${car === 'por_lado' ? 'de un solo lado' : 'el peso total'} en ${esc(e.n)}. Tocar para cambiar a ${car === 'por_lado' ? 'peso total' : 'peso por lado'}">kg (${car === 'por_lado' ? 'por lado' : 'total'})</button>` : '<span>kg</span>'}<span>Reps</span>${plano ? '' : '<span></span>'}</div>
+        ${e.s.map((s, j) => { const wi = idxTrabajo(e, j), p = s.w ? null : e.prev[wi]; const sg = sugSerie(e, j); const phKg = sg ? (sg.kg ? fmtKg(sg.kg) : 'kg') : p && p.kg ? fmtKg(p.kg) : '–'; const phR = sg ? String(sg.reps) : p ? String(p.reps) : s.w ? '–' : e.objReps || '–'; const pc = sg ? ' ph-sug' : ''; const sug = plano || s.w ? '' : sugerencia(e, s); const fin = !plano && !!s.done, lk = fin ? ' readonly tabindex="-1" aria-readonly="true"' : ''; const dos2 = e.uni && !s.w; // dos2: serie desdoblada en Izquierda y Derecha
+          const chk = plano ? '' : `<button type="button" class="chk" data-act="live-done" data-v="${i}.${j}" aria-pressed="${!!s.done}" aria-label="${s.done ? 'Desmarcar' : 'Marcar'} serie ${j + 1} como hecha">${I.check}</button>`;
+          const kgAria = e.uni ? '' : car === 'por_lado' ? ' de cada lado' : ' totales';
+          const pI = p ? `${p.kg ? fmtKg(p.kg) + ' × ' : ''}${p.reps}` : '—';
+          const pD = p ? `${(p.kgD != null ? p.kgD : p.kg) ? fmtKg(p.kgD != null ? p.kgD : p.kg) + ' × ' : ''}${p.repsD != null ? p.repsD : p.reps}` : '—';
+          const phKgD = lleno(s.kg) ? s.kg : phKg, phRD = lleno(s.reps) ? s.reps : phR;
+          return `<div class="lset ${s.w ? 'is-w' : ''} ${fin ? 'on is-done' : ''} ${dos2 ? 'lset-i' : ''}">
+          ${s.w ? '<span class="num sn sn-w" title="Calentamiento" aria-label="Serie de calentamiento">W</span>' : `<span class="num sn">${wi + 1}${dos2 ? '<b class="lado-t" aria-hidden="true">I</b>' : ''}</span>`}
+          <span class="prev">${pI}</span>
+          <input class="input${pc}" data-lv="${i}.${j}.kg" inputmode="decimal" value="${esc(s.kg)}" placeholder="${esc(phKg)}"${lk} aria-label="Kilos${kgAria}${dos2 ? ' del lado izquierdo' : ''} serie ${j + 1} de ${esc(e.n)}">
+          <input class="input${pc}" data-lv="${i}.${j}.reps" inputmode="numeric" value="${esc(s.reps)}" placeholder="${esc(phR)}"${lk} aria-label="Repeticiones${dos2 ? ' del lado izquierdo' : ''} serie ${j + 1} de ${esc(e.n)}">
+          ${dos2 ? (plano ? '' : '<span></span>') : chk}
+        </div>${dos2 ? `<div class="lset lset-d ${fin ? 'on is-done' : ''}">
+          <span class="num sn sn-d" aria-hidden="true">D</span>
+          <span class="prev">${pD}</span>
+          <input class="input${pc}" data-lv="${i}.${j}.kgD" inputmode="decimal" value="${esc(s.kgD == null ? '' : s.kgD)}" placeholder="${esc(phKgD)}"${lk} aria-label="Kilos del lado derecho serie ${j + 1} de ${esc(e.n)}">
+          <input class="input${pc}" data-lv="${i}.${j}.repsD" inputmode="numeric" value="${esc(s.repsD == null ? '' : s.repsD)}" placeholder="${esc(phRD)}"${lk} aria-label="Repeticiones del lado derecho serie ${j + 1} de ${esc(e.n)}">
+          ${chk}
+        </div>` : ''}${s.w ? '' : bestiaHTML(e, i, j, s)}${sug ? `<p class="lsug">${sug}</p>` : ''}`; }).join('')}
       </div>
       <div class="lex-foot"><button type="button" class="btn quiet small" data-act="live-set-add" data-v="${i}">${I.plus} Añadir serie</button>
         ${e.s.some((q) => q.w) ? `<button type="button" class="link" data-act="live-w-del" data-v="${i}">Quitar calentamiento</button>` : ''}
@@ -1416,14 +1433,19 @@ function aplicarCalentamiento(i, kg, n = 3) {
 function rellenarSerie(ex, j) {
   const s = ex.s[j], p = ex.prev[idxTrabajo(ex, j)], sg = sugSerie(ex, j);
   if (s.w) return !!String(s.reps).trim();
+  const lado = () => { // Unilateral: lo que falte en la Derecha se copia de la Izquierda
+    if (!ex.uni) return;
+    if (!String(s.kgD == null ? '' : s.kgD).trim() && String(s.kg).trim()) s.kgD = s.kg;
+    if (!String(s.repsD == null ? '' : s.repsD).trim() && String(s.reps).trim()) s.repsD = s.reps;
+  };
   if (sg) {
     if (!String(s.reps).trim()) s.reps = String(sg.reps);
     if (!String(s.kg).trim() && sg.kg) s.kg = String(sg.kg).replace('.', ',');
-    return true;
+    lado(); return true;
   }
   if (!String(s.reps).trim()) s.reps = p ? String(p.reps) : primerNumero(ex.objReps);
   if (!String(s.kg).trim() && p && p.kg) s.kg = String(p.kg).replace('.', ',');
-  return !!String(s.reps).trim();
+  lado(); return !!String(s.reps).trim();
 }
 
 // Lee lo apuntado y lo valida. Devuelve { ejs, nSets } o null (y enseña el error).
@@ -1461,6 +1483,11 @@ function liveRecoger() {
       if (!(reps >= 1 && reps <= 200) || !(kg >= 0 && kg <= 600)) return fail(`Revisa la serie ${s.w ? 'de calentamiento' : idxTrabajo(ex, j) + 1} de «${ex.n}»: repeticiones entre 1 y 200 y kilos entre 0 y 600.`);
       const q = { kg: Math.round(kg * 10) / 10, reps };
       if (s.w) { q.w = true; series.push(q); continue; } // calentamiento: se guarda marcado, no cuenta en estadísticas
+      if (ex.uni) { // Unilateral: kg/reps = Izquierda · kgD/repsD = Derecha (lo vacío copia la Izquierda)
+        const rD = String(s.repsD == null ? '' : s.repsD).trim() ? Math.round(num(s.repsD)) : reps, kD = String(s.kgD == null ? '' : s.kgD).trim() ? num(s.kgD) : kg;
+        if (!(rD >= 1 && rD <= 200) || !(kD >= 0 && kD <= 600)) return fail(`Revisa el lado derecho de la serie ${idxTrabajo(ex, j) + 1} de «${ex.n}»: repeticiones entre 1 y 200 y kilos entre 0 y 600.`);
+        q.kgD = Math.round(kD * 10) / 10; q.repsD = rD;
+      }
       if (esPro()) { // Modo Bestia (solo Pro): rir, isDropSet e isSuperset
         if (String(s.rir).trim() !== '') q.rir = Math.max(0, Math.min(5, Math.round(num(s.rir)) || 0));
         if (s.dropset) q.isDropSet = true;
@@ -1468,7 +1495,7 @@ function liveRecoger() {
       }
       series.push(q);
     }
-    if (series.length) ejs.push(ex.uni ? { n: ex.n, uni: true, series } : { n: ex.n, series });
+    if (series.length) ejs.push(ex.uni ? { n: ex.n, carga: cargaLive(ex), uni: true, series } : { n: ex.n, carga: cargaLive(ex), series });
   }
   if (!ejs.some((e) => E.trabajo(e.series).length)) return fail('Apunta al menos una serie o un bloque de cardio (escribe los datos o márcalo con ✓) para guardar el entrenamiento.');
   return { ejs, nSets: E.seriesDe({ ejercicios: ejs }) };
@@ -1814,7 +1841,7 @@ root.addEventListener('click', async (e) => {
       // Cinta: copia velocidad e inclinación del intervalo anterior (lo escrito o, si está vacío, su referencia en gris).
       const ref = ex.cm === 'cinta' ? refCardio(ex, ex.s.length - 1) : null;
       const ant = ex.cm === 'cinta' ? { velocidad: lleno(last.velocidad) ? last.velocidad : valTxt(E.cv(ref, 'velocidad')), inclinacion: lleno(last.inclinacion) ? last.inclinacion : valTxt(E.cv(ref, 'inclinacion')) } : null;
-      ex.s.push(ex.cm === 'cinta' ? intervaloCinta(ant) : ex.tipo === 'cardio' ? bloqueCardio(last.int) : { kg: last.kg, reps: '', done: false, rir: '', dropset: false });
+      ex.s.push(ex.cm === 'cinta' ? intervaloCinta(ant) : ex.tipo === 'cardio' ? bloqueCardio(last.int) : { kg: last.kg, reps: '', ...(ex.uni ? { kgD: last.kgD == null ? last.kg : last.kgD, repsD: '' } : {}), done: false, rir: '', dropset: false });
       liveSave(); return render();
     }
     if (act === 'live-set-del') { const ex = Lv.ex[Number(v)]; if (ex.s.length > 1) ex.s.pop(); liveSave(); return render(); }
@@ -1840,6 +1867,16 @@ root.addEventListener('click', async (e) => {
     if (act === 'live-w-del') { const ex = Lv.ex[Number(v)]; ex.s = ex.s.filter((q) => !q.w); if (!ex.s.length) ex.s.push({ kg: '', reps: '', done: false, rir: '', dropset: false }); liveSave(); return render(); }
     if (act === 'live-drop') { if (!esPro()) { toast('Función Pro'); return; } const [i, j] = v.split('.').map(Number), q = Lv.ex[i].s[j]; q.dropset = !q.dropset; liveSave(); return render(); }
     if (act === 'live-sup') { if (!esPro()) { toast('Función Pro'); return; } const ex = Lv.ex[Number(v)]; if (Number(v) < Lv.ex.length - 1) ex.superset = !ex.superset; liveSave(); return render(); }
+    if (act === 'live-carga') { // kg (total) ⇄ kg (por lado): se recuerda por ejercicio en el perfil (`cargaEj`), salvo al editar un entreno pasado
+      const ex = Lv.ex[Number(v)]; if (ex.uni) return;
+      ex.carga = cargaLive(ex) === 'total' ? 'por_lado' : 'total'; liveSave();
+      if (!Lv.edit && st.user) {
+        const m = { ...((st.profile && st.profile.cargaEj) || {}), [E.claveEj(ex.n)]: ex.carga };
+        st.profile = { ...st.profile, cargaEj: m };
+        Promise.resolve(api.saveProfile(st.user.uid, { cargaEj: m })).catch(() => {});
+      }
+      return render();
+    }
     if (act === 'live-uni') { Lv.ex[Number(v)].uni = b.dataset.u === '1'; liveSave(); return render(); }
     if (act === 'live-fin') { st.rest = null; return liveAbrirFin(); }
     if (act === 'live-discard') {
@@ -1923,7 +1960,7 @@ root.addEventListener('click', async (e) => {
               s: e.series.map((q) => ({ ...intervaloCinta(), ...Object.fromEntries(['tiempo', 'velocidad', 'inclinacion'].filter((k) => E.cv(q, k) != null).map((k) => [k, String(E.cv(q, k)).replace('.', ',')])), completada: true })) }
             : { n: e.n, m: 'cardio', tipo: 'cardio', cm: E.modoCardio(e.n), obj: '', objReps: '', uni: false, prev: [], superset: false,
               s: e.series.map((q) => ({ ...bloqueCardio(q.int), ...Object.fromEntries(CAMPOS_NUM.filter((k) => q[k] != null).map((k) => [k, String(q[k]).replace('.', ',')])), done: true })) })
-          : { n: e.n, m: (E.ejercicio(e.n) || {}).m || '', obj: '', objReps: '', uni: !!e.uni, prev: [], superset: e.series.some((q) => q.isSuperset), s: e.series.map((q) => ({ w: !!q.w, kg: q.kg ? String(q.kg).replace('.', ',') : '', reps: String(q.reps), done: true, rir: q.rir != null ? String(q.rir) : '', dropset: !!q.isDropSet })) })) };
+          : { n: e.n, m: (E.ejercicio(e.n) || {}).m || '', obj: '', objReps: '', uni: !!e.uni, carga: E.cargaDe(e), prev: [], superset: e.series.some((q) => q.isSuperset), s: e.series.map((q) => ({ w: !!q.w, kg: q.kg ? String(q.kg).replace('.', ',') : '', reps: String(q.reps), ...(e.uni && !q.w ? { kgD: q.kgD != null ? (q.kgD ? String(q.kgD).replace('.', ',') : '') : (q.kg ? String(q.kg).replace('.', ',') : ''), repsD: String(q.repsD != null ? q.repsD : q.reps) } : {}), done: true, rir: q.rir != null ? String(q.rir) : '', dropset: !!q.isDropSet })) })) };
       st.liveMin = false; st.wkHist = false; st.wkMod = false; liveSave(); render(); window.scrollTo(0, 0); return;
     }
     st.wk = { orig: x, id: x.id, fecha: x.fecha, tipo: x.tipo, nombre: x.nombre || '', min: String(x.min || ''), km: x.km ? String(x.km) : '', elev: x.elev ? String(x.elev) : '', pulso: x.pulso ? String(x.pulso) : '', np: x.np ? String(x.np) : '', bici: x.bici, esf: x.esf || 2, msg: '', saving: false };
