@@ -346,40 +346,77 @@ const resumenEntreno = (w) => ({
     }
     : {
       n: String(e.n || '').slice(0, 60), uni: !!e.uni,
-      series: (e.series || []).filter((s) => !s.w).slice(0, 15).map((s) => ({ kg: Number(s.kg) || 0, reps: Number(s.reps) || 0, ...(s.rir != null ? { rir: s.rir } : {}), ...(s.isDropSet ? { drop: true } : {}) })),
+      series: (e.series || []).filter((s) => !s.w).slice(0, 15).map((s) => ({ kg: Number(s.kg) || 0, reps: Number(s.reps) || 0, ...(s.rir != null && s.rir !== '' && Number.isFinite(Number(s.rir)) ? { rir: Number(s.rir) } : {}), ...(s.isDropSet ? { drop: true } : {}) })),
     })).filter((e) => e.series.length),
 });
 const devolverCoach = (w) => ({ nota: w.aiNota, titulo: w.aiTitulo || '', analisis: w.aiTexto || '', consejos: w.aiConsejos || [], demo: false, aiFecha: w.aiFecha || null });
 
-async function llamarGemini(clave, entrada) {
-  const ctrl = new AbortController(), t = setTimeout(() => ctrl.abort(), 45000);
+// Respaldo si el modelo principal está saturado (503) o ya no existe (404). Debe tener nivel gratuito; comprobar en ai.google.dev antes de cambiarlo.
+const MODELO_COACH_RESPALDO = 'gemini-3.5-flash-lite';
+const COACH_PRESUPUESTO_MS = 95000; // tiempo total máximo de Gemini con reintentos (la función dura 120 s y la app espera 125 s)
+const COACH_INTENTOS = [[MODELO_COACH, 0], [MODELO_COACH, 2000], [MODELO_COACH_RESPALDO, 3000]]; // [modelo, espera previa en ms]
+// Errores de Google que merece la pena reintentar: saturación/cuota por minuto (429, 500, 502, 503, 504), modelo retirado (404 → pasa al respaldo),
+// red caída, tiempo agotado y respuestas vacías o con JSON roto/cortado (el modelo es aleatorio: otra vez puede salir bien).
+const COACH_REINTENTABLE = (s) => [404, 429, 500, 502, 503, 504, 'timeout', 'red', 'vacio', 'json'].includes(s);
+// Gemini a veces envuelve el JSON en ```json … ``` o añade texto alrededor: se queda con lo que hay entre la primera «{» y la última «}».
+function jsonDeGemini(txt) {
+  const s = String(txt).replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+  const a = s.indexOf('{'), b = s.lastIndexOf('}');
+  return JSON.parse(a >= 0 && b > a ? s.slice(a, b + 1) : s);
+}
+// UNA llamada a UN modelo. Si falla lanza un Error con .status = código HTTP de Google, 'timeout', 'red', 'vacio' o 'json'.
+async function geminiUna(modelo, clave, entrada, ms) {
+  const ctrl = new AbortController(), t = setTimeout(() => ctrl.abort(), ms);
+  const fallo = (msg, status) => { const e = new Error(msg); e.status = status; return e; };
   try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODELO_COACH}:generateContent`, {
-      method: 'POST', signal: ctrl.signal,
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: PROMPT_COACH }] },
-        contents: [{ role: 'user', parts: [{ text: JSON.stringify(entrada) }] }],
-        generationConfig: { responseMimeType: 'application/json', responseSchema: ESQUEMA_COACH, temperature: 0.4, maxOutputTokens: 4096 },
-      }),
-    });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) { const e = new Error((j.error && j.error.message) || `HTTP ${r.status}`); e.status = r.status; throw e; }
+    let r, j;
+    try {
+      r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`, {
+        method: 'POST', signal: ctrl.signal,
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: PROMPT_COACH }] },
+          contents: [{ role: 'user', parts: [{ text: JSON.stringify(entrada) }] }],
+          // Gemini 3 «piensa» antes de responder y esos tokens cuentan en maxOutputTokens: con poco margen el JSON sale cortado.
+          generationConfig: { responseMimeType: 'application/json', responseSchema: ESQUEMA_COACH, temperature: 0.4, maxOutputTokens: 8192 },
+        }),
+      });
+      j = await r.json().catch(() => ({}));
+    } catch (e) {
+      throw e && e.name === 'AbortError' ? fallo(`Gemini no respondió en ${Math.round(ms / 1000)} s`, 'timeout') : fallo(`Sin conexión con Gemini (${e && e.message})`, 'red');
+    }
+    if (!r.ok) throw fallo((j.error && j.error.message) || `HTTP ${r.status}`, r.status);
     const c = (j.candidates || [])[0];
     const txt = ((c && c.content && c.content.parts) || []).map((p) => p.text || '').join('');
-    if (!txt) { const e = new Error(`Sin texto (${(c && c.finishReason) || (j.promptFeedback && j.promptFeedback.blockReason) || '¿?'})`); e.status = 'vacio'; throw e; }
-    return JSON.parse(txt);
+    if (!txt) throw fallo(`Sin texto (${(c && c.finishReason) || (j.promptFeedback && j.promptFeedback.blockReason) || '¿?'})`, 'vacio');
+    try { return jsonDeGemini(txt); } catch (e) { throw fallo(`JSON no válido (${(c && c.finishReason) || '¿?'}): ${txt.slice(0, 200)}`, 'json'); }
   } finally { clearTimeout(t); }
 }
+async function llamarGemini(clave, entrada) {
+  const fin = Date.now() + COACH_PRESUPUESTO_MS;
+  let ultimo = null;
+  for (const [modelo, espera] of COACH_INTENTOS) {
+    const queda = fin - Date.now() - espera;
+    if (queda < 8000) break; // no queda tiempo para otro intento con sentido
+    if (espera) await new Promise((r) => setTimeout(r, espera));
+    try { return await geminiUna(modelo, clave, entrada, Math.min(40000, queda)); } catch (e) {
+      ultimo = e;
+      console.error('Coach AI intento', modelo, e.status, e.message);
+      if (!COACH_REINTENTABLE(e.status)) throw e; // 400/401/402/403: reintentar no arregla nada
+    }
+  }
+  throw ultimo || Object.assign(new Error('Sin tiempo para llamar a Gemini'), { status: 'timeout' });
+}
 function limpiarCoach(x) {
-  const nota = Number(x && x.nota);
+  if (Array.isArray(x)) x = x[0]; // a veces devuelve [ { … } ]
+  const nota = Number(String(x && x.nota).replace(',', '.')); // admite «8,5»
   if (!Number.isFinite(nota)) throw new Error('nota no válida');
   const txt = (v, n) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, n);
   const consejos = (Array.isArray(x.consejos) ? x.consejos : []).map((c) => txt(c, 200)).filter(Boolean).slice(0, 3);
   return { nota: Math.round(Math.max(0, Math.min(10, nota)) * 10) / 10, titulo: txt(x.titulo, 60) || 'Análisis del entreno', analisis: txt(x.analisis, 500), consejos };
 }
 
-exports.coach = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 60, memory: '256MiB', concurrency: 10 }, async (req) => {
+exports.coach = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 120, memory: '256MiB', concurrency: 10 }, async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión para usar la IA.');
   const uid = req.auth.uid, id = String((req.data && req.data.id) || '');
   if (!/^[\w-]{1,80}$/.test(id)) throw new HttpsError('invalid-argument', 'Petición no válida.');
@@ -422,8 +459,13 @@ exports.coach = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 60, memory: '2
     const dec = FieldValue.increment(-1); // si falla, la consulta no cuenta
     await Promise.all([usoRef(uid, dia).set({ coach: dec }, { merge: true }), globalRef(dia).set({ coach: dec }, { merge: true })]).catch(() => {});
     if (e instanceof HttpsError) throw e;
-    console.error('Coach AI', e && e.status, e && e.message);
-    throw new HttpsError('unavailable', 'El Coach AI no ha respondido. Prueba otra vez en un momento.');
+    console.error('Coach AI', e && e.status, e && e.message, e && e.stack);
+    // details = qué ha pasado de verdad (HTTP de Google o motivo); la app lo enseña como código discreto y lo imprime en consola.
+    const st = e && e.status, http = Number.isInteger(st) ? st : null, motivo = typeof st === 'string' ? st : (http ? null : 'interno');
+    const msg = [429, 500, 502, 503, 504].includes(http) ? 'El Coach AI está saturado ahora mismo. Prueba otra vez en un minuto.'
+      : motivo === 'timeout' ? 'El Coach AI ha tardado demasiado. Prueba otra vez.'
+      : 'El Coach AI no ha respondido. Prueba otra vez en un momento.';
+    throw new HttpsError('unavailable', msg, { codigo: 'coach-fallo', http, motivo });
   }
 });
 

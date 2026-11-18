@@ -34,3 +34,19 @@ export async function analizarEntreno(api, w) {
   if (api.local) return { ...(await ejemploCoach(datosParaCoach(w))), guardado: false };
   return { ...(await api.coach(w.id)), demo: false, guardado: true };
 }
+
+// Diagnóstico de un fallo del Coach AI: lo imprime ENTERO en consola y devuelve un código discreto («Error 503», «Timeout»…) para el mensaje.
+// Con Firebase la llamada es «callable»: el SDK ya no da el HTTP crudo, pero sí `code` (unavailable = 503…), `message` y `details`
+// (el servidor mete en details.http el estado REAL de Google y en details.motivo timeout|red|vacio|json|interno).
+const HTTP_DE_CODIGO = { 'invalid-argument': 400, unauthenticated: 401, 'permission-denied': 403, 'not-found': 404, 'failed-precondition': 412,
+  'resource-exhausted': 429, internal: 500, unavailable: 503, 'deadline-exceeded': 504 };
+export function diagnosticoCoach(e, id) {
+  const code = String((e && e.code) || '').replace(/^functions\//, ''), d = (e && e.details && typeof e.details === 'object') ? e.details : {};
+  const http = d.http || HTTP_DE_CODIGO[code] || null;
+  console.error('[Coach AI] fallo', { entreno: id, code: (e && e.code) || null, http, mensaje: e && e.message, details: e && e.details, stack: e && e.stack });
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'Sin conexión';
+  if (d.http) return `Error ${d.http}`; // estado real de Google
+  if (d.motivo === 'timeout' || code === 'deadline-exceeded') return 'Timeout';
+  if (d.motivo) return `Error ${d.motivo}`; // json | vacio | red | interno
+  return http ? `Error ${http}` : 'Error';
+}

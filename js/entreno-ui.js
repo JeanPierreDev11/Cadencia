@@ -4,7 +4,7 @@ import { esc, num, nf, todayISO, fmtDate, lsSet, lsGet, toast, I } from './util.
 import { errorText } from './data.js';
 import * as E from './entreno.js';
 import * as CAL from './calorias.js';
-import { analizarEntreno } from './coach.js';
+import { analizarEntreno, diagnosticoCoach } from './coach.js';
 import * as C3 from './cuerpo.js';
 import { pautas } from './tecnica.js';
 
@@ -285,7 +285,7 @@ async function pedirCoach(id) {
     if (!res.guardado) await api.saveWorkout(st.user.uid, nuevo);
     st.workouts = st.workouts.map((x) => (x.id === id ? nuevo : x));
     delete st.aiPend[id];
-  } catch (e) { st.aiPend[id] = { error: errorText(e) }; }
+  } catch (e) { st.aiPend[id] = { error: `${errorText(e)} (${diagnosticoCoach(e, id)})` }; } // p. ej. «… (Error 503)» / «(Timeout)»
   render();
 }
 
