@@ -55,13 +55,19 @@ function metCardio(e, s) {
 
 /* ---------- estadísticas ---------- */
 const inWeek = (w, monday) => w.fecha >= monday && w.fecha <= addDays(monday, 6);
-// Series hechas y kilos movidos (kilos × repeticiones de cada serie; en los ejercicios a un lado, por los dos lados) de un entreno de fuerza.
+// Series hechas y kilos movidos (kilos × repeticiones de cada serie; ×2 en los ejercicios a un lado y en los de dos mancuernas, ver factorLados) de un entreno de fuerza.
 // Las series de calentamiento (w: true) se guardan en el historial pero NO cuentan en series, volumen, récords, 1RM ni fatiga.
 export const trabajo = (series) => (series || []).filter((s) => !(s && s.w));
 // Los bloques de cardio (ejercicio con tipo 'cardio') no son series de fuerza: no cuentan en series ni volumen.
 const deFuerza = (w) => (w.ejercicios || []).filter((e) => !exCardio(e));
 export const seriesDe = (w) => deFuerza(w).reduce((a, e) => a + trabajo(e.series).length, 0);
-export const volumenDe = (w) => deFuerza(w).reduce((a, e) => a + trabajo(e.series).reduce((b, s) => b + (Number(s.kg) || 0) * (Number(s.reps) || 0) * (e.uni ? 2 : 1), 0), 0);
+// Mancuernas: el peso que se apunta es el de UNA mancuerna (kg c/u). Con dos mancuernas a la vez (Ambos lados) se mueve el doble, así que el volumen cuenta ×2
+// sin que la persona sume nada. Los ejercicios que se hacen con UNA sola mancuerna (goblet, pullover, un brazo…) no se duplican.
+const UNA_MANCUERNA = /mancuerna(?!s)|\ba una (mano|pierna)\b|goblet|concentrad/i;
+export const dosMancuernas = (n) => { const x = ejercicio(n); return !!x && x.eq === 'mancuernas' && !UNA_MANCUERNA.test(x.n); };
+// Multiplicador del volumen de un ejercicio: ×2 si es unilateral (reps por lado, se hacen los dos lados) o si lleva dos mancuernas a la vez; si no, ×1.
+export const factorLados = (n, uni) => (uni || dosMancuernas(n) ? 2 : 1);
+export const volumenDe = (w) => deFuerza(w).reduce((a, e) => a + trabajo(e.series).reduce((b, s) => b + (Number(s.kg) || 0) * (Number(s.reps) || 0) * factorLados(e.n, e.uni), 0), 0);
 export function weekStats(ws, monday) {
   const list = ws.filter((w) => inWeek(w, monday));
   const sum = (k, l = list) => l.reduce((a, w) => a + (w[k] || 0), 0);
@@ -100,20 +106,27 @@ export function streakDays(ws, hoy, plan = () => true, hueco = 0) {
 // Descansos seguidos que permite una meta de `dias` entrenos por semana: 7 → 0, 6 → 1, 5 → 1, 4 → 1, 3 → 2, 2 → 3.
 export const huecoDeMeta = (dias) => (dias >= 2 && dias <= 7 ? Math.ceil(7 / dias) - 1 : 0);
 
-/* ---------- mover entreno a hoy (Pro; sustituye al «salvavidas de racha») ---------- */
+/* ---------- mover entreno a otro día de la semana (Pro; sustituye al «salvavidas de racha») ---------- */
 // Lista guardada en el perfil (campo `salvavidas`, se mantiene el nombre por compatibilidad):
-// [{ de: 'AAAA-MM-DD' (día cuya sesión se movió), a: 'AAAA-MM-DD' (día al que se movió) }].
+// [{ de: 'AAAA-MM-DD' (día original de la sesión), a: 'AAAA-MM-DD' (día al que se movió) }].
 // Ese «de» pasa a contar como descanso (no rompe la racha) y «a» hereda la sesión. Se guardan como mucho SALV_MAX.
+// Una sesión ya movida se puede volver a mover: se sustituye su entrada (sigue habiendo una sola por sesión, con el «de» original).
 export const SALV_MAX = 60;
 export const salvLista = (p) => (Array.isArray(p && p.salvavidas) ? p.salvavidas.filter((x) => x && typeof x.de === 'string' && typeof x.a === 'string') : []);
-// ¿Se puede mover la sesión del día `dia` a `hoy`? plan(iso) → sesión prevista YA con los movimientos aplicados; hechos = Set de fechas con entreno.
-// null → no hay nada que mover (no se muestra el botón). { ok: true } → se puede. { ok: false, msg } → se explica por qué no.
-export function moverAHoy(dia, hoy, plan, hechos, lista = []) {
-  if (dia === hoy || mondayOf(dia) !== mondayOf(hoy) || !plan(dia) || hechos.has(dia)) return null;
-  if (lista.some((x) => x.a === dia)) return { ok: false, msg: 'Esta sesión ya se movió una vez.' };
-  if (hechos.has(hoy)) return { ok: false, msg: 'Hoy ya has entrenado: no se puede mover otra sesión a hoy.' };
-  if (plan(hoy)) return { ok: false, msg: 'Hoy ya tienes una sesión prevista.' };
-  return { ok: true };
+// ¿Se puede mover la sesión del día `dia` y a qué días? plan(iso) → sesión prevista YA con los movimientos aplicados; hechos = Set de fechas con entreno.
+// Origen: un día de ESTA semana con sesión prevista y sin entreno (perdido, de hoy o futuro). Destino: un día de esta semana desde hoy, de descanso y sin entreno.
+// null → no hay nada que mover (no se muestra el botón). { ok: true, destinos: [iso…] } → se puede. { ok: false, msg } → se explica por qué no.
+export function moverDestinos(dia, hoy, plan, hechos) {
+  if (mondayOf(dia) !== mondayOf(hoy) || !plan(dia) || hechos.has(dia)) return null;
+  const lun = mondayOf(hoy), destinos = [];
+  for (let i = 0; i < 7; i++) { const d = addDays(lun, i); if (d >= hoy && d !== dia && !plan(d) && !hechos.has(d)) destinos.push(d); }
+  return destinos.length ? { ok: true, destinos } : { ok: false, msg: 'No te quedan días de descanso libres en esta semana.' };
+}
+// Lista nueva tras mover la sesión del día `dia` al día `destino`. Si `dia` ya era un destino de otra entrada, se reubica esa (el «de» original no cambia);
+// si se devuelve a su día original, la entrada desaparece.
+export function aplicarMover(lista, dia, destino) {
+  const e = lista.find((x) => x.a === dia), resto = e ? lista.filter((x) => x !== e) : lista, de = e ? e.de : dia;
+  return (destino === de ? resto : [...resto, { de, a: destino }]).slice(-SALV_MAX);
 }
 
 /* ---------- récords ---------- */

@@ -46,17 +46,17 @@ function rutinasList() {
   return list;
 }
 const nidR = () => 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-// dayPlanBase: lo que dice la rutina. dayPlan: además aplica los entrenos movidos a otro día (Pro, «Mover entreno a Hoy»): el día original pasa a descanso y el día destino hereda su sesión.
+// dayPlanBase: lo que dice la rutina. dayPlan: además aplica los entrenos movidos a otro día (Pro, «Mover entreno»): el día original pasa a descanso y el día destino hereda su sesión.
 const dayPlanBase = (iso) => { const r = rutinaOf(); if (!r) return null; const d = E.weekdayIdx(iso); return r.dias.includes(d) ? r.sesiones[d] || null : null; };
 const dayPlan = (iso) => {
   const sv = E.salvLista(st.profile);
   if (!sv.length) return dayPlanBase(iso);
-  if (sv.some((x) => x.de === iso)) return null;
-  const m = sv.find((x) => x.a === iso);
-  return (m && dayPlanBase(m.de)) || dayPlanBase(iso);
+  const m = sv.find((x) => x.a === iso), p = m && dayPlanBase(m.de); // un día destino hereda la sesión (aunque su día original sea otro movido)
+  if (p) return p;
+  return sv.some((x) => x.de === iso) ? null : dayPlanBase(iso);
 };
-// ¿Se puede mover a hoy la sesión del día d? (ver E.moverAHoy)
-const moverInfo = (d) => E.moverAHoy(d, todayISO(), dayPlan, new Set(st.workouts.map((w) => w.fecha)), E.salvLista(st.profile));
+// ¿Se puede mover la sesión del día d y a qué días? (ver E.moverDestinos)
+const moverInfo = (d) => E.moverDestinos(d, todayISO(), dayPlan, new Set(st.workouts.map((w) => w.fecha)));
 // Día elegido en la tira semanal (por defecto hoy; si es de otra semana, vuelve a hoy).
 // Semana que se ve en «Semana» (lunes ISO): la actual o una anterior elegida con el selector (st.wkSem). Nunca una futura.
 const semVista = () => { const cm = E.mondayOf(todayISO()), v = st.wkSem; return v && v < cm && E.mondayOf(v) === v ? v : cm; };
@@ -208,7 +208,7 @@ function wkSemana() {
     <section class="card"><h2>Horas por semana</h2>${barsChart(E.weeksSeries(ws, mon, 8))}</section>`;
 }
 
-// Tarjeta del día elegido en la tira: lo registrado (con Coach AI), lo previsto, «Registrar sesión» y «Mover entreno a Hoy».
+// Tarjeta del día elegido en la tira: lo registrado (con Coach AI), lo previsto, «Registrar sesión» y «Mover entreno».
 function diaHTML(sel, today) {
   const esHoy = sel === today, futuro = sel > today, dp = dayPlan(sel), pro = esPro();
   const hechos = st.workouts.filter((w) => w.fecha === sel);
@@ -217,7 +217,7 @@ function diaHTML(sel, today) {
   const plan = dp ? `<p class="today-line">${tipoIcon(dp.t)}<span><b>${esc(dp.nombre)}</b> · ${sesDuracion(dp)}<br><span class="muted small">${esc(sesResumen(dp))}</span></span></p>` : '';
   const mv = moverInfo(sel);
   const mover = !mv ? '' : mv.ok
-    ? `<button type="button" class="btn ghost block mover-btn ${pro ? '' : 'is-locked'}" data-act="wk-mover" data-v="${sel}">Mover entreno a Hoy${pro ? '' : ' <span class="protag">Pro</span>'}</button>`
+    ? `<button type="button" class="btn ghost block mover-btn ${pro ? '' : 'is-locked'}" data-act="wk-mover" data-v="${sel}">Mover entreno${pro ? '' : ' <span class="protag">Pro</span>'}</button>`
     : `<p class="small muted">${esc(mv.msg)}</p>`;
   if (hechos.length) {
     return `<section class="card dia-card ${esHoy ? 'ok-card' : ''}"><h2>${esc(titulo)}</h2>
@@ -231,7 +231,7 @@ function diaHTML(sel, today) {
     return `<section class="card dia-card"><h2>${esHoy ? 'Hoy toca' : esc(titulo)}</h2>${plan}${txt}${empezar}${reg('Registrar sesión', esHoy || futuro ? 'ghost' : '')}${mover}</section>`;
   }
   const movido = E.salvLista(st.profile).find((x) => x.de === sel);
-  const desc = movido ? `La sesión de este día se movió al ${esc(E.DIAS_LARGO[E.weekdayIdx(movido.a)].toLowerCase())}. Cuenta como descanso.`
+  const desc = movido ? `La sesión de este día se movió al ${esc(E.DIAS_LARGO[E.weekdayIdx(movido.a)].toLowerCase())}. Cuenta como descanso y no rompe tu racha.`
     : esHoy ? 'Hoy toca descansar. Si te apetece moverte, puedes registrar una sesión extra.' : futuro ? 'Día de descanso.' : 'Día de descanso. No hay ningún entreno registrado.';
   return `<section class="card dia-card"><h2>${esc(titulo)}</h2><p>${desc}</p>${reg('Registrar sesión')}</section>`;
 }
@@ -1134,6 +1134,21 @@ function calentarSheetHTML() {
       </div>
     </div>`;
 }
+// «Mover entreno» (Pro): elegir a qué día libre de esta semana se pasa la sesión. El día original cuenta como descanso y la racha no se rompe.
+function moverSheetHTML() {
+  const de = st.moverSel, inf = moverInfo(de), dp = dayPlan(de), hoy = todayISO();
+  const dia = (iso) => (iso === hoy ? 'Hoy' : cap(fmtDate(iso, { weekday: 'long' }))) + ' · ' + fmtDate(iso, { day: 'numeric', month: 'short' });
+  const opt = (iso) => `<button type="button" class="regopt" data-act="wk-mover-a" data-v="${iso}">${tipoIcon(dp ? dp.t : 'fuerza')}<span><b>${esc(dia(iso))}</b><small class="muted">Día de descanso</small></span></button>`;
+  return `<div class="sheet-back" data-act="mover-close"></div>
+    <div class="sheet short" role="dialog" aria-modal="true" aria-label="Mover entreno">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><button type="button" class="iconbtn" data-act="mover-close" aria-label="Cerrar">${I.back}</button><h2>Mover entreno</h2><span style="width:36px"></span></div>
+      <div class="sheet-list">
+        <p class="small muted">${dp ? `<b>${esc(dp.nombre)}</b> del ${esc(fmtDate(de, { weekday: 'long', day: 'numeric', month: 'short' }))}. ` : ''}Elige un día de descanso de esta semana. El día original contará como descanso y tu racha seguirá intacta.</p>
+        ${inf && inf.ok ? inf.destinos.map(opt).join('') : `<p class="small muted">${esc(inf ? inf.msg : 'Esta sesión ya no se puede mover.')}</p>`}
+      </div>
+    </div>`;
+}
 function modoSheetHTML() {
   const opt = (v, ico, t, sub) => `<button type="button" class="regopt" data-act="modo-pick" data-v="${v}">${ico}<span><b>${esc(t)}</b><small class="muted">${esc(sub)}</small></span></button>`;
   return `<div class="sheet-back" data-act="modo-close"></div>
@@ -1166,7 +1181,7 @@ const serieCuenta = (s, ex) => (ex && ex.tipo === 'cardio' ? (ex.cm === 'cinta' 
   : s.w && !livePlano(st.live) ? !!s.done : s.done || String(s.reps).trim() !== '' || String(s.kg).trim() !== '');
 function liveTotals() {
   let vol = 0, sets = 0;
-  for (const ex of st.live.ex) if (ex.tipo !== 'cardio') for (const s of ex.s) if (s.done && !s.w) { sets++; vol += (num(s.kg) || 0) * (num(s.reps) || 0) * (ex.uni ? 2 : 1); }
+  for (const ex of st.live.ex) if (ex.tipo !== 'cardio') for (const s of ex.s) if (s.done && !s.w) { sets++; vol += (num(s.kg) || 0) * (num(s.reps) || 0) * E.factorLados(ex.n, ex.uni); }
   return { vol: Math.round(vol), sets };
 }
 // Rellena un bloque de cardio vacío con lo de la última vez. true si tiene tiempo o distancia.
@@ -1250,7 +1265,7 @@ function viewLive() {
   const fmtKg = (v) => (v ? String(v).replace('.', ',') : '');
   const blocks = L.ex.map((e, i) => {
     if (e.tipo === 'cardio') return cardioBlockHTML(e, i, plano);
-    const x = E.ejercicio(e.n), uniOk = E.puedeUnilateral(e.n), conPeso = !x || x.eq !== 'corporal';
+    const x = E.ejercicio(e.n), uniOk = E.puedeUnilateral(e.n), conPeso = !x || x.eq !== 'corporal', dos = E.dosMancuernas(e.n); // dos: lleva dos mancuernas, se apunta el peso de UNA (c/u)
     return `<section class="lex ${i > 0 && L.ex[i - 1].superset ? 'ss-next' : ''} ${e.superset ? 'ss-first' : ''}">
       ${i > 0 && L.ex[i - 1].superset ? '<span class="ss-tag">Superserie</span>' : ''}
       <div class="lex-head"><button type="button" class="rx-view lex-view" data-act="ex-view" data-n="${esc(e.n)}" aria-label="Ver cómo se hace ${esc(e.n)}">${exThumb(x || { eq: 'corporal' })}
@@ -1258,13 +1273,13 @@ function viewLive() {
         ${!L.edit && conPeso ? `<button type="button" class="warm-btn ${pro ? '' : 'is-locked'}" data-act="live-warm" data-v="${i}" aria-label="Calentamiento para ${esc(e.n)}${pro ? '' : ' (Cadencia Pro)'}">${I.flame} Calentar${pro ? '' : ' <span class="protag">Pro</span>'}</button>` : ''}
         <button type="button" class="iconbtn" data-act="live-swap" data-v="${i}" aria-label="Cambiar ${esc(e.n)}">${I.swap}</button>
         <button type="button" class="iconbtn" data-act="live-del" data-v="${i}" aria-label="Quitar ${esc(e.n)}">${I.trash}</button></div>
-      ${uniOk ? `<div class="seg mini" role="group" aria-label="Lados"><button type="button" data-act="live-uni" data-v="${i}" data-u="0" aria-pressed="${!e.uni}">Ambos lados</button><button type="button" data-act="live-uni" data-v="${i}" data-u="1" aria-pressed="${!!e.uni}">Unilateral</button></div>` : ''}
+      ${uniOk ? `<div class="seg mini" role="group" aria-label="Lados"><button type="button" data-act="live-uni" data-v="${i}" data-u="0" aria-pressed="${!e.uni}">Ambos lados</button><button type="button" data-act="live-uni" data-v="${i}" data-u="1" aria-pressed="${!!e.uni}">Unilateral</button></div>${dos ? `<p class="lados-nota small muted">${e.uni ? 'Peso y reps de un lado · Volumen ×2 automático' : 'Peso de 1 mancuerna · Volumen ×2 automático'}</p>` : ''}` : ''}
       <div class="ltab ${plano ? 'simple' : ''}">
-        <div class="lrow-h"><span>Serie</span><span>Anterior</span><span>kg</span><span>${e.uni ? 'Reps/lado' : 'Reps'}</span>${plano ? '' : '<span></span>'}</div>
+        <div class="lrow-h"><span>Serie</span><span>Anterior</span><span>${dos ? 'kg (c/u)' : 'kg'}</span><span>${e.uni ? 'Reps/lado' : 'Reps'}</span>${plano ? '' : '<span></span>'}</div>
         ${e.s.map((s, j) => { const wi = idxTrabajo(e, j), p = s.w ? null : e.prev[wi]; const sg = sugSerie(e, j); const phKg = sg ? (sg.kg ? fmtKg(sg.kg) : 'kg') : p && p.kg ? fmtKg(p.kg) : '–'; const phR = sg ? String(sg.reps) : p ? String(p.reps) : s.w ? '–' : e.objReps || '–'; const pc = sg ? ' ph-sug' : ''; const sug = plano || s.w ? '' : sugerencia(e, s); const fin = !plano && !!s.done, lk = fin ? ' readonly tabindex="-1" aria-readonly="true"' : ''; return `<div class="lset ${s.w ? 'is-w' : ''} ${fin ? 'on is-done' : ''}">
           ${s.w ? '<span class="num sn sn-w" title="Calentamiento" aria-label="Serie de calentamiento">W</span>' : `<span class="num sn">${wi + 1}</span>`}
           <span class="prev">${p ? `${p.kg ? fmtKg(p.kg) + ' × ' : ''}${p.reps}${p.uni ? ' /lado' : ''}` : '—'}</span>
-          <input class="input${pc}" data-lv="${i}.${j}.kg" inputmode="decimal" value="${esc(s.kg)}" placeholder="${esc(phKg)}"${lk} aria-label="Kilos serie ${j + 1} de ${esc(e.n)}">
+          <input class="input${pc}" data-lv="${i}.${j}.kg" inputmode="decimal" value="${esc(s.kg)}" placeholder="${esc(phKg)}"${lk} aria-label="Kilos${dos ? ' de cada mancuerna' : ''} serie ${j + 1} de ${esc(e.n)}">
           <input class="input${pc}" data-lv="${i}.${j}.reps" inputmode="numeric" value="${esc(s.reps)}" placeholder="${esc(phR)}"${lk} aria-label="Repeticiones serie ${j + 1} de ${esc(e.n)}">
           ${plano ? '' : `<button type="button" class="chk" data-act="live-done" data-v="${i}.${j}" aria-pressed="${!!s.done}" aria-label="${s.done ? 'Desmarcar' : 'Marcar'} serie ${j + 1} como hecha">${I.check}</button>`}
         </div>${s.w ? '' : bestiaHTML(e, i, j, s)}${sug ? `<p class="lsug">${sug}</p>` : ''}`; }).join('')}
@@ -1509,7 +1524,7 @@ async function liveFinish() {
     await api.saveWorkout(st.user.uid, o);
     st.workouts = await api.listWorkouts(st.user.uid);
     const editado = !!L.edit;
-    // Pro: volumen total movido (peso × reps de todas las series; unilateral ×2, igual que el contador en vivo)
+    // Pro: volumen total movido (peso × reps de todas las series; ×2 en unilateral y en dos mancuernas, igual que el contador en vivo)
     const volTotal = Math.round(E.volumenDe(o)); // los bloques de cardio no suman volumen
     const record = E.beatsRecord(before, after);
     st.live = null; st.liveMin = false; liveSave();
@@ -1861,17 +1876,24 @@ root.addEventListener('click', async (e) => {
   if (act === 'reg-pick' && st.regPick) { const d = st.regPick.date; st.regPick = null; return openRegistro(d, v); }
 
   // registro
-  if (act === 'wk-mover') {
+  if (act === 'wk-mover') { // abre la hoja con los días libres de esta semana
     if (!esPro()) return abrirSuscripcion();
     const inf = moverInfo(v);
-    if (st.salvBusy || !inf || !inf.ok) return;
-    const hoy = todayISO(), lista = [...E.salvLista(st.profile), { de: v, a: hoy }].slice(-E.SALV_MAX);
+    if (!inf) return;
+    st.moverSel = v; return render();
+  }
+  if (act === 'mover-close') { st.moverSel = null; return render(); }
+  if (act === 'wk-mover-a' && st.moverSel) {
+    const de = st.moverSel, inf = moverInfo(de);
+    if (st.salvBusy || !inf || !inf.ok || !inf.destinos.includes(v)) return;
+    const lista = E.aplicarMover(E.salvLista(st.profile), de, v);
     st.salvBusy = true;
     try { await api.saveProfile(st.user.uid, { salvavidas: lista }); st.profile.salvavidas = lista; }
     catch (e) { toast(errorText(e)); return; }
     finally { st.salvBusy = false; }
-    const dp = dayPlan(hoy);
-    st.wkDia = hoy; render(); toast(`Entreno movido a hoy: ${dp ? dp.nombre : 'entrenar'}`); return;
+    const dp = dayPlan(v), hoy = todayISO();
+    st.moverSel = null; st.wkDia = v; render();
+    toast(`${dp ? dp.nombre : 'Entreno'} movido ${v === hoy ? 'a hoy' : 'al ' + E.DIAS_LARGO[E.weekdayIdx(v)].toLowerCase()}`); return;
   }
   if (act === 'ai-pedir') { if (!esPro()) { st.resumen = null; return abrirSuscripcion(); } return void pedirCoach(v); }
   if (act === 'rec-toggle') { // acordeón de Récords: pliega o despliega ese grupo (el resto no se toca)
@@ -2033,5 +2055,5 @@ function recuperacionHTML() {
     ${esPro() ? cuerpo : muro}</section>`;
 }
 function cuerpoSheetHTML() { return C3.sheetHTML(st.cuerpo3d, sexoCuerpo(), datosCuerpo(), todayISO()); }
-  return { exViewHTML, finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, limiteSheetHTML, calentarSheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML };
+  return { exViewHTML, finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, limiteSheetHTML, calentarSheetHTML, moverSheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML };
 }
