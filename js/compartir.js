@@ -25,8 +25,9 @@ const FUENTE = "'Archivo', system-ui, -apple-system, 'Segoe UI', Roboto, sans-se
 const fnt = (peso, px) => `${peso} ${px}px ${FUENTE}`;
 const TEMAS = {
   oscuro: { ink: '#FFFFFF', mute: '#8E8E8E', linea: '#2A2A2A', base: '#262626', sombra: false },
-  transparente: { ink: '#FFFFFF', mute: 'rgba(255,255,255,.74)', linea: 'rgba(255,255,255,.30)', base: 'rgba(255,255,255,.22)', sombra: true },
-  foto: { ink: '#FFFFFF', mute: 'rgba(255,255,255,.78)', linea: 'rgba(255,255,255,.34)', base: 'rgba(255,255,255,.24)', sombra: true },
+  // Transparente: va pegado sobre fotos de cualquier luz (Stories), así que todo en blanco casi sólido, sombra oscura nítida y silueta con contorno.
+  transparente: { ink: '#FFFFFF', mute: 'rgba(255,255,255,.95)', linea: 'rgba(255,255,255,.55)', base: 'rgba(255,255,255,.35)', contorno: 'rgba(255,255,255,.85)', sombra: { c: 'rgba(0,0,0,.85)', b: 12 } },
+  foto: { ink: '#FFFFFF', mute: 'rgba(255,255,255,.78)', linea: 'rgba(255,255,255,.34)', base: 'rgba(255,255,255,.24)', sombra: { c: 'rgba(0,0,0,.55)', b: 14 } },
 };
 
 /* ---------- datos de la tarjeta ---------- */
@@ -119,10 +120,15 @@ function figura(ctx, vista, x, y, s, d, t, K) {
   ctx.save();
   ctx.translate(x, y); ctx.scale(s, s);
   const lado = (fn) => { fn(); ctx.save(); ctx.translate(200, 0); ctx.scale(-1, 1); fn(); ctx.restore(); }; // izquierda + reflejo (derecha)
-  const pintar = (items, fill) => { for (const r of items) { const f = () => r.d.forEach((q) => ctx.fill(trazo(q))); fill(r); if (r.u) f(); else lado(f); } };
+  const pintar = (items, fill, borde) => { for (const r of items) { const f = () => r.d.forEach((q) => { ctx.fill(trazo(q)); if (borde) ctx.stroke(trazo(q)); }); fill(r); if (r.u) f(); else lado(f); } };
   ctx.fillStyle = t.base;
-  ctx.beginPath(); ctx.ellipse(100, 26, 16, 20, 0, 0, Math.PI * 2); ctx.fill(); // cabeza
-  pintar(BASE.map((b) => ({ d: [b.d], u: b.u })), () => {});
+  if (t.contorno) { // transparente: relleno claro + contorno blanco fino + sombra oscura detrás (legible sobre cualquier foto)
+    ctx.strokeStyle = t.contorno; ctx.lineWidth = 2.4 / s; ctx.lineJoin = 'round';
+    ctx.shadowColor = t.sombra.c; ctx.shadowBlur = t.sombra.b * K; ctx.shadowOffsetY = 2 * K;
+  }
+  ctx.beginPath(); ctx.ellipse(100, 26, 16, 20, 0, 0, Math.PI * 2); ctx.fill(); if (t.contorno) ctx.stroke(); // cabeza
+  pintar(BASE.map((b) => ({ d: [b.d], u: b.u })), () => {}, !!t.contorno);
+  ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
   // regiones sin trabajar: mismo color de la silueta (limpio); las trabajadas, encima y con brillo
   const trabajadas = REGIONES[vista].filter((r) => d.inten[r.k]);
   ctx.save();
@@ -154,7 +160,7 @@ function lineas(ctx, s, max, maxLin) { // parte en líneas por palabras; la últ
 
 // Todo el dibujo vive aquí: cada plantilla es una función (ctx, d, t, K) con coordenadas en el espacio de 1080 px.
 function crearPincel(ctx, t, K) {
-  const sombra = (on) => { if (on && t.sombra) { ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 14 * K; ctx.shadowOffsetY = 2 * K; } else { ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; } };
+  const sombra = (on) => { if (on && t.sombra) { ctx.shadowColor = t.sombra.c; ctx.shadowBlur = t.sombra.b * K; ctx.shadowOffsetY = 2 * K; } else { ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; } };
   const txt = (s, x, y, { fuente, color, align = 'left', esp = 0, max }) => {
     ctx.font = fuente; ctx.fillStyle = color; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     const q = max ? recortar(ctx, s, max, esp) : s;
@@ -373,7 +379,7 @@ export function crearCompartir(ctx) {
   function sheetHTML() {
     const c = st.compartir, d = datos();
     if (!c || !d) return '';
-    const slides = PLANTILLAS.map((P, i) => `<div class="cp-slide"><div class="cp-frame${c.fondo === 'transparente' ? ' cp-trans' : ''}" style="aspect-ratio:${P.w} / ${P.h}"><canvas data-cp="${i}" role="img" aria-label="Plantilla ${i + 1} de ${PLANTILLAS.length}: ${esc(P.n)}"></canvas></div></div>`).join('');
+    const slides = PLANTILLAS.map((P, i) => `<div class="cp-slide"><div class="cp-frame${c.fondo === 'transparente' ? ' cp-trans' : ''}" style="aspect-ratio:${P.w} / ${P.h};--ar:${(P.w / P.h).toFixed(4)}"><canvas data-cp="${i}" role="img" aria-label="Plantilla ${i + 1} de ${PLANTILLAS.length}: ${esc(P.n)}"></canvas></div></div>`).join('');
     const dots = PLANTILLAS.map((P, i) => `<button type="button" class="cp-dot${i === c.i ? ' on' : ''}" data-act="cp-dot" data-v="${i}" aria-label="${esc(P.n)} (${i + 1} de ${PLANTILLAS.length})"></button>`).join('');
     const chips = c.menu ? `<div class="cp-fondos" role="group" aria-label="Fondo de la tarjeta">${FONDOS.map(([k, n]) => `<button type="button" class="cp-chip${c.fondo === k ? ' on' : ''}" data-act="${k === 'foto' ? 'cp-foto' : 'cp-bg'}" data-v="${k}" aria-pressed="${c.fondo === k}">${n}</button>`).join('')}</div>` : '';
     const act = (a, ico, n, extra = '') => `<button type="button" class="cp-act${extra}" data-act="${a}"><span class="cp-circ">${ICONOS[ico]}</span><span class="cp-lbl">${n}</span></button>`;
