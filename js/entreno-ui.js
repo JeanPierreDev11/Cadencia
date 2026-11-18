@@ -228,7 +228,8 @@ function diaHTML(sel, today) {
     return `<section class="card dia-card ${esHoy ? 'ok-card' : ''}"><h2>${esc(titulo)}</h2>
       ${esHoy ? '<p><b>Ya has entrenado hoy.</b> Come bien y descansa.</p>' : ''}
       ${hechos.map((w) => `<div class="dia-wk"><div class="list">${wkRow(w, false)}</div>${aiHTML(w, true)}</div>`).join('')}
-      ${reg('Registrar otra sesión')}</section>`;
+      ${reg('Registrar otra sesión')}
+      ${hechos.filter(puedeCompartir).map((w, _, a) => `<button type="button" class="btn quiet block" data-act="cp-open" data-v="${esc(w.id)}">${I.share} Compartir entrenamiento${a.length > 1 ? ` · ${esc(w.nombre || 'Sesión')}` : ''}</button>`).join('')}</section>`;
   }
   if (dp) {
     const txt = esHoy ? '' : futuro ? '<p class="small muted">Previsto en tu rutina.</p>' : '<p class="small muted">No registraste esta sesión.</p>';
