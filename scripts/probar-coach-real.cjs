@@ -13,8 +13,8 @@ const mocks = {
 };
 const orig = Module._load; Module._load = function (r, ...a) { return mocks[r] || orig.call(this, r, ...a); };
 const m = new Module(ruta, null); m.filename = ruta; m.paths = Module._nodeModulePaths(path.dirname(ruta));
-m._compile(require('fs').readFileSync(ruta, 'utf8') + '\nmodule.exports.__t = { geminiUna, limpiarCoach, MODELO_COACH, MODELO_COACH_RESPALDO };', ruta);
-const { geminiUna, limpiarCoach, MODELO_COACH, MODELO_COACH_RESPALDO } = m.exports.__t;
+m._compile(require('fs').readFileSync(ruta, 'utf8') + '\nmodule.exports.__t = { geminiUna, llamarGemini, limpiarCoach, MODELO_COACH, MODELO_COACH_RESPALDO };', ruta);
+const { geminiUna, llamarGemini, limpiarCoach, MODELO_COACH, MODELO_COACH_RESPALDO } = m.exports.__t;
 const entrada = { perfil: { sexo: 'hombre', edad: 28, pesoKg: 80, objetivos: ['ganar músculo'], experiencia: 'intermedio (cerca de 1 año)', lugares: ['en gimnasio'], minutosSesion: 60, diasSemana: 4 },
   entreno: { fecha: '2026-11-19', nombre: 'Pull', min: 69, seriesTotales: 10, seriesPorHora: 8.7, ejercicios: [
     { n: 'Remo con barra', uni: false, objetivoRutina: '4 × 8-12', series: [{ kg: 60, reps: 10, rir: 2 }, { kg: 60, reps: 9, rir: 1 }, { kg: 60, reps: 8, rir: 1 }] },
@@ -30,5 +30,8 @@ const entrada = { perfil: { sexo: 'hombre', edad: 28, pesoKg: 80, objetivos: ['g
       if (VER) console.log('   «' + r.titulo + '» ' + r.resumen + '\n   AL 10: ' + r.paraLlegarAl10.join(' | ') + '\n   CONSEJOS: ' + r.consejos.join(' | ')); }
     catch (e) { if (pensar === 'low' || pensar === null) fallos++; console.log(`${modelo} pensar=${pensar} → FALLO en ${Date.now() - t0} ms · ${e.status} · ${String(e.message).slice(0, 160)}`); }
   }
+  const t1 = Date.now();
+  try { const r = limpiarCoach(await llamarGemini(process.env.GEMINI_API_KEY, entrada)); console.log(`llamarGemini (cadena real de producción) → OK en ${Date.now() - t1} ms · nota ${r.nota}`); }
+  catch (e) { console.log(`llamarGemini (cadena real de producción) → FALLO en ${Date.now() - t1} ms · ${e.status} · ${String(e.message).slice(0, 160)}`); }
   process.exit(0);
 })();

@@ -272,7 +272,7 @@ exports.ia = onCall({ secrets: [CLAVE], timeoutSeconds: 90, memory: '512MiB', cp
 // pide la valoración a Gemini y la guarda en el propio documento (aiNota, aiTitulo, aiTexto [= resumen], aiParaLlegarAl10[], aiConsejos, aiDemo:false, aiFecha).
 // Si el entreno ya tiene análisis, lo devuelve sin gastar nada. Contadores propios en iaUso/iaGlobal (campo «coach»).
 const GEMINI_CLAVE = defineSecret('GEMINI_API_KEY'); // al cambiar la clave en Secret Manager hay que volver a desplegar con un cambio en este archivo (si no, se salta «coach» y sigue con la versión anterior)
-const MODELO_COACH = 'gemini-3.5-flash'; // tiene nivel gratuito (3.6 no); 1.5 y 2.0 ya están apagados // cambiar aquí si Google lo retira (lista: ai.google.dev/gemini-api/docs/models)
+const MODELO_COACH = 'gemini-3.5-flash-lite'; // principal desde 2026-11-19: medido con Gemini real tarda ~1,5-4 s (3.5 Flash tarda 21-27 s con la misma calidad en este análisis). Tiene nivel gratuito (3.6 no); 1.5 y 2.0 ya están apagados // cambiar aquí si Google lo retira (lista: ai.google.dev/gemini-api/docs/models)
 const LIMITE_COACH_USUARIO = 10; // análisis por persona y día (Gemini, nivel gratuito)
 const LIMITE_COACH_GLOBAL = 400; // análisis al día entre todas las personas (seguridad de gasto)
 const PROMPT_COACH = `Eres un entrenador personal experto en fuerza e hipertrofia. Analizas UN entreno de gimnasio ya terminado y devuelves una valoración breve, honesta y útil, en español de España, tuteando. Tu tono es siempre motivador, positivo y cercano (como un buen entrenador que te anima), pero sin regalar notas ni adular: la nota es honesta y se explica.
@@ -383,14 +383,13 @@ const resumenEntreno = (w, objetivos = {}) => {
 const devolverCoach = (w) => ({ nota: w.aiNota, titulo: w.aiTitulo || '', resumen: w.aiTexto || '', analisis: w.aiTexto || '', paraLlegarAl10: w.aiParaLlegarAl10 || [], consejos: w.aiConsejos || [], demo: false, aiFecha: w.aiFecha || null });
 
 // Respaldo si el modelo principal está saturado (503) o ya no existe (404). Debe tener nivel gratuito; comprobar en ai.google.dev antes de cambiarlo.
-const MODELO_COACH_RESPALDO = 'gemini-3.5-flash-lite';
-// Fiabilidad (2026-11-19): la llamada dura poco y si Google falla se salta ENSEGUIDA al otro modelo (si uno está saturado, el otro suele ir bien).
-// Una petición larga (40 s mudos) en el móvil se corta sola (el SDK da `internal`/500 aunque el servidor siga y acabe bien), así que:
-// intentos cortos, presupuesto total de 75 s (la función dura 90 s y la app espera 95 s) y, si aun así se corta, la app reintenta sola (el candado evita duplicar la llamada).
+const MODELO_COACH_RESPALDO = 'gemini-3.5-flash'; // más lento (21-27 s medidos) pero de otra «cola» de Google: si el principal falla, suele responder
+// Fiabilidad (2026-11-19): medido con Gemini real, flash-lite responde en 1,5-4 s y 3.5 Flash en 21-27 s (misma calidad). Una petición larga y muda en el móvil se corta sola
+// (el SDK da `internal`/500 aunque el servidor siga y acabe bien), así que: principal rápido, si falla se reintenta enseguida y luego se salta al otro modelo.
+// Presupuesto total 75 s (la función dura 90 s y la app espera 95 s). Si aun así se corta, la app reintenta sola y el candado evita duplicar la llamada.
 const COACH_PRESUPUESTO_MS = 75000; // tiempo total máximo de Gemini con reintentos
-const COACH_INTENTO_MS = 28000; // máximo por intento (con «pensar» bajo, un análisis tarda 4-10 s)
-const COACH_INTENTOS = [[MODELO_COACH, 0], [MODELO_COACH_RESPALDO, 800], [MODELO_COACH, 2500], [MODELO_COACH_RESPALDO, 4000], [MODELO_COACH, 6000]]; // [modelo, espera previa en ms]
-const COACH_PENSAR = 'low'; // thinkingLevel de Gemini 3.x (minimal|low|medium|high). Por defecto 3.5 Flash usa «medium» y tarda mucho más; este análisis no necesita razonar a fondo.
+// [modelo, espera previa en ms, thinkingLevel de Gemini 3.x (minimal|low|medium|high), tiempo máximo del intento en ms]
+const COACH_INTENTOS = [[MODELO_COACH, 0, 'medium', 20000], [MODELO_COACH, 1500, 'medium', 20000], [MODELO_COACH_RESPALDO, 0, 'low', 40000], [MODELO_COACH, 3000, 'medium', 20000]];
 const COACH_CANDADO_MS = 85000; // un análisis en marcha bloquea otro igual durante este tiempo (cabe en timeoutSeconds)
 // Errores de Google que merece la pena reintentar: saturación/cuota por minuto (429, 500, 502, 503, 504), modelo retirado (404 → pasa al respaldo),
 // red caída, tiempo agotado y respuestas vacías o con JSON roto/cortado (el modelo es aleatorio: otra vez puede salir bien).
@@ -402,7 +401,7 @@ function jsonDeGemini(txt) {
   return JSON.parse(a >= 0 && b > a ? s.slice(a, b + 1) : s);
 }
 // UNA llamada a UN modelo. Si falla lanza un Error con .status = código HTTP de Google, 'timeout', 'red', 'vacio' o 'json'.
-async function geminiUna(modelo, clave, entrada, ms, pensar = COACH_PENSAR) {
+async function geminiUna(modelo, clave, entrada, ms, pensar) {
   const ctrl = new AbortController(), t = setTimeout(() => ctrl.abort(), ms);
   const fallo = (msg, status) => { const e = new Error(msg); e.status = status; return e; };
   try {
@@ -431,21 +430,21 @@ async function geminiUna(modelo, clave, entrada, ms, pensar = COACH_PENSAR) {
 }
 async function llamarGemini(clave, entrada) {
   const fin = Date.now() + COACH_PRESUPUESTO_MS;
-  let ultimo = null, pensar = COACH_PENSAR;
-  for (const [modelo, espera] of COACH_INTENTOS) {
+  let ultimo = null, usarPensar = true;
+  for (const [modelo, espera, pensar, maxMs] of COACH_INTENTOS) {
     const queda = fin - Date.now() - espera;
     if (queda < 6000) break; // no queda tiempo para otro intento con sentido
     if (espera) await new Promise((r) => setTimeout(r, espera));
     const t0 = Date.now();
     try {
-      const res = await geminiUna(modelo, clave, entrada, Math.min(COACH_INTENTO_MS, queda), pensar);
+      const res = await geminiUna(modelo, clave, entrada, Math.min(maxMs, queda), usarPensar ? pensar : null);
       console.log('Coach AI ok', modelo, `${Date.now() - t0} ms`);
       return res;
     } catch (e) {
       ultimo = e;
       console.error('Coach AI intento', modelo, e.status, e.message);
-      // Si un modelo rechaza `thinkingLevel` (400), se sigue sin él en los demás intentos: mejor lento que roto.
-      if (e.status === 400 && pensar && /think/i.test(e.message)) { pensar = null; continue; }
+      // Si un modelo rechaza `thinkingLevel` (400), se sigue sin él en los demás intentos: mejor menos fino que roto.
+      if (e.status === 400 && usarPensar && /think/i.test(e.message)) { usarPensar = false; continue; }
       if (!COACH_REINTENTABLE(e.status)) throw e; // 400/401/402/403: reintentar no arregla nada
     }
   }
