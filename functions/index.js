@@ -384,8 +384,14 @@ const devolverCoach = (w) => ({ nota: w.aiNota, titulo: w.aiTitulo || '', resume
 
 // Respaldo si el modelo principal está saturado (503) o ya no existe (404). Debe tener nivel gratuito; comprobar en ai.google.dev antes de cambiarlo.
 const MODELO_COACH_RESPALDO = 'gemini-3.5-flash-lite';
-const COACH_PRESUPUESTO_MS = 95000; // tiempo total máximo de Gemini con reintentos (la función dura 120 s y la app espera 125 s)
-const COACH_INTENTOS = [[MODELO_COACH, 0], [MODELO_COACH, 2000], [MODELO_COACH_RESPALDO, 3000]]; // [modelo, espera previa en ms]
+// Fiabilidad (2026-11-19): la llamada dura poco y si Google falla se salta ENSEGUIDA al otro modelo (si uno está saturado, el otro suele ir bien).
+// Una petición larga (40 s mudos) en el móvil se corta sola (el SDK da `internal`/500 aunque el servidor siga y acabe bien), así que:
+// intentos cortos, presupuesto total de 75 s (la función dura 90 s y la app espera 95 s) y, si aun así se corta, la app reintenta sola (el candado evita duplicar la llamada).
+const COACH_PRESUPUESTO_MS = 75000; // tiempo total máximo de Gemini con reintentos
+const COACH_INTENTO_MS = 28000; // máximo por intento (con «pensar» bajo, un análisis tarda 4-10 s)
+const COACH_INTENTOS = [[MODELO_COACH, 0], [MODELO_COACH_RESPALDO, 800], [MODELO_COACH, 2500], [MODELO_COACH_RESPALDO, 4000], [MODELO_COACH, 6000]]; // [modelo, espera previa en ms]
+const COACH_PENSAR = 'low'; // thinkingLevel de Gemini 3.x (minimal|low|medium|high). Por defecto 3.5 Flash usa «medium» y tarda mucho más; este análisis no necesita razonar a fondo.
+const COACH_CANDADO_MS = 85000; // un análisis en marcha bloquea otro igual durante este tiempo (cabe en timeoutSeconds)
 // Errores de Google que merece la pena reintentar: saturación/cuota por minuto (429, 500, 502, 503, 504), modelo retirado (404 → pasa al respaldo),
 // red caída, tiempo agotado y respuestas vacías o con JSON roto/cortado (el modelo es aleatorio: otra vez puede salir bien).
 const COACH_REINTENTABLE = (s) => [404, 429, 500, 502, 503, 504, 'timeout', 'red', 'vacio', 'json'].includes(s);
@@ -396,7 +402,7 @@ function jsonDeGemini(txt) {
   return JSON.parse(a >= 0 && b > a ? s.slice(a, b + 1) : s);
 }
 // UNA llamada a UN modelo. Si falla lanza un Error con .status = código HTTP de Google, 'timeout', 'red', 'vacio' o 'json'.
-async function geminiUna(modelo, clave, entrada, ms) {
+async function geminiUna(modelo, clave, entrada, ms, pensar = COACH_PENSAR) {
   const ctrl = new AbortController(), t = setTimeout(() => ctrl.abort(), ms);
   const fallo = (msg, status) => { const e = new Error(msg); e.status = status; return e; };
   try {
@@ -409,7 +415,7 @@ async function geminiUna(modelo, clave, entrada, ms) {
           systemInstruction: { parts: [{ text: PROMPT_COACH }] },
           contents: [{ role: 'user', parts: [{ text: JSON.stringify(entrada) }] }],
           // Gemini 3 «piensa» antes de responder y esos tokens cuentan en maxOutputTokens: con poco margen el JSON sale cortado.
-          generationConfig: { responseMimeType: 'application/json', responseSchema: ESQUEMA_COACH, temperature: 0.4, maxOutputTokens: 8192 },
+          generationConfig: { responseMimeType: 'application/json', responseSchema: ESQUEMA_COACH, temperature: 0.4, maxOutputTokens: 8192, ...(pensar ? { thinkingConfig: { thinkingLevel: pensar } } : {}) },
         }),
       });
       j = await r.json().catch(() => ({}));
@@ -425,14 +431,21 @@ async function geminiUna(modelo, clave, entrada, ms) {
 }
 async function llamarGemini(clave, entrada) {
   const fin = Date.now() + COACH_PRESUPUESTO_MS;
-  let ultimo = null;
+  let ultimo = null, pensar = COACH_PENSAR;
   for (const [modelo, espera] of COACH_INTENTOS) {
     const queda = fin - Date.now() - espera;
-    if (queda < 8000) break; // no queda tiempo para otro intento con sentido
+    if (queda < 6000) break; // no queda tiempo para otro intento con sentido
     if (espera) await new Promise((r) => setTimeout(r, espera));
-    try { return await geminiUna(modelo, clave, entrada, Math.min(40000, queda)); } catch (e) {
+    const t0 = Date.now();
+    try {
+      const res = await geminiUna(modelo, clave, entrada, Math.min(COACH_INTENTO_MS, queda), pensar);
+      console.log('Coach AI ok', modelo, `${Date.now() - t0} ms`);
+      return res;
+    } catch (e) {
       ultimo = e;
       console.error('Coach AI intento', modelo, e.status, e.message);
+      // Si un modelo rechaza `thinkingLevel` (400), se sigue sin él en los demás intentos: mejor lento que roto.
+      if (e.status === 400 && pensar && /think/i.test(e.message)) { pensar = null; continue; }
       if (!COACH_REINTENTABLE(e.status)) throw e; // 400/401/402/403: reintentar no arregla nada
     }
   }
@@ -448,7 +461,7 @@ function limpiarCoach(x) {
   return { nota: Math.round(Math.max(0, Math.min(10, nota)) * 10) / 10, titulo: txt(x.titulo, 60) || 'Análisis del entreno', resumen: txt(x.resumen != null ? x.resumen : x.analisis, 500), paraLlegarAl10, consejos };
 }
 
-exports.coach = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 120, memory: '256MiB', concurrency: 10 }, async (req) => {
+exports.coach = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 90, memory: '256MiB', concurrency: 10 }, async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión para usar la IA.');
   const uid = req.auth.uid, id = String((req.data && req.data.id) || '');
   if (!/^[\w-]{1,80}$/.test(id)) throw new HttpsError('invalid-argument', 'Petición no válida.');
@@ -469,35 +482,52 @@ exports.coach = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 120, memory: '
     if (prev) anterior = resumenEntreno(prev);
   } catch (e) { /* sin sesión anterior */ }
 
-  const dia = hoyMadrid();
-  let usadas = 0;
-  await db.runTransaction(async (tx) => {
-    const [u, g] = await Promise.all([tx.get(usoRef(uid, dia)), tx.get(globalRef(dia))]);
-    usadas = (u.exists && u.data().coach) || 0;
-    const total = (g.exists && g.data().coach) || 0;
-    if (usadas >= LIMITE_COACH_USUARIO) throw new HttpsError('resource-exhausted', `Ya has pedido ${LIMITE_COACH_USUARIO} análisis hoy. Mañana podrás pedir más.`);
-    if (total >= LIMITE_COACH_GLOBAL) throw new HttpsError('resource-exhausted', 'El Coach AI ha llegado a su límite de hoy. Prueba mañana.');
-    tx.set(usoRef(uid, dia), { uid, dia, coach: usadas + 1, ultima: FieldValue.serverTimestamp() }, { merge: true });
-    tx.set(globalRef(dia), { coach: total + 1 }, { merge: true });
+  // Candado por entreno: si el móvil pierde la conexión y reintenta mientras el servidor sigue con Google, el reintento NO lanza otra llamada
+  // (ni gasta otra consulta del día): recibe `aborted` y la app espera y vuelve a preguntar. Caduca solo (COACH_CANDADO_MS) si la función muriera.
+  const candado = db.doc(`iaCandado/${uid}_${id}`);
+  const libre = await db.runTransaction(async (tx) => {
+    const c = await tx.get(candado), desde = c.exists ? Number(c.data().desde) || 0 : 0;
+    if (Date.now() - desde < COACH_CANDADO_MS) return false;
+    tx.set(candado, { uid, desde: Date.now() });
+    return true;
   });
+  if (!libre) throw new HttpsError('aborted', 'Tu análisis ya se está preparando.', { codigo: 'coach-en-curso', http: null, motivo: 'en-curso' });
 
+  const dia = hoyMadrid();
+  let usadas = 0, hecho = false;
   try {
-    const perfil = perfilCoach(p);
-    const res = limpiarCoach(await llamarGemini(GEMINI_CLAVE.value(), { perfil, entreno: ent, sesionAnterior: anterior }));
-    const campos = { aiNota: res.nota, aiTitulo: res.titulo, aiTexto: res.resumen, aiParaLlegarAl10: res.paraLlegarAl10, aiConsejos: res.consejos, aiDemo: false, aiFecha: new Date().toISOString() };
-    await doc.ref.update(campos);
-    return devolverCoach(campos);
-  } catch (e) {
-    const dec = FieldValue.increment(-1); // si falla, la consulta no cuenta
-    await Promise.all([usoRef(uid, dia).set({ coach: dec }, { merge: true }), globalRef(dia).set({ coach: dec }, { merge: true })]).catch(() => {});
-    if (e instanceof HttpsError) throw e;
-    console.error('Coach AI', e && e.status, e && e.message, e && e.stack);
-    // details = qué ha pasado de verdad (HTTP de Google o motivo); la app lo enseña como código discreto y lo imprime en consola.
-    const st = e && e.status, http = Number.isInteger(st) ? st : null, motivo = typeof st === 'string' ? st : (http ? null : 'interno');
-    const msg = [429, 500, 502, 503, 504].includes(http) ? 'El Coach AI está saturado ahora mismo. Prueba otra vez en un minuto.'
-      : motivo === 'timeout' ? 'El Coach AI ha tardado demasiado. Prueba otra vez.'
-      : 'El Coach AI no ha respondido. Prueba otra vez en un momento.';
-    throw new HttpsError('unavailable', msg, { codigo: 'coach-fallo', http, motivo });
+    await db.runTransaction(async (tx) => {
+      const [u, g] = await Promise.all([tx.get(usoRef(uid, dia)), tx.get(globalRef(dia))]);
+      usadas = (u.exists && u.data().coach) || 0;
+      const total = (g.exists && g.data().coach) || 0;
+      if (usadas >= LIMITE_COACH_USUARIO) throw new HttpsError('resource-exhausted', `Ya has pedido ${LIMITE_COACH_USUARIO} análisis hoy. Mañana podrás pedir más.`);
+      if (total >= LIMITE_COACH_GLOBAL) throw new HttpsError('resource-exhausted', 'El Coach AI ha llegado a su límite de hoy. Prueba mañana.');
+      tx.set(usoRef(uid, dia), { uid, dia, coach: usadas + 1, ultima: FieldValue.serverTimestamp() }, { merge: true });
+      tx.set(globalRef(dia), { coach: total + 1 }, { merge: true });
+    });
+
+    try {
+      const perfil = perfilCoach(p);
+      const res = limpiarCoach(await llamarGemini(GEMINI_CLAVE.value(), { perfil, entreno: ent, sesionAnterior: anterior }));
+      const campos = { aiNota: res.nota, aiTitulo: res.titulo, aiTexto: res.resumen, aiParaLlegarAl10: res.paraLlegarAl10, aiConsejos: res.consejos, aiDemo: false, aiFecha: new Date().toISOString() };
+      await doc.ref.update(campos);
+      hecho = true;
+      return devolverCoach(campos);
+    } catch (e) {
+      const dec = FieldValue.increment(-1); // si falla, la consulta no cuenta
+      await Promise.all([usoRef(uid, dia).set({ coach: dec }, { merge: true }), globalRef(dia).set({ coach: dec }, { merge: true })]).catch(() => {});
+      if (e instanceof HttpsError) throw e;
+      console.error('Coach AI', e && e.status, e && e.message, e && e.stack);
+      // details = qué ha pasado de verdad (HTTP de Google o motivo); la app lo enseña como código discreto y lo imprime en consola.
+      const st = e && e.status, http = Number.isInteger(st) ? st : null, motivo = typeof st === 'string' ? st : (http ? null : 'interno');
+      const msg = [429, 500, 502, 503, 504].includes(http) ? 'El Coach AI está saturado ahora mismo. Prueba otra vez en un minuto.'
+        : motivo === 'timeout' ? 'El Coach AI ha tardado demasiado. Prueba otra vez.'
+        : 'El Coach AI no ha respondido. Prueba otra vez en un momento.';
+      throw new HttpsError('unavailable', msg, { codigo: 'coach-fallo', http, motivo });
+    }
+  } finally {
+    await candado.delete().catch(() => {}); // libera el candado tanto si sale bien como si falla (el siguiente intento ya puede entrar)
+    if (hecho) console.log('Coach AI guardado', id);
   }
 });
 

@@ -25,3 +25,11 @@ jobs:
             "https://generativelanguage.googleapis.com/v1beta/models/$MODELO:generateContent" \
             -d '{"contents":[{"parts":[{"text":"Responde solo: hola"}]}],"generationConfig":{"maxOutputTokens":200}}'
           head -c 600 r.json; echo
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Coach AI real (ambos modelos, varios niveles de «pensar»)
+        run: |
+          export GEMINI_API_KEY=$(gcloud secrets versions access latest --secret=GEMINI_API_KEY --project cadencia-11cb6)
+          echo "::add-mask::$GEMINI_API_KEY"
+          node scripts/probar-coach-real.cjs

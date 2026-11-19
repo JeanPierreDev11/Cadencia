@@ -276,25 +276,46 @@ async function pedirCoach(id) {
   st.aiPend = st.aiPend || {};
   if (!aiPosible(w0) || aiDe(w0) || st.aiPend[id] === 'cargando') return;
   st.aiPend[id] = 'cargando'; render();
-  try {
-    const res = await analizarEntreno(api, w0); // con Firebase lo analiza Gemini en el servidor y ya queda guardado
-    const nota = Number(res && res.nota);
-    if (!Number.isFinite(nota)) throw new Error('Respuesta no válida');
-    const w = st.workouts.find((x) => x.id === id);
-    if (!w || !st.user) { delete st.aiPend[id]; return render(); } // borrado o sesión cerrada mientras tanto
-    const nuevo = { ...w,
-      aiNota: Math.round(Math.max(0, Math.min(10, nota)) * 10) / 10,
-      aiTitulo: String(res.titulo || '').slice(0, 80),
-      aiTexto: String(res.resumen != null ? res.resumen : res.analisis || '').slice(0, 1200), // `analisis` = nombre antiguo (servidor anterior al 18-11)
-      aiParaLlegarAl10: (Array.isArray(res.paraLlegarAl10) ? res.paraLlegarAl10 : []).slice(0, 3).map((c) => String(c).slice(0, 300)),
-      aiConsejos: (Array.isArray(res.consejos) ? res.consejos : []).slice(0, 5).map((c) => String(c).slice(0, 300)),
-      aiDemo: !!res.demo,
-      aiFecha: res.aiFecha || new Date().toISOString() };
-    if (!res.guardado) await api.saveWorkout(st.user.uid, nuevo);
-    st.workouts = st.workouts.map((x) => (x.id === id ? nuevo : x));
-    delete st.aiPend[id];
-  } catch (e) { st.aiPend[id] = { error: `${errorText(e)} (${diagnosticoCoach(e, id)})` }; } // p. ej. «… (Error 503)» / «(Timeout)»
+  // Reintento automático (2026-11-19): en el móvil una petición larga se corta sola (el SDK da `internal`/500) aunque el servidor siga y termine bien.
+  // Volver a llamar es seguro: si ya terminó devuelve lo guardado sin gastar consulta; si sigue en marcha, el candado del servidor responde `aborted` y no duplica nada.
+  const t0 = Date.now();
+  for (let intento = 0; ; intento++) {
+    try { await coachUna(id, w0); st.aiPend[id] === 'cargando' && delete st.aiPend[id]; break; } catch (e) {
+      const c = e && e.code, corto = c === 'functions/internal' || c === 'functions/aborted';
+      const maxRe = corto ? 3 : (c === 'functions/unavailable' || c === 'functions/deadline-exceeded') ? 1 : 0;
+      const sinRed = typeof navigator !== 'undefined' && navigator.onLine === false;
+      if (intento < maxRe && !sinRed && Date.now() - t0 < 150000) { diagnosticoCoach(e, id); await new Promise((r) => setTimeout(r, c === 'functions/aborted' ? 6000 : 4000)); if (!st.user || !st.workouts.some((x) => x.id === id)) { delete st.aiPend[id]; return render(); } continue; }
+      st.aiPend[id] = { error: `${textoCoach(e)} (${diagnosticoCoach(e, id)})` }; // p. ej. «… (Error 503)» / «(Timeout)»
+      break;
+    }
+  }
   render();
+}
+// Mensaje para el usuario: `internal` en el móvil casi siempre es una conexión cortada, no un fallo de la IA.
+function textoCoach(e) {
+  const c = e && e.code;
+  if (c === 'functions/internal') return 'Se ha cortado la conexión durante el análisis. Pulsa otra vez: si ya estaba hecho, aparecerá al instante.';
+  if (c === 'functions/aborted') return 'Tu análisis sigue preparándose. Pulsa otra vez en unos segundos.';
+  return errorText(e);
+}
+// Una llamada completa: pide el análisis y, si llega bien, actualiza el entreno en memoria.
+async function coachUna(id, w0) {
+  const res = await analizarEntreno(api, w0); // con Firebase lo analiza Gemini en el servidor y ya queda guardado
+  const nota = Number(res && res.nota);
+  if (!Number.isFinite(nota)) throw new Error('Respuesta no válida');
+  const w = st.workouts.find((x) => x.id === id);
+  if (!w || !st.user) { delete st.aiPend[id]; return; } // borrado o sesión cerrada mientras tanto
+  const nuevo = { ...w,
+    aiNota: Math.round(Math.max(0, Math.min(10, nota)) * 10) / 10,
+    aiTitulo: String(res.titulo || '').slice(0, 80),
+    aiTexto: String(res.resumen != null ? res.resumen : res.analisis || '').slice(0, 1200), // `analisis` = nombre antiguo (servidor anterior al 18-11)
+    aiParaLlegarAl10: (Array.isArray(res.paraLlegarAl10) ? res.paraLlegarAl10 : []).slice(0, 3).map((c) => String(c).slice(0, 300)),
+    aiConsejos: (Array.isArray(res.consejos) ? res.consejos : []).slice(0, 5).map((c) => String(c).slice(0, 300)),
+    aiDemo: !!res.demo,
+    aiFecha: res.aiFecha || new Date().toISOString() };
+  if (!res.guardado) await api.saveWorkout(st.user.uid, nuevo);
+  st.workouts = st.workouts.map((x) => (x.id === id ? nuevo : x));
+  delete st.aiPend[id];
 }
 
 function wkRow(w, mod) {

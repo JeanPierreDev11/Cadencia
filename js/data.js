@@ -161,7 +161,7 @@ async function firebaseBackend(config) {
     // Coach AI (Gemini) a través de la Cloud Function «coach»: analiza el entreno guardado y lo guarda en su documento.
     async coach(id) {
       const Fn = await import(/* @vite-ignore */ FB + 'firebase-functions.js');
-      return (await Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), 'coach', { timeout: 125000 })({ id })).data;
+      return (await Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), 'coach', { timeout: 95000 })({ id })).data;
     },
     // Strava a través de la Cloud Function «strava» (conectar, actividades, desconectar). Los tokens nunca llegan al móvil.
     async strava(data) {
