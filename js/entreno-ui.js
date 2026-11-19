@@ -266,16 +266,29 @@ function aiHTML(w, compacto = false) {
       ${ai.llegar10.length ? `<section class="ai-box ai-diez ${ai.nota >= 10 ? 'is-diez' : ''}"><span class="ai-lbl">${ai.nota >= 10 ? 'Por qué es un 10/10' : 'Qué faltó para el 10/10'}</span><ul>${ai.llegar10.map((c) => `<li>${esc(c)}</li>`).join('')}</ul></section>` : ''}
       ${ai.consejos.length ? `<section class="ai-box"><span class="ai-lbl">Para la próxima sesión</span><ul>${ai.consejos.map((c) => `<li>${esc(c)}</li>`).join('')}</ul></section>` : ''}</div>`;
   }
-  if (pend === 'cargando') return `<div class="ai-load" role="status"><span class="ai-spin" aria-hidden="true"></span><span class="small muted">Analizando…</span></div>`;
+  if (pend === 'cargando') return `<div class="ai-load" role="status"><span class="ai-spin" aria-hidden="true"></span><span class="sr-only">Analizando…</span><span class="small muted ai-msg" aria-hidden="true">${fraseCoach()}</span></div>`;
   return `${pend && pend.error ? `<p class="small muted" role="alert">${esc(pend.error)}</p>` : ''}
     <button type="button" class="btn block ai-btn ${pro ? '' : 'is-locked'}" data-act="ai-pedir" data-v="${esc(w.id)}">Solicitar Análisis AI ${I.brain}${pro ? '' : ' <span class="protag">Pro</span>'}</button>`;
+}
+// Frases que rotan bajo la ruedita mientras el Coach AI trabaja (una nueva cada 2,5 s; la primera siempre «Analizando…»).
+const FRASES_COACH = ['Analizando tu entreno…', 'Leyendo repeticiones…', 'Analizando pesos…', 'Revisando el volumen…', 'Midiendo la intensidad…', 'Comparando con tu rutina…', 'Calculando la densidad…', 'Buscando tu progresión…', 'Preparando tus consejos…'];
+let coachT0 = 0, coachTimer = null;
+const fraseCoach = () => FRASES_COACH[Math.floor((Date.now() - coachT0) / 2500) % FRASES_COACH.length];
+// Cambia el texto en el sitio (sin repintar toda la pantalla); se para solo cuando ya no hay análisis en curso.
+function rotarFrasesCoach() {
+  if (coachTimer) return;
+  coachT0 = Date.now();
+  coachTimer = setInterval(() => {
+    if (!Object.values(st.aiPend || {}).includes('cargando')) { clearInterval(coachTimer); coachTimer = null; return; }
+    document.querySelectorAll('.ai-msg').forEach((el) => { const f = fraseCoach(); if (el.textContent !== f) el.textContent = f; });
+  }, 500);
 }
 // Pide el análisis (solo al pulsar el botón); el servidor lo guarda en el documento del entreno (en modo prueba, la app) y repinta. Si ya está guardado, no vuelve a pedirlo.
 async function pedirCoach(id) {
   const w0 = st.workouts.find((x) => x.id === id);
   st.aiPend = st.aiPend || {};
   if (!aiPosible(w0) || aiDe(w0) || st.aiPend[id] === 'cargando') return;
-  st.aiPend[id] = 'cargando'; render();
+  st.aiPend[id] = 'cargando'; rotarFrasesCoach(); render();
   // Reintento automático (2026-11-19): en el móvil una petición larga se corta sola (el SDK da `internal`/500) aunque el servidor siga y termine bien.
   // Volver a llamar es seguro: si ya terminó devuelve lo guardado sin gastar consulta; si sigue en marcha, el candado del servidor responde `aborted` y no duplica nada.
   const t0 = Date.now();
