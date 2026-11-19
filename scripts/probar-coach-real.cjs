@@ -22,10 +22,12 @@ const entrada = { perfil: { sexo: 'hombre', edad: 28, pesoKg: 80, objetivos: ['g
     { n: 'Curl de bíceps', uni: false, series: [{ kg: 14, reps: 12 }, { kg: 14, reps: 10 }, { kg: 14, reps: 9 }, { kg: 14, reps: 8 }] }] }, sesionAnterior: null };
 (async () => {
   let fallos = 0;
-  for (const modelo of [MODELO_COACH, MODELO_COACH_RESPALDO]) for (const pensar of ['low', 'minimal', null, 'medium']) {
+  const VER = process.env.VER_TEXTOS === '1';
+  for (const modelo of [MODELO_COACH, MODELO_COACH_RESPALDO]) for (const pensar of ['low', 'medium']) {
     const t0 = Date.now();
     try { const r = limpiarCoach(await geminiUna(modelo, process.env.GEMINI_API_KEY, entrada, 60000, pensar));
-      console.log(`${modelo} pensar=${pensar} → OK en ${Date.now() - t0} ms · nota ${r.nota} · ${r.paraLlegarAl10.length} puntos al 10 · ${r.consejos.length} consejos`); }
+      console.log(`${modelo} pensar=${pensar} → OK en ${Date.now() - t0} ms · nota ${r.nota} · ${r.paraLlegarAl10.length} puntos al 10 · ${r.consejos.length} consejos`);
+      if (VER) console.log('   «' + r.titulo + '» ' + r.resumen + '\n   AL 10: ' + r.paraLlegarAl10.join(' | ') + '\n   CONSEJOS: ' + r.consejos.join(' | ')); }
     catch (e) { if (pensar === 'low' || pensar === null) fallos++; console.log(`${modelo} pensar=${pensar} → FALLO en ${Date.now() - t0} ms · ${e.status} · ${String(e.message).slice(0, 160)}`); }
   }
   process.exit(0);

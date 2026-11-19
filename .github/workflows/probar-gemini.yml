@@ -32,4 +32,4 @@ jobs:
         run: |
           export GEMINI_API_KEY=$(gcloud secrets versions access latest --secret=GEMINI_API_KEY --project cadencia-11cb6)
           echo "::add-mask::$GEMINI_API_KEY"
-          node scripts/probar-coach-real.cjs
+          VER_TEXTOS=1 node scripts/probar-coach-real.cjs
