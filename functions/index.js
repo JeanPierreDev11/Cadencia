@@ -277,10 +277,12 @@ const LIMITE_COACH_USUARIO = 10; // análisis por persona y día (Gemini, nivel 
 const LIMITE_COACH_GLOBAL = 400; // análisis al día entre todas las personas (seguridad de gasto)
 const PROMPT_COACH = `Eres un entrenador personal experto en fuerza e hipertrofia. Analizas UN entreno de gimnasio ya terminado y devuelves una valoración breve, honesta y útil, en español de España, tuteando. Tu tono es siempre motivador, positivo y cercano (como un buen entrenador que te anima), pero sin regalar notas ni adular: la nota es honesta y se explica.
 Campos de la respuesta:
-- "nota": número de 0 a 10 con un decimal (calidad del entreno para el objetivo de la persona: volumen, intensidad, rango de repeticiones, RIR si lo hay, progresión respecto al objetivo de la rutina o a la sesión anterior si se dan, densidad de trabajo).
+- "nota": número de 0 a 10 con un decimal (calidad del entreno para el objetivo de la persona: estímulo real = intensidad y esfuerzo efectivo (RIR) con buena carga y progresión; volumen; rango de repeticiones; progresión respecto al objetivo de la rutina o a la sesión anterior si se dan; densidad de trabajo). Valora la CALIDAD Y LA INTENSIDAD por encima de cumplir series a ciegas: NO penalices automáticamente hacer menos series de las programadas (por ejemplo 2 en lugar de 3) si esas series se llevaron al fallo o muy cerca (RIR 0-1, o drop set) con buena carga y progresión; un volumen ligeramente menor con máxima intensidad sigue siendo un gran entreno y su nota debe reflejarlo. Descuenta por volumen solo cuando además hubo poca intensidad (RIR alto o sin apuntar) o el recorte es grande. Los datos traen "seriesAlLimite" (series con RIR 0-1 o drop set) y "seriesConMargen" (RIR 2 o más) por ejercicio: cítalos tal cual.
 - "titulo": 2 a 5 palabras, sin punto final.
 - "resumen": valoración general positiva y motivadora, 1 o 2 frases (máximo 300 caracteres). Empieza por lo que ha salido bien y cita ejercicios y cifras reales (duración, series, pesos, RIR).
-- "paraLlegarAl10": lista de 2 o 3 puntos (máximo 170 caracteres cada uno) que explican de forma clara, constructiva y accionable por qué la nota no es un 10 y qué habría hecho falta HOY para el 10/10. Cada punto debe ser un descuento concreto con datos reales, no un consejo genérico. Ejemplos de descuentos válidos: densidad baja (pocas series para el tiempo total de la sesión), series que faltaron respecto al objetivo de la rutina, RIR demasiado alto o sin apuntar en los ejercicios principales, ningún ejercicio clave con más peso o repeticiones que la sesión anterior, rango de repeticiones fuera del objetivo, un grupo muscular sin trabajar. Redáctalos en positivo («Con 2 series más de X habrías llegado al objetivo de 4×8-12»), nunca como reproche. Los puntos deben ser coherentes con la nota: cuanto más baja, más peso tienen. Si la nota es 10, esta lista explica en 2 o 3 puntos por qué ha sido un 10/10 (qué se ha cumplido, con cifras) en lugar de lo que faltó. Solo pon un 10 si de verdad no hay nada relevante que descontar.
+- "paraLlegarAl10": lista de 2 o 3 puntos (máximo 200 caracteres cada uno) que explican de forma clara, constructiva y accionable por qué la nota no es un 10 y qué habría hecho falta HOY para el 10/10. Cada punto debe ser un descuento concreto con datos reales, no un consejo genérico. Redáctalos en positivo («Con 1 serie más de X habrías llegado al objetivo de 4×8-12»), nunca como reproche. Los puntos deben ser coherentes con la nota: cuanto más baja, más peso tienen. Si la nota es 10, esta lista explica en 2 o 3 puntos por qué ha sido un 10/10 (qué se ha cumplido, con cifras) en lugar de lo que faltó. Solo pon un 10 si de verdad no hay nada relevante que descontar. Reglas estrictas de esta lista:
+  · CERO REDUNDANCIA: cada punto trata un aspecto DISTINTO. Si faltó volumen, lo dices UNA sola vez, en un único punto (agrupando todos los ejercicios con series de menos); no repitas «te faltaron series» (ni «más volumen», ni «más series») en otro punto con otras palabras. Los demás puntos miran otros aspectos objetivos y medibles, por ejemplo: progresión de cargas o repeticiones respecto a "sesionAnterior"; equilibrio entre los grupos musculares de la sesión (qué grupo o ejercicio quedó corto frente a otro); gestión de la fatiga y del RIR (RIR alto en ejercicios principales, o series sin apuntar); densidad del entreno ("seriesPorHora"); rango de repeticiones fuera del objetivo. Si un aspecto fue bien, no lo uses como descuento. Es mejor 2 puntos distintos que 3 con uno repetido.
+  · CON NOMBRES: si propones añadir series, di EXACTAMENTE en qué ejercicio o ejercicios de ESTA sesión conviene añadirlas, con su nombre tal cual viene en los datos, cuántas en cada uno y por qué ahí (por ejemplo «añade 1 serie en Pullover en polea y 1 en Curl martillo, donde aún tenías margen: RIR 3»). Elige ejercicios de la sesión con margen real (RIR alto en sus series) o con menos series que el objetivo de la rutina; nunca digas «añade series» o «un par de series más» sin nombrar ejercicio. Si propones subir peso o repeticiones, también con el ejercicio concreto.
 - "consejos": 2 o 3 consejos concretos y accionables para la próxima sesión, con cierre motivador (máximo 140 caracteres cada uno). No repitas aquí los puntos de "paraLlegarAl10": estos miran a la próxima sesión, aquellos a lo que faltó hoy.
 Reglas de datos (muy importantes):
 - Usa solo los datos recibidos; no inventes ejercicios, cifras ni tiempos. Sin consejos médicos. Si los datos son escasos, dilo con tacto y puntúa con prudencia.
@@ -357,6 +359,8 @@ const objetivosRutina = (p, w) => {
   return {};
 };
 const resumenEntreno = (w, objetivos = {}) => {
+  // Por ejercicio de fuerza: series al límite (RIR 0-1 o drop set) y con margen (RIR ≥ 2), contadas aquí para que el modelo no las deduzca de cabeza.
+  const intensidad = (series) => ({ seriesAlLimite: series.filter((s) => s.drop || (s.rir != null && s.rir <= 1)).length, seriesConMargen: series.filter((s) => !s.drop && s.rir != null && s.rir >= 2).length });
   const ejercicios = (w.ejercicios || []).slice(0, 20).map((e) => (e.tipo === 'cardio'
     ? { // bloque de cardio dentro del entreno (2026-11-15)
       n: String(e.n || '').slice(0, 60), cardio: true,
@@ -369,11 +373,10 @@ const resumenEntreno = (w, objetivos = {}) => {
         return o;
       }).filter((o) => Object.keys(o).length),
     }
-    : {
-      n: String(e.n || '').slice(0, 60), uni: !!e.uni,
-      ...(objetivos[normEj(e.n)] ? { objetivoRutina: objetivos[normEj(e.n)] } : {}),
-      series: (e.series || []).filter((s) => !s.w).slice(0, 15).map((s) => ({ kg: Number(s.kg) || 0, reps: Number(s.reps) || 0, ...(s.rir != null && s.rir !== '' && Number.isFinite(Number(s.rir)) ? { rir: Number(s.rir) } : {}), ...(s.isDropSet ? { drop: true } : {}) })),
-    })).filter((e) => e.series.length);
+    : (() => {
+      const series = (e.series || []).filter((s) => !s.w).slice(0, 15).map((s) => ({ kg: Number(s.kg) || 0, reps: Number(s.reps) || 0, ...(s.rir != null && s.rir !== '' && Number.isFinite(Number(s.rir)) ? { rir: Number(s.rir) } : {}), ...(s.isDropSet ? { drop: true } : {}) }));
+      return { n: String(e.n || '').slice(0, 60), uni: !!e.uni, ...(objetivos[normEj(e.n)] ? { objetivoRutina: objetivos[normEj(e.n)] } : {}), ...intensidad(series), series };
+    })())).filter((e) => e.series.length);
   // Cifras que el modelo NO debe calcular de cabeza: series de trabajo de fuerza y densidad real (series por hora de la duración registrada).
   const seriesTotales = ejercicios.reduce((t, e) => t + (e.cardio ? 0 : e.series.length), 0);
   const min = Number(w.min) > 0 ? Math.round(Number(w.min)) : null;

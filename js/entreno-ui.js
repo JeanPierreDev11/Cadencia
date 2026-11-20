@@ -60,6 +60,14 @@ const dayPlan = (iso) => {
   if (p) return p;
   return sv.some((x) => x.de === iso) ? null : dayPlanBase(iso);
 };
+// Sesión de la rutina con la que se abre un entreno en vivo: { rid, d } (rutina y día 0-6; si la sesión se movió, el día ORIGINAL). Sirve para, al guardar,
+// ofrecer incorporar a esa sesión los ejercicios que se hayan añadido en vivo (rutNuevos). `rutinasList()` primero: da id a una rutina antigua que no lo tenga.
+function planRef(iso) {
+  const a = (rutinasList(), rutinaOf());
+  if (!a) return null;
+  const m = E.salvLista(st.profile).find((x) => x.a === iso);
+  return { rid: a.id || null, d: E.weekdayIdx(m && dayPlanBase(m.de) ? m.de : iso) };
+}
 // ¿Se puede mover la sesión del día d y a qué días? (ver E.moverDestinos)
 const moverInfo = (d) => E.moverDestinos(d, todayISO(), dayPlan, new Set(st.workouts.map((w) => w.fecha)));
 // Día elegido en la tira semanal (por defecto hoy; si es de otra semana, vuelve a hoy).
@@ -1063,7 +1071,7 @@ function libApply(names) {
   } else {
     const Lv = st.live;
     if (L.mode === 'swap') { const ex = Lv.ex[L.i]; Lv.ex[L.i] = liveEx(names[0], ex.s.length, ex.obj); }
-    else names.forEach((n) => Lv.ex.push(liveEx(n, 3, '')));
+    else names.forEach((n) => Lv.ex.push({ ...liveEx(n, 3, ''), extra: true })); // extra = añadido durante el entreno (al guardar se ofrece sumarlo a la rutina)
     liveSave();
   }
   st.lib = null; render();
@@ -1124,6 +1132,8 @@ function liveCargarSesion(op) {
   const L = st.live, r = rutinaOf();
   const ej = op.ej || E.sesionFuerza(op.foco, goalsKind(), { exp: r && r.exp, equipo: r && r.equipo }).ej;
   L.nombre = op.nombre; L.foco = op.foco || ''; L.custom = false;
+  const d = op.ej && r ? r.dias.find((x) => r.sesiones[x] && r.sesiones[x].t === 'fuerza' && r.sesiones[x].nombre === op.nombre) : null; // sesión de la rutina elegida (las de «split» sin ej no son de la rutina)
+  L.plan = d != null ? { rid: (rutinasList(), r.id || null), d } : null;
   L.ex = ej.map((e) => liveEx(e.n, e.series, `${e.series} × ${e.reps}`, e));
 }
 // Un entreno de fuerza nuevo pregunta el modo; si ya hay uno en curso, se continúa.
@@ -1215,7 +1225,7 @@ function startLive(fecha, modo = 'guiado') {
     return;
   }
   const dp = dayPlan(fecha), plan = dp && dp.t === 'fuerza' ? dp : null;
-  st.live = { uid: st.user.uid, fecha, start: Date.now(), nombre: plan ? plan.nombre : 'Entrenamiento', foco: (plan && plan.foco) || '', custom: !plan && !liveOpciones().length, modo,
+  st.live = { uid: st.user.uid, fecha, start: Date.now(), nombre: plan ? plan.nombre : 'Entrenamiento', foco: (plan && plan.foco) || '', custom: !plan && !liveOpciones().length, modo, plan: plan ? planRef(fecha) : null,
     ex: plan ? plan.ej.map((e) => liveEx(e.n, e.series, `${e.series} × ${e.reps}`, e)) : [], msg: '' };
   st.liveMin = false; st.wk = null; liveSave(); render(); window.scrollTo(0, 0);
 }
@@ -1574,6 +1584,64 @@ function finSheetHTML() {
       </div>
     </div>`;
 }
+/* ---------- «Has añadido X hoy: ¿lo incorporas a tu rutina?» (al guardar un entreno en vivo) ---------- */
+// Ejercicios de fuerza que se AÑADIERON en vivo (no los cambiados con «Cambiar») y que no están en la sesión de la rutina de la que partió el entreno.
+// Cada uno lleva como objetivo las series de trabajo y el rango de repeticiones de hoy. Devuelve { rid, d, nombre, items } o null (sin sesión de rutina o sin nada nuevo).
+function ejerciciosNuevos(L, ejs) {
+  const ref = L.plan, r = ref && rutinasList().find((x) => x.id === ref.rid), s = r && r.sesiones && r.sesiones[ref.d];
+  if (!s || s.t !== 'fuerza' || !Array.isArray(s.ej)) return null;
+  const k = (n) => E.normTxt(E.canon(n)), enRutina = new Set(s.ej.map((e) => k(e.n))), extra = new Set(L.ex.filter((x) => x.extra && x.tipo !== 'cardio').map((x) => k(x.n)));
+  const vistos = new Set(), items = [];
+  for (const e of ejs) {
+    if (e.tipo === 'cardio' || !extra.has(k(e.n)) || enRutina.has(k(e.n)) || vistos.has(k(e.n))) continue;
+    const tr = E.trabajo(e.series);
+    if (!tr.length) continue;
+    vistos.add(k(e.n));
+    const reps = tr.map((q) => q.reps), lo = Math.min(...reps), hi = Math.max(...reps);
+    items.push({ n: e.n, series: Math.min(10, tr.length), reps: lo === hi ? String(lo) : `${lo}-${hi}`, on: true });
+  }
+  return items.length ? { rid: ref.rid, d: ref.d, nombre: s.nombre || r.nombre || 'tu rutina', items } : null;
+}
+function rutNuevosSheetHTML() {
+  const R = st.rutNuevos, varios = R.items.length > 1, sel = R.items.filter((x) => x.on).length;
+  const lista = R.items.map((x) => `<b>${esc(x.n)}</b>`);
+  const nombres = lista.length > 1 ? `${lista.slice(0, -1).join(', ')} y ${lista[lista.length - 1]}` : lista[0];
+  const fila = (x, i) => `<button type="button" class="rnv-it${x.on ? ' on' : ''}" data-act="rn-toggle" data-v="${i}" role="checkbox" aria-checked="${x.on}" ${varios ? '' : 'tabindex="-1"'}>
+      ${varios ? `<span class="rnv-box" aria-hidden="true">${x.on ? '✓' : ''}</span>` : ''}
+      <span class="rnv-t"><b>${esc(x.n)}</b><small>${x.series} × ${esc(x.reps)} (lo de hoy como objetivo)</small></span></button>`;
+  return `<div class="sheet-back exv-back" data-act="rn-close"></div>
+    <div class="sheet short rnv" role="dialog" aria-modal="true" aria-label="Añadir a la rutina">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><span style="width:36px"></span><h2>Tu rutina</h2><button type="button" class="iconbtn" data-act="rn-close" aria-label="Solo por hoy">${I.back}</button></div>
+      <div class="rnv-body">
+        <p class="rnv-q">Has añadido ${nombres} hoy. ¿Quieres incorporar${varios ? 'los' : 'lo'} a tu rutina de <b>${esc(R.nombre)}</b>?</p>
+        <div class="rnv-list">${R.items.map(fila).join('')}</div>
+        ${R.msg ? `<div class="msg" role="alert">${esc(R.msg)}</div>` : ''}
+        <button type="button" class="btn block" data-act="rn-add" ${sel && !R.busy ? '' : 'disabled'}>${R.busy ? 'Guardando…' : 'Añadir a la rutina'}</button>
+        <button type="button" class="btn ghost block" data-act="rn-close" ${R.busy ? 'disabled' : ''}>Solo por hoy</button>
+      </div>
+    </div>`;
+}
+async function rutNuevosAplicar() {
+  const R = st.rutNuevos;
+  if (!R || R.busy) return;
+  const sel = R.items.filter((x) => x.on);
+  if (!sel.length) { st.rutNuevos = null; return render(); }
+  R.busy = true; R.msg = ''; render();
+  try {
+    const list = rutinasList(), r = list.find((x) => x.id === R.rid), s = r && r.sesiones && r.sesiones[R.d];
+    if (!s || s.t !== 'fuerza' || !Array.isArray(s.ej)) throw new Error('Esa sesión ya no está en tu rutina.');
+    const ya = new Set(s.ej.map((e) => E.normTxt(E.canon(e.n))));
+    const nuevos = sel.filter((x) => !ya.has(E.normTxt(E.canon(x.n)))).map((x) => ({ n: x.n, m: (E.ejercicio(x.n) || {}).m || '', series: x.series, reps: x.reps }));
+    if (nuevos.length) {
+      const rut = { ...r, sesiones: { ...r.sesiones, [R.d]: { ...s, ej: [...s.ej, ...nuevos] } } }, act = rutinaOf();
+      await saveRutinas(list.map((x) => (x.id === r.id ? rut : x)), act && act.id === r.id ? rut : null);
+    }
+    st.rutNuevos = null; render();
+    toast(sel.length === 1 ? `${sel[0].n} añadido a tu rutina` : `${sel.length} ejercicios añadidos a tu rutina`);
+  } catch (e) { R.busy = false; R.msg = `No se ha podido guardar en tu rutina: ${errorText(e)}`; render(); }
+}
+
 async function liveFinish() {
   const L = st.live, f = st.liveFin, r = liveRecoger();
   if (!r || !f) return;
@@ -1603,6 +1671,7 @@ async function liveFinish() {
     st.wkDia = o.fecha; st.wkSem = E.mondayOf(o.fecha) < E.mondayOf(todayISO()) ? E.mondayOf(o.fecha) : null; // si se registró en una semana anterior, se muestra esa
     if (esPro() && !editado) st.resumen = { id: o.id, nombre: o.nombre, vol: volTotal, sets: nSets, min, record };
     if (!editado && nSets > 0) st.compartir = { id: o.id, i: 0, fondo: 'oscuro', menu: false }; // «Compartir Entreno» al terminar (para todos); al darle a LISTO sigue el resumen Pro si lo hay
+    if (!editado) { const rn = ejerciciosNuevos(L, ejs); if (rn) st.rutNuevos = { ...rn, busy: false, msg: '' }; } // va ANTES que «Compartir» (primero de la cadena de hojas): ejercicios añadidos hoy → ¿a la rutina?
     render(); window.scrollTo(0, 0);
     toast(editado ? 'Entreno actualizado' : record ? '¡Nuevo récord personal!' : nSets ? `Entrenamiento guardado · ${nSets} ${nSets === 1 ? 'serie' : 'series'}` : 'Entrenamiento guardado');
   } catch (e) { fail(`No se ha podido guardar: ${errorText(e)}`); }
@@ -1968,6 +2037,9 @@ root.addEventListener('click', async (e) => {
     st.moverSel = v; return render();
   }
   if (act === 'mover-close') { st.moverSel = null; return render(); }
+  if (act === 'rn-close') { if (st.rutNuevos && st.rutNuevos.busy) return; st.rutNuevos = null; return render(); } // «Solo por hoy»: no toca la rutina
+  if (act === 'rn-toggle' && st.rutNuevos && !st.rutNuevos.busy) { const x = st.rutNuevos.items[Number(v)]; if (x && st.rutNuevos.items.length > 1) { x.on = !x.on; render(); } return; }
+  if (act === 'rn-add') return void rutNuevosAplicar();
   if (act === 'wk-mover-a' && st.moverSel) {
     const de = st.moverSel, inf = moverInfo(de);
     if (st.salvBusy || !inf || !inf.ok || !inf.destinos.includes(v)) return;
@@ -2140,5 +2212,5 @@ function recuperacionHTML() {
     ${esPro() ? cuerpo : muro}</section>`;
 }
 function cuerpoSheetHTML() { return C3.sheetHTML(st.cuerpo3d, sexoCuerpo(), datosCuerpo(), todayISO()); }
-  return { exViewHTML, finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, compartirSheetHTML: CP.sheetHTML, pintarCompartir: CP.pintar, limiteSheetHTML, calentarSheetHTML, moverSheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML };
+  return { exViewHTML, finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, compartirSheetHTML: CP.sheetHTML, pintarCompartir: CP.pintar, limiteSheetHTML, calentarSheetHTML, moverSheetHTML, rutNuevosSheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML };
 }
