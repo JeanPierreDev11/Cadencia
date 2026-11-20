@@ -2055,6 +2055,35 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
    2026-11-17 · Escritorio (≥ 1024 px). Todo dentro de la media query:
    el móvil no cambia. Sidebar, columna central y vistas a dos columnas.
    ============================================================ */
+/* ---- Pauta de cardio (máquina, datos exactos y porqué) ---- */
+.cguia { border: 1.5px solid var(--line); border-left: 3px solid var(--accent-text); background: var(--surface2); border-radius: var(--r-md); padding: 12px 14px; margin: 8px 0; display: grid; gap: 8px; }
+.cguia-t { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.cguia-t svg { color: var(--accent-text); flex: none; }
+.cguia-ch { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
+.cguia-ch li { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm, 10px); padding: 8px 10px; display: grid; gap: 2px; min-width: 0; }
+.cguia-ch span { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.cguia-ch b { font-size: 14px; line-height: 1.25; overflow-wrap: anywhere; }
+.cguia-p { margin: 0; }
+.cguia.in-live { margin: 0 0 10px; }
+
+/* ---- Hidratación (Nutrición) ---- */
+.hid { display: grid; gap: 14px; }
+.hid-head { display: flex; align-items: center; gap: 10px; }
+.hid-head svg { color: var(--accent-text); flex: none; }
+.hid-head h2 { margin: 0; font-size: 17px; }
+.hid-meta { margin: 0; }
+.hid-big { display: flex; align-items: baseline; gap: 6px; }
+.hid-big b { font-size: 34px; line-height: 1; letter-spacing: -.02em; }
+.hid-big span { color: var(--muted); font-size: 14px; }
+.hid-bar { height: 10px; border-radius: 99px; background: var(--surface2); border: 1px solid var(--line); overflow: hidden; }
+.hid-bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 99px; transition: width .3s ease; }
+.hid-btns { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; }
+.hid-btns .btn { white-space: nowrap; }
+.hid-split { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.hid-split li { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; padding: 9px 12px; background: var(--surface2); border: 1px solid var(--line); border-radius: var(--r-sm, 10px); font-size: 14px; }
+.hid-split li b { color: var(--accent-text); white-space: nowrap; }
+.hid-split li.is-train { border-color: var(--accent-text); }
+
 @media (min-width: 1024px) {
   :root { --sb-w: 104px; --col: 800px; }
 

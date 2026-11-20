@@ -213,6 +213,21 @@ export function crearSecciones(ctx) {
         : `<p class="small">Completa edad y estatura en tu <button class="link" data-act="tab" data-v="perfil">perfil</button> para calcular tu objetivo.</p>`}
     </section>`;
 
+    // Hidratación
+    const hd = hidratacion(d);
+    if (hd) {
+      const lit = (ml) => `${nf(ml / 1000, 2)} L`, falta = Math.max(0, hd.meta - hd.bebido);
+      h += `<section class="card hid" aria-label="Hidratación">
+        <div class="hid-head">${I.drop}<h2>Hidratación</h2></div>
+        <div class="hid-big"><b class="num">${lit(hd.bebido)}</b><span>de ${lit(hd.meta)}</span></div>
+        <div class="hid-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${hd.meta}" aria-valuenow="${hd.bebido}" aria-label="Agua bebida"><i style="width:${Math.min(100, Math.round((hd.bebido / hd.meta) * 100))}%"></i></div>
+        <p class="small muted hid-meta">${falta ? `Te faltan ${nf(falta)} ml.` : 'Meta cumplida.'} Son 35 ml por kg (${nf(hd.kg, 1)} kg)${hd.entrena ? ' más 500 ml porque hoy entrenas' : ''}.</p>
+        <div class="hid-btns"><button type="button" class="btn quiet" data-act="agua-add" data-v="250">${I.plus} 250 ml</button><button type="button" class="btn quiet" data-act="agua-add" data-v="500">${I.plus} 500 ml</button>
+          <button type="button" class="btn ghost small" data-act="agua-add" data-v="-250" ${hd.bebido ? '' : 'disabled'} aria-label="Quitar 250 ml">−250</button></div>
+        <ul class="hid-split">${hd.partes.map(([n, ml]) => `<li class="${n === 'Durante el entreno' ? 'is-train' : ''}"><span>${n}</span><b>${nf(ml)} ml</b></li>`).join('')}</ul>
+      </section>`;
+    }
+
     // Comidas
     const prev = dia(E.addDays(d, -1)).items, ayerTxt = d === t ? 'ayer' : 'el día anterior';
     if (st.iaQuedan == null) setTimeout(() => iaEstado(), 0);
@@ -488,9 +503,32 @@ export function crearSecciones(ctx) {
     saveProfile({ misAlimentos: [{ id, n, k, p, c, f, u: u || null }, ...(P().misAlimentos || [])].slice(0, 200) });
   }
   async function guardarDia(d, items) {
-    st.dias[d] = { fecha: d, items };
+    const agua = dia(d).aguaMl || 0;
+    st.dias[d] = { ...dia(d), fecha: d, items };
     render();
-    try { await api.saveDia(uid(), d, { items }); } catch (e) { toast(errorText(e)); }
+    try { await api.saveDia(uid(), d, agua ? { items, aguaMl: agua } : { items }); } catch (e) { toast(errorText(e)); }
+  }
+  // Agua del día (ml): vive en el mismo documento que las comidas de esa fecha.
+  async function guardarAgua(d, ml) {
+    const aguaMl = Math.max(0, Math.min(10000, Math.round(ml)));
+    st.dias[d] = { ...dia(d), fecha: d, aguaMl };
+    render();
+    try { await api.saveDia(uid(), d, { items: dia(d).items, aguaMl }); } catch (e) { toast(errorText(e)); }
+  }
+  // Meta de agua: ≈35 ml por kg de peso (redondeada a 50 ml) + 500 ml si ese día entrenas (según tu rutina o un entreno registrado).
+  function hidratacion(d) {
+    const kg = currentKg();
+    if (!kg) return null;
+    const r = rutinaOf(), dow = (new Date(`${d}T12:00:00`).getDay() + 6) % 7;
+    const entrena = !!((r && r.dias || []).includes(dow) || (st.workouts || []).some((w) => w.fecha === d && w.tipo !== 'otro'));
+    const base = Math.round((kg * 35) / 50) * 50, meta = base + (entrena ? 500 : 0);
+    // Reparto práctico: si la meta es menor que la suma de los vasos fijos, se escalan; lo que sobra va «entre comidas».
+    const fijo = [['Al despertar', 500], ...(entrena ? [['Durante el entreno', 750]] : []), ['Con la comida', 500], ['Con la cena', 500]];
+    const suma = fijo.reduce((a, x) => a + x[1], 0), f = Math.min(1, meta / suma);
+    const partes = fijo.map(([n, ml]) => [n, Math.round((ml * f) / 50) * 50]);
+    const resto = Math.max(0, meta - partes.reduce((a, x) => a + x[1], 0));
+    if (resto >= 50) partes.splice(entrena ? 2 : 1, 0, ['Repartido entre comidas', resto]);
+    return { kg, base, meta, entrena, partes, bebido: dia(d).aguaMl || 0 };
   }
   function addItem(x) {
     const d = st.nDate || todayISO(), items = [...dia(d).items, { id: nid('f'), m: st.food.meal, ...x }];
@@ -998,6 +1036,7 @@ export function crearSecciones(ctx) {
   async function click(act, v, b) {
     switch (act) {
       // Nutrición
+      case 'agua-add': { const d = st.nDate || todayISO(); guardarAgua(d, (dia(d).aguaMl || 0) + Number(v)); return true; }
       case 'n-dia': { const t = todayISO(), d = st.nDate || t; st.nDate = v === '0' ? t : E.addDays(d, Number(v)); if (st.nDate > t) st.nDate = t; render(); return true; }
       case 'n-ir': st.nDate = v; render(); window.scrollTo(0, 0); return true;
       case 'n-add': st.food = { meal: Number(v), q: '', sel: null, mode: 'g', amt: '', prep: null, oil: '' }; render(); focusSheet(); return true;

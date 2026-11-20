@@ -89,9 +89,20 @@ const goalsKind = () => E.planKind(st.profile && st.profile.objetivos);
 const sesDuracion = (s) => (s.t === 'fuerza' ? `${(s.ej || []).length} ejercicios` : fmtDur(s.min));
 const sesResumen = (s) => {
   if (s.t === 'fuerza' && s.ej && s.ej.length) { const n = s.ej.map((e) => e.n); return n.length > 2 ? `${n.slice(0, 2).join(', ')} y ${n.length - 2} más` : n.join(' y '); }
+  if (s.guia) return `${s.guia.maq} · ${s.guia.items.map((q) => q.v).join(' · ')}`;
   if ((s.t === 'bici' || s.t === 'cardio') && s.ses) { const x = E.sesionPorId(s.ses); return x ? x.d : ''; }
   return s.det || '';
 };
+// Pauta de cardio de la rutina: máquina, 3 datos (tiempo, velocidad, pendiente/resistencia…) y el porqué. Se sanea al guardar.
+const guiaLimpia = (g) => {
+  if (!g || typeof g !== 'object') return null;
+  const t = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
+  const items = (Array.isArray(g.items) ? g.items : []).map((q) => ({ k: t(q && q.k, 24), v: t(q && q.v, 40) })).filter((q) => q.k && q.v).slice(0, 5);
+  return t(g.maq, 40) && items.length ? { maq: t(g.maq, 40), items, por: t(g.por, 200) } : null;
+};
+const guiaHTML = (g, cls = '') => (g ? `<div class="cguia ${cls}"><b class="cguia-t">${I.heart}<span>${esc(g.maq)}</span></b>
+  <ul class="cguia-ch">${g.items.map((q) => `<li><span>${esc(q.k)}</span><b>${esc(q.v)}</b></li>`).join('')}</ul>
+  ${g.por ? `<p class="small muted cguia-p">${esc(g.por)}</p>` : ''}</div>` : '');
 const EQ_ICO = {
   barra: '<path d="M2 12h20M5 8v8M8 6v12M16 6v12M19 8v8"/>',
   mancuernas: '<path d="M4 10v4M7 7v10M17 7v10M20 10v4M7 12h10"/>',
@@ -449,6 +460,7 @@ function rxHTML(d, i, e, s, re) {
   // Foto y nombre abren la ficha del ejercicio (GIF grande, cómo hacerlo y músculos). «Cambiar» abre la biblioteca completa ya filtrada por alternativas de este hueco.
   return `<div class="rx">
     <div class="rx-top"><button type="button" class="rx-view" data-act="ex-view" data-n="${esc(e.n)}" aria-label="Ver cómo se hace ${esc(e.n)}">${exThumb(x || { eq: 'corporal' })}<span class="rx-n">${esc(e.n)}<span class="small muted">${x ? E.MUSCULOS[x.m] : ''}</span></span></button><button type="button" class="iconbtn" data-act="re-del" data-v="${key}" aria-label="Quitar ${esc(e.n)}">${I.close}</button></div>
+    ${e.guia ? guiaHTML(guiaLimpia(e.guia), 'in-ed') : ''}
     ${E.esCinta(e) ? rxCintaHTML(d, i, e) : ''}
     <div class="rx-bot">
       ${E.esCinta(e) ? '<span></span>' : `<span class="rx-sr"><input class="input" data-re="${d}.ej.${i}.series" inputmode="numeric" value="${esc(e.series)}" aria-label="Series de ${esc(e.n)}"><span>×</span><input class="input" data-re="${d}.ej.${i}.reps" value="${esc(e.reps)}" aria-label="Repeticiones de ${esc(e.n)}"></span>`}
@@ -471,7 +483,7 @@ function dayCardHTML(R, d, re) {
   } else if (s.t === 'bici' || s.t === 'cardio') {
     const ses = s.ses ? E.sesionPorId(s.ses) : null;
     const open = re.ses === d || !ses;
-    body = `${ses ? `<p class="small">${esc(ses.d)}</p>` : ''}
+    body = `${s.guia ? guiaHTML(guiaLimpia(s.guia), 'in-ed') : ses ? `<p class="small">${esc(ses.d)}</p>` : ''}
       ${open ? `<div class="alts"><span class="small muted">${ses ? 'Alternativas' : 'Elige una sesión'}</span>
           ${E.alternativasSesion(s.t, s.ses).map((a) => `<button type="button" class="altses" data-act="re-ses" data-v="${d}" data-id="${a.id}"><b>${esc(a.n)} · ${fmtDur(a.min)}</b><span class="small muted">${esc(a.d)}</span></button>`).join('')}
           ${ses ? `<button type="button" class="link" data-act="re-ses-close" data-v="${d}">Cerrar</button>` : ''}</div>`
@@ -508,7 +520,7 @@ const editorHTML = (re) => [...re.draft.dias].sort((a, b) => a - b).map((d) => d
 function normRutina(R) {
   const used = [...new Set(R.dias.map((d) => R.sesiones[d].t))];
   const out = { tipos: used.length ? used : R.tipos, otro: String(R.otro || '').trim().slice(0, 30), dias: [...R.dias].sort((a, b) => a - b), modo: R.modo,
-    split: R.split || 'auto', exp: R.exp || '', equipo: R.equipo || null, eqSel: R.eqSel || [], donde: dondeDe(R.donde), flex: !!R.flex, deporte: R.deporte || '', sesiones: {} };
+    split: R.split || 'auto', exp: R.exp || '', equipo: R.equipo || null, eqSel: R.eqSel || [], donde: dondeDe(R.donde), flex: !!R.flex, deporte: R.deporte || '', prio: RW_PRIO.some(([k]) => k === R.prio) ? R.prio : '', sesiones: {} };
   for (const d of out.dias) {
     const s = R.sesiones[d];
     const o = { t: s.t, nombre: String(s.nombre || '').trim().slice(0, 40) || RT[s.t] };
@@ -521,14 +533,19 @@ function normRutina(R) {
           const rango = (v, lo, hi) => { const n = num(v); return String(v ?? '').trim() !== '' && n >= lo && n <= hi ? Math.round(n * 10) / 10 : ''; };
           const ints = intervalosDe(e).map((q) => ({ tiempo: rango(q.tiempo, 0.5, 600), velocidad: rango(q.velocidad, 0.5, 30), inclinacion: rango(q.inclinacion, 0, 30) })).filter((q) => q.tiempo !== '').slice(0, 20);
           const tot = ints.reduce((a, q) => a + q.tiempo, 0);
-          return { n: E.canon(e.n), m: 'cardio', series: Math.max(1, ints.length), reps: `${nf(tot || 20)} min`, intervalos: ints.length ? ints : [{ tiempo: 20, velocidad: '', inclinacion: '' }] };
+          const rc = { n: E.canon(e.n), m: 'cardio', series: Math.max(1, ints.length), reps: `${nf(tot || 20)} min`, intervalos: ints.length ? ints : [{ tiempo: 20, velocidad: '', inclinacion: '' }] };
+          const gc = guiaLimpia(e.guia); if (gc) rc.guia = gc;
+          return rc;
         }
-        return { n: e.n, m: e.m || (x ? x.m : ''), series: sr >= 1 && sr <= 10 ? sr : 3, reps: String(e.reps || '').trim().slice(0, 20) || '10' };
+        const base = { n: e.n, m: e.m || (x ? x.m : ''), series: sr >= 1 && sr <= 10 ? sr : 3, reps: String(e.reps || '').trim().slice(0, 20) || '10' };
+        const gj = guiaLimpia(e.guia); if (gj) base.guia = gj;
+        if (E.INTENSIDADES[e.int]) base.int = e.int;
+        return base;
       });
     } else {
       const m = Math.round(num(s.min));
       o.min = m >= 5 && m <= 600 ? m : 60;
-      if (s.t === 'bici' || s.t === 'cardio') { o.ses = s.ses || null; const k = num(s.km); if (k > 0 && k <= 500) o.km = Math.round(k * 10) / 10; }
+      if (s.t === 'bici' || s.t === 'cardio') { o.ses = s.ses || null; const k = num(s.km); if (k > 0 && k <= 500) o.km = Math.round(k * 10) / 10; const gs = s.t === 'cardio' ? guiaLimpia(s.guia) : null; if (gs) o.guia = gs; }
       else o.det = String(s.det || '').trim().slice(0, 80);
     }
     out.sesiones[d] = o;
@@ -650,6 +667,9 @@ const RW_MAIN = [
   { id: 'otro', t: 'Otro deporte', s: 'Fútbol, natación…', ico: () => I.ball },
 ];
 const RW_EXP = [['nuevo', 'Debutante'], ['meses', 'Unos meses'], ['anio', 'Alrededor de 1 año'], ['anios', 'Años'], ['compite', 'Compito']];
+// Qué quieres priorizar (decide cuántos días de pierna y de torso lleva la semana). Sin elegir, la mujer parte de «Glúteo y pierna».
+const RW_PRIO = [['inferior', 'Glúteo y pierna', 'Más días y más volumen de tren inferior'], ['torso', 'Pecho y espalda', 'Más días de tren superior'], ['brazos', 'Hombros y brazos', 'Más trabajo de hombro y brazo'], ['equilibrado', 'Todo equilibrado', 'Reparto parejo entre tren superior e inferior']];
+const prioDePerfil = (p = {}) => { const r = p.rutina && p.rutina.prio; return RW_PRIO.some(([k]) => k === r) ? r : p.sexo === 'mujer' ? 'inferior' : 'equilibrado'; };
 const RW_DONDE = [['gym', 'Gimnasio', 'Máquinas, poleas y peso libre'], ['casa', 'Casa', 'Con poco o ningún material'], ['parque', 'Parque', 'Barras, paralelas y tu peso']];
 const RW_MAT = [['maquina', 'Máquinas / poleas'], ['mancuernas', 'Mancuernas'], ['barra', 'Barras'], ['banda', 'Bandas elásticas'], ['kettlebell', 'Kettlebells'], ['ninguno', 'Solo peso corporal']];
 const RW_DIV = [['ppl', 'Push · Pull · Legs', 'Empuje, tirón y pierna'], ['tp', 'Torso / Pierna', 'Tren superior e inferior'], ['full', 'Full body', 'Todo el cuerpo cada día'], ['weider', 'Un músculo por día', 'Pecho, espalda, pierna, hombro y brazos'], ['deporte', 'Fuerza para deporte', 'Potencia y core para tu deporte'], ['custom', 'Personalizado', 'Tú decides qué haces cada día']];
@@ -662,10 +682,10 @@ const eqDeDonde = (ds) => { const eq = [...new Set(ds.flatMap((k) => EQ_DEF[k]))
 // Lo que se contestó en el cuestionario inicial (experiencia, dónde, material y días por semana) precarga una rutina NUEVA; se puede cambiar paso a paso.
 function inicioDesdePerfil() {
   const p = st.profile || {};
-  return { exp: RW_EXP.some(([k]) => k === p.experiencia) ? p.experiencia : '', donde: dondeDe(p.donde), eq: Array.isArray(p.eqSel) ? [...p.eqSel] : [], n: p.diasSemana >= 1 && p.diasSemana <= 7 ? p.diasSemana : 0 };
+  return { exp: RW_EXP.some(([k]) => k === p.experiencia) ? p.experiencia : '', donde: dondeDe(p.donde), eq: Array.isArray(p.eqSel) ? [...p.eqSel] : [], n: p.diasSemana >= 1 && p.diasSemana <= 7 ? p.diasSemana : 0, prio: prioDePerfil(p) };
 }
 const rwSteps = (o) => {
-  if (o.main === 'fuerza') return ['tipo', 'exp', 'donde', 'material', 'n', 'dias', 'modo', ...(o.modo === 'propia' ? ['division'] : []), 'editor'];
+  if (o.main === 'fuerza') return ['tipo', 'exp', 'donde', 'material', 'n', 'dias', 'modo', ...(o.modo === 'propia' ? ['division'] : ['prio']), 'editor'];
   if (o.main === 'bici' || o.main === 'cardio') return ['tipo', 'exp', 'n', 'dias', 'modo', 'editor'];
   if (o.main === 'otro') return ['tipo', 'otro', 'n', 'dias', 'editor'];
   return ['tipo'];
@@ -676,7 +696,7 @@ const expBars = (k) => `<span class="bars" aria-hidden="true">${[1, 2, 3, 4, 5].
 function rwStart(rid, nueva) {
   const r = nueva ? null : rutinasList().find((x) => x.id === rid) || rutinaOf();
   if (!r && sobreLimite('rutinas')) return avisoLimite('rutinas'); // crear una rutina nueva
-  const base = { step: 0, main: '', exp: '', donde: [], eq: [], n: 0, dias: [], flex: false, modo: '', division: '', deporte: '', otro: '', msg: '', anim: 'fwd' };
+  const base = { step: 0, main: '', exp: '', donde: [], eq: [], n: 0, dias: [], flex: false, prio: prioDePerfil(st.profile), modo: '', division: '', deporte: '', otro: '', msg: '', anim: 'fwd' };
   st.rw = r
     ? { ...base, rid: r.id, main: r.tipos[0] || '', otro: r.otro || '', n: r.dias.length, dias: [...r.dias], flex: !!r.flex, exp: r.exp || '', donde: dondeDe(r.donde), eq: r.eqSel ? [...r.eqSel] : [], deporte: r.deporte || '' }
     : { ...base, nueva: true, ...inicioDesdePerfil() };
@@ -693,6 +713,7 @@ function rwCanNext() {
   if (s === 'otro') return o.otro.trim().length > 0;
   if (s === 'n') return o.n > 0;
   if (s === 'dias') return o.flex ? o.n > 0 : o.dias.length === o.n;
+  if (s === 'prio') return !!o.prio;
   if (s === 'modo') return !!o.modo;
   if (s === 'division') return !!o.division && (o.division !== 'deporte' || !!o.deporte);
   return true;
@@ -732,6 +753,13 @@ function viewRutWizard() {
         ${ch('rw-flex', 'flex', o.flex, `<span class="t">Suelo variar<small>Pondremos días orientativos y tú decides cada semana</small></span>${tick(o.flex)}`, 'style="margin-top:6px"')}</div>
       <p class="small ${o.flex || !diff ? '' : 'muted'}" role="status">${o.flex ? 'Sin días fijos: te sugerimos unos y cambias cuando quieras.' : diff === 0 ? `Perfecto: ${o.n} ${o.n === 1 ? 'día' : 'días'}.` : diff > 0 ? `Te ${diff === 1 ? 'falta' : 'faltan'} ${diff}.` : `Te ${-diff === 1 ? 'sobra' : 'sobran'} ${-diff}.`}</p>`;
     if (o.main === 'otro') next = 'Crear rutina';
+  } else if (s === 'prio') {
+    const mujer = st.profile && st.profile.sexo === 'mujer';
+    body = `<h1 class="ob-title">¿Qué quieres priorizar?</h1>
+      <p class="ob-sub">Repartimos los días de pierna y de torso según esto, tu nivel y tus ${o.n || ''} días.</p>
+      <div class="choices big">${RW_PRIO.map(([k, t, sub]) => ch('rw-prio', k, o.prio === k, `<span class="t">${t}<small>${sub}</small></span>${tick(o.prio === k)}`)).join('')}</div>`;
+    hint = mujer ? 'Te lo hemos preseleccionado según tu perfil. Puedes cambiarlo.' : 'Si dudas, elige «Todo equilibrado».';
+    next = 'Crear rutina';
   } else if (s === 'modo') {
     const goals = (st.profile.objetivos || []).map(goalById).filter(Boolean).map((g) => g.t.toLowerCase());
     const prop = o.main === 'cardio' ? 'Plan de running con rodajes suaves, series y tirada larga' : o.main === 'bici' ? 'Base aeróbica en zona 2, series y salida larga' : `Adaptada a tus objetivos${goals.length ? ': ' + goals.join(', ') : ''}`;
@@ -774,7 +802,7 @@ function rwCfg(o) {
   const fuerza = o.main === 'fuerza';
   const gymCompleto = o.donde.includes('gym') && ['maquina', 'mancuernas', 'barra'].every((x) => o.eq.includes(x)) && !o.eq.includes('ninguno');
   return { tipos: [o.main], dias: o.flex ? [...E.DIAS_DEF[o.n]] : [...o.dias], otro: o.main === 'otro' ? o.otro.trim() : '',
-    split: 'auto', exp: o.exp, equipo: fuerza ? E.expandirEquipo(gymCompleto ? ['gym'] : o.eq) : null, run: o.main === 'cardio', escalar: o.main === 'bici' || o.main === 'cardio' };
+    split: 'auto', exp: o.exp, sexo: st.profile && st.profile.sexo, prio: fuerza ? o.prio : '', equipo: fuerza ? E.expandirEquipo(gymCompleto ? ['gym'] : o.eq) : null, run: o.main === 'cardio', escalar: o.main === 'bici' || o.main === 'cardio' };
 }
 // Rutina personalizada de fuerza: los días ya traen su enfoque (Push, Pierna…) pero sin ejercicios.
 function rwPersonalizada(o) {
@@ -790,13 +818,13 @@ function rwPersonalizada(o) {
   return R;
 }
 // Mismas respuestas del asistente = mismo borrador (así «Atrás» y «Siguiente» no pierden lo que ya programaste).
-const rwKey = (o) => JSON.stringify([o.main, o.exp, [...o.donde].sort(), [...o.eq].sort(), o.n, [...o.dias].sort(), o.flex, o.modo, o.division, o.deporte, o.otro.trim()]);
+const rwKey = (o) => JSON.stringify([o.main, o.exp, [...o.donde].sort(), [...o.eq].sort(), o.n, [...o.dias].sort(), o.flex, o.modo, o.division, o.deporte, o.otro.trim(), o.main === 'fuerza' ? o.prio : '']);
 function rwGenerar() {
   const o = st.rw, key = rwKey(o), old = st.re && st.re.src === 'rw' ? st.re : null;
   if (old && old.genKey === key) { o.step = rwSteps(o).length - 1; o.maxStep = Math.max(o.maxStep || 0, o.step); o.anim = 'fwd'; render(); window.scrollTo(0, 0); return; }
   const cfg = rwCfg(o);
   const R = o.modo === 'propuesta' && o.main !== 'otro' ? E.proponerRutina(cfg, st.profile.objetivos) : rwPersonalizada(o);
-  R.eqSel = o.main === 'fuerza' ? [...o.eq] : []; R.donde = [...o.donde]; R.flex = o.flex; R.deporte = o.deporte; R.exp = o.exp;
+  R.eqSel = o.main === 'fuerza' ? [...o.eq] : []; R.donde = [...o.donde]; R.flex = o.flex; R.deporte = o.deporte; R.exp = o.exp; R.prio = o.main === 'fuerza' && o.modo !== 'propia' ? o.prio : '';
   const nuevo = reNew(R, 'rw'); nuevo.genKey = key;
   // Cambiaste una respuesta anterior: lo que ya habías programado a mano pasa al nuevo borrador (día a día, en orden) si el tipo de sesión es el mismo.
   if (old && (old.dirty || old.draft.modo === 'propia')) {
@@ -822,7 +850,7 @@ async function rwNext() {
   if (!rwCanNext()) return;
   o.msg = '';
   const s = rwStep(o);
-  if ((s === 'modo' && !(o.modo === 'propia' && o.main === 'fuerza')) || s === 'division' || (s === 'dias' && o.main === 'otro')) return rwGenerar();
+  if ((s === 'modo' && o.main !== 'fuerza') || s === 'division' || s === 'prio' || (s === 'dias' && o.main === 'otro')) return rwGenerar();
   if (s !== 'editor') { o.step++; o.maxStep = Math.max(o.maxStep || 0, o.step); o.anim = 'fwd'; render(); window.scrollTo(0, 0); return; }
   o.saving = true; st.re.msg = ''; render();
   try {
@@ -1113,9 +1141,9 @@ function liveEx(n, nSets, obj, ej) {
   const x = E.ejercicio(n), prev = E.lastSets(st.workouts, n) || [];
   if (E.tipoEjercicio(x) === 'cardio') { // cardio: bloques/intervalos (tiempo, distancia, velocidad…) en lugar de series de kg × reps
     const cm = E.modoCardio(n), base = { n: x ? x.n : n, m: 'cardio', tipo: 'cardio', cm, obj: obj || '', objReps: '', uni: false, superset: false, prev };
-    if (cm === 'cinta') { const plan = planCinta(ej); return { ...base, plan, s: Array.from({ length: Math.max(1, plan.length) }, () => intervaloCinta()) }; }
-    const int = (prev[0] && prev[0].int) || (x && x.int) || 'correr';
-    return { ...base, s: [bloqueCardio(int)] };
+    if (cm === 'cinta') { const plan = planCinta(ej); return { ...base, guia: guiaLimpia(ej && ej.guia), plan, s: Array.from({ length: Math.max(1, plan.length) }, () => intervaloCinta()) }; }
+    const int = (prev[0] && prev[0].int) || (ej && ej.int) || (x && x.int) || 'correr';
+    return { ...base, guia: guiaLimpia(ej && ej.guia), s: [bloqueCardio(int)] };
   }
   const objReps = obj ? obj.split('×')[1].trim() : '';
   return { n, m: x ? x.m : '', obj: obj || '', objReps, uni: false, carga: cargaGuardada(n), superset: false, prev, s: Array.from({ length: Math.max(1, Math.min(10, nSets || 3)) }, () => ({ kg: '', reps: '', done: false, rir: '', dropset: false })) };
@@ -1304,6 +1332,7 @@ function cardioBlockHTML(e, i, plano) {
       <span class="lex-t"><b>${esc(e.n)}</b><span class="small muted">Cardio${e.obj ? ` · Objetivo ${esc(e.obj)}` : ''}</span></span></button>
       <button type="button" class="iconbtn" data-act="live-swap" data-v="${i}" aria-label="Cambiar ${esc(e.n)}">${I.swap}</button>
       <button type="button" class="iconbtn" data-act="live-del" data-v="${i}" aria-label="Quitar ${esc(e.n)}">${I.trash}</button></div>
+    ${guiaHTML(e.guia, 'in-live')}
     ${prevTxt ? `<p class="small muted c-prev">La última vez: ${esc(prevTxt)}</p>` : ''}
     <div class="ltab cardio c${cols} ${cinta ? 'cinta' : ''} ${plano ? 'simple' : ''}">
       <div class="lrow-h"><span>${cinta ? 'Int.' : 'Bloque'}</span>${campos.map((c) => `<span>${c.t}</span>`).join('')}${plano ? '' : '<span></span>'}</div>
@@ -1911,6 +1940,7 @@ root.addEventListener('click', async (e) => {
   if (o && act === 'rw-n') { o.n = Number(v); if (!o.flex && o.dias.length > o.n) o.dias = o.dias.slice(0, o.n); render(); return rwAuto(); }
   if (o && act === 'rw-dia') { const d = Number(v); o.flex = false; o.dias = o.dias.includes(d) ? o.dias.filter((x) => x !== d) : [...o.dias, d].sort((a, c) => a - c); return render(); }
   if (o && act === 'rw-flex') { o.flex = !o.flex; if (o.flex) o.dias = []; return render(); }
+  if (o && act === 'rw-prio') { o.prio = v; return render(); }
   if (o && act === 'rw-modo') { o.modo = v; render(); return rwAuto(); }
   if (o && act === 'rw-div') { o.division = v; render(); if (v !== 'deporte') rwAuto(); return; }
   if (o && act === 'rw-dep') { o.deporte = v; return render(); }
@@ -1939,7 +1969,7 @@ root.addEventListener('click', async (e) => {
     }
     else if (act === 're-ses-open') re.ses = Number(v);
     else if (act === 're-ses-close') re.ses = null;
-    else if (act === 're-ses') { const s = R.sesiones[Number(v)], x = E.sesionPorId(b.dataset.id); s.ses = x.id; s.nombre = x.n; s.min = x.min; s.km = x.km || ''; re.ses = null; touch(); }
+    else if (act === 're-ses') { const s = R.sesiones[Number(v)], x = E.sesionPorId(b.dataset.id); s.ses = x.id; s.nombre = x.n; s.min = x.min; s.km = x.km || ''; E.aplicarGuia(s, { exp: R.exp, kind: goalsKind() }); re.ses = null; touch(); }
     else if (act === 're-save') {
       try { const err = await saveRutina(R, re.rid); if (err) { re.msg = err; return render(); } st.re = null; render(); toast('Rutina guardada'); } catch (err) { re.msg = errorText(err); render(); }
       return;
@@ -2172,7 +2202,7 @@ root.addEventListener('change', async (e) => {
   // Cambiar el tipo de un día de la rutina.
   if (st.re && t.dataset.ret != null) {
     const d = Number(t.dataset.ret), R = st.re.draft;
-    R.sesiones[d] = R.modo === 'propuesta' ? E.sesionPorDefecto(t.value, goalsKind(), R.otro, { split: R.split, exp: R.exp, equipo: R.equipo }) : E.sesionVacia(t.value, R.otro);
+    R.sesiones[d] = R.modo === 'propuesta' ? E.sesionPorDefecto(t.value, goalsKind(), R.otro, { split: R.split, exp: R.exp, equipo: R.equipo, sexo: st.profile && st.profile.sexo, prio: R.prio }) : E.sesionVacia(t.value, R.otro);
     st.re.dirty = true; st.re.alt = null; st.re.ses = null;
     render();
   }

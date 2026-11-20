@@ -679,16 +679,18 @@ const REPS_FIJAS = {
   'Zancadas': '10 por pierna', 'Zancadas caminando': '10 por pierna', 'Zancada inversa': '10 por pierna', 'Zancadas con barra': '8 por pierna',
   'Zancadas con peso corporal': '12 por pierna', 'Sentadilla búlgara': '8-10 por pierna', 'Step-up al cajón': '10 por pierna',
   'Peso muerto a una pierna': '8 por pierna', 'Gemelos a una pierna': '12 por pierna', 'Hip thrust a una pierna': '10 por pierna',
-  'Paseo del granjero': '40 m', 'Jalón a una mano': '10 por brazo', 'Remo con mancuerna': '10 por brazo', 'Curl concentrado': '10 por brazo',
+  'Paseo del granjero': '40 m', 'Abducción en máquina': '12-15', 'Abducción con banda': '15-20', 'Patada de glúteo en polea': '12-15 por pierna', 'Puente de glúteo': '12-15', 'Jalón a una mano': '10 por brazo', 'Remo con mancuerna': '10 por brazo', 'Curl concentrado': '10 por brazo',
 };
 const REPS_OBJ = { fuerza: '8-12', grasa: '10-15', rend: '5-8', general: '8-12' };
 const SERIES_EXP = { nuevo: 3, meses: 3, anio: 4, anios: 4, compite: 4 };
+// Los accesorios (bíceps, tríceps, laterales, gemelos, core…) llevan una serie menos que los ejercicios principales según el nivel.
+const SERIES_ACC = { nuevo: 2, meses: 3, anio: 3, anios: 3, compite: 3 };
 export function nuevoEjercicio(n, kind, exp) {
   const x = ejercicio(n);
-  if (tipoEjercicio(x) === 'cardio') return x.cm === 'cinta'
-    ? { n, m: 'cardio', series: 1, reps: '20 min', intervalos: [{ tiempo: 20, velocidad: '', inclinacion: '' }] }
-    : { n, m: 'cardio', series: 1, reps: '20 min' };
-  return { n, m: x ? x.m : '', series: SERIES_EXP[exp] || 3, reps: REPS_FIJAS[n] || (exp === 'nuevo' ? '10-12' : REPS_OBJ[kind] || '8-12') };
+  if (tipoEjercicio(x) === 'cardio') return ejercicioCardio(n, x, kind, exp);
+  const acc = !!(x && x.p && ACCESORIOS.has(x.p));
+  const series = (acc ? SERIES_ACC[exp] : SERIES_EXP[exp]) || 3;
+  return { n, m: x ? x.m : '', series, reps: REPS_FIJAS[n] || (exp === 'nuevo' ? '10-12' : REPS_OBJ[kind] || '8-12') };
 }
 // Al cambiar un ejercicio por otro, ajusta las repeticiones si uno se mide en tiempo o por lado.
 export function repsPara(nuevo, actual, kind) {
@@ -721,8 +723,28 @@ export const SES_FUERZA = {
   hombro: { n: 'Hombro y core', p: ['empuje_v', 'elev_lat', 'elev_lat', 'posterior', 'empuje_v', 'core', 'core'], m: ['hombro', 'core'] },
   brazos: { n: 'Brazos', p: ['biceps', 'triceps', 'biceps', 'triceps', 'biceps', 'triceps', 'antebrazo'], m: ['biceps', 'triceps', 'antebrazo'] },
   cicl: { n: CICLISMO ? 'Fuerza para ciclistas' : 'Pierna y core', p: ['rodilla', 'bisagra', 'unilateral', 'gluteo', 'gemelos', 'core', 'core'], m: ['cuadriceps', 'gluteo', 'femoral', 'gemelos', 'core'] },
+  // Sesiones con énfasis en tren inferior (enfoque glúteo/pierna). Un hueco «patrón:Ejercicio|Alternativa» pide ese ejercicio concreto
+  // (si el material y el nivel lo permiten) y, si no, cualquiera del patrón.
+  gluIsq: { n: 'Glúteo e isquios', p: ['gluteo:Hip thrust|Hip thrust con mancuerna|Puente de glúteo', 'bisagra:Peso muerto rumano|Peso muerto con mancuernas', 'femoral:Curl femoral tumbado|Curl femoral sentado|Curl femoral con fitball', 'unilateral:Zancada inversa|Zancadas con peso corporal', 'gluteo:Abducción en máquina|Abducción con banda', 'gemelos:Elevación de gemelos de pie|Gemelos con mancuernas', 'core:Plancha'], m: ['gluteo', 'femoral', 'gemelos', 'core'] },
+  cuadGlu: { n: 'Cuádriceps y glúteo', p: ['rodilla:Sentadilla con barra|Sentadilla goblet|Prensa de piernas', 'unilateral:Sentadilla búlgara|Zancadas|Zancadas con peso corporal', 'rodilla:Prensa de piernas|Hack squat|Sentadilla con peso corporal', 'gluteo:Hip thrust a una pierna|Patada de glúteo en polea|Puente de glúteo', 'cuad_iso:Extensión de cuádriceps', 'gluteo:Patada de glúteo en polea|Abducción con banda|Abducción en máquina', 'gemelos:Gemelos en prensa|Elevación de gemelos de pie'], m: ['cuadriceps', 'gluteo', 'gemelos'] },
+  lowerFull: { n: 'Pierna completa', p: ['rodilla:Prensa de piernas|Sentadilla goblet', 'bisagra:Peso muerto rumano|Peso muerto con mancuernas', 'gluteo:Hip thrust|Hip thrust con mancuerna|Puente de glúteo', 'unilateral:Step-up al cajón|Zancadas caminando|Zancadas con peso corporal', 'femoral', 'gluteo:Abducción con banda|Patada de glúteo en polea|Abducción en máquina', 'core:Dead bug|Plancha lateral'], m: ['cuadriceps', 'femoral', 'gluteo', 'core'] },
+  // Torso ligero y equilibrado: tonifica sin sobrecargar la parte superior.
+  torsoL: { n: 'Torso · Tonificación', p: ['tiron_v:Jalón al pecho|Dominadas asistidas', 'empuje_h:Press con mancuernas|Press de pecho en máquina|Flexiones', 'tiron_h:Remo en polea baja|Remo en máquina|Remo con mancuerna', 'elev_lat:Elevaciones laterales', 'triceps:Extensión con cuerda|Extensión de tríceps en polea', 'biceps:Curl de bíceps con mancuernas|Curl martillo'], m: ['espalda', 'pecho', 'hombro', 'triceps', 'biceps'] },
+  // Cuerpo completo con énfasis en glúteo/pierna (para 1-2 días de fuerza a la semana).
+  fullG: { n: 'Cuerpo completo · Glúteo', p: ['gluteo:Hip thrust|Hip thrust con mancuerna|Puente de glúteo', 'rodilla:Prensa de piernas|Sentadilla goblet|Sentadilla con peso corporal', 'tiron_v:Jalón al pecho|Dominadas asistidas', 'empuje_h:Press con mancuernas|Press de pecho en máquina|Flexiones', 'bisagra:Peso muerto rumano|Peso muerto con mancuernas', 'elev_lat:Elevaciones laterales', 'core:Plancha'], m: ['gluteo', 'cuadriceps', 'espalda', 'pecho', 'femoral', 'core'] },
+  fullG2: { n: 'Cuerpo completo · Pierna', p: ['bisagra:Peso muerto rumano|Peso muerto con mancuernas', 'unilateral:Sentadilla búlgara|Zancadas|Zancadas con peso corporal', 'tiron_h:Remo en polea baja|Remo en máquina|Remo con mancuerna', 'empuje_v:Press de hombro en máquina|Press con mancuernas sentado', 'gluteo:Abducción en máquina|Patada de glúteo en polea|Abducción con banda', 'femoral', 'core:Dead bug|Plancha lateral'], m: ['femoral', 'cuadriceps', 'gluteo', 'espalda', 'hombro', 'core'] },
 };
-export function splitOrden(split, nF, kind) {
+// Enfoque de la semana: 'inferior' (glúteo y pierna), 'superior' (pecho, espalda, hombros, brazos) o 'equilibrado'.
+// cfg.prio = lo que eligió la persona ('inferior' | 'torso' | 'brazos' | 'equilibrado'); sin elegir, manda el sexo: la mujer parte del enfoque glúteo/pierna.
+export function enfoqueDe(cfg = {}) {
+  if (cfg.prio === 'inferior') return 'inferior';
+  if (cfg.prio === 'torso' || cfg.prio === 'brazos') return 'superior';
+  if (cfg.prio === 'equilibrado') return 'equilibrado';
+  return cfg.sexo === 'mujer' ? 'inferior' : 'equilibrado';
+}
+// Orden de sesiones de fuerza de la semana. ctx = { enfoque, prio } (solo se usa con split «auto»).
+// Regla: el tren inferior nunca se queda en frecuencia 1 si hay 4 o más días de fuerza, y con enfoque glúteo/pierna llega a 2-3.
+export function splitOrden(split, nF, kind, ctx = {}) {
   if (split === 'ppl') return ['push', 'pull', 'legs'];
   if (split === 'tp') return ['torso', 'pierna'];
   if (split === 'full') return ['full', 'fullB', 'fullC'];
@@ -730,9 +752,26 @@ export function splitOrden(split, nF, kind) {
   if (split === 'cicl') return ['cicl', 'fullB'];
   if (split === 'dep') return ['pierna', 'fullB', 'torso'];
   if (kind === 'rend') return ['cicl', 'fullB', 'torso'];
+  const enf = ctx.enfoque || 'equilibrado';
+  if (enf === 'inferior') {
+    if (nF <= 1) return ['fullG'];
+    if (nF === 2) return ['fullG', 'fullG2']; // 2 días: pierna/glúteo 2 veces, con torso en cada uno
+    if (nF === 3) return ['gluIsq', 'torsoL', 'cuadGlu']; // pierna ×2, torso ×1
+    if (nF === 4) return ['gluIsq', 'torsoL', 'cuadGlu', 'torsoL']; // pierna ×2, torso ×2
+    return ['gluIsq', 'torsoL', 'cuadGlu', 'torsoL', 'lowerFull', 'hombro']; // 5-6+: pierna ×3, torso ×2-3
+  }
+  if (enf === 'superior') {
+    const extra = ctx.prio === 'brazos' ? 'brazos' : 'torso';
+    if (nF <= 2) return ['full', 'fullB'];
+    if (nF === 3) return ['push', 'pull', 'legs'];
+    if (nF === 4) return ['push', 'pull', 'pierna', extra];
+    if (nF === 5) return ['push', 'pull', 'legs', 'torso', extra === 'torso' ? 'hombro' : extra];
+    return ['push', 'pull', 'legs', 'push', 'pull', 'pierna'];
+  }
   if (nF <= 2) return ['full', 'fullB'];
   if (nF === 3) return kind === 'fuerza' ? ['push', 'pull', 'legs'] : ['full', 'fullB', 'fullC'];
   if (nF === 4) return ['torso', 'pierna'];
+  if (nF === 5) return ['push', 'pull', 'legs', 'torso', 'pierna']; // pierna ×2 (antes quedaba en ×1)
   return ['push', 'pull', 'legs'];
 }
 // Equipo que eliges en el asistente → equipo de los ejercicios (null = gimnasio completo).
@@ -745,28 +784,48 @@ export function expandirEquipo(sel) {
   }
   return [...out];
 }
-function elegir(p, usados, equipo, evitar = [], eqPrevio = null) {
+// Ejercicios de técnica exigente: a quien empieza se le ofrecen al final (primero máquinas y variantes guiadas).
+const COMPLEJOS = new Set(['Sentadilla con barra', 'Sentadilla frontal', 'Peso muerto convencional', 'Peso muerto sumo', 'Peso muerto con barra hexagonal', 'Buenos días', 'Remo Pendlay',
+  'Zancadas con barra', 'Press militar', 'Dominadas', 'Dominadas supinas', 'Fondos en paralelas', 'Curl nórdico', 'Sissy squat', 'Press landmine', 'Swing con kettlebell', 'Press declinado', 'Sentadilla búlgara']);
+// Preferencias por patrón para quien empieza (la primera disponible con su material).
+const PREF_NUEVO = {
+  tiron_v: ['Jalón al pecho', 'Dominadas asistidas'], empuje_h: ['Press de pecho en máquina', 'Press con mancuernas', 'Flexiones'], empuje_v: ['Press de hombro en máquina', 'Press con mancuernas sentado'],
+  rodilla: ['Prensa de piernas', 'Sentadilla goblet', 'Sentadilla con peso corporal'], tiron_h: ['Remo en polea baja', 'Remo en máquina', 'Remo con mancuerna'], bisagra: ['Peso muerto rumano', 'Peso muerto con mancuernas'],
+  unilateral: ['Zancadas con peso corporal', 'Zancada inversa', 'Step-up al cajón'], core: ['Plancha', 'Dead bug'], femoral: ['Curl femoral tumbado', 'Curl femoral sentado'],
+};
+// Accesorios (menos series que los ejercicios principales).
+const ACCESORIOS = new Set(['biceps', 'triceps', 'elev_lat', 'gemelos', 'core', 'aperturas', 'posterior', 'antebrazo']);
+// slot = «patron» o «patron:Ejercicio preferido|Alternativa». simple = nivel principiante (evita lo técnico).
+function elegir(slot, usados, equipo, evitar = [], eqPrevio = null, simple = false) {
+  const [p, pref] = String(slot).split(':');
   const c = BIBLIOTECA.filter((x) => x.p === p && !usados.includes(x.n) && tieneEq(x, equipo));
   if (!c.length) return null;
   const sinRepetir = c.filter((x) => !evitar.includes(x.n));
-  const base = sinRepetir.length ? sinRepetir : c;
+  let base = sinRepetir.length ? sinRepetir : c;
+  if (simple) base = [...base.filter((x) => !COMPLEJOS.has(x.n)), ...base.filter((x) => COMPLEJOS.has(x.n))];
+  const prefs = pref ? pref.split('|') : simple ? PREF_NUEVO[p] || [] : [];
+  for (const n of prefs) {
+    const x = base.find((y) => y.n === n);
+    if (x && !(simple && COMPLEJOS.has(n))) return x;
+  }
   return (eqPrevio && base.find((x) => x.eq !== eqPrevio)) || base[0];
 }
 // cfg: { exp, equipo (ya expandido) }
 // evitar: ejercicios de una sesión anterior con el mismo enfoque, para que los días repetidos tengan variantes.
-export function sesionFuerza(key, kind, cfg = {}, evitar = []) {
+export function sesionFuerza(key, kind, cfg = {}, evitar = [], repite = evitar.length > 0) {
   const def = SES_FUERZA[key];
-  const max = { nuevo: 4, meses: 5 }[cfg.exp] || 6;
+  const max = { nuevo: 4, meses: 5, compite: 7 }[cfg.exp] || 6;
+  const simple = cfg.exp === 'nuevo' || cfg.exp === 'meses';
   const usados = [], ej = [], eqPorPatron = {};
-  for (const p of def.p) {
+  for (const slot of def.p) {
     if (ej.length >= max) break;
-    const x = elegir(p, usados, cfg.equipo, evitar, eqPorPatron[p]);
+    const p = String(slot).split(':')[0];
+    const x = elegir(slot, usados, cfg.equipo, evitar, eqPorPatron[p], simple);
     if (!x) continue;
     usados.push(x.n); eqPorPatron[p] = x.eq;
     ej.push(nuevoEjercicio(x.n, kind, cfg.exp));
   }
-  const rep = evitar.length > 0;
-  return { t: 'fuerza', nombre: rep && !/ [ABC]$/.test(def.n) ? def.n + ' B' : def.n, foco: key, ej };
+  return { t: 'fuerza', nombre: repite && !/ [ABC]$/.test(def.n) ? def.n + ' B' : def.n, foco: key, ej };
 }
 export const musculosDe = (foco) => (SES_FUERZA[foco] ? SES_FUERZA[foco].m : []);
 
@@ -819,6 +878,14 @@ export function alternativasSesion(t, id) {
   return lib.filter((s) => s.id !== id).sort((a, b) => (cur ? (b.cat === cur.cat) - (a.cat === cur.cat) : 0));
 }
 function sesionLib(t, id) { const s = sesionPorId(id); const o = { t, nombre: s.n, min: s.min, ses: s.id }; if (s.km) o.km = s.km; return o; }
+// Pone a una sesión de cardio sus parámetros concretos (máquina, tiempo, velocidad, pendiente o resistencia y por qué) según tu nivel y objetivo.
+// El tiempo pasa a ser el de la pauta y se quitan los km de la biblioteca (ya no cuadrarían con ese tiempo).
+export function aplicarGuia(o, ctx = {}) {
+  const g = o.t === 'cardio' && o.ses ? guiaDeSesion(o.ses, ctx) : null;
+  if (!g) { delete o.guia; return o; }
+  o.guia = g.guia; o.min = g.min; delete o.km;
+  return o;
+}
 // Ajusta tiempo y km de una sesión de bici o cardio a tu experiencia (múltiplos de 5 min y de 1 km).
 function escalarSesion(o, exp) {
   const f = ESCALA_EXP[exp] || 1;
@@ -826,6 +893,104 @@ function escalarSesion(o, exp) {
   if (o.km) o.km = Math.max(2, Math.round(o.km * f));
   return o;
 }
+
+/* ---------- pautas concretas de cardio (máquina, tiempo, velocidad, pendiente/resistencia y por qué) ---------- */
+// Nivel → tramo: 0 = empieza (nuevo / meses), 1 = intermedio (1 año), 2 = avanzado (varios años / compite). Sin nivel conocido se parte del 0.
+const tramoDe = (exp) => (exp === 'compite' || exp === 'anios' ? 2 : exp === 'anio' ? 1 : 0);
+// Por qué ese ritmo, según el objetivo del plan. «base» = esfuerzo continuo y suave; «int» = intervalos.
+const POR_BASE = {
+  grasa: 'Ritmo de zona 2 (puedes hablar sin ahogarte): gastas grasa y cuidas el corazón sin fatigar las piernas ni frenar tu recuperación muscular.',
+  fuerza: 'Esfuerzo suave que cuida tu corazón y ayuda a recuperar entre sesiones de fuerza, sin quitarle energía a tu entrenamiento de pesas.',
+  rend: 'Base aeróbica con poca fatiga: mejora tu resistencia sin comprometer las sesiones de calidad.',
+  general: 'Ritmo cómodo y constante: mejora tu salud cardiovascular y tu resistencia sin acumular fatiga.',
+};
+const POR_INT = {
+  grasa: 'Los intervalos gastan más en menos tiempo y ayudan a conservar músculo; las pausas suaves evitan que llegues agotado a la siguiente serie.',
+  fuerza: 'Intervalos cortos para mejorar tu capacidad cardiovascular; mantenlos en pocos días para no restar recuperación muscular.',
+  rend: 'Los intervalos suben tu velocidad y tu umbral; respeta las pausas suaves para llegar fresco a la siguiente serie.',
+  general: 'Alternar esfuerzo y descanso mejora tu resistencia en poco tiempo y se hace más llevadero que un ritmo fuerte constante.',
+};
+const nfs = (v) => String(v).replace('.', ',');
+// Cada pauta: maq (qué máquina o actividad), min (minutos por defecto por tramo), items ([etiqueta, valor] por tramo) y plan (valores numéricos para la cinta).
+const PAUTAS = {
+  caminata: { maq: 'Cinta inclinada', int: false, min: [20, 25, 30], plan: { vel: [5.2, 5.8, 6.2], inc: [9, 11, 12] }, fin: [15, 20, 20],
+    items: (t) => [['Tiempo', ['15-20', '20-30', '25-35'][t] + ' min'], ['Velocidad', ['5,0-5,5', '5,5-6,0', '6,0-6,5'][t] + ' km/h'], ['Pendiente', ['8-10', '10-12', '12-15'][t] + ' %']] },
+  correr: { maq: 'Cinta o calle · carrera suave', int: false, min: [20, 30, 35], plan: { vel: [7, 8, 9.5], inc: [1, 1, 1] }, fin: [15, 20, 20],
+    items: (t) => [['Tiempo', ['15-20', '25-30', '30-40'][t] + ' min'], ['Velocidad', ['6,5-7,5', '7,5-9,0', '8,5-10,5'][t] + ' km/h'], ['Pendiente', '1 % (en cinta)']] },
+  eliptica: { maq: 'Elíptica', int: false, min: [20, 30, 35], fin: [15, 20, 20],
+    items: (t) => [['Tiempo', ['15-20', '25-30', '30-40'][t] + ' min'], ['Cadencia', ['50-55', '55-65', '60-70'][t] + ' zancadas/min'], ['Resistencia', ['nivel 3-4', 'nivel 5-6', 'nivel 6-8'][t] + ' (de 10)']] },
+  bici: { maq: 'Bicicleta estática', int: false, min: [20, 30, 40], fin: [15, 20, 20],
+    items: (t) => [['Tiempo', ['15-20', '25-30', '30-45'][t] + ' min'], ['Cadencia', ['70-80', '75-90', '80-95'][t] + ' pedaladas/min'], ['Resistencia', ['nivel 3-4', 'nivel 4-6', 'nivel 5-7'][t] + ' (de 10)']] },
+  remo: { maq: 'Remo (máquina)', int: false, min: [15, 25, 30], fin: [10, 15, 15],
+    items: (t) => [['Tiempo', ['10-15', '20-25', '25-30'][t] + ' min'], ['Cadencia', ['18-20', '20-24', '22-26'][t] + ' paladas/min'], ['Resistencia', ['nivel 3-4', 'nivel 4-5', 'nivel 5-6'][t] + ' (de 10)']] },
+  aire: { maq: 'Caminata rápida al aire libre', int: false, min: [20, 30, 40], fin: [15, 20, 20],
+    items: (t) => [['Tiempo', ['15-20', '25-30', '30-40'][t] + ' min'], ['Ritmo', ['5,0-5,5', '5,5-6,0', '6,0-6,5'][t] + ' km/h (paso rápido)'], ['Terreno', 'llano o con alguna cuesta suave']] },
+  recup: { maq: 'Trote suave (cinta o calle)', int: false, min: [25, 30, 30],
+    items: (t) => [['Tiempo', ['20-25', '25-30', '25-30'][t] + ' min'], ['Velocidad', ['6,0-7,0', '6,5-7,5', '7,0-8,0'][t] + ' km/h'], ['Pendiente', '1 % (en cinta)']] },
+  largo: { maq: 'Rodaje largo (cinta o calle)', int: false, min: [45, 70, 85],
+    items: (t) => [['Tiempo', ['40-50', '60-70', '75-90'][t] + ' min'], ['Velocidad', ['6,5-7,5', '7,0-8,5', '8,0-9,5'][t] + ' km/h'], ['Pendiente', '1 % (en cinta)']] },
+  series: { maq: 'Series de carrera (cinta o pista)', int: true, min: [30, 40, 45],
+    items: (t) => [['Calentamiento', '10 min a 6,0 km/h'], ['Series', ['5 × 1 min a 8,0-9,0', '6 × 2 min a 10-11', '8 × 2 min a 11-13'][t] + ' km/h'], ['Recuperación', '1-2 min andando a 5,5-6,5 km/h']] },
+  tempo: { maq: 'Tempo run (cinta o calle)', int: true, min: [35, 45, 50],
+    items: (t) => [['Calentamiento', '10 min a 6,5 km/h'], ['Bloque', ['2 × 8 min a 8,0-9,0', '20 min a 10-11', '25 min a 11-12,5'][t] + ' km/h'], ['Vuelta a la calma', '5-10 min a 6,0 km/h']] },
+  cuestas: { maq: 'Cuestas (cinta o calle)', int: true, min: [30, 45, 45],
+    items: (t) => [['Calentamiento', '10 min a 6,0 km/h'], ['Subidas', ['5 × 30 s', '8 × 45 s', '10 × 60 s'][t] + ' al ' + ['5-6', '7-8', '8-10'][t] + ' %'], ['Bajada', 'andando 90 s a 4,5 km/h (0 %)']] },
+  'hiit-remo': { maq: 'Intervalos de remo', int: true, min: [25, 30, 35],
+    items: (t) => [['Calentamiento', '5 min suave (18 paladas/min)'], ['Series', ['6 × 40 s', '8 × 1 min', '10 × 1 min'][t] + ' a 24-28 paladas/min'], ['Recuperación', '1 min suave (16-18 paladas/min)']] },
+  'hiit-eliptica': { maq: 'Intervalos en elíptica', int: true, min: [25, 35, 40],
+    items: (t) => [['Calentamiento', '5 min suave'], ['Series', ['6 × 40 s', '8 × 1 min', '10 × 1 min'][t] + ' con resistencia ' + ['5-6', '6-7', '7-8'][t]], ['Recuperación', '1 min suave (resistencia 3)']] },
+  comba: { maq: 'Comba', int: true, min: [20, 25, 25],
+    items: (t) => [['Trabajo', ['8', '10', '12'][t] + ' × 1 min de comba'], ['Descanso', '1 min entre series'], ['Ritmo', 'saltos pequeños, sin llegar a ahogarte']] },
+};
+// Sesiones de la biblioteca de cardio (SES_CARDIO) → pauta.
+const PAUTA_DE_SESION = { 'c-caminata': 'caminata', 'c-correr': 'correr', 'c-eliptica': 'eliptica', 'c-remo': 'remo', 'c-series': 'series', 'c-hiit-remo': 'hiit-remo', 'c-hiit-eliptica': 'hiit-eliptica',
+  'c-largo': 'largo', 'c-tempo-run': 'tempo', 'c-cuestas': 'cuestas', 'c-recup-run': 'recup', 'c-comba': 'comba' };
+// Devuelve { guia: { maq, items, por }, min, plan: { vel, inc } } o null. clave = id de pauta; ctx = { exp, kind, fin } (fin = al final de una sesión de fuerza: más corto).
+export function guiaCardio(clave, ctx = {}) {
+  const P = PAUTAS[clave];
+  if (!P) return null;
+  const t = tramoDe(ctx.exp), kind = POR_BASE[ctx.kind] ? ctx.kind : 'general';
+  const min = ctx.fin && P.fin ? P.fin[t] : P.min[t];
+  // items = [{ k: etiqueta, v: valor }] (Firestore no admite arrays dentro de arrays)
+  const items = P.items(t).map(([a, b]) => ({ k: a, v: ctx.fin && a === 'Tiempo' && P.fin ? `${P.fin[t] - 5}-${P.fin[t]} min` : b }));
+  const plan = P.plan ? { vel: P.plan.vel[t], inc: P.plan.inc[t] } : {};
+  return { guia: { maq: P.maq, items, por: (P.int ? POR_INT : POR_BASE)[kind] }, min, plan };
+}
+export const guiaDeSesion = (id, ctx) => (PAUTA_DE_SESION[id] ? guiaCardio(PAUTA_DE_SESION[id], ctx) : null);
+// Pauta para un ejercicio de cardio de la biblioteca (cinta, bici, elíptica, remo, aire libre…).
+export function guiaEjercicio(n, ctx = {}) {
+  const x = ejercicio(n), cm = x && x.cm ? x.cm : modoCardio(n), nom = String(n);
+  let clave;
+  if (cm === 'cinta') {
+    // «Caminadora / Cinta de correr» es genérica: caminata inclinada si buscas grasa o empiezas; carrera suave solo con nivel y otro objetivo.
+    const generica = /caminadora/i.test(nom), nov = ['nuevo', 'meses'].includes(ctx.exp) || !ctx.exp;
+    clave = generica ? (ctx.kind === 'grasa' || nov ? 'caminata' : 'correr') : /correr|carrera/i.test(nom) ? 'correr' : 'caminata';
+  }
+  else if (cm === 'estatica') clave = /el[ií]ptica/i.test(nom) ? 'eliptica' : /remo/i.test(nom) ? 'remo' : /bici/i.test(nom) ? 'bici' : /escalad/i.test(nom) ? 'eliptica' : 'bici';
+  else clave = /correr|carrera|trote/i.test(nom) ? 'correr' : 'aire';
+  const g = guiaCardio(clave, ctx);
+  if (g && clave === 'correr' && cm === 'aire') { g.guia.maq = 'Carrera suave al aire libre'; g.guia.items = g.guia.items.map((q) => (q.k === 'Pendiente' ? { k: 'Terreno', v: 'llano o con cuestas suaves' } : q)); }
+  return g;
+}
+// Bloque de cardio dentro de una rutina de fuerza (o añadido desde la biblioteca): con minutos, pauta y, en la cinta, el intervalo ya rellenado.
+function ejercicioCardio(n, x, kind, exp, fin = false) {
+  const g = guiaEjercicio(n, { exp, kind, fin });
+  const min = g ? g.min : 20;
+  const base = { n, m: 'cardio', series: 1, reps: `${min} min` };
+  if (x && x.cm === 'cinta') base.intervalos = [{ tiempo: min, velocidad: g && g.plan.vel ? g.plan.vel : '', inclinacion: g && g.plan.inc != null ? g.plan.inc : '' }];
+  if (g) base.guia = g.guia;
+  return base;
+}
+// Cardio al final de una sesión de fuerza: cinta si hay máquinas (o gimnasio completo); si no, caminata rápida al aire libre.
+export function cardioFinal(kind, cfg = {}) {
+  const maquinas = !cfg.equipo || cfg.equipo.includes('maquina');
+  const n = maquinas ? CINTA : 'Correr al aire libre';
+  const x = ejercicio(n);
+  if (maquinas) return ejercicioCardio(n, x, kind, cfg.exp, true);
+  const g = guiaCardio('aire', { exp: cfg.exp, kind, fin: true });
+  return { n, m: 'cardio', series: 1, reps: `${g.min} min`, int: 'caminata', guia: g.guia };
+}
+const SESION_INFERIOR = new Set(['gluIsq', 'cuadGlu', 'lowerFull', 'legs', 'pierna', 'cicl', 'fullG2']);
 
 /* ---------- reparto de días según lo que entrenas y tus objetivos ---------- */
 const PESOS = {
@@ -882,13 +1047,15 @@ export function sesionVacia(t, otro) {
   return { t: 'otro', nombre: otro || 'Otro', min: 60, det: '' };
 }
 export function sesionPorDefecto(t, kind, otro, cfg = {}) {
-  if (t === 'fuerza') return sesionFuerza(splitOrden(cfg.split, 1, kind)[0], kind, cfg);
+  if (t === 'fuerza') return sesionFuerza(splitOrden(cfg.split, 1, kind, { enfoque: enfoqueDe(cfg), prio: cfg.prio })[0], kind, cfg);
   if (t === 'bici') return sesionLib('bici', BICI_ORDEN[kind][1]);
-  if (t === 'cardio') return sesionLib('cardio', CARDIO_ORDEN[kind][0]);
+  if (t === 'cardio') return aplicarGuia(sesionLib('cardio', CARDIO_ORDEN[kind][0]), { exp: cfg.exp, kind });
   return sesionVacia('otro', otro);
 }
 
-// cfg = { tipos: ['fuerza','bici',...], dias: [0,2,4], otro: 'Pádel', split, exp, equipo }
+// cfg = { tipos: ['fuerza','bici',...], dias: [0,2,4], otro: 'Pádel', split, exp, equipo, sexo, prio }
+// Lee el perfil: sexo y prioridad deciden el enfoque (glúteo/pierna, torso o equilibrado) y por tanto cuántos días de pierna y de torso;
+// el nivel decide ejercicios, series y complejidad; los objetivos, el tipo de plan y el cardio.
 export function proponerRutina(cfg, goals) {
   const kind = planKind(goals);
   const dias = [...cfg.dias].sort((a, b) => a - b);
@@ -897,23 +1064,37 @@ export function proponerRutina(cfg, goals) {
   const bici = BICI_ORDEN[kind].slice(0, nB).sort((a, b) => (sesionPorId(a).cat === 'fondo') - (sesionPorId(b).cat === 'fondo'));
   const cardio = cfg.run ? RUN_ORDEN : CARDIO_ORDEN[kind];
   const nF = seq.filter((t) => t === 'fuerza').length;
-  const fOrd = splitOrden(cfg.split, nF, kind);
+  const enfoque = enfoqueDe(cfg);
+  const fOrd = splitOrden(cfg.split, nF, kind, { enfoque, prio: cfg.prio });
   let fi = 0, bi = 0, ci = 0;
-  const previas = {};
+  const previas = {}, vistas = {};
   const sesiones = {};
+  const dFuerza = [];
   dias.forEach((d, i) => {
     const t = seq[i];
     if (t === 'fuerza') {
       const key = fOrd[fi++ % fOrd.length];
-      const ses = sesionFuerza(key, kind, cfg, previas[key] || []);
-      previas[key] = [...(previas[key] || []), ...ses.ej.map((e) => e.n)];
-      sesiones[d] = ses;
+      const grupo = SESION_INFERIOR.has(key) ? 'inferior' : key; // los días de pierna comparten lo ya elegido: así no repiten los mismos ejercicios
+      const ses = sesionFuerza(key, kind, cfg, previas[grupo] || [], vistas[key] > 0);
+      vistas[key] = (vistas[key] || 0) + 1;
+      previas[grupo] = [...(previas[grupo] || []), ...ses.ej.map((e) => e.n)];
+      sesiones[d] = ses; dFuerza.push(d);
     }
     else if (t === 'bici') sesiones[d] = cfg.escalar ? escalarSesion(sesionLib('bici', bici[bi++ % bici.length]), cfg.exp) : sesionLib('bici', bici[bi++ % bici.length]);
-    else if (t === 'cardio') sesiones[d] = cfg.escalar ? escalarSesion(sesionLib('cardio', cardio[ci++ % cardio.length]), cfg.exp) : sesionLib('cardio', cardio[ci++ % cardio.length]);
+    else if (t === 'cardio') {
+      const o = sesionLib('cardio', cardio[ci++ % cardio.length]);
+      sesiones[d] = guiaDeSesion(o.ses, { exp: cfg.exp, kind }) ? aplicarGuia(o, { exp: cfg.exp, kind }) : cfg.escalar ? escalarSesion(o, cfg.exp) : o;
+    }
     else sesiones[d] = sesionVacia('otro', cfg.otro);
   });
-  return { tipos: cfg.tipos, otro: cfg.otro || '', dias, modo: 'propuesta', split: cfg.split || 'auto', exp: cfg.exp || '', equipo: cfg.equipo || null, sesiones };
+  // Rutina solo de fuerza: añade cardio al final de algunas sesiones (con máquina, tiempo, velocidad y pendiente) si el objetivo es perder grasa
+  // o si empiezas (1 sesión). Primero las sesiones que no son de pierna, para no cargar las piernas antes de entrenarlas.
+  if (cfg.tipos.length === 1 && cfg.tipos[0] === 'fuerza' && dFuerza.length) {
+    const nCardio = Math.min(dFuerza.length, kind === 'grasa' ? (dFuerza.length >= 5 ? 3 : 2) : cfg.exp === 'nuevo' && kind !== 'rend' ? 1 : 0);
+    const orden = [...dFuerza.filter((d) => !SESION_INFERIOR.has(sesiones[d].foco)), ...dFuerza.filter((d) => SESION_INFERIOR.has(sesiones[d].foco)).reverse()];
+    orden.slice(0, nCardio).forEach((d) => sesiones[d].ej.push(cardioFinal(kind, cfg)));
+  }
+  return { tipos: cfg.tipos, otro: cfg.otro || '', dias, modo: 'propuesta', split: cfg.split || 'auto', exp: cfg.exp || '', equipo: cfg.equipo || null, prio: cfg.prio || '', sesiones };
 }
 export function rutinaVacia(cfg, goals) {
   const dias = [...cfg.dias].sort((a, b) => a - b);
