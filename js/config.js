@@ -12,3 +12,7 @@ export const FIREBASE_CONFIG = {
 };
 
 export const APP_NAME = 'Cadencia';
+
+// Interruptor del ciclismo (pestaña Bici, rutas y mapas, Taller, Strava y tipo de entreno «Bici»).
+// En false todo queda oculto; el código y los datos guardados se conservan. Poner true para volver a enseñarlo.
+export const CICLISMO = false;

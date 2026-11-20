@@ -8,7 +8,8 @@ const conPlan = (p) => {
   return p.proPlan ? p : { ...p, proPlan: 'none' };
 };
 
-import { FIREBASE_CONFIG } from './config.js';
+import { FIREBASE_CONFIG, CICLISMO } from './config.js';
+const sinBici = (l) => (CICLISMO ? l : l.filter((w) => w.tipo !== 'bici')); // con el ciclismo apagado, los entrenos de bici guardados no se enseñan
 
 const FB = 'https://www.gstatic.com/firebasejs/10.14.1/';
 // Referidos: 1 semana de Pro por amigo invitado (máx. 10). Mismas cifras que las Cloud Functions miCodigo / canjearCodigo / reclamarReferido.
@@ -196,7 +197,7 @@ async function firebaseBackend(config) {
     async listWorkouts(uid, n = 500) { // de más reciente a más antiguo
       const q = F.query(F.collection(db, 'users', uid, 'entrenos'), F.orderBy('fecha', 'desc'), F.limit(n));
       const s = await F.getDocs(q);
-      return s.docs.map((d) => d.data());
+      return sinBici(s.docs.map((d) => d.data()));
     },
   };
 }
@@ -352,7 +353,7 @@ function localBackend() {
     async removeToken(uid, token) { const s = read(); const u = byUid(s, uid); if (!u) return; u.profile.fcmTokens = (u.profile.fcmTokens || []).filter((x) => x !== token); write(s); },
     async listWorkouts(uid, n = 500) {
       const u = byUid(read(), uid); if (!u || !u.entrenos) return [];
-      return Object.values(u.entrenos).sort((a, b) => b.fecha.localeCompare(a.fecha) || (b.id > a.id ? 1 : -1)).slice(0, n);
+      return sinBici(Object.values(u.entrenos)).sort((a, b) => b.fecha.localeCompare(a.fecha) || (b.id > a.id ? 1 : -1)).slice(0, n);
     },
   };
 }

@@ -1,4 +1,5 @@
 import { IMG_CUR, EXTRA, IMGDB, DBX, VIEJOS } from './ejercicios.js';
+import { CICLISMO } from './config.js';
 // Lógica del entrenamiento: solo cálculos y datos, sin pantalla.
 
 export const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -719,7 +720,7 @@ export const SES_FUERZA = {
   espalda: { n: 'Espalda y bíceps', p: ['tiron_v', 'tiron_h', 'tiron_h', 'tiron_v', 'biceps', 'biceps', 'posterior'], m: ['espalda', 'biceps'] },
   hombro: { n: 'Hombro y core', p: ['empuje_v', 'elev_lat', 'elev_lat', 'posterior', 'empuje_v', 'core', 'core'], m: ['hombro', 'core'] },
   brazos: { n: 'Brazos', p: ['biceps', 'triceps', 'biceps', 'triceps', 'biceps', 'triceps', 'antebrazo'], m: ['biceps', 'triceps', 'antebrazo'] },
-  cicl: { n: 'Fuerza para ciclistas', p: ['rodilla', 'bisagra', 'unilateral', 'gluteo', 'gemelos', 'core', 'core'], m: ['cuadriceps', 'gluteo', 'femoral', 'gemelos', 'core'] },
+  cicl: { n: CICLISMO ? 'Fuerza para ciclistas' : 'Pierna y core', p: ['rodilla', 'bisagra', 'unilateral', 'gluteo', 'gemelos', 'core', 'core'], m: ['cuadriceps', 'gluteo', 'femoral', 'gemelos', 'core'] },
 };
 export function splitOrden(split, nF, kind) {
   if (split === 'ppl') return ['push', 'pull', 'legs'];
@@ -860,7 +861,7 @@ export function repartir(tipos, n, kind) {
 }
 
 export const KIND_TEXT = {
-  rend: 'Prioriza la calidad en bici o cardio (intervalos y fondo) y fuerza específica para tener más potencia.',
+  rend: CICLISMO ? 'Prioriza la calidad en bici o cardio (intervalos y fondo) y fuerza específica para tener más potencia.' : 'Prioriza la calidad en cardio (intervalos y fondo) y fuerza específica para tener más potencia.',
   grasa: 'Combina fuerza para conservar músculo con resistencia suave y algún intervalo para gastar más.',
   fuerza: 'Más días de fuerza con buen volumen y resistencia suave para recuperar.',
   general: 'Una mezcla equilibrada de fuerza y resistencia.',

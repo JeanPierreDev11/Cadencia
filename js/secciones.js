@@ -8,6 +8,7 @@ import * as CAL from './calorias.js';
 import { leerGPX, MAX_BYTES } from './gpx.js';
 import { trazado, IDA_Y_VUELTA } from './trazados.js';
 import { crearMapa } from './mapa.js';
+import { CICLISMO } from './config.js';
 
 const BR = globalThis.BR || {};
 const T = BR.training, RF = BR.routeFuel, RT = BR.routes, BD = BR.body, GS = BR.groupsets;
@@ -61,7 +62,7 @@ const META_T = [
   ['min_sem', 'General', '{v} min de entreno a la semana', 'min', 'sem', 240],
 ];
 const metaDef = (id) => META_T.find((x) => x[0] === id) || META_T[0];
-const META_G = ['Bici', 'Cardio', 'Pesos', 'General'];
+const META_G = CICLISMO ? ['Bici', 'Cardio', 'Pesos', 'General'] : ['Cardio', 'Pesos', 'General'];
 
 /* Tiempo de muestra si no hay conexión con el servicio meteorológico (de la app original). */
 const PRESETS = [
@@ -123,6 +124,7 @@ export function crearSecciones(ctx) {
   /* ================================================================ */
   function tieneBici() {
     // Interruptor manual (Configuración / Tus datos) y, si no lo has tocado, lo que elegiste al registrarte o en tu rutina.
+    if (!CICLISMO) return false;
     const pf = P();
     if (typeof pf.ciclismo === 'boolean') return pf.ciclismo;
     const r = rutinaOf();
@@ -155,7 +157,7 @@ export function crearSecciones(ctx) {
       const list = await api.listDias(u, E.addDays(todayISO(), -90));
       list.forEach((d) => { st.dias[d.fecha] = d; });
     } catch (e) { /* sin comidas: no impide entrar */ }
-    try { st.rutas = await api.listRutas(u); } catch (e) { st.rutas = st.rutas || []; }
+    if (CICLISMO) try { st.rutas = await api.listRutas(u); } catch (e) { st.rutas = st.rutas || []; }
     try { const g = JSON.parse(lsGet('cadencia-geo') || 'null'); if (g && g.lat) st.geo = { ...g, status: 'ok' }; } catch (e) { /* nada */ }
   }
   async function saveProfile(data) {
@@ -963,7 +965,7 @@ export function crearSecciones(ctx) {
       <button class="btn small" data-act="n-hoy">${I.plus} Apuntar</button></div>
       ${od ? pbar(tot.k / od.target, tot.k > od.target * 1.05 ? 'over' : '') : ''}
       ${od ? `<p class="small muted">Proteína ${nf(tot.p)} de ${nf(od.macros.p)} g</p>` : ''}</section>`;
-    const ms = metas().slice(0, 3);
+    const ms = metasVis().slice(0, 3);
     if (ms.length) h += `<section class="card"><div class="card-head"><h2>Tus objetivos</h2><button class="link" data-act="nov-wk" data-v="objetivos">Ver</button></div>${ms.map((m) => metaCard(m, true)).join('')}</section>`;
     const pm = pmcData();
     if (pm) {
@@ -1251,7 +1253,7 @@ export function crearSecciones(ctx) {
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && st.user && st.profile && !esPro()) { refrescarPro(false); if (st.vuelveDePago && st.pro) render(); /* de vuelta de Stripe: aparece «Ya he pagado» */ } });
   const proVentajas = () => [
       [ICO.camara, 'Escanear alimento', 'Haz una foto a tu plato y la IA calcula las calorías y los macros. Tú lo revisas y lo guardas.'],
-      [ICO.spark, 'Recomendaciones para tu bici', 'En el Taller, 3 piezas compatibles con tu bici y tu presupuesto, con precio aproximado.'],
+      ...(CICLISMO ? [[ICO.spark, 'Recomendaciones para tu bici', 'En el Taller, 3 piezas compatibles con tu bici y tu presupuesto, con precio aproximado.']] : []),
       [ICO.lock, 'Mapa de fatiga muscular', 'Mira qué músculos están listos, descansando o fatigados, y el mapa de calor de tu semana.'],
       [ICO.lock, 'Modo Bestia', 'En tus series: RIR, drop-sets y superseries, guardados en tu historial.'],
       [I.check, '10 consultas de IA al día', 'Se reparten entre fotos y recomendaciones, y se renuevan cada día.'],
@@ -1587,6 +1589,7 @@ export function crearSecciones(ctx) {
   /* Objetivos de entreno                                              */
   /* ================================================================ */
   const metas = () => P().metas || [];
+  const metasVis = () => metas().filter((m) => CICLISMO || !String(m.tipo).startsWith('bici_')); // con el ciclismo apagado no se enseñan los objetivos de bici
   const metaTitulo = (m) => metaDef(m.tipo)[2].replace('{v}', nf(m.valor, m.valor % 1 ? 1 : 0)).replace('{ej}', m.ej || 'un ejercicio');
   const kmOf = (w) => w.km || 0;
   function metaSuma(tipo, ws) {
@@ -1658,9 +1661,9 @@ export function crearSecciones(ctx) {
     </button>`;
   }
   function viewObjetivos() {
-    const ms = metas();
+    const ms = metasVis();
     if (!ms.length) return `<section class="card tl-empty"><button class="addbig" data-act="meta-new"><span class="addbig-c">${I.plusBig}</span><b>Añadir objetivo</b></button>
-      <p class="muted" style="text-align:center">Ponte metas de bici, cardio o pesos: km a la semana, minutos de cardio, entrenos o kilos en un ejercicio. Se van completando solas con lo que registras.</p></section>`;
+      <p class="muted" style="text-align:center">Ponte metas de cardio o pesos: km a la semana, minutos de cardio, entrenos o kilos en un ejercicio. Se van completando solas con lo que registras.</p></section>`;
     return `<div class="metas">${ms.map((m) => metaCard(m)).join('')}</div>
       <button class="btn ghost block" data-act="meta-new">${I.plus} Nuevo objetivo</button>`;
   }

@@ -2,6 +2,7 @@
 // biblioteca de ejercicios, entrenamiento en directo y registro de bici, cardio y otros.
 import { esc, num, nf, todayISO, fmtDate, lsSet, lsGet, toast, I } from './util.js';
 import { errorText } from './data.js';
+import { CICLISMO } from './config.js';
 import * as E from './entreno.js';
 import * as CAL from './calorias.js';
 import { analizarEntreno, diagnosticoCoach } from './coach.js';
@@ -52,7 +53,7 @@ function rutinasList() {
 }
 const nidR = () => 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 // dayPlanBase: lo que dice la rutina. dayPlan: además aplica los entrenos movidos a otro día (Pro, «Mover entreno»): el día original pasa a descanso y el día destino hereda su sesión.
-const dayPlanBase = (iso) => { const r = rutinaOf(); if (!r) return null; const d = E.weekdayIdx(iso); return r.dias.includes(d) ? r.sesiones[d] || null : null; };
+const dayPlanBase = (iso) => { const r = rutinaOf(); if (!r) return null; const d = E.weekdayIdx(iso); const x = r.dias.includes(d) ? r.sesiones[d] || null : null; return x && !CICLISMO && x.t === 'bici' ? null : x; };
 const dayPlan = (iso) => {
   const sv = E.salvLista(st.profile);
   if (!sv.length) return dayPlanBase(iso);
@@ -184,7 +185,7 @@ function wkSemana() {
 
   const streak = E.streakDays(ws, today, (d) => !!dayPlan(d));
   // Si tu rutina no tiene bici y sí fuerza, el panel habla de series y kilos movidos en lugar de sesiones y distancia.
-  const soloFuerza = r.dias.every((d) => r.sesiones[d].t !== 'bici') && r.dias.some((d) => r.sesiones[d].t === 'fuerza');
+  const soloFuerza = (!CICLISMO || r.dias.every((d) => r.sesiones[d].t !== 'bici')) && r.dias.some((d) => r.sesiones[d].t === 'fuerza');
   const hoy = E.dayStats(ws, sel);
   // Semana anterior: las métricas son las de TODA la semana (tiempo, series, volumen y días completados).
   if (pasada) {
@@ -195,7 +196,7 @@ function wkSemana() {
     <div class="stats" aria-label="Resumen de la semana">
       <section class="stat"><span class="label">Tiempo</span><span class="val num nowrap">${fmtDur(stt.min).replace(' min', '')}${stt.min % 60 ? '<em>min</em>' : ''}</span></section>
       ${soloFuerza ? `<section class="stat"><span class="label">Series</span><span class="val num">${nf(stt.sets)}</span></section>`
-        : `<section class="stat"><span class="label">Distancia en bici</span><span class="val num">${nf(stt.km, 1)}<em>km</em></span></section>`}
+        : `<section class="stat"><span class="label">${CICLISMO ? 'Distancia en bici' : 'Distancia'}</span><span class="val num">${nf(stt.km, 1)}<em>km</em></span></section>`}
       <section class="stat"><span class="label">Volumen total</span><span class="val num">${nf(stt.vol)}<em>kg</em></span></section>
       <section class="stat"><span class="label">Días completados</span><span class="val num">${dias}<em>de ${r.dias.length}</em></span></section>
     </div>
@@ -206,7 +207,7 @@ function wkSemana() {
     : `<section class="stat"><span class="label">Sesiones</span><span class="val num">${stt.n}<em>de ${r.dias.length}</em></span></section>`;
   const caja3 = soloFuerza
     ? `<section class="stat"><span class="label">Volumen total</span><span class="val num">${nf(hoy.vol)}<em>kg</em></span></section>`
-    : `<section class="stat"><span class="label">Distancia en bici</span><span class="val num">${nf(stt.km, 1)}<em>km</em></span>${stt.elev ? `<span class="hint">+${nf(stt.elev)} m de desnivel</span>` : ''}</section>`;
+    : `<section class="stat"><span class="label">${CICLISMO ? 'Distancia en bici' : 'Distancia'}</span><span class="val num">${nf(stt.km, 1)}<em>km</em></span>${stt.elev ? `<span class="hint">+${nf(stt.elev)} m de desnivel</span>` : ''}</section>`;
   return `${semNavHTML(mon, curMon)}
     <section class="card"><h2>Tu semana</h2><div class="weekstrip">${cells}</div></section>
     ${diaHTML(sel, today)}
@@ -343,7 +344,7 @@ function wkRow(w, mod) {
   const sub = [fmtDate(w.fecha, { weekday: 'short', day: 'numeric', month: 'short' }), fmtDur(w.min)];
   if (w.km) sub.push(`${nf(w.km, 1)} km`);
   if (w.elev) sub.push(`+${nf(w.elev)} m`);
-  if (w.fuente === 'strava') sub.push('Strava');
+  if (CICLISMO && w.fuente === 'strava') sub.push('Strava');
   const ne = (w.ejercicios || []).length; if (ne) sub.push(`${ne} ${ne === 1 ? 'ejercicio' : 'ejercicios'}`);
   const icoT = w.tipo === 'gym' ? 'fuerza' : w.tipo;
   return `<div class="row wrow"><span class="wico">${tipoIcon(icoT)}</span>
@@ -384,10 +385,10 @@ function wkRecords() {
   if (r.bici.elev) bici.push(fila('Más desnivel', `${nf(r.bici.elev.v)} m`, r.bici.elev.fecha));
   if (r.bici.min) bici.push(fila('Más tiempo en bici', fmtDur(r.bici.min.v), r.bici.min.fecha));
   grupos.set('cardio', { t: 'Cardio', filas: cardio });
-  grupos.set('bici', { t: 'Bici', filas: bici });
+  if (CICLISMO) grupos.set('bici', { t: 'Bici', filas: bici });
   const con = [...grupos].filter(([, g]) => g.filas.length);
   if (!con.length) {
-    return `<section class="card"><div class="empty"><b>Aún no hay récords</b><span>Termina un entreno y aquí verás tu mejor serie de cada ejercicio, tus marcas de cardio y tus salidas en bici.</span></div></section>`;
+    return `<section class="card"><div class="empty"><b>Aún no hay récords</b><span>Termina un entreno y aquí verás tu mejor serie de cada ejercicio, tus marcas de cardio${CICLISMO ? ' y tus salidas en bici' : ''}.</span></div></section>`;
   }
   const rec = st.recOpen || {}, primero = con[0][0];
   const acordeon = ([id, g]) => {
@@ -459,7 +460,7 @@ function rxHTML(d, i, e, s, re) {
 function dayCardHTML(R, d, re) {
   const s = R.sesiones[d];
   const dl = E.DIAS_LARGO[d].toLowerCase();
-  const tp = re && re.mix ? ['fuerza', 'bici', 'cardio', 'otro'] : R.tipos;
+  const tp = re && re.mix ? ['fuerza', ...(CICLISMO ? ['bici'] : []), 'cardio', 'otro'] : R.tipos.filter((t) => CICLISMO || t !== 'bici' || s.t === 'bici');
   const sel = tp.length > 1
     ? `<select class="input sel" data-ret="${d}" aria-label="Tipo de entreno del ${dl}">${tp.map((t) => `<option value="${t}" ${s.t === t ? 'selected' : ''}>${RT[t]}</option>`).join('')}</select>`
     : `<span class="tag">${RT[s.t]}</span>`;
@@ -570,13 +571,13 @@ function wkRutina() {
   const abierta = list.find((x) => x.id === st.rutSel) || null;
   if (abierta && (!st.re || st.re.src !== 'tab' || st.re.rid !== abierta.id)) { st.re = reNew(clone(abierta), 'tab'); st.re.rid = abierta.id; }
   if (!abierta && st.re && st.re.src === 'tab') st.re = null;
-  const resumen = (x) => `${x.dias.map((d) => E.DIAS[d]).join(', ')} · ${x.tipos.map((t) => (t === 'otro' && x.otro ? x.otro : RT[t])).join(', ')}`;
+  const resumen = (x) => `${x.dias.map((d) => E.DIAS[d]).join(', ')} · ${x.tipos.filter((t) => CICLISMO || t !== 'bici').map((t) => (t === 'otro' && x.otro ? x.otro : RT[t])).join(', ')}`;
   const cuerpo = (r) => {
     const re = st.re, esActiva = r.id === act.id;
     const split = r.tipos.includes('fuerza') && r.split && E.SPLITS[r.split] ? ` · ${E.SPLITS[r.split].t}` : '';
     return `<div class="rutbody" id="rut-${esc(r.id)}">
       <label class="field"><span>Nombre de la rutina</span><input class="input" data-rutname maxlength="30" value="${esc(r.nombre || '')}"></label>
-      <p><b>${r.dias.map((d) => E.DIAS[d]).join(', ')}</b> · ${r.tipos.map((t) => (t === 'otro' && r.otro ? r.otro : RT[t])).join(', ')}${esc(split)}</p>
+      <p><b>${r.dias.map((d) => E.DIAS[d]).join(', ')}</b> · ${r.tipos.filter((t) => CICLISMO || t !== 'bici').map((t) => (t === 'otro' && r.otro ? r.otro : RT[t])).join(', ')}${esc(split)}</p>
       <p class="small muted">${r.modo === 'propuesta' ? 'Propuesta de la app según tus objetivos.' : 'Rutina creada por ti.'} Toca «Cambiar» en un ejercicio o sesión para ver alternativas.</p>
       ${esActiva ? '' : `<button class="btn block" data-act="rut-use">Usar esta rutina</button>`}
       <div class="rut-acts">
@@ -644,7 +645,7 @@ function rutDelSheetHTML() {
 /* ---------- asistente para crear la rutina (una pregunta por pantalla) ---------- */
 const RW_MAIN = [
   { id: 'fuerza', t: 'Fuerza', s: 'Gimnasio, calistenia…', ico: () => I.dumb },
-  { id: 'bici', t: 'Bici', s: 'Carretera, rodillo…', ico: () => I.bike },
+  ...(CICLISMO ? [{ id: 'bici', t: 'Bici', s: 'Carretera, rodillo…', ico: () => I.bike }] : []),
   { id: 'cardio', t: 'Running', s: 'Correr en calle, cinta o monte', ico: () => I.pulse },
   { id: 'otro', t: 'Otro deporte', s: 'Fútbol, natación…', ico: () => I.ball },
 ];
@@ -652,7 +653,7 @@ const RW_EXP = [['nuevo', 'Debutante'], ['meses', 'Unos meses'], ['anio', 'Alred
 const RW_DONDE = [['gym', 'Gimnasio', 'Máquinas, poleas y peso libre'], ['casa', 'Casa', 'Con poco o ningún material'], ['parque', 'Parque', 'Barras, paralelas y tu peso']];
 const RW_MAT = [['maquina', 'Máquinas / poleas'], ['mancuernas', 'Mancuernas'], ['barra', 'Barras'], ['banda', 'Bandas elásticas'], ['kettlebell', 'Kettlebells'], ['ninguno', 'Solo peso corporal']];
 const RW_DIV = [['ppl', 'Push · Pull · Legs', 'Empuje, tirón y pierna'], ['tp', 'Torso / Pierna', 'Tren superior e inferior'], ['full', 'Full body', 'Todo el cuerpo cada día'], ['weider', 'Un músculo por día', 'Pecho, espalda, pierna, hombro y brazos'], ['deporte', 'Fuerza para deporte', 'Potencia y core para tu deporte'], ['custom', 'Personalizado', 'Tú decides qué haces cada día']];
-const RW_DEPORTES = ['Fútbol', 'Baloncesto', 'Bici', 'Pádel', 'Tenis', 'Natación', 'Running', 'Esquí'];
+const RW_DEPORTES = ['Fútbol', 'Baloncesto', ...(CICLISMO ? ['Bici'] : []), 'Pádel', 'Tenis', 'Natación', 'Running', 'Esquí'];
 const EQ_DEF = { gym: ['maquina', 'mancuernas', 'barra'], casa: ['ninguno'], parque: ['ninguno'] };
 // «Dónde entrenas» es una lista (['gym', 'casa']). Las rutinas guardadas antes con un solo texto ('gym') se leen como ['gym'].
 const dondeDe = (x) => (Array.isArray(x) ? x : x ? [x] : []).filter((k) => EQ_DEF[k]);
@@ -1681,7 +1682,7 @@ async function liveFinish() {
 function resolveTipo(date, tipo) {
   if (['bici', 'gym', 'cardio', 'otro'].includes(tipo)) return tipo;
   const dp = dayPlan(date || todayISO()), r = rutinaOf();
-  return dp ? WK_DE[dp.t] : r ? WK_DE[r.tipos[0]] : 'bici';
+  return dp ? WK_DE[dp.t] : r ? WK_DE[r.tipos[0]] : 'gym';
 }
 function newWk(date, t) {
   const f = date || todayISO(), dp = dayPlan(f), same = dp && WK_DE[dp.t] === t;
@@ -1709,7 +1710,7 @@ function regSheetHTML() {
       <div class="sheet-head"><button type="button" class="iconbtn" data-act="reg-close" aria-label="Cerrar">${I.back}</button><h2>¿Qué registras ${esc(cuando)}?</h2><span style="width:36px"></span></div>
       <div class="sheet-list regopts">
         ${opt('gym', I.dumb, fuerzaT, fuerzaS)}
-        ${opt('bici', I.bike, 'Bici', dp && dp.t === 'bici' ? dp.nombre : 'Salida, rodillo o bici de spinning')}
+        ${CICLISMO ? opt('bici', I.bike, 'Bici', dp && dp.t === 'bici' ? dp.nombre : 'Salida, rodillo o bici de spinning') : ''}
         ${opt('cardio', I.heart, 'Cardio / Otro', 'Correr, nadar, pádel, caminar…')}
         ${plan ? `<p class="small muted">${esc(plan)}</p>` : ''}
       </div>
@@ -1728,7 +1729,7 @@ function viewWkForm() {
     <div class="ob-top"><button type="button" class="ob-back" data-act="wk-cancel" aria-label="Volver">${I.back}</button><h1 class="form-title">${w.id ? 'Editar entreno' : 'Registrar entreno'}</h1></div>
     <div class="form-grid" style="padding-top:20px;flex:1;align-content:start">
       ${w.id ? `<p class="small muted">${esc(E.TIPOS[t] || 'Entreno')}</p>` : `<div class="seg" role="group" aria-label="Tipo de entreno">
-        ${[['gym', 'Fuerza'], ['bici', 'Bici'], ['cardio', 'Cardio'], ['otro', 'Otro']].map(([v, l]) => `<button type="button" data-act="wk-tipo" data-v="${v}" aria-pressed="${t === v}">${l}</button>`).join('')}
+        ${[['gym', 'Fuerza'], ...(CICLISMO ? [['bici', 'Bici']] : []), ['cardio', 'Cardio'], ['otro', 'Otro']].map(([v, l]) => `<button type="button" data-act="wk-tipo" data-v="${v}" aria-pressed="${t === v}">${l}</button>`).join('')}
       </div>`}
       <div class="two">
         <label class="field"><span>Fecha</span><input class="input" type="date" data-wk="fecha" value="${esc(w.fecha)}" max="${todayISO()}"></label>

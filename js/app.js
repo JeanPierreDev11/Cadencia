@@ -1,6 +1,6 @@
 import './br.js'; // Fórmulas de Bilbao Ride (globalThis.BR): debe cargarse antes que secciones.js
 import { createBackend, errorText, REF_MAX } from './data.js';
-import { APP_NAME } from './config.js';
+import { APP_NAME, CICLISMO } from './config.js';
 import * as E from './entreno.js';
 import { crearSecciones, NOV_V } from './secciones.js';
 import { crearEntreno } from './entreno-ui.js';
@@ -26,7 +26,7 @@ import { esc, num, nf, todayISO, fmtDate, lsGet, lsSet, toast, I } from './util.
 const GOALS = [
   { id: 'perder', t: 'Perder grasa', s: 'Bajar peso sin perder fuerza', ico: '<path d="M12 4v14M6 12l6 6 6-6"/>' },
   { id: 'musculo', t: 'Ganar músculo', s: 'Más fuerza en piernas y tronco', ico: '<path d="M4 10v4M7 7v10M17 7v10M20 10v4M7 12h10"/>' },
-  { id: 'rendimiento', t: 'Rendir más en la bici', s: 'Más potencia y fondo en las subidas', ico: '<path d="M3 18l6-8 4 5 3-4 5 7"/>' },
+  { id: 'rendimiento', t: CICLISMO ? 'Rendir más en la bici' : 'Rendir más', s: CICLISMO ? 'Más potencia y fondo en las subidas' : 'Más fuerza, potencia y resistencia', ico: '<path d="M3 18l6-8 4 5 3-4 5 7"/>' },
   { id: 'prueba', t: 'Preparar un maratón', s: 'Llegar en forma a una fecha concreta', ico: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>' },
   { id: 'mantener', t: 'Mantener mi peso', s: 'Estable y con energía', ico: '<path d="M4 12h16M8 8l-4 4 4 4M16 8l4 4-4 4"/>' },
   { id: 'salud', t: 'Ganar salud', s: 'Dormir mejor, menos estrés, más vitalidad', ico: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>' },
@@ -118,7 +118,7 @@ function heroProfile() {
 }
 
 const heroHTML = (tag = 'h1') => `<svg class="logo-mark" viewBox="0 0 64 64" aria-hidden="true" fill="currentColor"><path d="M12 8H56V22H28V42H56V56H12Z" transform="translate(6.8 0) skewX(-12)"/></svg>
-      <${tag} class="wordmark">${esc(APP_NAME)}</${tag}>${tag === 'h1' ? '<p class="tagline">Tu peso, tus objetivos y tu bici, en un mismo sitio.</p>' : ''}
+      <${tag} class="wordmark">${esc(APP_NAME)}</${tag}>${tag === 'h1' ? `<p class="tagline">${CICLISMO ? 'Tu peso, tus objetivos y tu bici, en un mismo sitio.' : 'Tu peso, tus objetivos y tus entrenos, en un mismo sitio.'}</p>` : ''}
       ${heroProfile()}`;
 
 // Sin sesión: primero la bienvenida (el cuestionario empieza SIN cuenta); «Iniciar sesión» lleva al formulario de acceso.
@@ -165,7 +165,7 @@ function delSheetHTML() {
       <div class="sheet-grab"></div>
       <div class="sheet-head"><button type="button" class="iconbtn" data-act="del-close" aria-label="Cerrar">${I.back}</button><h2>Borrar mi cuenta</h2><span style="width:36px"></span></div>
       <form class="sheet-list form-grid" data-form="delacc" novalidate>
-        <div class="msg"><b>¿Estás seguro? Esta acción no se puede deshacer.</b> Se borrarán <b>para siempre</b> tu cuenta y todos tus datos: perfil, foto, pesos, entrenos, rutinas, objetivos, comidas y taller.</div>
+        <div class="msg"><b>¿Estás seguro? Esta acción no se puede deshacer.</b> Se borrarán <b>para siempre</b> tu cuenta y todos tus datos: perfil, foto, pesos, entrenos, rutinas, objetivos y comidas.</div>
         ${st.profile && st.profile.isPro === true ? '<div class="msg ok">Tienes Cadencia Pro. Borrar la cuenta <b>no cancela la suscripción</b>: cancélala antes desde el enlace del recibo de Stripe que te llegó por email.</div>' : ''}
         <label class="field"><span>Tu contraseña</span><input class="input" type="password" name="pass" data-del="pass" autocomplete="current-password" value="${esc(D.pass)}"></label>
         <label class="field"><span>Escribe BORRAR para confirmar</span><input class="input" name="txt" data-del="txt" autocapitalize="characters" autocomplete="off" value="${esc(D.txt)}" placeholder="BORRAR"></label>
@@ -659,7 +659,7 @@ function focusFirst() {
 /* App principal                                                       */
 /* ================================================================== */
 // Entreno vive en entreno-ui.js; Nutrición, Rutas, Taller, Progreso y Objetivos en secciones.js.
-const W = crearEntreno({ st, root, get api() { return api; }, render, get M() { return M; }, currentKg: () => currentKg(), goalById: (id) => goalById(id), stravaBtn: () => S.syncBtnHTML(), gearHTML: () => gearHTML() });
+const W = crearEntreno({ st, root, get api() { return api; }, render, get M() { return M; }, currentKg: () => currentKg(), goalById: (id) => goalById(id), stravaBtn: () => (CICLISMO ? S.syncBtnHTML() : ''), gearHTML: () => gearHTML() });
 const { exViewHTML, rutinaOf, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, regSheetHTML, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, limiteSheetHTML, calentarSheetHTML, moverSheetHTML, rutNuevosSheetHTML, resumenSheetHTML, compartirSheetHTML, pintarCompartir, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML, finSheetHTML } = W;
 const M = crearSecciones({
   st, get api() { return api; }, render, toast, esc, num, nf, todayISO, fmtDate, lsGet, lsSet, I, E, errorText,
@@ -669,7 +669,7 @@ const M = crearSecciones({
 const S = crearStrava({ st, get api() { return api; }, render, toast, esc, E, currentKg: () => currentKg(), todayISO, fmtDate, lsGet, lsSet, errorText });
 const R = crearRecordatorios({ st, get api() { return api; }, render, toast, esc, lsGet, lsSet, errorText, I });
 let irPendiente = leerIr(); // si venimos de tocar un aviso, aquí queda la pantalla a la que ir
-let stravaRet = leerRetorno(); // si venimos de la pantalla de permisos de Strava, aquí queda el código temporal
+let stravaRet = CICLISMO ? leerRetorno() : null; // si venimos de la pantalla de permisos de Strava, aquí queda el código temporal
 
 const gearHTML = () => `<button type="button" class="gear" data-act="cfg-open" aria-label="Configuración">${I.gear}</button>`;
 function viewMain() {
@@ -1199,13 +1199,13 @@ function planCardHTML() {
   const renueva = regalo ? `Tu PRO de regalo (referidos) dura hasta el <b>${dia(regalo)}</b>.` : pro && pr.proRenueva ? (pr.proCancela ? `Tu suscripción está cancelada: sigues con Pro hasta el <b>${dia(pr.proRenueva)}</b>.` : `Próxima renovación: <b>${dia(pr.proRenueva)}</b>.`) : '';
   if (!pro) return `<section class="card" id="plan-card">
       <div class="card-head"><h2>Tu plan</h2><span class="tag" id="plan-tag">Gratuita</span></div>
-      <p class="small muted">El registro manual, las rutinas, las rutas y el resto de la app son gratis. Con Pro desbloqueas la IA: Escanear alimento y recomendaciones del Taller.</p>
+      <p class="small muted">El registro manual, las rutinas y el resto de la app son gratis. Con Pro desbloqueas la IA: Escanear alimento y el Coach AI.</p>
       <button class="btn block" data-act="pro-open" data-v="perfil">Hazte Pro</button>
     </section>`;
   return `<section class="card" id="plan-card">
       <div class="card-head"><h2>Tu plan</h2><span class="tag ok" id="plan-tag">Pro</span></div>
       <p><b>Cadencia Pro</b></p>
-      <p class="small muted">Incluye Escanear alimento, recomendaciones del Taller con IA y 10 consultas de IA al día. ${renueva}</p>
+      <p class="small muted">Incluye Escanear alimento, el Coach AI y 10 consultas de IA al día. ${renueva}</p>
     </section>`;
 }
 
@@ -1259,7 +1259,7 @@ function viewPerfil() {
       pfRow('user', 'Detalles personales', { act: 'pf-open', v: 'detalles' }),
       pfRow('sliders', 'Preferencias', { act: 'pf-open', v: 'prefs', val: tema }),
       pfRow('globe', 'Idioma', { act: 'pf-open', v: 'idioma', val: idioma }),
-      pfRow('link', 'Integraciones', { act: 'pf-open', v: 'integraciones', val: S.conectado() ? 'Strava' : '' }),
+      CICLISMO ? pfRow('link', 'Integraciones', { act: 'pf-open', v: 'integraciones', val: S.conectado() ? 'Strava' : '' }) : '',
       tienePass() ? pfRow('key', 'Modificar contraseña', { act: 'pwd-open' }) : '',
       tieneGoogle() ? pfRow('link', 'Cuenta de Google', { tag: '<span class="tag ok">Vinculada</span>' }) : pfRow('link', 'Vincular cuenta de Google', { act: 'google-link' }),
     ])}
@@ -1329,7 +1329,7 @@ function pfCuerpo(v) {
       <p class="small muted">${t === 'system' ? 'Sigue el modo claro u oscuro de tu móvil.' : t === 'light' ? 'Fondo claro con el mismo amarillo.' : 'Negro y amarillo, el estilo de Cadencia.'}</p></section></div>`;
   }
   if (v === 'suscripcion') return suscripcionHTML();
-  if (v === 'integraciones') return `<div class="sheet-list">${S.integracionesHTML()}</div>`;
+  if (v === 'integraciones' && CICLISMO) return `<div class="sheet-list">${S.integracionesHTML()}</div>`;
   if (v === 'idioma') {
     const l = p.idioma === 'en' ? 'en' : 'es';
     return `<div class="sheet-list"><div class="pf-list">${[['es', 'Español'], ['en', 'English']].map(([k, n]) => `<button type="button" class="pf-row" data-act="pf-idioma" data-v="${k}"><span class="pf-t">${n}</span>${l === k ? `<span class="pf-ok">${I.check}</span>` : ''}</button>`).join('')}</div>
@@ -1482,10 +1482,10 @@ function cfgSheetHTML() {
           <div class="seg" role="group" aria-label="Tema">${[['dark', 'Oscuro'], ['light', 'Claro'], ['system', 'Sistema']].map(([v, l]) => `<button type="button" data-act="theme" data-v="${v}" aria-pressed="${t === v}">${l}</button>`).join('')}</div>
           <p class="small muted">${t === 'system' ? 'Sigue el modo claro u oscuro de tu móvil.' : t === 'light' ? 'Fondo claro con el mismo amarillo.' : 'Negro y amarillo, el estilo de Cadencia.'}</p>
         </section>
-        <section class="card"><h2>Funciones</h2>
+        ${CICLISMO ? `<section class="card"><h2>Funciones</h2>
           <div class="rec-row"><div class="rec-t"><b id="cfg-cic">Mostrar funciones de Ciclismo</b><span class="small muted">Pestaña Bici con rutas, mapa y taller de tu bici.</span></div>
             <button type="button" class="switch" role="switch" aria-checked="${M.tieneBici()}" aria-labelledby="cfg-cic" data-act="cfg-cic"><i></i></button></div>
-        </section>
+        </section>` : ''}
         ${R.cardHTML()}
         ${installCard(false)}
       </div>

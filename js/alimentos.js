@@ -515,7 +515,7 @@ const FOODS_RAW = [
   ['Aceitunas negras', 145, 1, 3, 15, 'aceituna', 4],
   ['Maíz frito (kikos)', 450, 8, 66, 17],
   ['Barrita de proteínas', 360, 32, 35, 12, 'barrita', 60],
-  ['Barrita energética (ciclismo)', 380, 6, 70, 8, 'barrita', 40],
+  ['Barrita energética', 380, 6, 70, 8, 'barrita', 40],
   ['Gel energético', 250, 0, 62, 0, 'gel', 40],
   ['Mazapán', 450, 9, 57, 21],
   ['Crema catalana', 160, 4, 20, 7, 'ración', 130],
