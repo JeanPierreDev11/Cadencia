@@ -26,7 +26,11 @@ const STRAVA_SECRETO = defineSecret('STRAVA_CLIENT_SECRET'); // el «Client Secr
 setGlobalOptions({ region: 'europe-west1', maxInstances: 3 });
 
 const LIMITE_USUARIO = 10; // consultas de IA por persona y día (fotos + Taller)
-const LIMITE_GLOBAL = 300; // consultas al día entre todas las personas (seguridad de gasto)
+const LIMITE_GLOBAL = 300; // consultas al día entre todas las personas CON PRO (seguridad de gasto)
+const LIMITE_GLOBAL_FREE = 150; // fotos de plato gratuitas al día entre todas las personas SIN Pro: tope aparte, para que cuentas gratuitas masivas no agoten la cuota de quien paga
+// App Check (verifica que la llamada viene de la app real y no de un script con una cuenta cualquiera). Déjalo en false hasta que la app envíe el token
+// (ver «App Check» en claude/contexto-seguridad-produccion.md); con true y sin App Check en la app, TODAS las llamadas de IA fallarían.
+const EXIGIR_APPCHECK = false;
 const MODELO_PLATO = 'claude-haiku-5-5'; // rápido y barato, ve imágenes
 const MODELO_TALLER = 'claude-sonnet-5-5'; // más conocimiento de componentes y compatibilidades
 
@@ -37,6 +41,39 @@ const userRef = (uid) => db.doc(`users/${uid}`);
 // Pro vigente: isPro y, si son días regalados por referidos (proCaduca), que no hayan caducado.
 const proVigente = (d) => !!d && d.isPro === true && !(Number(d.proCaduca) > 0 && Number(d.proCaduca) <= Date.now());
 const esPro = async (uid) => { const d = await userRef(uid).get(); return d.exists && proVigente(d.data()); };
+
+/* ------------------------------------------------------------------ */
+/* Cuotas diarias: error de límite estructurado y devolución acotada   */
+/* ------------------------------------------------------------------ */
+// TODAS las cuotas (IA de fotos/Taller, Coach AI y ajustes de rutina) se comprueban y se descuentan aquí, en una transacción de Firestore,
+// con la fecha del SERVIDOR (hoyMadrid): cambiar la hora del móvil o recargar la página no sirve de nada.
+// Al llegar al límite se responde con HttpsError('resource-exhausted'), que el protocolo callable entrega como HTTP 429, y con `details`:
+//   { codigo, funcion, http: 429, usadas, limite, pro, upgrade, reinicia }
+//   codigo: 'limite-free' (1 foto gratis al día) | 'ia-limite' | 'ia-global' | 'coach-limite' | 'coach-global' | 'ajustes-limite' | 'ajustes-global'
+//   funcion: 'ia' | 'coach' | 'ajustarRutina' · upgrade: true si pasarse a Pro le daría más cupo · reinicia: ISO del próximo reinicio (medianoche de Madrid).
+// La app ya lee details.codigo ('limite-free', 'ajustes-limite'); el resto de códigos solo añaden información.
+const reinicioCuota = () => {
+  const ahora = new Date();
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', hourCycle: 'h23', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(ahora).map((x) => [x.type, x.value]));
+  const seg = Number(p.hour) * 3600 + Number(p.minute) * 60 + Number(p.second);
+  return new Date(ahora.getTime() + (86400 - seg) * 1000).toISOString();
+};
+const errLimite = (mensaje, codigo, funcion, extra) => new HttpsError('resource-exhausted', mensaje, { codigo, funcion, http: 429, reinicia: reinicioCuota(), ...(extra || {}) });
+// Si la llamada a la IA falla por culpa nuestra o de Google, la consulta reservada se devuelve. Con TOPE diario de devoluciones por persona:
+// sin tope, quien provocara fallos a propósito tendría llamadas a la IA ilimitadas (y a nuestro cargo). Devuelve true si la devolvió.
+const MAX_REEMBOLSOS_DIA = 5;
+async function devolverCupo(uid, dia, campoUso, campoGlobal, extraUso) {
+  try {
+    return await db.runTransaction(async (tx) => {
+      const u = await tx.get(usoRef(uid, dia));
+      const dev = (u.exists && Number(u.data().reembolsos)) || 0;
+      if (dev >= MAX_REEMBOLSOS_DIA) return false;
+      tx.set(usoRef(uid, dia), { [campoUso]: FieldValue.increment(-1), reembolsos: dev + 1, ...(extraUso || {}) }, { merge: true });
+      tx.set(globalRef(dia), { [campoGlobal]: FieldValue.increment(-1) }, { merge: true });
+      return true;
+    });
+  } catch (e) { console.error('No se pudo devolver la consulta', e && e.message); return false; }
+}
 
 /* ------------------------------------------------------------------ */
 /* Foto del plato                                                      */
@@ -214,41 +251,47 @@ function leerJSON(r) {
 /* ------------------------------------------------------------------ */
 /* Función pública                                                     */
 /* ------------------------------------------------------------------ */
-exports.ia = onCall({ secrets: [CLAVE], timeoutSeconds: 90, memory: '512MiB', cpu: 1, concurrency: 10 }, async (req) => {
+exports.ia = onCall({ secrets: [CLAVE], timeoutSeconds: 90, memory: '512MiB', cpu: 1, concurrency: 10, enforceAppCheck: EXIGIR_APPCHECK }, async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión para usar la IA.');
   const uid = req.auth.uid, data = req.data || {}, modo = data.modo, dia = hoyMadrid();
   // La IA es de Cadencia Pro. Se comprueba aquí, en el servidor, antes de leer nada de la petición.
   const pro = await esPro(uid);
   if (modo === 'estado') {
     const [s, u] = await Promise.all([usoRef(uid, dia).get(), db.doc(`users/${uid}`).get()]);
-    return { quedan: Math.max(0, LIMITE_USUARIO - ((s.exists && s.data().n) || 0)), limite: LIMITE_USUARIO, pro, libreUsado: !pro && !!u.exists && u.data().ultimoEscaneo === dia };
+    const uso = s.exists ? s.data() : {};
+    return { quedan: Math.max(0, LIMITE_USUARIO - (uso.n || 0)), limite: LIMITE_USUARIO, pro, libreUsado: !pro && ((Number(uso.plato) || 0) >= 1 || (!!u.exists && u.data().ultimoEscaneo === dia)) };
   }
-  if (modo === 'borrar') { // la app lo llama al borrar la cuenta: elimina los contadores de uso y los tokens de Strava de esta persona
+  if (modo === 'borrar') { // la app lo llama al borrar la cuenta: elimina los tokens de Strava y los contadores de días ANTERIORES de esta persona
+    // Los contadores de HOY no se tocan: si se pudieran borrar, cualquiera reiniciaría sus límites diarios (ia, Coach AI y ajustes de rutina) llamando a esto.
     await db.doc(`stravaTokens/${uid}`).delete().catch(() => {});
     const q = await db.collection('iaUso').where('uid', '==', uid).get();
+    const viejos = q.docs.filter((d) => d.data().dia !== dia);
     const b = db.batch();
-    q.docs.forEach((d) => b.delete(d.ref));
-    if (q.size) await b.commit();
+    viejos.forEach((d) => b.delete(d.ref));
+    if (viejos.length) await b.commit();
     return { ok: true };
   }
   if (modo !== 'plato' && modo !== 'taller') throw new HttpsError('invalid-argument', 'Petición no válida.');
-  // Gratis: 1 foto de comida al día (la fecha del último escaneo se guarda en users/{uid}.ultimoEscaneo). El Taller sigue siendo solo Pro.
+  // Gratis: 1 foto de comida al día. El marcador vive en el contador del servidor (iaUso.plato) y, por compatibilidad con la app, también en users/{uid}.ultimoEscaneo:
+  // si alguien borrara y recreara su perfil, el contador del servidor sigue ahí. El Taller sigue siendo solo Pro.
   const libre = !pro && modo === 'plato';
   if (!pro && !libre) throw new HttpsError('permission-denied', 'Esta función es de Cadencia Pro.', { codigo: 'pro-requerido' });
-  const userRef = db.doc(`users/${uid}`);
+  const miRef = userRef(uid);
+  const campoG = libre ? 'nFree' : 'n', topeG = libre ? LIMITE_GLOBAL_FREE : LIMITE_GLOBAL; // las cuentas gratuitas tienen su propio tope global
 
   // Reserva una consulta (por persona y global) antes de llamar a la IA.
   let usadas = 0;
   await db.runTransaction(async (tx) => {
-    const [u, g, usr] = await Promise.all([tx.get(usoRef(uid, dia)), tx.get(globalRef(dia)), libre ? tx.get(userRef) : null]);
-    if (libre && usr.exists && usr.data().ultimoEscaneo === dia) throw new HttpsError('resource-exhausted', 'Límite diario alcanzado. Escanea sin límites con Cadencia Pro', { codigo: 'limite-free' });
-    usadas = (u.exists && u.data().n) || 0;
-    const total = (g.exists && g.data().n) || 0;
-    if (usadas >= LIMITE_USUARIO) throw new HttpsError('resource-exhausted', `Ya has usado tus ${LIMITE_USUARIO} consultas de IA de hoy. Mañana tendrás otras ${LIMITE_USUARIO}.`);
-    if (total >= LIMITE_GLOBAL) throw new HttpsError('resource-exhausted', 'La IA ha llegado a su límite de hoy. Prueba mañana.');
-    tx.set(usoRef(uid, dia), { uid, dia, n: usadas + 1, ultima: FieldValue.serverTimestamp() }, { merge: true });
-    tx.set(globalRef(dia), { n: total + 1 }, { merge: true });
-    if (libre) tx.set(userRef, { ultimoEscaneo: dia }, { merge: true });
+    const [u, g, usr] = await Promise.all([tx.get(usoRef(uid, dia)), tx.get(globalRef(dia)), libre ? tx.get(miRef) : null]);
+    const uso = u.exists ? u.data() : {};
+    if (libre && ((Number(uso.plato) || 0) >= 1 || (usr.exists && usr.data().ultimoEscaneo === dia))) throw errLimite('Límite diario alcanzado. Escanea sin límites con Cadencia Pro', 'limite-free', 'ia', { usadas: 1, limite: 1, pro: false, upgrade: true });
+    usadas = uso.n || 0;
+    const total = (g.exists && g.data()[campoG]) || 0;
+    if (usadas >= LIMITE_USUARIO) throw errLimite(`Ya has usado tus ${LIMITE_USUARIO} consultas de IA de hoy. Mañana tendrás otras ${LIMITE_USUARIO}.`, 'ia-limite', 'ia', { usadas, limite: LIMITE_USUARIO, pro, upgrade: !pro });
+    if (total >= topeG) throw errLimite(libre ? 'El escáner gratuito ha llegado a su límite de hoy. Prueba mañana o hazte Pro.' : 'La IA ha llegado a su límite de hoy. Prueba mañana.', 'ia-global', 'ia', { pro, upgrade: libre });
+    tx.set(usoRef(uid, dia), { uid, dia, n: usadas + 1, ...(libre ? { plato: (Number(uso.plato) || 0) + 1 } : {}), ultima: FieldValue.serverTimestamp() }, { merge: true });
+    tx.set(globalRef(dia), { [campoG]: total + 1 }, { merge: true });
+    if (libre) tx.set(miRef, { ultimoEscaneo: dia }, { merge: true });
   });
 
   try {
@@ -256,9 +299,9 @@ exports.ia = onCall({ secrets: [CLAVE], timeoutSeconds: 90, memory: '512MiB', cp
     const res = modo === 'plato' ? await analizarPlato(client, data) : await recomendarTaller(client, data);
     return { ...res, quedan: Math.max(0, LIMITE_USUARIO - usadas - 1), limite: LIMITE_USUARIO };
   } catch (e) {
-    // Si falla, devolvemos la consulta para no gastarla.
-    const dec = FieldValue.increment(-1);
-    await Promise.all([usoRef(uid, dia).set({ n: dec }, { merge: true }), globalRef(dia).set({ n: dec }, { merge: true }), ...(libre ? [userRef.set({ ultimoEscaneo: FieldValue.delete() }, { merge: true })] : [])]).catch(() => {});
+    // Si falla, devolvemos la consulta para no gastarla (con tope diario de devoluciones: ver devolverCupo).
+    const devuelta = await devolverCupo(uid, dia, 'n', campoG, libre ? { plato: FieldValue.increment(-1) } : null);
+    if (devuelta && libre) await miRef.set({ ultimoEscaneo: FieldValue.delete() }, { merge: true }).catch(() => {});
     if (e instanceof HttpsError) throw e;
     console.error('IA', modo, e && e.status, e && e.message);
     throw new HttpsError('unavailable', 'La IA no ha respondido. Prueba otra vez en un momento.');
@@ -380,7 +423,7 @@ const resumenEntreno = (w, objetivos = {}) => {
   // Cifras que el modelo NO debe calcular de cabeza: series de trabajo de fuerza y densidad real (series por hora de la duración registrada).
   const seriesTotales = ejercicios.reduce((t, e) => t + (e.cardio ? 0 : e.series.length), 0);
   const min = Number(w.min) > 0 ? Math.round(Number(w.min)) : null;
-  return { fecha: w.fecha, nombre: w.nombre || '', min, seriesTotales, ...(min && seriesTotales ? { seriesPorHora: Math.round((seriesTotales / min) * 600) / 10 } : {}), ejercicios };
+  return { fecha: String(w.fecha || '').slice(0, 10), nombre: String(w.nombre || '').slice(0, 80), min, seriesTotales, ...(min && seriesTotales ? { seriesPorHora: Math.round((seriesTotales / min) * 600) / 10 } : {}), ejercicios };
 };
 // `analisis` se mantiene como alias de `resumen` para las apps que aún no conocen el campo nuevo.
 const devolverCoach = (w) => ({ nota: w.aiNota, titulo: w.aiTitulo || '', resumen: w.aiTexto || '', analisis: w.aiTexto || '', paraLlegarAl10: w.aiParaLlegarAl10 || [], consejos: w.aiConsejos || [], demo: false, aiFecha: w.aiFecha || null });
@@ -465,7 +508,7 @@ function limpiarCoach(x) {
   return { nota: Math.round(Math.max(0, Math.min(10, nota)) * 10) / 10, titulo: txt(x.titulo, 60) || 'Análisis del entreno', resumen: txt(x.resumen != null ? x.resumen : x.analisis, 500), paraLlegarAl10, consejos };
 }
 
-exports.coach = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 90, memory: '256MiB', concurrency: 10 }, async (req) => {
+exports.coach = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 90, memory: '256MiB', concurrency: 10, enforceAppCheck: EXIGIR_APPCHECK }, async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión para usar la IA.');
   const uid = req.auth.uid, id = String((req.data && req.data.id) || '');
   if (!/^[\w-]{1,80}$/.test(id)) throw new HttpsError('invalid-argument', 'Petición no válida.');
@@ -504,8 +547,8 @@ exports.coach = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 90, memory: '2
       const [u, g] = await Promise.all([tx.get(usoRef(uid, dia)), tx.get(globalRef(dia))]);
       usadas = (u.exists && u.data().coach) || 0;
       const total = (g.exists && g.data().coach) || 0;
-      if (usadas >= LIMITE_COACH_USUARIO) throw new HttpsError('resource-exhausted', `Ya has pedido ${LIMITE_COACH_USUARIO} análisis hoy. Mañana podrás pedir más.`);
-      if (total >= LIMITE_COACH_GLOBAL) throw new HttpsError('resource-exhausted', 'El Coach AI ha llegado a su límite de hoy. Prueba mañana.');
+      if (usadas >= LIMITE_COACH_USUARIO) throw errLimite(`Ya has pedido ${LIMITE_COACH_USUARIO} análisis hoy. Mañana podrás pedir más.`, 'coach-limite', 'coach', { usadas, limite: LIMITE_COACH_USUARIO, pro: true, upgrade: false });
+      if (total >= LIMITE_COACH_GLOBAL) throw errLimite('El Coach AI ha llegado a su límite de hoy. Prueba mañana.', 'coach-global', 'coach', { pro: true, upgrade: false });
       tx.set(usoRef(uid, dia), { uid, dia, coach: usadas + 1, ultima: FieldValue.serverTimestamp() }, { merge: true });
       tx.set(globalRef(dia), { coach: total + 1 }, { merge: true });
     });
@@ -518,8 +561,7 @@ exports.coach = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 90, memory: '2
       hecho = true;
       return devolverCoach(campos);
     } catch (e) {
-      const dec = FieldValue.increment(-1); // si falla, la consulta no cuenta
-      await Promise.all([usoRef(uid, dia).set({ coach: dec }, { merge: true }), globalRef(dia).set({ coach: dec }, { merge: true })]).catch(() => {});
+      await devolverCupo(uid, dia, 'coach', 'coach'); // si falla, la consulta no cuenta (con tope diario de devoluciones)
       if (e instanceof HttpsError) throw e;
       console.error('Coach AI', e && e.status, e && e.message, e && e.stack);
       // details = qué ha pasado de verdad (HTTP de Google o motivo); la app lo enseña como código discreto y lo imprime en consola.
@@ -543,7 +585,8 @@ exports.coach = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 90, memory: '2
 // Límite diario por persona (contador en iaUso/{uid}_{día}, campo «rutina», hora de Madrid): 3 sin Pro y 10 con Pro. Si Gemini falla, la solicitud no cuenta.
 const LIMITE_AJUSTES_FREE = 3;
 const LIMITE_AJUSTES_PRO = 10;
-const LIMITE_AJUSTES_GLOBAL = 600; // solicitudes al día entre todas las personas (seguridad de gasto)
+const LIMITE_AJUSTES_GLOBAL = 600; // solicitudes al día entre todas las personas CON Pro (seguridad de gasto)
+const LIMITE_AJUSTES_GLOBAL_FREE = 300; // y tope aparte para las SIN Pro: cuentas gratuitas masivas no pueden agotar el cupo de quien paga
 const AJUSTE_TIPOS = ['fuerza', 'cardio', 'bici', 'otro'];
 const AJUSTE_FOCOS = ['push', 'pull', 'legs', 'torso', 'pierna', 'full', 'fullB', 'fullC', 'pecho', 'espalda', 'hombro', 'brazos', 'gluIsq', 'cuadGlu', 'lowerFull', 'torsoL', 'fullG', 'fullG2'];
 const COACH_PRIO = { inferior: 'glúteo y pierna', torso: 'pecho y espalda', brazos: 'hombros y brazos', equilibrado: 'todo equilibrado' };
@@ -645,7 +688,7 @@ function limpiarRutinaIA(x) {
   if (!dias.length) throw Object.assign(new Error('rutina vacía'), { status: 'json' });
   return { mensaje: txtAj(x.mensaje, 320) || 'Rutina actualizada.', dias: dias.sort((a, b) => a.dia - b.dia) };
 }
-exports.ajustarRutina = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 90, memory: '256MiB', concurrency: 10 }, async (req) => {
+exports.ajustarRutina = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 90, memory: '256MiB', concurrency: 10, enforceAppCheck: EXIGIR_APPCHECK }, async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión para usar la IA.');
   const uid = req.auth.uid, data = req.data || {}, dia = hoyMadrid();
   const usr = await userRef(uid).get();
@@ -662,22 +705,22 @@ exports.ajustarRutina = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 90, me
 
   // Reserva la solicitud en el contador del día (por persona y global). Si Gemini falla, se devuelve abajo.
   let usadas = 0;
+  const campoG = pro ? 'rutina' : 'rutinaFree', topeG = pro ? LIMITE_AJUSTES_GLOBAL : LIMITE_AJUSTES_GLOBAL_FREE; // contador global propio de cada grupo
   await db.runTransaction(async (tx) => {
     const [u, g] = await Promise.all([tx.get(usoRef(uid, dia)), tx.get(globalRef(dia))]);
     usadas = (u.exists && Number(u.data().rutina)) || 0;
-    const total = (g.exists && Number(g.data().rutina)) || 0;
-    if (usadas >= limite) throw new HttpsError('resource-exhausted', pro ? `Ya has usado tus ${limite} ajustes PRO de hoy. Mañana tendrás otros ${limite}.` : `Ya has usado tus ${limite} ajustes de hoy. Con Cadencia PRO tienes hasta ${LIMITE_AJUSTES_PRO} al día.`, { codigo: 'ajustes-limite', usadas, limite, pro });
-    if (total >= LIMITE_AJUSTES_GLOBAL) throw new HttpsError('resource-exhausted', 'La IA ha llegado a su límite de hoy. Prueba mañana.', { codigo: 'ajustes-global' });
+    const total = (g.exists && Number(g.data()[campoG])) || 0;
+    if (usadas >= limite) throw errLimite(pro ? `Ya has usado tus ${limite} ajustes PRO de hoy. Mañana tendrás otros ${limite}.` : `Ya has usado tus ${limite} ajustes de hoy. Con Cadencia PRO tienes hasta ${LIMITE_AJUSTES_PRO} al día.`, 'ajustes-limite', 'ajustarRutina', { usadas, limite, pro, upgrade: !pro });
+    if (total >= topeG) throw errLimite(pro ? 'La IA ha llegado a su límite de hoy. Prueba mañana.' : 'Los ajustes gratuitos han llegado a su límite de hoy. Prueba mañana o hazte Pro.', 'ajustes-global', 'ajustarRutina', { pro, upgrade: !pro });
     tx.set(usoRef(uid, dia), { uid, dia, rutina: usadas + 1, ultima: FieldValue.serverTimestamp() }, { merge: true });
-    tx.set(globalRef(dia), { rutina: total + 1 }, { merge: true });
+    tx.set(globalRef(dia), { [campoG]: total + 1 }, { merge: true });
   });
   try {
     const res = limpiarRutinaIA(await llamarGemini(GEMINI_CLAVE.value(), { perfil: perfilCoach(p), contexto, rutina, catalogo, instruccion }, CFG_RUTINA));
     console.log('Ajuste de rutina ok', pro ? 'pro' : 'free', usadas + 1, '/', limite);
     return { ...res, usadas: usadas + 1, quedan: limite - usadas - 1, limite, pro };
   } catch (e) {
-    const dec = FieldValue.increment(-1); // si falla, la solicitud no cuenta
-    await Promise.all([usoRef(uid, dia).set({ rutina: dec }, { merge: true }), globalRef(dia).set({ rutina: dec }, { merge: true })]).catch(() => {});
+    await devolverCupo(uid, dia, 'rutina', campoG); // si falla, la solicitud no cuenta (con tope diario de devoluciones)
     if (e instanceof HttpsError) throw e;
     console.error('Ajuste de rutina', e && e.status, e && e.message);
     const st = e && e.status, http = Number.isInteger(st) ? st : null, motivo = typeof st === 'string' ? st : (http ? null : 'interno');
@@ -808,7 +851,8 @@ exports.portalStripe = onCall({ secrets: [STRIPE_CLAVE], memory: '256MiB', timeo
   if (!d.stripeCustomerId) throw new HttpsError('failed-precondition', 'sin-cliente');
   const stripe = new Stripe(String(STRIPE_CLAVE.value() || '').trim());
   try {
-    const s = await stripe.billingPortal.sessions.create({ customer: d.stripeCustomerId, return_url: String(req.data && req.data.volver || 'https://cadencia-11cb6.web.app/') });
+    const volver = String((req.data && req.data.volver) || ''); // solo se vuelve a dominios de Cadencia (si no, a la web principal)
+    const s = await stripe.billingPortal.sessions.create({ customer: d.stripeCustomerId, return_url: /^https:\/\/cadencia-11cb6\.(web\.app|firebaseapp\.com)(\/|$|\?|#)/.test(volver) ? volver : 'https://cadencia-11cb6.web.app/' });
     return { url: s.url };
   } catch (e) { console.error('portal', e && e.message); throw new HttpsError('internal', 'portal'); }
 });
@@ -1067,7 +1111,7 @@ exports.miCodigo = onCall({ memory: '256MiB', timeoutSeconds: 30, concurrency: 1
 });
 
 // El invitado canjea el código de un amigo: +7 días de Pro para él y +1 en «referidos» del dueño.
-exports.canjearCodigo = onCall({ memory: '256MiB', timeoutSeconds: 30, concurrency: 10 }, async (req) => {
+exports.canjearCodigo = onCall({ memory: '256MiB', timeoutSeconds: 30, concurrency: 10, enforceAppCheck: EXIGIR_APPCHECK }, async (req) => {
   const uid = exigirSesion(req);
   const codigo = String((req.data && req.data.codigo) || '').trim().toUpperCase().replace(/[\s-]/g, '');
   if (!/^[A-Z0-9]{6}$/.test(codigo)) throw new HttpsError('invalid-argument', 'El código tiene 6 letras y números.', { codigo: 'ref-formato' });
@@ -1076,16 +1120,18 @@ exports.canjearCodigo = onCall({ memory: '256MiB', timeoutSeconds: 30, concurren
     if (!reg.exists) throw new HttpsError('not-found', 'Ese código no existe. Revísalo y vuelve a probar.', { codigo: 'ref-no-existe' });
     const dueno = reg.data().uid;
     if (dueno === uid) throw new HttpsError('failed-precondition', 'No puedes usar tu propio código.', { codigo: 'ref-propio' });
-    const [yo, el] = await Promise.all([tx.get(userRef(uid)), tx.get(userRef(dueno))]);
+    const canjeRef = db.doc(`refCanjes/${uid}`); // marca del servidor: «esta cuenta ya canjeó un código». Sobrevive aunque alguien borre y recree su perfil (codigoUsado viviría en el perfil)
+    const [yo, el, canje] = await Promise.all([tx.get(userRef(uid)), tx.get(userRef(dueno)), tx.get(canjeRef)]);
     if (!yo.exists) throw new HttpsError('failed-precondition', 'Tu perfil aún se está creando. Vuelve a probar en unos segundos.');
     if (!el.exists) throw new HttpsError('not-found', 'Ese código ya no está disponible.', { codigo: 'ref-no-existe' });
     const m = yo.data(), o = el.data();
-    if (m.codigoUsado === true) throw new HttpsError('already-exists', 'Ya has usado un código de invitación en esta cuenta.', { codigo: 'ref-usado' });
+    if (m.codigoUsado === true || canje.exists) throw new HttpsError('already-exists', 'Ya has usado un código de invitación en esta cuenta.', { codigo: 'ref-usado' });
     if (tienePagado(m)) throw new HttpsError('failed-precondition', 'Ya tienes Cadencia PRO de pago: la semana de regalo no te haría falta.', { codigo: 'ref-pro-pago' });
     if ((o.referidos || 0) >= MAX_REFERIDOS) throw new HttpsError('resource-exhausted', 'Este código ya ha llegado a su límite de invitados.', { codigo: 'ref-lleno' });
     const caduca = masUnaSemana(m);
     tx.set(userRef(uid), { isPro: true, proCaduca: caduca, codigoUsado: true, proActualizado: FieldValue.serverTimestamp() }, { merge: true });
     tx.set(userRef(dueno), { referidos: FieldValue.increment(1) }, { merge: true });
+    tx.set(canjeRef, { codigo, dueno, creado: FieldValue.serverTimestamp() });
     return { proCaduca: caduca };
   });
 });

@@ -1,13 +1,36 @@
 rules_version = '2';
-// Foto de perfil: cada persona solo puede subir y ver la suya (profile_pictures/{uid}/{archivo}), una imagen de menos de 5 MB.
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// Reglas de Firebase Storage de Cadencia (endurecidas para producción, 2026-11-22).
+//  - Nada es público ni se puede subir o borrar sin sesión; lo no listado aquí queda denegado (regla final).
+//  - Foto de perfil: cada persona solo sube, lee y borra la suya, en su carpeta profile_pictures/{uid}/avatar.jpg
+//    (un solo archivo con nombre fijo: no se pueden llenar el bucket subiendo archivos sueltos), imagen JPEG/PNG/WebP de menos de 1 MB
+//    (la app la exporta a 400×400 JPEG, unos 30-100 KB). No se admite SVG ni otros tipos.
+//  - Otras fotos (p. ej. el fondo de «Compartir entreno»): NO se suben; se procesan en el navegador (canvas) y no salen del móvil.
+//  - Recursos compartidos de ejercicios (GIFs/imágenes), si algún día se mueven a Storage: solo lectura con sesión, nunca escritura desde la app.
+//    (Hoy los GIFs van en Firebase Hosting, /ejercicios/db/**, no en Storage.)
+//  Nota: la URL de descarga que devuelve getDownloadURL() lleva un token y NO pasa por estas reglas de lectura; el token es secreto de quien tiene la foto.
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 service firebase.storage {
   match /b/{bucket}/o {
+
+    function signedIn() { return request.auth != null; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+
     match /profile_pictures/{uid}/{archivo} {
-      allow read: if request.auth != null && request.auth.uid == uid;
-      allow delete: if request.auth != null && request.auth.uid == uid;
-      allow create, update: if request.auth != null && request.auth.uid == uid
-        && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && archivo == 'avatar.jpg'
+        && request.resource.size < 1 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+    }
+
+    match /ejercicios/{ruta=**} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /{ruta=**} {
+      allow read, write: if false;
     }
   }
 }

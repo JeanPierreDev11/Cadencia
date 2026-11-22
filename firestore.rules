@@ -1,56 +1,90 @@
 rules_version = '2';
-// Cada persona solo puede leer y escribir sus propios datos.
-// Excepción: «isPro», los datos de Stripe, «ultimoEscaneo» (límite diario de la IA gratis) y el aviso «strava» solo los cambia el servidor (stripeWebhook y strava),
-// para que nadie pueda hacerse Pro ni falsear la conexión desde la app. Lo mismo con los referidos (refCode, referidos, recompensas, codigoUsado, proCaduca):
-// los gestionan las funciones miCodigo, canjearCodigo y reclamarReferido. La colección «refCodes» (código → dueño) tampoco tiene reglas: solo el servidor. Los tokens de Strava viven en la colección
-// «stravaTokens», sin ninguna regla: la app no puede leerla ni escribirla (solo el servidor).
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// Reglas de Firestore de Cadencia (endurecidas para producción, 2026-11-22).
+//
+//  1. NADA es público: todo exige sesión (request.auth != null) y lo que no esté escrito aquí queda denegado (regla final).
+//  2. Cada persona solo lee y escribe SUS documentos: users/{uid} y sus subcolecciones (pesos, entrenos, comidas —incluye hidratación—, rutas).
+//  3. Campos SOLO-SERVIDOR (nadie los cambia desde el navegador, ni siquiera con la consola): isPro, proPlan, proCaduca, proRenueva, proCancela,
+//     proActualizado, stripeCustomerId, stripeSubscriptionId, strava, ultimoEscaneo, refCode, referidos, recompensas, codigoUsado.
+//     Los escriben las Cloud Functions (stripeWebhook, strava, ia, miCodigo, canjearCodigo, reclamarReferido, caducarPro) con permisos de servidor.
+//     Se comprueba con diff().affectedKeys(): vale tanto para añadir, como para cambiar o borrar uno de esos campos.
+//  4. Colecciones sin ninguna regla (solo servidor; la app no puede ni leerlas): iaUso, iaGlobal, iaCandado (cuotas diarias de IA),
+//     refCodes, refCanjes (referidos), stravaTokens, stravaGlobal. Al no tener «match» caen en la denegación final.
+//  5. Catálogo compartido: solo lectura con sesión (hoy el catálogo de ejercicios va dentro de la app y en Hosting, no en Firestore;
+//     el bloque queda listo por si algún día se mueve aquí).
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Sugerencias de funciones: cada persona puede enviar las suyas, pero nadie las lee desde la app (se ven en la consola de Firebase).
+
+    function signedIn() { return request.auth != null; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+
+    // Campos que solo cambia el servidor (ver punto 3).
+    function serverFields() {
+      return ['isPro', 'proPlan', 'proCaduca', 'proRenueva', 'proCancela', 'proActualizado',
+              'stripeCustomerId', 'stripeSubscriptionId', 'strava', 'ultimoEscaneo',
+              'refCode', 'referidos', 'recompensas', 'codigoUsado'];
+    }
+
+    // Pro vigente según el documento d: isPro y, si son días regalados por referidos (proCaduca, en ms), que no hayan caducado.
+    function proVigente(d) {
+      return d.get('isPro', false) == true
+        && (d.get('proCaduca', null) == null || d.get('proCaduca', 0) <= 0 || d.get('proCaduca', 0) > request.time.toMillis());
+    }
+
+    // Catálogo compartido (ejercicios, GIFs…): lectura con sesión, escritura nunca desde la app.
+    match /catalogo/{document=**} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    // Sugerencias de funciones: cada persona envía las suyas (con su uid), pero nadie las lee desde la app (se ven en la consola de Firebase).
     match /feature_requests/{id} {
-      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid
         && request.resource.data.texto is string && request.resource.data.texto.size() <= 1000;
     }
-    // Rutinas compartidas por código: el id del documento es el código. Cualquiera con sesión puede leer UNA si sabe el código
-    // (get), pero no listarlas; solo su autor la crea, actualiza o borra.
+
+    // Rutinas compartidas por código: el id del documento es el código. Con sesión se puede leer UNA si se sabe el código (get), no listarlas;
+    // solo su autor la crea, la actualiza o la borra, y no puede cambiarle el autor.
     match /shared_routines/{code} {
-      allow get: if request.auth != null;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid && code.size() == 6;
-      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow get: if signedIn();
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid && code.size() == 6;
+      allow update: if signedIn() && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid;
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
     }
+
     match /users/{uid} {
-      allow read, delete: if request.auth != null && request.auth.uid == uid;
-      allow create: if request.auth != null && request.auth.uid == uid
+      allow read, delete: if isOwner(uid);
+
+      // Alta: perfil sin Pro, sin datos de pago ni de referidos (los pone el servidor) y dentro del límite gratuito (3 rutinas y 3 ejercicios propios).
+      allow create: if isOwner(uid)
         && request.resource.data.get('isPro', false) == false
-        && !('stripeCustomerId' in request.resource.data)
-        && !('stripeSubscriptionId' in request.resource.data)
-        && !('strava' in request.resource.data)
-        && !('ultimoEscaneo' in request.resource.data)
-        && !('refCode' in request.resource.data)
-        && !('codigoUsado' in request.resource.data)
-        && !('proCaduca' in request.resource.data)
+        && request.resource.data.get('proPlan', 'none') == 'none' // al crear, proPlan solo puede faltar o valer 'none'; los planes de pago los pone el servidor
         && request.resource.data.get('referidos', 0) == 0
         && request.resource.data.get('recompensas', []).size() == 0
-        && request.resource.data.get('proPlan', 'none') == 'none'; // al crear, `proPlan` solo puede faltar o valer 'none'; los planes de pago los pone el servidor
-      allow update: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.get('isPro', false) == resource.data.get('isPro', false)
-        && request.resource.data.get('stripeCustomerId', null) == resource.data.get('stripeCustomerId', null)
-        && request.resource.data.get('stripeSubscriptionId', null) == resource.data.get('stripeSubscriptionId', null)
-        && request.resource.data.get('strava', null) == resource.data.get('strava', null)
-        && request.resource.data.get('ultimoEscaneo', null) == resource.data.get('ultimoEscaneo', null)
-        && request.resource.data.get('proPlan', null) == resource.data.get('proPlan', null)
-        && request.resource.data.get('refCode', null) == resource.data.get('refCode', null)
-        && request.resource.data.get('referidos', 0) == resource.data.get('referidos', 0)
-        && request.resource.data.get('recompensas', []) == resource.data.get('recompensas', [])
-        && request.resource.data.get('codigoUsado', false) == resource.data.get('codigoUsado', false)
-        && request.resource.data.get('proCaduca', null) == resource.data.get('proCaduca', null)
-        // Límite gratuito: sin Pro, rutinas y ejercicios propios no pueden pasar de 3 (quien ya tenga más puede mantenerlos o borrar, no añadir).
-        && (resource.data.get('isPro', false) == true
+        && !request.resource.data.keys().hasAny(['stripeCustomerId', 'stripeSubscriptionId', 'strava', 'ultimoEscaneo', 'refCode', 'codigoUsado',
+                                                 'proCaduca', 'proRenueva', 'proCancela', 'proActualizado'])
+        && request.resource.data.get('rutinas', []).size() <= 3
+        && request.resource.data.get('ejPropios', []).size() <= 3;
+
+      // Cambios: ningún campo solo-servidor puede cambiar.
+      // Límite gratuito: sin Pro vigente, rutinas y ejercicios propios no pueden pasar de 3 (quien ya tenga más puede mantenerlos o borrar, no añadir).
+      allow update: if isOwner(uid)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(serverFields())
+        && (proVigente(resource.data)
           || ((request.resource.data.get('rutinas', []).size() <= 3 || request.resource.data.get('rutinas', []).size() <= resource.data.get('rutinas', []).size())
             && (request.resource.data.get('ejPropios', []).size() <= 3 || request.resource.data.get('ejPropios', []).size() <= resource.data.get('ejPropios', []).size())));
-      match /{document=**} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
-      }
+
+      // Datos personales: SOLO el dueño. Subcolecciones explícitas (cualquier subcolección nueva queda denegada hasta que se añada aquí).
+      match /pesos/{id}    { allow read, write: if isOwner(uid); }  // peso y composición corporal
+      match /entrenos/{id} { allow read, write: if isOwner(uid); }  // entrenos, historial y análisis del Coach AI
+      match /comidas/{id}  { allow read, write: if isOwner(uid); }  // nutrición e hidratación (un documento por día)
+      match /rutas/{id}    { allow read, write: if isOwner(uid); }  // rutas de bici
+    }
+
+    // Todo lo demás (iaUso, iaGlobal, iaCandado, refCodes, refCanjes, stravaTokens, stravaGlobal…): solo el servidor.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
