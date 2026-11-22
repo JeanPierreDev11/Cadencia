@@ -979,12 +979,6 @@ export function crearSecciones(ctx) {
       ${od ? `<p class="small muted">Proteína ${nf(tot.p)} de ${nf(od.macros.p)} g</p>` : ''}</section>`;
     const ms = metasVis().slice(0, 3);
     if (ms.length) h += `<section class="card"><div class="card-head"><h2>Tus objetivos</h2><button class="link" data-act="nov-wk" data-v="objetivos">Ver</button></div>${ms.map((m) => metaCard(m, true)).join('')}</section>`;
-    const pm = pmcData();
-    if (pm) {
-      const fs = T.formState(pm.last.tsb);
-      h += `<section class="card"><div class="card-head"><h2>Tu forma</h2></div>
-        <p><span class="tag tsb-${tsbCls(pm.last.tsb)}">${esc(fs.label)}</span> <span class="muted small">frescura ${sgn(Math.round(pm.last.tsb))}</span></p><p class="small">${esc(fs.advice)}</p></section>`;
-    }
     if (tieneBici() && RT) {
       if (!st.wx && !st.wxLoading && !st.wxErr) setTimeout(() => loadWx(), 0);
       const w = wxNow(), r = rankedRoutes()[0];
