@@ -101,7 +101,7 @@ const IDEAS = {
 
 export function crearSecciones(ctx) {
   const api = new Proxy({}, { get: (_, k) => ctx.api[k] }); // el acceso a datos se crea al arrancar
-  const { st, render, toast, esc, num, nf, todayISO, fmtDate, lsGet, lsSet, I, E, errorText, currentKg, rutinaOf, gearHTML } = ctx;
+  const { st, render, toast, esc, num, nf, todayISO, fmtDate, lsGet, lsSet, I, E, errorText, currentKg, rutinaOf, viewPeso, gearHTML } = ctx;
   const r1 = (x) => Math.round(x * 10) / 10;
   const eur = (n) => nf(n, 0) + ' €';
   const sgn = (n, d = 0) => (n > 0 ? '+' : n < 0 ? '−' : '±') + nf(Math.abs(n), d);
@@ -133,15 +133,17 @@ export function crearSecciones(ctx) {
   function tabs() {
     const t = [{ id: 'inicio', t: 'Inicio', ico: I.home }, { id: 'entreno', t: 'Entreno', ico: I.pulse }, { id: 'nutricion', t: 'Nutrición', ico: ICO.food }];
     if (tieneBici()) t.push({ id: 'bici', t: 'Bici', ico: ICO.bici });
+    t.push({ id: 'progreso', t: 'Forma física', ico: ICO.prog });
     t.push({ id: 'perfil', t: 'Perfil', ico: I.user });
     return t;
   }
   function tabActual() {
     let t = st.tab;
+    if (t === 'peso') t = 'progreso';
     // Rutas y Taller viven dentro de la pestaña Bici.
     if (t === 'rutas' || t === 'taller') { st.biciSub = t; st.tab = t = 'bici'; lsSet('cadencia-tab', 'bici'); }
     if (t === 'bici' && !tieneBici()) t = 'inicio';
-    if (!['inicio', 'entreno', 'nutricion', 'bici', 'perfil'].includes(t)) t = 'inicio';
+    if (!['inicio', 'entreno', 'nutricion', 'bici', 'progreso', 'perfil'].includes(t)) t = 'inicio';
     return t;
   }
 
@@ -934,6 +936,38 @@ export function crearSecciones(ctx) {
   }
 
   /* ================================================================ */
+  /* Forma física (Peso y Cuerpo)                                      */
+  /* ================================================================ */
+  function viewProgreso() {
+    const sub = st.progSub || 'peso';
+    // Reloj (solo en Peso) y engranaje en el mismo contenedor flex, alineados y con el mismo hueco.
+    let h = head('Forma física', 'Peso y cuerpo', true, `<div class="hello-ico">${sub === 'peso' ? `<button class="iconbtn hist-btn" data-act="peso-hist" aria-label="Historial de registros">${I.clock}</button>` : ''}${gearHTML()}</div>`, 'hello-gear');
+    if (sub === 'peso' && st.pesoComp) return h + viewPeso(true); // detalle de una métrica: sin pestañas, el selector de la cabecera cambia de métrica
+    h += seg('p-sub', [['peso', 'Peso'], ['cuerpo', 'Cuerpo']], sub, 'Qué ver');
+    if (sub === 'cuerpo') return h + subCuerpo();
+    return h + viewPeso(true);
+  }
+  function subCuerpo() {
+    const p = P(), sex = p.sexo === 'mujer' ? 'female' : 'male', B = st.body || (st.body = {});
+    const kg = currentKg(), sites = BD.SKINFOLD_SITES[sex];
+    const res = (v, k) => (v == null || !isFinite(v) ? '' : `<div class="bfres"><div><b class="num">${nf(v, 1)} %</b><span class="muted small">${k}${kg ? ` · ${nf(BD.composition(kg, v).fatKg, 1)} kg de grasa, ${nf(BD.composition(kg, v).leanKg, 1)} kg magros` : ''}</span></div><button class="btn small" data-act="b-save" data-v="${r1(v)}">Guardar</button></div>`);
+    const navy = p.alturaCm && num(B.cuello) > 0 && num(B.cintura) > 0 && (sex === 'male' || num(B.cadera) > 0) ? BD.navyBodyFat(sex, p.alturaCm, num(B.cuello), num(B.cintura), num(B.cadera) || 0) : null;
+    const sk = p.edad && num(B.s1) > 0 && num(B.s2) > 0 && num(B.s3) > 0 ? BD.skinfoldBodyFat(sex, p.edad, num(B.s1), num(B.s2), num(B.s3)) : null;
+    const fld = (k, l, u) => `<label class="field"><span>${l} (${u})</span><input class="input" data-body="${k}" inputmode="decimal" value="${esc(B[k] || '')}"></label>`;
+    const hist = st.weights.filter((w) => w.grasa != null).slice(-8).reverse();
+    return `<section class="card"><h2>% de grasa con cinta métrica</h2>
+        <p class="small muted">Método de la Marina de EE. UU. Mide por la mañana, sin apretar la cinta.</p>
+        <div class="two">${fld('cuello', 'Cuello', 'cm')}${fld('cintura', 'Cintura, a la altura del ombligo', 'cm')}${sex === 'female' ? fld('cadera', 'Cadera', 'cm') : ''}</div>
+        <div id="b-navy">${res(navy, 'Con cinta')}</div></section>
+      <section class="card"><h2>% de grasa con plicómetro</h2>
+        <p class="small muted">Jackson-Pollock de 3 pliegues, lado derecho, en milímetros.</p>
+        <div class="two">${fld('s1', sites[0], 'mm')}${fld('s2', sites[1], 'mm')}${fld('s3', sites[2], 'mm')}</div>
+        <div id="b-sk">${res(sk, 'Con pliegues')}</div></section>
+      <section class="card"><h2>Historial de % de grasa</h2>
+        ${hist.length ? `<div class="list">${hist.map((w) => `<div class="row"><span>${esc(fmtDate(w.fecha, { weekday: 'short', day: 'numeric', month: 'short' }))}</span><b>${nf(w.grasa, 1)} %</b></div>`).join('')}</div>` : '<p class="small muted">Cuando guardes una medida aparecerá aquí y en la gráfica de Peso → Grasa.</p>'}
+      </section>`;
+  }
+  /* ================================================================ */
   /* Inicio                                                            */
   /* ================================================================ */
   function homeCards() {
@@ -1059,6 +1093,8 @@ export function crearSecciones(ctx) {
       case 'tl-meta': { const g = garaje(), m = g.mejora.metas; g.mejora.metas = m.includes(v) ? m.filter((x) => x !== v) : [...m, v]; await saveGaraje(g); return true; }
       case 'tl-deseo-del': { const g = garaje(); g.mejora.deseos = g.mejora.deseos.filter((x) => x.id !== v); await saveGaraje(g); return true; }
       // Progreso
+      case 'p-sub': st.progSub = v; render(); return true;
+      case 'p-peso': st.progSub = 'peso'; st.tab = 'progreso'; lsSet('cadencia-tab', 'progreso'); st.novOpen = false; render(); window.scrollTo(0, 0); return true;
       case 'b-save': {
         const pct = Number(v), t = todayISO(), hoy = st.weights.find((w) => w.fecha === t), kg = hoy ? hoy.kg : currentKg();
         try {
@@ -1136,6 +1172,15 @@ export function crearSecciones(ctx) {
     if (st.mealDet != null && t.dataset.mg) {
       const x = dia(st.nDate || todayISO()).items.find((q) => q.id === t.dataset.mg), g = num(t.value);
       const kEl = document.getElementById('mk-' + t.dataset.mg); if (x && x.g && kEl && g > 0) kEl.textContent = nf(Math.round(x.k * g / x.g));
+      return true;
+    }
+    if (t.dataset.body) {
+      const B = st.body || (st.body = {}); B[t.dataset.body] = t.value;
+      // Recalcular sin redibujar toda la pantalla (para no perder el teclado).
+      const keep = document.activeElement === t;
+      const html = subCuerpo(), tmp = document.createElement('div'); tmp.innerHTML = html;
+      ['b-navy', 'b-sk'].forEach((id) => { const a = document.getElementById(id), n = tmp.querySelector('#' + id); if (a && n) a.innerHTML = n.innerHTML; });
+      if (keep) t.focus();
       return true;
     }
     return false;
@@ -1519,7 +1564,7 @@ export function crearSecciones(ctx) {
   function novItems() {
     const bici = tieneBici();
     return [
-      { t: 'Nutrición más ordenada', d: 'Hidratación y «Últimos 7 días» se despliegan al tocar su cabecera, con un resumen a la vista. En «Últimos 7 días», toca un día para ver el entreno que hiciste. La pestaña «Forma física» ya no existe.', como: 'Pestaña «Nutrición».', act: 'tab', v: 'nutricion', btn: 'Ir a Nutrición' },
+      { t: 'Nutrición más ordenada', d: 'Hidratación y «Últimos 7 días» se despliegan al tocar su cabecera, con un resumen a la vista. En «Últimos 7 días», toca un día para ver el entreno que hiciste.', como: 'Pestaña «Nutrición».', act: 'tab', v: 'nutricion', btn: 'Ir a Nutrición' },
       { t: 'Mis rutinas en acordeón, con edición', d: 'Verás solo los títulos y, al tocar uno, se despliegan sus días y ejercicios. El lápiz junto a «Nueva» te deja renombrar, editar o borrar rutinas.', como: 'Entreno → Rutinas → lápiz.', act: 'nov-wk', v: 'rutina', btn: 'Ver mis rutinas' },
       { t: 'Crear rutinas más rápido', d: 'Al meter ejercicios, las series y repeticiones del primero se repiten en los siguientes. «Copiar día de otra rutina» importa un día entero. Y si das a Atrás en el asistente, no pierdes lo que ya habías puesto.', como: 'Entreno → Rutinas → Nueva.', act: 'rut-new', v: '', btn: 'Crear una rutina' },
       { t: 'Buscador de ejercicios más listo', d: 'Perdona los acentos, las mayúsculas y las erratas, y entiende inglés: prueba «deadlift», «curl» o «squat».', como: 'Al añadir un ejercicio, escribe en el buscador.', act: 'nov-wk', v: 'semana', btn: 'Ir a Entreno' },
@@ -1677,6 +1722,7 @@ export function crearSecciones(ctx) {
   function view(tab) {
     if (tab === 'nutricion') return viewNutricion();
     if (tab === 'bici') return viewBici();
+    if (tab === 'progreso') return viewProgreso();
     return '';
   }
 

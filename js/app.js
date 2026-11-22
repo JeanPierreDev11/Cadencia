@@ -663,7 +663,7 @@ const W = crearEntreno({ st, root, get api() { return api; }, render, get M() { 
 const { exViewHTML, rutinaOf, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, regSheetHTML, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, limiteSheetHTML, calentarSheetHTML, moverSheetHTML, dia7SheetHTML, rutNuevosSheetHTML, resumenSheetHTML, compartirSheetHTML, pintarCompartir, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML, finSheetHTML } = W;
 const M = crearSecciones({
   st, get api() { return api; }, render, toast, esc, num, nf, todayISO, fmtDate, lsGet, lsSet, I, E, errorText,
-  currentKg: () => currentKg(), rutinaOf: () => rutinaOf(), gearHTML: () => gearHTML(),
+  currentKg: () => currentKg(), rutinaOf: () => rutinaOf(), viewPeso: (sub) => viewPeso(sub), gearHTML: () => gearHTML(),
 });
 
 const S = crearStrava({ st, get api() { return api; }, render, toast, esc, E, currentKg: () => currentKg(), todayISO, fmtDate, lsGet, lsSet, errorText });
@@ -679,8 +679,8 @@ function viewMain() {
   if (st.wk) return viewWkForm();
   const tab = M.tabActual(), tabs = M.tabs();
   const body = tab === 'perfil' ? viewPerfil() : tab === 'entreno' ? viewEntreno() : tab === 'inicio' ? viewInicio() : M.view(tab);
-  // El engranaje va DENTRO de la cabecera (junto al reloj del historial) en Inicio y Entreno con rutina; en el resto, flotante.
-  const gearEnCabecera = tab === 'inicio' || (tab === 'entreno' && !!rutinaOf());
+  // El engranaje va DENTRO de la cabecera (junto al reloj del historial) en Inicio, Forma física y Entreno con rutina; en el resto, flotante.
+  const gearEnCabecera = tab === 'inicio' || tab === 'progreso' || (tab === 'entreno' && !!rutinaOf());
   return `${gearEnCabecera ? '' : gearHTML()}<main class="main ${st.live ? 'has-live' : ''}">${body}</main>${st.live ? liveBarHTML() : ''}${sheet}${M.novModalHTML()}
   <div class="tabbar"><nav aria-label="Secciones" class="n${tabs.length}">${tabs.map((t) => `<button type="button" data-act="tab" data-v="${t.id}" ${tab === t.id ? 'aria-current="page"' : ''}>${t.ico}<span>${t.t}</span></button>`).join('')}</nav></div>`;
 }
@@ -714,7 +714,7 @@ function viewInicio() {
 
     <section class="racha-home tap" data-act="tab" data-v="entreno" role="button" tabindex="0" aria-label="Tu racha: abrir Entreno">${fuegoHTML(rachaActual(), true)}<span class="racha-t"><b>${rachaActual() === 1 ? 'Día' : 'Días'} de racha</b><span class="small muted">${rachaActual() ? 'No la rompas hoy' : 'Entrena y enciende el fuego'}</span></span></section>
 
-    <section class="card weight-hero tap" data-act="peso-sheet" role="button" tabindex="0" aria-label="Peso actual: añadir un registro de peso">
+    <section class="card weight-hero tap" data-act="p-peso" role="button" tabindex="0" aria-label="Peso actual: abrir Forma física">
       <h2>Peso actual</h2>
       <div class="big num">${nf(kg, 1)}<em>kg</em></div>
       ${delta != null ? `<div class="delta">${delta > 0 ? '+' : delta < 0 ? '−' : ''}${nf(Math.abs(delta), 1)} kg desde el ${fmtDate(first.fecha, { day: 'numeric', month: 'long' })}</div>` : '<div class="delta">Registra tu peso cada pocos días para ver cómo evoluciona.</div>'}
@@ -1342,7 +1342,7 @@ function pfCuerpo(v) {
       <a class="small muted" href="mailto:${CONTACTO}?subject=${encodeURIComponent('Idea para Cadencia')}">O envíanosla por correo</a></form>`;
   }
   if (v === 'faq') {
-    const Q = [['¿Cómo registro mi peso?', 'En Inicio, toca tu peso actual para añadir un registro. También puedes cambiarlo en Perfil → Detalles personales.'],
+    const Q = [['¿Cómo registro mi peso?', 'En Forma física, pulsa «Añadir registro». También puedes cambiarlo en Perfil → Detalles personales.'],
       ['¿Cómo se calcula la recuperación muscular?', 'Al entrenar un músculo baja a 0–20 % según las series, y se recupera en torno a un 33 % cada 24 horas hasta el 100 % a las 72 horas.'],
       ['¿Cómo cancelo Cadencia Pro?', 'Desde Perfil → Administrar suscripción, con «Gestionar suscripción». Seguirás con Pro hasta que termine el periodo pagado.'],
       ['¿Mis datos son privados?', 'Sí. Solo tú puedes verlos y no los compartimos con anunciantes. Puedes borrarlos cuando quieras con «Eliminar cuenta».']];
