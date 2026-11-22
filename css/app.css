@@ -2067,10 +2067,6 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .cguia.in-live { margin: 0 0 10px; }
 
 /* ---- Hidratación (Nutrición) ---- */
-.hid { display: grid; gap: 14px; }
-.hid-head { display: flex; align-items: center; gap: 10px; }
-.hid-head svg { color: var(--accent-text); flex: none; }
-.hid-head h2 { margin: 0; font-size: 17px; }
 .hid-meta { margin: 0; }
 .hid-big { display: flex; align-items: baseline; gap: 6px; }
 .hid-big b { font-size: 34px; line-height: 1; letter-spacing: -.02em; }
@@ -2080,9 +2076,59 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .hid-btns { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; }
 .hid-btns .btn { white-space: nowrap; }
 .hid-split { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.hid-split li { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; padding: 9px 12px; background: var(--surface2); border: 1px solid var(--line); border-radius: var(--r-sm, 10px); font-size: 14px; }
+.hid-split li { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; padding: 9px 12px; background: var(--surface2); border: 1px solid var(--line); border-radius: var(--r-sm, 10px); }
 .hid-split li b { color: var(--accent-text); white-space: nowrap; }
 .hid-split li.is-train { border-color: var(--accent-text); }
+
+/* ---- Acordeones de Nutrición: Hidratación y «Últimos 7 días» (2026-11-22 (48)) ----
+   Cabecera interactiva (botón) + cuerpo que se despliega animando grid-template-rows 0fr → 1fr. El estado vive en st (nHidOpen, n7Open) y la clase
+   .is-open se alterna sin render() para que la transición se vea. Cerrado: el cuerpo queda visibility:hidden (no se enfoca ni se lee). */
+.card.acc { display: grid; gap: 0; padding-top: 0; padding-bottom: 0; }
+.acc-head { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 14px 0; border: 0; background: none; color: var(--ink); text-align: left; font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.acc-head:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
+.acc-ico { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--line); background: var(--surface2); color: var(--accent-text); }
+.acc-ico svg { width: 20px; height: 20px; }
+.acc-t { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.acc-t b { font-size: 17px; letter-spacing: .02em; }
+.acc-sum { font-size: 13.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card.acc.hid .acc-sum { color: var(--accent-text); font-weight: 700; }
+.acc-chev { flex: none; display: grid; place-items: center; color: var(--muted); transition: transform .3s ease, color .3s ease; }
+.acc.is-open .acc-chev { transform: rotate(90deg); color: var(--accent-text); }
+.acc-head:active .acc-chev { color: var(--accent-text); }
+.acc > .hid-bar { margin: 0 0 14px; height: 6px; }
+.acc-body { display: grid; grid-template-rows: 0fr; opacity: 0; visibility: hidden; transition: grid-template-rows .3s ease, opacity .25s ease, visibility 0s linear .3s; }
+.acc.is-open .acc-body { grid-template-rows: 1fr; opacity: 1; visibility: visible; transition: grid-template-rows .3s ease, opacity .3s ease .05s, visibility 0s; }
+.acc-in { min-height: 0; overflow: hidden; display: grid; gap: 14px; }
+.acc.is-open .acc-in { padding-bottom: 16px; }
+.acc.n7 .acc-in { gap: 8px; }
+.acc-note { margin: 0; }
+.acc.n7 > .acc-head { padding-bottom: 14px; }
+.card.acc.hid:not(.is-open) > .hid-bar { margin-bottom: 14px; }
+.card.acc.hid.is-open > .hid-bar { margin-bottom: 16px; }
+@media (prefers-reduced-motion: reduce) { .acc-body, .acc.is-open .acc-body, .acc-chev { transition: none; } }
+
+/* Tabla de «Últimos 7 días»: filas clicables + marca de entreno en la 5.ª columna */
+.tbl7 > * { grid-template-columns: 1.4fr 1fr 1fr 1fr 22px; align-items: center; }
+.tbl7 button { min-height: 44px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.tbl7 button:active { background: var(--accent-soft); }
+.tbl7 button:focus-visible { outline: 2px solid var(--accent-text); outline-offset: -2px; }
+.tbl7 > * > .t7-m { text-align: center; color: var(--accent-text); display: grid; place-items: center; }
+.tbl7 .t7-m svg { width: 16px; height: 16px; }
+
+/* Hoja con el entreno de un día de «Últimos 7 días» (n7-dia → st.dia7) */
+.d7-body { gap: 14px; padding-bottom: 20px; }
+.d7-wk { display: grid; gap: 10px; }
+.d7-stats { margin: 0; }
+.d7-stats .stat { padding: 12px 10px; }
+.d7-stats .stat .val { font-size: 19px; line-height: 1.15; }
+.d7-exs { display: grid; gap: 0; }
+.d7-ex { display: grid; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); }
+.d7-ex b { font-size: 15px; overflow-wrap: anywhere; }
+.d7-sets { display: flex; flex-wrap: wrap; gap: 6px; }
+.d7-set { padding: 4px 9px; background: var(--surface2); border: 1px solid var(--line); border-radius: 2px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.d7-set.is-w { color: var(--muted); border-style: dashed; }
+.d7-empty { padding: 28px 8px; }
+.d7-empty b { color: var(--ink); font-size: 17px; }
 
 @media (min-width: 1024px) {
   :root { --sb-w: 104px; --col: 800px; }

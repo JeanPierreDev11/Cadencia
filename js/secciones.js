@@ -101,7 +101,7 @@ const IDEAS = {
 
 export function crearSecciones(ctx) {
   const api = new Proxy({}, { get: (_, k) => ctx.api[k] }); // el acceso a datos se crea al arrancar
-  const { st, render, toast, esc, num, nf, todayISO, fmtDate, lsGet, lsSet, I, E, errorText, currentKg, rutinaOf, viewPeso, gearHTML } = ctx;
+  const { st, render, toast, esc, num, nf, todayISO, fmtDate, lsGet, lsSet, I, E, errorText, currentKg, rutinaOf, gearHTML } = ctx;
   const r1 = (x) => Math.round(x * 10) / 10;
   const eur = (n) => nf(n, 0) + ' €';
   const sgn = (n, d = 0) => (n > 0 ? '+' : n < 0 ? '−' : '±') + nf(Math.abs(n), d);
@@ -133,17 +133,15 @@ export function crearSecciones(ctx) {
   function tabs() {
     const t = [{ id: 'inicio', t: 'Inicio', ico: I.home }, { id: 'entreno', t: 'Entreno', ico: I.pulse }, { id: 'nutricion', t: 'Nutrición', ico: ICO.food }];
     if (tieneBici()) t.push({ id: 'bici', t: 'Bici', ico: ICO.bici });
-    t.push({ id: 'progreso', t: 'Forma física', ico: ICO.prog });
     t.push({ id: 'perfil', t: 'Perfil', ico: I.user });
     return t;
   }
   function tabActual() {
     let t = st.tab;
-    if (t === 'peso') t = 'progreso';
     // Rutas y Taller viven dentro de la pestaña Bici.
     if (t === 'rutas' || t === 'taller') { st.biciSub = t; st.tab = t = 'bici'; lsSet('cadencia-tab', 'bici'); }
     if (t === 'bici' && !tieneBici()) t = 'inicio';
-    if (!['inicio', 'entreno', 'nutricion', 'bici', 'progreso', 'perfil'].includes(t)) t = 'inicio';
+    if (!['inicio', 'entreno', 'nutricion', 'bici', 'perfil'].includes(t)) t = 'inicio';
     return t;
   }
 
@@ -213,18 +211,23 @@ export function crearSecciones(ctx) {
         : `<p class="small">Completa edad y estatura en tu <button class="link" data-act="tab" data-v="perfil">perfil</button> para calcular tu objetivo.</p>`}
     </section>`;
 
-    // Hidratación
+    // Hidratación (acordeón: cerrado por defecto; la cabecera resume lo bebido y la meta. Estado en st.nHidOpen: render() rehace el DOM)
     const hd = hidratacion(d);
     if (hd) {
-      const lit = (ml) => `${nf(ml / 1000, 2)} L`, falta = Math.max(0, hd.meta - hd.bebido);
-      h += `<section class="card hid" aria-label="Hidratación">
-        <div class="hid-head">${I.drop}<h2>Hidratación</h2></div>
-        <div class="hid-big"><b class="num">${lit(hd.bebido)}</b><span>de ${lit(hd.meta)}</span></div>
-        <div class="hid-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${hd.meta}" aria-valuenow="${hd.bebido}" aria-label="Agua bebida"><i style="width:${Math.min(100, Math.round((hd.bebido / hd.meta) * 100))}%"></i></div>
-        <p class="small muted hid-meta">${falta ? `Te faltan ${nf(falta)} ml.` : 'Meta cumplida.'} Son 35 ml por kg (${nf(hd.kg, 1)} kg)${hd.entrena ? ' más 500 ml porque hoy entrenas' : ''}.</p>
-        <div class="hid-btns"><button type="button" class="btn quiet" data-act="agua-add" data-v="250">${I.plus} 250 ml</button><button type="button" class="btn quiet" data-act="agua-add" data-v="500">${I.plus} 500 ml</button>
-          <button type="button" class="btn ghost small" data-act="agua-add" data-v="-250" ${hd.bebido ? '' : 'disabled'} aria-label="Quitar 250 ml">−250</button></div>
-        <ul class="hid-split">${hd.partes.map(([n, ml]) => `<li class="${n === 'Durante el entreno' ? 'is-train' : ''}"><span>${n}</span><b>${nf(ml)} ml</b></li>`).join('')}</ul>
+      const lit = (ml) => `${nf(ml / 1000, 2)} L`, falta = Math.max(0, hd.meta - hd.bebido), op = !!st.nHidOpen, pct = Math.min(100, Math.round((hd.bebido / hd.meta) * 100));
+      h += `<section class="card acc hid${op ? ' is-open' : ''}" data-acc="hid" aria-label="Hidratación">
+        <button type="button" class="acc-head" data-act="n-acc" data-v="hid" aria-expanded="${op}" aria-controls="acc-hid">
+          <span class="acc-ico">${I.drop}</span>
+          <span class="acc-t"><b>Hidratación</b><span class="acc-sum num">${lit(hd.bebido)} de ${lit(hd.meta)}</span></span>
+          <span class="acc-chev" aria-hidden="true">${I.chev}</span>
+        </button>
+        <div class="hid-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${hd.meta}" aria-valuenow="${hd.bebido}" aria-label="Agua bebida"><i style="width:${pct}%"></i></div>
+        <div class="acc-body" id="acc-hid" role="region" aria-label="Detalle de hidratación"><div class="acc-in">
+          <p class="small muted hid-meta">${falta ? `Te faltan ${nf(falta)} ml.` : 'Meta cumplida.'} Son 35 ml por kg (${nf(hd.kg, 1)} kg)${hd.entrena ? ' más 500 ml porque hoy entrenas' : ''}.</p>
+          <div class="hid-btns"><button type="button" class="btn quiet" data-act="agua-add" data-v="250">${I.plus} 250 ml</button><button type="button" class="btn quiet" data-act="agua-add" data-v="500">${I.plus} 500 ml</button>
+            <button type="button" class="btn ghost small" data-act="agua-add" data-v="-250" ${hd.bebido ? '' : 'disabled'} aria-label="Quitar 250 ml">−250</button></div>
+          <ul class="hid-split">${hd.partes.map(([n, ml]) => `<li class="${n === 'Durante el entreno' ? 'is-train' : ''}"><span>${n}</span><b>${nf(ml)} ml</b></li>`).join('')}</ul>
+        </div></div>
       </section>`;
     }
 
@@ -265,13 +268,25 @@ export function crearSecciones(ctx) {
       ${!it.length && prev.length ? `<button class="btn ghost small" data-act="n-copiar">Copiar todo lo de ${ayerTxt} (${prev.length})</button>` : ''}
     </section>`;
 
-    // Últimos 7 días
-    const rows = [];
+    // Últimos 7 días (acordeón; cerrado por defecto). Cada día abre la hoja con el entreno de ese día (n7-dia → st.dia7, hoja en entreno-ui.js).
+    const rows = []; let n7 = 0, k7 = 0, nEnt = 0;
     for (let i = 0; i < 7; i++) {
-      const x = E.addDays(t, -i), l = totales(x), w = st.weights.find((y) => y.fecha === x);
-      rows.push(`<button type="button" data-act="n-ir" data-v="${x}" class="${x === d ? 'on' : ''}"><span>${i === 0 ? 'Hoy' : esc(dayName(x) + ' ' + fmtDate(x))}</span><span class="num">${l.n ? nf(l.k) : '–'}</span><span class="num">${w ? nf(w.kg, 1) : '–'}</span><span class="num">${l.n ? nf(l.p) + ' g' : '–'}</span></button>`);
+      const x = E.addDays(t, -i), l = totales(x), w = st.weights.find((y) => y.fecha === x), ent = (st.workouts || []).filter((y) => y.fecha === x);
+      if (l.n) { n7++; k7 += l.k; }
+      nEnt += ent.length;
+      rows.push(`<button type="button" data-act="n7-dia" data-v="${x}" class="${x === d ? 'on' : ''}" aria-haspopup="dialog" aria-label="${i === 0 ? 'Hoy' : esc(dayName(x) + ' ' + fmtDate(x))}: ${ent.length ? ent.length + (ent.length === 1 ? ' entreno' : ' entrenos') : 'sin entreno'}, ver detalle"><span>${i === 0 ? 'Hoy' : esc(dayName(x) + ' ' + fmtDate(x))}</span><span class="num">${l.n ? nf(l.k) : '–'}</span><span class="num">${w ? nf(w.kg, 1) : '–'}</span><span class="num">${l.n ? nf(l.p) + ' g' : '–'}</span><span class="t7-m ${ent.length ? 'on' : ''}" aria-hidden="true">${ent.length ? I.dumb : ''}</span></button>`);
     }
-    h += `<section class="card"><h2>Últimos 7 días</h2><div class="tbl7"><div class="th"><span>Día</span><span>kcal</span><span>Peso</span><span>Proteína</span></div>${rows.join('')}</div></section>`;
+    const op7 = !!st.n7Open, sum7 = `${n7 ? `Media ${nf(Math.round(k7 / n7))} kcal` : 'Sin comidas'} · ${nEnt} ${nEnt === 1 ? 'entreno' : 'entrenos'}`;
+    h += `<section class="card acc n7${op7 ? ' is-open' : ''}" data-acc="n7" aria-label="Últimos 7 días">
+      <button type="button" class="acc-head" data-act="n-acc" data-v="n7" aria-expanded="${op7}" aria-controls="acc-n7">
+        <span class="acc-t"><b>Últimos 7 días</b><span class="acc-sum">${sum7}</span></span>
+        <span class="acc-chev" aria-hidden="true">${I.chev}</span>
+      </button>
+      <div class="acc-body" id="acc-n7" role="region" aria-label="Detalle de los últimos 7 días"><div class="acc-in">
+        <div class="tbl7"><div class="th"><span>Día</span><span>kcal</span><span>Peso</span><span>Proteína</span><span></span></div>${rows.join('')}</div>
+        <p class="small muted acc-note">Toca un día para ver el entreno que hiciste.</p>
+      </div></div>
+    </section>`;
     h += planCard();
     return h;
   }
@@ -919,81 +934,6 @@ export function crearSecciones(ctx) {
   }
 
   /* ================================================================ */
-  /* Progreso                                                          */
-  /* ================================================================ */
-  function lineas(series, label) {
-    const all = series.flatMap((s) => s.pts);
-    if (all.length < 2) return '';
-    const W = 340, H = 160, Pd = { l: 30, r: 8, t: 10, b: 22 };
-    const ts = all.map((p) => new Date(p[0]).getTime()), t0 = Math.min(...ts), t1 = Math.max(...ts);
-    let lo = Math.min(0, ...all.map((p) => p[1])), hi = Math.max(...all.map((p) => p[1]));
-    if (hi - lo < 10) hi = lo + 10;
-    const x = (d) => Pd.l + ((new Date(d).getTime() - t0) / Math.max(1, t1 - t0)) * (W - Pd.l - Pd.r);
-    const y = (v) => Pd.t + (1 - (v - lo) / (hi - lo)) * (H - Pd.t - Pd.b);
-    const ticks = [lo, (lo + hi) / 2, hi];
-    return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">
-      ${ticks.map((tk) => `<line class="gl" x1="${Pd.l}" x2="${W - Pd.r}" y1="${y(tk)}" y2="${y(tk)}"/><text x="${Pd.l - 6}" y="${y(tk) + 4}" text-anchor="end">${nf(tk)}</text>`).join('')}
-      ${series.map((s) => `<path class="${s.cls}" d="${s.pts.map((p, i) => `${i ? 'L' : 'M'}${x(p[0]).toFixed(1)} ${y(p[1]).toFixed(1)}`).join(' ')}"/>`).join('')}
-      <text x="${Pd.l}" y="${H - 4}">${fmtDate(new Date(t0).toISOString().slice(0, 10))}</text><text x="${W - Pd.r}" y="${H - 4}" text-anchor="end">${fmtDate(new Date(t1).toISOString().slice(0, 10))}</text>
-    </svg><div class="legend">${series.map((s) => `<span><i class="${s.cls}"></i>${s.name}</span>`).join('')}</div>`;
-  }
-  function viewProgreso() {
-    const sub = st.progSub || 'peso';
-    // Reloj (solo en Peso) y engranaje en el mismo contenedor flex, alineados y con el mismo hueco.
-    let h = head('Forma física', 'Peso, cuerpo y forma', true, `<div class="hello-ico">${sub === 'peso' ? `<button class="iconbtn hist-btn" data-act="peso-hist" aria-label="Historial de registros">${I.clock}</button>` : ''}${gearHTML()}</div>`, 'hello-gear');
-    if (sub === 'peso' && st.pesoComp) return h + viewPeso(true); // detalle de una métrica: sin pestañas, el selector de la cabecera cambia de métrica
-    h += seg('p-sub', [['peso', 'Peso'], ['cuerpo', 'Cuerpo'], ['forma', 'Forma']], sub, 'Qué ver');
-    if (sub === 'cuerpo') return h + subCuerpo();
-    if (sub === 'forma') return h + subForma();
-    return h + viewPeso(true);
-  }
-  function subCuerpo() {
-    const p = P(), sex = p.sexo === 'mujer' ? 'female' : 'male', B = st.body || (st.body = {});
-    const kg = currentKg(), sites = BD.SKINFOLD_SITES[sex];
-    const res = (v, k) => (v == null || !isFinite(v) ? '' : `<div class="bfres"><div><b class="num">${nf(v, 1)} %</b><span class="muted small">${k}${kg ? ` · ${nf(BD.composition(kg, v).fatKg, 1)} kg de grasa, ${nf(BD.composition(kg, v).leanKg, 1)} kg magros` : ''}</span></div><button class="btn small" data-act="b-save" data-v="${r1(v)}">Guardar</button></div>`);
-    const navy = p.alturaCm && num(B.cuello) > 0 && num(B.cintura) > 0 && (sex === 'male' || num(B.cadera) > 0) ? BD.navyBodyFat(sex, p.alturaCm, num(B.cuello), num(B.cintura), num(B.cadera) || 0) : null;
-    const sk = p.edad && num(B.s1) > 0 && num(B.s2) > 0 && num(B.s3) > 0 ? BD.skinfoldBodyFat(sex, p.edad, num(B.s1), num(B.s2), num(B.s3)) : null;
-    const fld = (k, l, u) => `<label class="field"><span>${l} (${u})</span><input class="input" data-body="${k}" inputmode="decimal" value="${esc(B[k] || '')}"></label>`;
-    const hist = st.weights.filter((w) => w.grasa != null).slice(-8).reverse();
-    return `<section class="card"><h2>% de grasa con cinta métrica</h2>
-        <p class="small muted">Método de la Marina de EE. UU. Mide por la mañana, sin apretar la cinta.</p>
-        <div class="two">${fld('cuello', 'Cuello', 'cm')}${fld('cintura', 'Cintura, a la altura del ombligo', 'cm')}${sex === 'female' ? fld('cadera', 'Cadera', 'cm') : ''}</div>
-        <div id="b-navy">${res(navy, 'Con cinta')}</div></section>
-      <section class="card"><h2>% de grasa con plicómetro</h2>
-        <p class="small muted">Jackson-Pollock de 3 pliegues, lado derecho, en milímetros.</p>
-        <div class="two">${fld('s1', sites[0], 'mm')}${fld('s2', sites[1], 'mm')}${fld('s3', sites[2], 'mm')}</div>
-        <div id="b-sk">${res(sk, 'Con pliegues')}</div></section>
-      <section class="card"><h2>Historial de % de grasa</h2>
-        ${hist.length ? `<div class="list">${hist.map((w) => `<div class="row"><span>${esc(fmtDate(w.fecha, { weekday: 'short', day: 'numeric', month: 'short' }))}</span><b>${nf(w.grasa, 1)} %</b></div>`).join('')}</div>` : '<p class="small muted">Cuando guardes una medida aparecerá aquí y en la gráfica de Peso → Grasa.</p>'}
-      </section>`;
-  }
-  function subForma() {
-    const pm = pmcData(), a = atleta(), A = P().atleta || {};
-    let h = '';
-    if (!pm) h += '<section class="card"><div class="empty"><b>Aún no hay entrenos</b><span>Registra tus salidas y sesiones en Entreno y aquí verás tu forma, tu fatiga y tu frescura.</span></div></section>';
-    else {
-      const L = pm.last, fs = T.formState(L.tsb), from = E.addDays(todayISO(), -90), pts = pm.pts.filter((x) => x.date >= from);
-      h += `<div class="stats s3">${stat('Forma', nf(L.ctl), '', 'media 6 semanas')}${stat('Fatiga', nf(L.atl), '', 'media 7 días')}${stat('Frescura', sgn(Math.round(L.tsb)), '', esc(fs.label), 'tsb-' + tsbCls(L.tsb))}</div>
-        <section class="card"><h2>${esc(fs.label)}</h2><p>${esc(fs.advice)}</p>
-          ${lineas([{ name: 'Forma', cls: 's1', pts: pts.map((x) => [x.date, x.ctl]) }, { name: 'Fatiga', cls: 's2', pts: pts.map((x) => [x.date, x.atl]) }], 'Forma y fatiga de los últimos 90 días')}</section>`;
-      const weeks = [], mon = E.mondayOf(todayISO());
-      for (let i = 7; i >= 0; i--) { const s = E.addDays(mon, -7 * i), e = E.addDays(s, 6); let v = 0; Object.keys(pm.daily).forEach((d) => { if (d >= s && d <= e) v += pm.daily[d]; }); weeks.push({ s, v: Math.round(v) }); }
-      const mx = Math.max(1, ...weeks.map((x) => x.v));
-      h += `<section class="card"><h2>Carga semanal</h2><div class="vbars">${weeks.map((x, i) => `<div class="${i === weeks.length - 1 ? 'cur' : ''}"><span class="num">${x.v || ''}</span><i style="height:${Math.max(2, (x.v / mx) * 100)}%"></i><small>${esc(fmtDate(x.s))}</small></div>`).join('')}</div>
-        <p class="small muted">Puntos de carga (TSS) por semana. Súbela poco a poco: no más de un 10 % por semana.</p></section>`;
-    }
-    h += `<details class="card"${st.athOpen ? ' open' : ''}><summary><h2>Tus datos de entreno</h2></summary>
-      <form class="form-grid" data-form="atleta" novalidate>
-        <div class="two"><label class="field"><span>FC máxima</span><input class="input" name="fcMax" inputmode="numeric" value="${esc(A.fcMax || '')}" placeholder="${a.hrMax}"></label>
-        <label class="field"><span>FC en reposo</span><input class="input" name="fcRep" inputmode="numeric" value="${esc(A.fcRep || '')}" placeholder="60"></label>
-        <label class="field"><span>FTP (vatios)</span><input class="input" name="ftp" inputmode="numeric" value="${esc(A.ftp || '')}" placeholder="Opcional"></label></div>
-        <p class="small muted">${a.est ? `Sin tu FC máxima usamos ${a.hrMax} (estimada por tu edad). ` : ''}Con pulso o potencia en tus salidas, la carga se calcula mejor; sin ellos, por duración y esfuerzo.</p>
-        <button class="btn" type="submit">Guardar</button>
-      </form></details>`;
-    return h;
-  }
-
-  /* ================================================================ */
   /* Inicio                                                            */
   /* ================================================================ */
   function homeCards() {
@@ -1008,7 +948,7 @@ export function crearSecciones(ctx) {
     const pm = pmcData();
     if (pm) {
       const fs = T.formState(pm.last.tsb);
-      h += `<section class="card"><div class="card-head"><h2>Tu forma</h2><button class="link" data-act="p-forma">Ver</button></div>
+      h += `<section class="card"><div class="card-head"><h2>Tu forma</h2></div>
         <p><span class="tag tsb-${tsbCls(pm.last.tsb)}">${esc(fs.label)}</span> <span class="muted small">frescura ${sgn(Math.round(pm.last.tsb))}</span></p><p class="small">${esc(fs.advice)}</p></section>`;
     }
     if (tieneBici() && RT) {
@@ -1036,6 +976,11 @@ export function crearSecciones(ctx) {
   async function click(act, v, b) {
     switch (act) {
       // Nutrición
+      case 'n-acc': { // acordeones de Nutrición: se alterna la clase en el propio nodo (sin render) para que la transición se vea
+        const k = v === 'hid' ? 'nHidOpen' : 'n7Open'; st[k] = !st[k];
+        const sec = b && b.closest('[data-acc]'); if (sec) { sec.classList.toggle('is-open', !!st[k]); b.setAttribute('aria-expanded', String(!!st[k])); }
+        return true;
+      }
       case 'agua-add': { const d = st.nDate || todayISO(); guardarAgua(d, (dia(d).aguaMl || 0) + Number(v)); return true; }
       case 'n-dia': { const t = todayISO(), d = st.nDate || t; st.nDate = v === '0' ? t : E.addDays(d, Number(v)); if (st.nDate > t) st.nDate = t; render(); return true; }
       case 'n-ir': st.nDate = v; render(); window.scrollTo(0, 0); return true;
@@ -1114,9 +1059,6 @@ export function crearSecciones(ctx) {
       case 'tl-meta': { const g = garaje(), m = g.mejora.metas; g.mejora.metas = m.includes(v) ? m.filter((x) => x !== v) : [...m, v]; await saveGaraje(g); return true; }
       case 'tl-deseo-del': { const g = garaje(); g.mejora.deseos = g.mejora.deseos.filter((x) => x.id !== v); await saveGaraje(g); return true; }
       // Progreso
-      case 'p-sub': st.progSub = v; render(); return true;
-      case 'p-peso': st.progSub = 'peso'; st.tab = 'progreso'; lsSet('cadencia-tab', 'progreso'); st.novOpen = false; render(); window.scrollTo(0, 0); return true;
-      case 'p-forma': st.progSub = 'forma'; st.tab = 'progreso'; lsSet('cadencia-tab', 'progreso'); render(); window.scrollTo(0, 0); return true;
       case 'b-save': {
         const pct = Number(v), t = todayISO(), hoy = st.weights.find((w) => w.fecha === t), kg = hoy ? hoy.kg : currentKg();
         try {
@@ -1196,15 +1138,6 @@ export function crearSecciones(ctx) {
       const kEl = document.getElementById('mk-' + t.dataset.mg); if (x && x.g && kEl && g > 0) kEl.textContent = nf(Math.round(x.k * g / x.g));
       return true;
     }
-    if (t.dataset.body) {
-      const B = st.body || (st.body = {}); B[t.dataset.body] = t.value;
-      // Recalcular sin redibujar toda la pantalla (para no perder el teclado).
-      const keep = document.activeElement === t;
-      const html = subCuerpo(), tmp = document.createElement('div'); tmp.innerHTML = html;
-      ['b-navy', 'b-sk'].forEach((id) => { const a = document.getElementById(id), n = tmp.querySelector('#' + id); if (a && n) a.innerHTML = n.innerHTML; });
-      if (keep) t.focus();
-      return true;
-    }
     return false;
   }
   async function change(t) {
@@ -1229,13 +1162,6 @@ export function crearSecciones(ctx) {
       if (!(pr >= 0 && pr <= 20000)) { toast('Revisa el precio'); return true; }
       const g = garaje(); g.mejora.deseos = [...g.mejora.deseos, { id: nid('d'), n: n.slice(0, 60), precio: r1(pr) }];
       await saveGaraje(g); return true;
-    }
-    if (kind === 'atleta') {
-      const o = {}, chk = (k, lo, hi, msg) => { const s = String(f[k].value).trim(); if (!s) return true; const v = num(s); if (!(v >= lo && v <= hi)) { toast(msg); return false; } o[k] = Math.round(v); return true; };
-      if (!chk('fcMax', 120, 230, 'FC máxima entre 120 y 230') || !chk('fcRep', 30, 110, 'FC en reposo entre 30 y 110') || !chk('ftp', 50, 600, 'FTP entre 50 y 600 W')) return true;
-      if (o.fcRep && o.fcMax && o.fcRep >= o.fcMax) { toast('La FC en reposo tiene que ser menor que la máxima'); return true; }
-      st.athOpen = true;
-      await saveProfile({ atleta: o }); render(); toast('Datos guardados'); return true;
     }
     return false;
   }
@@ -1593,7 +1519,7 @@ export function crearSecciones(ctx) {
   function novItems() {
     const bici = tieneBici();
     return [
-      { t: 'La pestaña «Progreso» ahora es «Forma física»', d: 'Mismo contenido, nombre nuevo. Además, tocar tu peso actual en Inicio te lleva directo a ella. El engranaje ya no te sigue al bajar: se queda arriba del todo.', como: 'Pestaña «Forma física», abajo.', act: 'p-peso', v: '', btn: 'Ir a Forma física' },
+      { t: 'Nutrición más ordenada', d: 'Hidratación y «Últimos 7 días» se despliegan al tocar su cabecera, con un resumen a la vista. En «Últimos 7 días», toca un día para ver el entreno que hiciste. La pestaña «Forma física» ya no existe.', como: 'Pestaña «Nutrición».', act: 'tab', v: 'nutricion', btn: 'Ir a Nutrición' },
       { t: 'Mis rutinas en acordeón, con edición', d: 'Verás solo los títulos y, al tocar uno, se despliegan sus días y ejercicios. El lápiz junto a «Nueva» te deja renombrar, editar o borrar rutinas.', como: 'Entreno → Rutinas → lápiz.', act: 'nov-wk', v: 'rutina', btn: 'Ver mis rutinas' },
       { t: 'Crear rutinas más rápido', d: 'Al meter ejercicios, las series y repeticiones del primero se repiten en los siguientes. «Copiar día de otra rutina» importa un día entero. Y si das a Atrás en el asistente, no pierdes lo que ya habías puesto.', como: 'Entreno → Rutinas → Nueva.', act: 'rut-new', v: '', btn: 'Crear una rutina' },
       { t: 'Buscador de ejercicios más listo', d: 'Perdona los acentos, las mayúsculas y las erratas, y entiende inglés: prueba «deadlift», «curl» o «squat».', como: 'Al añadir un ejercicio, escribe en el buscador.', act: 'nov-wk', v: 'semana', btn: 'Ir a Entreno' },
@@ -1751,7 +1677,6 @@ export function crearSecciones(ctx) {
   function view(tab) {
     if (tab === 'nutricion') return viewNutricion();
     if (tab === 'bici') return viewBici();
-    if (tab === 'progreso') return viewProgreso();
     return '';
   }
 

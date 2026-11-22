@@ -1235,6 +1235,51 @@ function moverSheetHTML() {
       </div>
     </div>`;
 }
+// Detalle de un día de «Últimos 7 días» (Nutrición): el entreno que se hizo ese día (sesión, duración, ejercicios y series) o, si no hubo, qué tocaba.
+// Reutiliza wkRow, E.seriesDe/E.volumenDe y las mismas reglas de carga/unilateral que el resto de la app. Estado: st.dia7 = fecha ISO.
+function serieTxt(e, s) {
+  const kg = (v) => `${nf(Number(v) || 0, Number(v) % 1 ? 1 : 0)} kg`;
+  if (e.uni) {
+    const [I_, D_] = E.ladosSerie(s);
+    return `I ${I_.kg ? kg(I_.kg) + ' × ' : ''}${I_.reps} · D ${D_.kg ? kg(D_.kg) + ' × ' : ''}${D_.reps}`;
+  }
+  const k = Number(s.kg) || 0, r = s.reps !== '' && s.reps != null ? s.reps : '–';
+  return k ? `${kg(k)}${E.cargaDe(e) === 'por_lado' ? ' c/u' : ''} × ${r}` : `${r} reps`;
+}
+function cardioTxt(s) {
+  const t = E.cv(s, 'tiempo') ?? E.cv(s, 'min'), km = E.cv(s, 'km'), v = E.cv(s, 'velocidad') ?? E.cv(s, 'kmh');
+  const p = []; if (t) p.push(`${nf(Number(t), 1).replace(',0', '')} min`); if (km) p.push(`${nf(Number(km), 1)} km`); if (v) p.push(`${nf(Number(v), 1)} km/h`);
+  return p.join(' · ') || 'Completado';
+}
+function dia7SheetHTML() {
+  const iso = st.dia7, hoy = todayISO(), ws = (st.workouts || []).filter((w) => w.fecha === iso);
+  const tit = (iso === hoy ? 'Hoy' : cap(fmtDate(iso, { weekday: 'long' }))) + ' · ' + fmtDate(iso, { day: 'numeric', month: 'short' });
+  const bloque = (w) => {
+    const ejs = (w.ejercicios || []).filter((e) => e && (e.series || []).length);
+    const series = E.seriesDe(w), vol = Math.round(E.volumenDe(w));
+    const st3 = (l, v) => `<section class="stat"><span class="label">${l}</span><span class="val num">${v}</span></section>`;
+    const resumen = series ? `<div class="stats s3 d7-stats">${st3('Duración', w.min ? fmtDur(w.min) : '–')}${st3('Series', nf(series))}${st3('Volumen', nf(vol) + ' kg')}</div>` : '';
+    const lista = ejs.map((e) => {
+      const car = E.exCardio(e), sr = e.series || [];
+      return `<div class="d7-ex"><b>${esc(e.n)}</b><div class="d7-sets">${sr.map((s) => `<span class="d7-set${s.w ? ' is-w' : ''}">${s.w ? 'Cal. ' : ''}${esc(car ? cardioTxt(s) : serieTxt(e, s))}</span>`).join('')}</div></div>`;
+    }).join('');
+    return `<div class="d7-wk"><div class="list">${wkRow(w, false)}</div>${resumen}${lista ? `<div class="d7-exs">${lista}</div>` : (w.notas ? `<p class="small muted">${esc(w.notas)}</p>` : '')}</div>`;
+  };
+  let cuerpo;
+  if (ws.length) cuerpo = ws.map(bloque).join('');
+  else {
+    const dp = dayPlan(iso);
+    cuerpo = `<div class="empty d7-empty"><b>${dp ? (iso === hoy ? `Hoy toca ${esc(dp.nombre)}` : `No registraste ${esc(dp.nombre)}`) : 'Día de descanso'}</b><span>${dp ? (iso === hoy ? 'Todavía no has registrado ningún entreno hoy.' : 'No hay ningún entreno guardado este día.') : 'No hubo entreno este día.'}</span></div>`;
+  }
+  return `<div class="sheet-back" data-act="n7-close"></div>
+    <div class="sheet short d7-sheet" role="dialog" aria-modal="true" aria-label="Entreno del ${esc(tit)}">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><button type="button" class="iconbtn" data-act="n7-close" aria-label="Cerrar">${I.back}</button><h2>${esc(tit)}</h2><span style="width:36px"></span></div>
+      <div class="sheet-list d7-body">${cuerpo}
+        <button type="button" class="btn quiet block" data-act="n7-ir" data-v="${esc(iso)}">Ver comidas de este día</button>
+      </div>
+    </div>`;
+}
 function modoSheetHTML() {
   const opt = (v, ico, t, sub) => `<button type="button" class="regopt" data-act="modo-pick" data-v="${v}">${ico}<span><b>${esc(t)}</b><small class="muted">${esc(sub)}</small></span></button>`;
   return `<div class="sheet-back" data-act="modo-close"></div>
@@ -2068,6 +2113,9 @@ root.addEventListener('click', async (e) => {
     st.moverSel = v; return render();
   }
   if (act === 'mover-close') { st.moverSel = null; return render(); }
+  if (act === 'n7-dia') { st.dia7 = v; return render(); }
+  if (act === 'n7-close') { st.dia7 = null; return render(); }
+  if (act === 'n7-ir') { st.dia7 = null; st.nDate = v; render(); window.scrollTo(0, 0); return; }
   if (act === 'rn-close') { if (st.rutNuevos && st.rutNuevos.busy) return; st.rutNuevos = null; return render(); } // «Solo por hoy»: no toca la rutina
   if (act === 'rn-toggle' && st.rutNuevos && !st.rutNuevos.busy) { const x = st.rutNuevos.items[Number(v)]; if (x && st.rutNuevos.items.length > 1) { x.on = !x.on; render(); } return; }
   if (act === 'rn-add') return void rutNuevosAplicar();
@@ -2243,5 +2291,5 @@ function recuperacionHTML() {
     ${esPro() ? cuerpo : muro}</section>`;
 }
 function cuerpoSheetHTML() { return C3.sheetHTML(st.cuerpo3d, sexoCuerpo(), datosCuerpo(), todayISO()); }
-  return { exViewHTML, finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, compartirSheetHTML: CP.sheetHTML, pintarCompartir: CP.pintar, limiteSheetHTML, calentarSheetHTML, moverSheetHTML, rutNuevosSheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML };
+  return { exViewHTML, finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, compartirSheetHTML: CP.sheetHTML, pintarCompartir: CP.pintar, limiteSheetHTML, calentarSheetHTML, moverSheetHTML, rutNuevosSheetHTML, dia7SheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML };
 }
