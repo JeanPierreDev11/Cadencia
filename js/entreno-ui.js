@@ -535,6 +535,7 @@ function moverFilaHTML(R, d) {
   return `<div class="rd-move" role="group" aria-label="Mover el ${dl}">
     <button type="button" class="btn quiet small mv" data-act="re-up" data-v="${d}" ${i <= 0 ? 'disabled' : ''} aria-label="Subir: intercambiar el ${dl} con el día de entreno anterior">${I.up} Subir</button>
     <button type="button" class="btn quiet small mv" data-act="re-dn" data-v="${d}" ${i >= orden.length - 1 ? 'disabled' : ''} aria-label="Bajar: intercambiar el ${dl} con el día de entreno siguiente">${I.dn} Bajar</button>
+    <button type="button" class="btn quiet small mv" data-act="re-rest" data-v="${d}" ${orden.length <= 1 ? 'disabled' : ''} aria-label="Dejar el ${dl} como día de descanso (quita esta sesión)">Dejar libre</button>
     <select class="input sel mv-sel" data-rem="${d}" aria-label="Pasar el ${dl} a otro día de la semana"><option value="">Pasar a…</option>${E.DIAS_LARGO.map((n, k) => (k === d ? '' : `<option value="${k}">${n} · ${R.sesiones[k] ? 'cambia con ' + esc(nombreCorto(R.sesiones[k])) : 'libre'}</option>`)).join('')}</select>
   </div>`;
 }
@@ -2196,6 +2197,12 @@ root.addEventListener('click', async (e) => {
       const orden = [...R.dias].sort((a, b) => a - b), d = Number(v), j = orden.indexOf(d) + (act === 're-up' ? -1 : 1);
       if (orden[j] == null) return;
       reMover(re, d, orden[j]); render(); toast(`${E.DIAS_LARGO[d]} y ${E.DIAS_LARGO[orden[j]]} intercambiados`); return irADia(orden[j]);
+    }
+    else if (act === 're-rest') { // quita la sesión del día: pasa a descanso (siempre queda al menos un día de entreno)
+      const d = Number(v); if (R.dias.length <= 1 || !R.sesiones[d]) return;
+      const nom = R.sesiones[d].nombre || RT[R.sesiones[d].t];
+      delete R.sesiones[d]; R.dias = R.dias.filter((x) => x !== d); const f = { ...(re.fold || {}) }; delete f[d]; re.fold = f;
+      re.alt = re.ses = re.copy = null; re.dirty = true; render(); return toast(`${E.DIAS_LARGO[d]} queda libre (descanso). «${nom}» se ha quitado de la rutina`);
     }
     else if (act === 're-goto') { re.fold = { ...(re.fold || {}), [v]: false }; render(); return irADia(Number(v)); }
     else if (act === 're-ses-open') re.ses = Number(v);
