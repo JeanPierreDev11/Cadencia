@@ -164,6 +164,12 @@ async function firebaseBackend(config) {
       const Fn = await import(/* @vite-ignore */ FB + 'firebase-functions.js');
       return (await Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), 'coach', { timeout: 95000 })({ id })).data;
     },
+    // Ajustes de la rutina propuesta con IA (Gemini) a través de «ajustarRutina»: { modo:'estado' } = cuántos ajustes quedan hoy; con { rutina, catalogo, contexto, instruccion } devuelve la rutina modificada.
+    // El contador diario (3 sin Pro, 10 con Pro) lo lleva el servidor.
+    async ajustarRutina(data) {
+      const Fn = await import(/* @vite-ignore */ FB + 'firebase-functions.js');
+      return (await Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), 'ajustarRutina', { timeout: 95000 })(data || {})).data;
+    },
     // Strava a través de la Cloud Function «strava» (conectar, actividades, desconectar). Los tokens nunca llegan al móvil.
     async strava(data) {
       if (!stravaFn) {
@@ -338,6 +344,25 @@ function localBackend() {
     },
     local: true, // modo prueba: el Coach AI devuelve un ejemplo y lo guarda la propia app
     async coach() { throw err('local/no-ia'); },
+    // Ajustes de rutina con IA en modo prueba: mismo contador diario que el servidor (3 sin Pro, 10 con Pro; guardado en este dispositivo) y una respuesta SIMULADA
+    // (sube una serie al primer ejercicio de fuerza) para poder ver cómo se aplica un ajuste. Una prueba automática puede sustituirla con globalThis.cadenciaAjusteRutinaPrueba.
+    async ajustarRutina(data) {
+      const s = read(), u = s.session && s.users[s.session]; if (!u) throw err('auth/no-current-user');
+      const pro = conPlan(u.profile).isPro === true, limite = pro ? 10 : 3, dia = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date());
+      const usadas = ((s.ajustes || {})[u.uid + '_' + dia]) || 0;
+      if (data && data.modo === 'estado') return { usadas, quedan: Math.max(0, limite - usadas), limite, pro };
+      if (!data || String(data.instruccion || '').trim().length < 3 || !data.rutina) throw Object.assign(new Error('Escribe qué quieres cambiar de la rutina.'), { code: 'functions/invalid-argument' });
+      if (usadas >= limite) throw Object.assign(new Error(pro ? `Ya has usado tus ${limite} ajustes PRO de hoy. Mañana tendrás otros ${limite}.` : `Ya has usado tus ${limite} ajustes de hoy. Con Cadencia PRO tienes hasta 10 al día.`), { code: 'functions/resource-exhausted', details: { codigo: 'ajustes-limite', usadas, limite, pro } });
+      let res;
+      if (typeof globalThis.cadenciaAjusteRutinaPrueba === 'function') res = await globalThis.cadenciaAjusteRutinaPrueba(data);
+      else {
+        const dias = JSON.parse(JSON.stringify(data.rutina.dias || [])), d = dias.find((x) => x.tipo === 'fuerza' && x.ejercicios && x.ejercicios.length);
+        if (d) { d.ejercicios[0].series = Math.min(10, (Number(d.ejercicios[0].series) || 3) + 1); }
+        res = { mensaje: d ? `Modo prueba (sin servidor de IA): he subido una serie a «${d.ejercicios[0].nombre}» el ${['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'][d.dia]} para que veas cómo se aplica un ajuste.` : 'Modo prueba (sin servidor de IA): no hay nada que ajustar.', dias: dias.map((x) => ({ ...x, origen: x.dia })) };
+      }
+      (s.ajustes = s.ajustes || {})[u.uid + '_' + dia] = usadas + 1; write(s);
+      return { ...res, usadas: usadas + 1, quedan: limite - usadas - 1, limite, pro };
+    },
     // En modo prueba no hay servidor: Strava solo responde si una prueba automática lo simula.
     async strava(data) {
       if (typeof globalThis.cadenciaStravaPrueba === 'function') return globalThis.cadenciaStravaPrueba(data);

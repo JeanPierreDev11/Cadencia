@@ -2051,6 +2051,30 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .rnv-t small { font-size: 12.5px; color: rgba(255, 255, 255, .6); }
 .sheet.rnv .btn.ghost { color: #F2F2F2; border-color: rgba(255, 255, 255, .25); }
 
+/* Rutina propuesta: previsualización semanal, mover días y ajustes con IA */
+.rp-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; position: sticky; top: 0; z-index: 4; background: var(--bg); padding: 6px 0 8px; }
+.rp-d { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; padding: 6px 2px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font: inherit; }
+.rp-d.on { color: var(--ink); background: var(--surface2); cursor: pointer; }
+.rp-l { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+.rp-n { font-size: 10.5px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd-move { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 0 2px; }
+.rd-move .mv { display: inline-flex; align-items: center; gap: 4px; }
+.rd-move .mv:disabled { opacity: .35; }
+.rd-move .mv-sel { min-width: 0; flex: 1 1 140px; }
+.rch { display: grid; gap: 10px; }
+.rch-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.rch-t { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
+.rch-q { font-size: 12.5px; color: var(--muted); }
+.rch-q.zero { color: var(--accent-text); font-weight: 700; }
+.rch-sug { display: flex; flex-wrap: wrap; gap: 6px; }
+.rch-row { display: flex; gap: 8px; align-items: stretch; }
+.rch-in { flex: 1; min-width: 0; resize: none; font-size: 16px; }
+.rch-go { width: 48px; padding: 0; display: grid; place-items: center; flex: none; }
+.rch-ans { display: grid; gap: 4px; font-size: 14px; }
+.rch-lim { display: grid; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--surface2); font-size: 14px; justify-items: start; }
+.rch-lim p { margin: 0; }
+.rch-undo { justify-self: start; }
+
 /* ============================================================
    2026-11-17 · Escritorio (≥ 1024 px). Todo dentro de la media query:
    el móvil no cambia. Sidebar, columna central y vistas a dos columnas.

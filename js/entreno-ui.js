@@ -505,8 +505,9 @@ function dayCardHTML(R, d, re) {
   const plegado = !!(re.fold && re.fold[d]);
   const nEj = s.t === 'fuerza' ? s.ej.length : 0;
   const resumen = s.t === 'fuerza' ? `${s.nombre ? `${s.nombre} · ` : ''}${nEj} ${nEj === 1 ? 'ejercicio' : 'ejercicios'}` : s.nombre || RT[s.t];
-  return `<section class="card rday ${plegado ? 'folded' : ''}">
+  return `<section class="card rday ${plegado ? 'folded' : ''}" id="rday-${d}">
     <div class="rd-head"><button type="button" class="rd-toggle" data-act="re-fold" data-v="${d}" aria-expanded="${!plegado}" aria-controls="rd-body-${d}"><span class="chev" aria-hidden="true">${I.chev}</span><b>${E.DIAS_LARGO[d]}</b>${plegado ? `<span class="rd-sum small muted">${esc(resumen)}</span>` : ''}</button>${sel}</div>
+    ${re && re.src === 'rw' ? moverFilaHTML(R, d) : ''}
     <div class="rd-fold" id="rd-body-${d}" ${plegado ? 'hidden' : ''}>
       <div class="rd-name"><input class="input" data-re="${d}.nombre" value="${esc(s.nombre || '')}" maxlength="40" aria-label="Nombre de la sesión del ${dl}">${minBox}</div>
       ${body}
@@ -514,7 +515,161 @@ function dayCardHTML(R, d, re) {
     </div>
   </section>`;
 }
-const editorHTML = (re) => [...re.draft.dias].sort((a, b) => a - b).map((d) => dayCardHTML(re.draft, d, re)).join('');
+const editorHTML = (re) => `${re.src === 'rw' ? semanaHTML(re.draft) : ''}${[...re.draft.dias].sort((a, b) => a - b).map((d) => dayCardHTML(re.draft, d, re)).join('')}`;
+
+/* ---------- Rutina propuesta: mover días a mano y ajustes con IA (asistente de rutinas, paso «editor») ---------- */
+// Nombre corto de una sesión para la previsualización semanal («Push · Empuje» → «Push»).
+const nombreCorto = (s) => { const n = String((s && s.nombre) || '').split(/\s*[·\-–]\s*/)[0].trim(); return n || RT[(s && s.t) || 'fuerza']; };
+// Previsualización semanal: siete casillas Lun…Dom con la sesión de cada día. Se repinta con cada cambio (mover, intercambiar o ajuste con IA) sin gastar IA.
+function semanaHTML(R) {
+  return `<div class="rp-week" role="group" aria-label="Previsualización semanal de la rutina">${E.DIAS.map((l, d) => {
+    const s = R.dias.includes(d) ? R.sesiones[d] : null;
+    return s
+      ? `<button type="button" class="rp-d on" data-act="re-goto" data-v="${d}" aria-label="${E.DIAS_LARGO[d]}: ${esc(s.nombre || RT[s.t])}. Ir a este día"><span class="rp-l">${l}</span><span class="rp-n">${esc(nombreCorto(s))}</span></button>`
+      : `<span class="rp-d" aria-label="${E.DIAS_LARGO[d]}: libre"><span class="rp-l">${l}</span><span class="rp-n">Libre</span></span>`;
+  }).join('')}</div>`;
+}
+// Mover un día: «Subir/Bajar» intercambia su contenido con el día de entreno anterior o siguiente; «Pasar a…» lo lleva a cualquier día de la semana (si está ocupado, los dos se intercambian).
+function moverFilaHTML(R, d) {
+  const orden = [...R.dias].sort((a, b) => a - b), i = orden.indexOf(d), dl = E.DIAS_LARGO[d].toLowerCase();
+  return `<div class="rd-move" role="group" aria-label="Mover el ${dl}">
+    <button type="button" class="btn quiet small mv" data-act="re-up" data-v="${d}" ${i <= 0 ? 'disabled' : ''} aria-label="Subir: intercambiar el ${dl} con el día de entreno anterior">${I.up} Subir</button>
+    <button type="button" class="btn quiet small mv" data-act="re-dn" data-v="${d}" ${i >= orden.length - 1 ? 'disabled' : ''} aria-label="Bajar: intercambiar el ${dl} con el día de entreno siguiente">${I.dn} Bajar</button>
+    <select class="input sel mv-sel" data-rem="${d}" aria-label="Pasar el ${dl} a otro día de la semana"><option value="">Pasar a…</option>${E.DIAS_LARGO.map((n, k) => (k === d ? '' : `<option value="${k}">${n} · ${R.sesiones[k] ? 'cambia con ' + esc(nombreCorto(R.sesiones[k])) : 'libre'}</option>`)).join('')}</select>
+  </div>`;
+}
+// Mueve la sesión del día `de` al día `a` (intercambio si `a` ya tenía sesión). No usa IA. Devuelve 'swap' | 'move' | null.
+function reMover(re, de, a) {
+  const R = re.draft;
+  if (de === a || a < 0 || a > 6 || !R.sesiones[de]) return null;
+  const hay = !!R.sesiones[a], sesA = R.sesiones[a], fold = { ...(re.fold || {}) }, fDe = fold[de], fA = fold[a];
+  R.sesiones[a] = R.sesiones[de];
+  if (hay) { R.sesiones[de] = sesA; fold[de] = fA; fold[a] = fDe; }
+  else { delete R.sesiones[de]; R.dias = [...R.dias.filter((x) => x !== de), a].sort((x, y) => x - y); fold[a] = fDe; delete fold[de]; }
+  re.fold = fold; re.alt = re.ses = re.copy = null; re.dirty = true; re.msg = '';
+  return hay ? 'swap' : 'move';
+}
+// Tras repintar, lleva la vista al día que acaba de moverse.
+const irADia = (d) => setTimeout(() => { const el = document.getElementById('rday-' + d); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 30);
+
+// Chat de ajustes con IA bajo la rutina propuesta. Estado en st.re.chat = { txt, busy, msg, err, avisos, resumen, undo, cuota:{usadas,quedan,limite,pro} }.
+const RCH_LIM_FREE = 3, RCH_LIM_PRO = 10;
+const RCH_SUG = ['Divide la pierna en 2 días distintos', 'Mete más volumen de hombro', 'Máximo 5 ejercicios por día'];
+const ICO_ENVIAR = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg>';
+const chatDe = (re) => (re.chat = re.chat || { txt: '', busy: false, msg: '', err: '', avisos: [], resumen: '', undo: null, cuota: null });
+// Cuántos ajustes quedan hoy: la cuota viene del servidor (contador diario persistente); el límite lo marca el plan actual.
+const rchCuota = (c) => { const pro = esPro(), limite = pro ? RCH_LIM_PRO : RCH_LIM_FREE, usadas = c.cuota ? Math.min(limite, Number(c.cuota.usadas) || 0) : null; return { pro, limite, usadas, quedan: usadas == null ? null : limite - usadas }; };
+const rchTxtCuota = (q) => (q.quedan == null ? '' : q.pro ? `${q.quedan}/${q.limite} ajustes PRO restantes hoy` : `${q.quedan}/${q.limite} ajustes restantes hoy`);
+function rchHTML(re) {
+  const c = chatDe(re), q = rchCuota(c), agotado = q.quedan === 0, off = c.busy || agotado;
+  const aviso = agotado
+    ? (q.pro
+      ? `<p class="small muted rch-lim" role="status">Has usado tus ${q.limite} ajustes PRO de hoy. Mañana tendrás otros ${q.limite}. Mientras tanto puedes mover los días y editar los ejercicios a mano.</p>`
+      : `<div class="rch-lim" role="status"><p><b>Has usado tus ${q.limite} ajustes de hoy.</b> Pasa a PRO y tendrás hasta ${RCH_LIM_PRO} ajustes con IA al día.</p><button type="button" class="btn small" data-act="lim-pro">Ver Cadencia PRO</button></div>`)
+    : '';
+  return `<section class="card rch" id="rch" aria-label="Ajustes de la rutina con IA">
+    <div class="rch-h"><span class="rch-t">${I.brain} Ajusta tu rutina con IA</span><span class="rch-q ${agotado ? 'zero' : ''}" id="rch-q" role="status">${esc(rchTxtCuota(q))}</span></div>
+    <p class="small muted">Pide un cambio concreto: la IA lo aplica a esta rutina y respeta tu perfil y tus objetivos. No se guarda nada hasta que pulses «Guardar rutina».</p>
+    <div class="rch-sug">${RCH_SUG.map((t, i) => `<button type="button" class="chip chipbtn" data-act="rch-sug" data-v="${i}" ${off ? 'disabled' : ''}>${esc(t)}</button>`).join('')}</div>
+    <div class="rch-row">
+      <textarea class="input rch-in" data-rch rows="2" maxlength="300" placeholder="Ej. Quiero que el lunes sea pierna, pero dividida en 2 días" aria-label="Qué quieres cambiar de la rutina" ${off ? 'disabled' : ''}>${esc(c.txt)}</textarea>
+      <button type="button" class="btn rch-go ${agotado ? 'is-locked' : ''}" data-act="rch-send" aria-label="${agotado ? 'Ajustes agotados hoy' : 'Enviar ajuste'}" ${c.busy || (!agotado && !c.txt.trim()) ? 'disabled' : ''}>${c.busy ? '<span class="spinner"></span>' : agotado ? I.lock : ICO_ENVIAR}</button>
+    </div>
+    ${c.busy ? '<p class="small muted" role="status">Ajustando tu rutina…</p>' : ''}
+    ${c.err ? `<div class="msg" role="alert">${esc(c.err)}</div>` : ''}
+    ${c.msg && !c.busy ? `<div class="rch-ans" role="status"><b>Hecho.</b> ${esc(c.msg)}${c.resumen ? `<span class="small muted rch-sem">${esc(c.resumen)}</span>` : ''}${(c.avisos || []).map((a) => `<span class="small muted rch-av">${esc(a)}</span>`).join('')}</div>` : ''}
+    ${c.undo && !c.busy ? '<button type="button" class="link rch-undo" data-act="rch-undo">Deshacer el último ajuste</button>' : ''}
+    ${aviso}
+  </section>`;
+}
+// Catálogo que se le da a la IA: ejercicios base de fuerza que puede hacer con su material (+ los que ya lleva la rutina), agrupados por músculo.
+function catalogoParaIA(R) {
+  const out = {}, add = (x) => { if (!x || !x.m || x.m === 'cardio' || E.tipoEjercicio(x) !== 'fuerza') return; const l = (out[x.m] = out[x.m] || []); if (!l.includes(x.n)) l.push(x.n); };
+  for (const x of E.todosEjercicios()) if (x.base && (!R.equipo || x.eq === 'corporal' || R.equipo.includes(x.eq))) add(x);
+  for (const d of R.dias) { const s = R.sesiones[d]; if (s && s.t === 'fuerza') for (const e of s.ej) add(E.ejercicio(e.n)); }
+  return out;
+}
+// La rutina como la entiende la IA (sin guías de cardio ni intervalos: esos ejercicios se conservan aparte).
+function rutinaParaIA(R) {
+  return { dias: [...R.dias].sort((a, b) => a - b).map((d) => {
+    const s = R.sesiones[d], o = { dia: d, tipo: s.t, nombre: String(s.nombre || '') };
+    if (s.foco) o.foco = s.foco;
+    if (s.t === 'fuerza') o.ejercicios = s.ej.filter((e) => !E.exCardio(e)).map((e) => ({ nombre: E.canon(e.n), series: Math.round(num(e.series)) || 3, reps: String(e.reps || '') }));
+    else if (num(s.min) > 0) o.min = Math.round(num(s.min));
+    return o;
+  }) };
+}
+// Rutina devuelta por la IA → nuevo borrador. Valida cada ejercicio con la biblioteca de la app: los que no existen se descartan y se avisa. Lanza si no queda ninguna sesión.
+function aplicarAjusteIA(R, res) {
+  const out = clone(R), avisos = [], dias = [];
+  out.sesiones = {};
+  const nuevoDe = (x) => { const o = R.sesiones[x.origen]; return Number.isInteger(x.origen) && x.origen >= 0 && o ? o : null; };
+  for (const x of res.dias || []) {
+    const d = Number(x.dia), orig = nuevoDe(x), nombreDia = E.DIAS_LARGO[d];
+    if (!(d >= 0 && d <= 6) || out.sesiones[d]) continue;
+    let s = null;
+    if (x.tipo !== 'fuerza') {
+      s = orig && orig.t === x.tipo ? clone(orig) : { t: x.tipo, nombre: String(x.nombre || RT[x.tipo]).slice(0, 40), min: Math.round(num(x.min)) || 45, ...(x.tipo === 'otro' ? { det: '' } : { km: '', ses: null }) };
+    } else {
+      const prevPorNombre = new Map(); for (const dd of R.dias) for (const e of (R.sesiones[dd].ej || [])) prevPorNombre.set(E.normTxt(E.canon(e.n)), e);
+      const ej = [];
+      for (const e of x.ejercicios || []) {
+        const xe = E.ejercicio(e.nombre);
+        if (!xe) { avisos.push(`«${e.nombre}» no está en la biblioteca de Cadencia y no se ha añadido.`); continue; }
+        if (E.tipoEjercicio(xe) === 'cardio' || ej.some((q) => E.normTxt(q.n) === E.normTxt(xe.n))) continue;
+        const prev = prevPorNombre.get(E.normTxt(xe.n)), sr = Math.round(num(e.series)), reps = String(e.reps || '').trim().slice(0, 20);
+        ej.push({ ...(prev ? clone(prev) : {}), n: xe.n, m: xe.m, series: sr >= 1 && sr <= 10 ? sr : (prev ? prev.series : 3), reps: reps || (prev ? prev.reps : '8-12') });
+      }
+      const cardio = orig && orig.t === 'fuerza' ? clone(orig.ej.filter((e) => E.exCardio(e))) : [];
+      if (!ej.length && orig && orig.t === 'fuerza' && orig.ej.some((e) => !E.exCardio(e))) { s = clone(orig); avisos.push(`El ${nombreDia.toLowerCase()} se ha dejado como estaba: la IA no propuso ejercicios válidos.`); }
+      else if (!ej.length && !cardio.length) { avisos.push(`No se ha creado el ${nombreDia.toLowerCase()}: la IA no propuso ejercicios válidos.`); continue; }
+      else s = { t: 'fuerza', nombre: String(x.nombre || (orig && orig.nombre) || RT.fuerza).slice(0, 40), ...(x.foco && E.SES_FUERZA[x.foco] ? { foco: x.foco } : orig && orig.foco && !x.foco ? { foco: orig.foco } : {}), ej: [...ej, ...cardio] };
+    }
+    out.sesiones[d] = s; dias.push(d);
+  }
+  if (!dias.length) throw Object.assign(new Error('La IA no devolvió ninguna sesión válida.'), { code: 'rutina/vacia' });
+  out.dias = dias.sort((a, b) => a - b);
+  out.tipos = [...new Set([...(R.tipos || []), ...out.dias.map((d) => out.sesiones[d].t)])];
+  return { draft: out, avisos: [...new Set(avisos)].slice(0, 4) };
+}
+// «Lun Pierna A · Mié Push · Vie Pierna B»: cómo queda la semana tras un ajuste (se ve aunque la previsualización de arriba esté fuera de pantalla).
+const resumenSemana = (R) => [...R.dias].sort((a, b) => a - b).map((d) => `${E.DIAS[d]} ${nombreCorto(R.sesiones[d])}`).join(' · ');
+// Cuántos ajustes quedan hoy: se pide al servidor al entrar en la previsualización (no gasta ninguno) y se refresca sin repintar todo (el texto que se esté escribiendo no se toca).
+async function rchEstado() {
+  const re = st.re; if (!re || re.src !== 'rw') return;
+  const c = chatDe(re); if (c.cuota || c.cargando) return;
+  c.cargando = true;
+  try { c.cuota = await api.ajustarRutina({ modo: 'estado' }); } catch (e) { /* sin red o servidor sin desplegar: se verá al enviar */ }
+  c.cargando = false;
+  if (st.re !== re || !c.cuota) return;
+  if (rchCuota(c).quedan === 0) return render(); // ya no le quedan: se bloquea el chat
+  const q = document.getElementById('rch-q'); if (q) q.textContent = rchTxtCuota(rchCuota(c));
+}
+async function rchEnviar() {
+  const re = st.re; if (!re || re.src !== 'rw') return;
+  const c = chatDe(re), q = rchCuota(c), txt = c.txt.trim();
+  if (c.busy) return;
+  if (q.quedan === 0) { if (q.pro) return; st.limite = { tipo: 'ajustes', limite: q.limite }; return render(); } // sin ajustes: no se envía nada (el aviso PRO se reutiliza)
+  if (txt.length < 3) return;
+  c.busy = true; c.err = ''; c.msg = ''; c.avisos = []; c.resumen = ''; render();
+  try {
+    const res = await api.ajustarRutina({ rutina: rutinaParaIA(re.draft), catalogo: catalogoParaIA(re.draft), contexto: { exp: re.draft.exp || '', donde: dondeDe(re.draft.donde), eq: re.draft.eqSel || [], prio: re.draft.prio || '' }, instruccion: txt });
+    const { draft, avisos } = aplicarAjusteIA(re.draft, res);
+    if (st.re !== re) return; // cerró el asistente mientras esperaba
+    c.undo = { draft: re.draft, fold: re.fold || {} };
+    re.draft = draft; re.fold = {}; re.alt = re.ses = re.copy = null; re.dirty = true; re.msg = '';
+    c.cuota = { usadas: res.usadas, quedan: res.quedan, limite: res.limite, pro: res.pro };
+    c.msg = String(res.mensaje || 'Rutina actualizada.'); c.avisos = avisos; c.resumen = resumenSemana(draft); c.txt = '';
+  } catch (e) {
+    if (st.re !== re) return;
+    const d = e && e.details;
+    if (d && d.codigo === 'ajustes-limite') { // el servidor dice que ya no le quedan (otro dispositivo, contador adelantado…)
+      c.cuota = { usadas: d.usadas, quedan: 0, limite: d.limite, pro: d.pro };
+      if (!d.pro) st.limite = { tipo: 'ajustes', limite: d.limite }; else c.err = e.message;
+    } else c.err = e && e.code === 'rutina/vacia' ? 'La IA no ha devuelto una rutina válida. Prueba con otras palabras (esta solicitud sí cuenta).' : errorText(e);
+  }
+  c.busy = false; render();
+}
 
 // Limpia y valida la rutina antes de guardarla. Devuelve { rutina } o { error }.
 function normRutina(R) {
@@ -776,10 +931,11 @@ function viewRutWizard() {
   } else {
     const km = o.main === 'bici' || o.main === 'cardio';
     body = `<h1 class="ob-title">${o.modo === 'propuesta' ? 'Tu rutina propuesta' : 'Programa tus días'}</h1>
-      <p class="ob-sub">${o.modo === 'propuesta' ? 'Toca «Cambiar» para ver alternativas y ajusta ' + (km ? 'los km o el tiempo' : 'lo que quieras') + '.' : km ? 'Elige la sesión de cada día y pon su objetivo de km o de tiempo.' : o.main === 'fuerza' ? 'Añade los ejercicios exactos de cada día.' : 'Pon el tiempo y una nota en cada día.'}</p>
+      <p class="ob-sub">${o.modo === 'propuesta' ? 'Toca «Cambiar» para ver alternativas y ajusta ' + (km ? 'los km o el tiempo' : 'lo que quieras') + '.' + (o.main === 'fuerza' ? ' Puedes mover los días con los botones de cada uno o pedirle un cambio a la IA al final.' : '') : km ? 'Elige la sesión de cada día y pon su objetivo de km o de tiempo.' : o.main === 'fuerza' ? 'Añade los ejercicios exactos de cada día.' : 'Pon el tiempo y una nota en cada día.'}</p>
       ${o.flex ? '<p class="small muted">Los días son orientativos: puedes entrenar otro día y registrarlo igual.</p>' : ''}
       ${editorHTML(st.re)}
-      ${o.main !== 'otro' ? `<button type="button" class="btn quiet small" data-act="re-mix" aria-pressed="${!!st.re.mix}">${st.re.mix ? 'Un solo tipo de entreno' : 'Mezclar tipos de entreno'}</button>` : ''}`;
+      ${o.main !== 'otro' ? `<button type="button" class="btn quiet small" data-act="re-mix" aria-pressed="${!!st.re.mix}">${st.re.mix ? 'Un solo tipo de entreno' : 'Mezclar tipos de entreno'}</button>` : ''}
+      ${o.main === 'fuerza' ? rchHTML(st.re) : ''}`;
     next = 'Guardar rutina';
   }
   const msg = s === 'editor' ? st.re.msg : o.msg;
@@ -821,7 +977,7 @@ function rwPersonalizada(o) {
 const rwKey = (o) => JSON.stringify([o.main, o.exp, [...o.donde].sort(), [...o.eq].sort(), o.n, [...o.dias].sort(), o.flex, o.modo, o.division, o.deporte, o.otro.trim(), o.main === 'fuerza' ? o.prio : '']);
 function rwGenerar() {
   const o = st.rw, key = rwKey(o), old = st.re && st.re.src === 'rw' ? st.re : null;
-  if (old && old.genKey === key) { o.step = rwSteps(o).length - 1; o.maxStep = Math.max(o.maxStep || 0, o.step); o.anim = 'fwd'; render(); window.scrollTo(0, 0); return; }
+  if (old && old.genKey === key) { o.step = rwSteps(o).length - 1; o.maxStep = Math.max(o.maxStep || 0, o.step); o.anim = 'fwd'; render(); window.scrollTo(0, 0); rchEstado(); return; }
   const cfg = rwCfg(o);
   const R = o.modo === 'propuesta' && o.main !== 'otro' ? E.proponerRutina(cfg, st.profile.objetivos) : rwPersonalizada(o);
   R.eqSel = o.main === 'fuerza' ? [...o.eq] : []; R.donde = [...o.donde]; R.flex = o.flex; R.deporte = o.deporte; R.exp = o.exp; R.prio = o.main === 'fuerza' && o.modo !== 'propia' ? o.prio : '';
@@ -838,6 +994,7 @@ function rwGenerar() {
   st.re = nuevo;
   o.step = rwSteps(o).length - 1; o.maxStep = Math.max(o.maxStep || 0, o.step); o.anim = 'fwd';
   render(); window.scrollTo(0, 0);
+  rchEstado();
 }
 // Avance automático al tocar una opción de respuesta única (con un instante para ver la selección).
 function rwAuto() {
@@ -1187,6 +1344,21 @@ function resumenSheetHTML() {
     </div>`;
 }
 function limiteSheetHTML() {
+  if (st.limite && st.limite.tipo === 'ajustes') { // chat de ajustes de rutina con IA: 3 al día sin Pro, 10 con Pro
+    const n = st.limite.limite || RCH_LIM_FREE;
+    return `<div class="sheet-back" data-act="lim-close"></div>
+    <div class="sheet short limite" role="alertdialog" aria-modal="true" aria-label="Ajustes con IA agotados hoy">
+      <div class="sheet-grab"></div>
+      <div class="lim-body">
+        <span class="lim-ico">${I.lock}</span>
+        <span class="lim-count num">${n}/${n}</span>
+        <p class="lim-t">Has usado tus ${n} ajustes con IA de hoy. Pasa a Cadencia PRO y tendrás hasta ${RCH_LIM_PRO} ajustes al día.</p>
+        <button type="button" class="btn block" data-act="lim-pro">Ver Cadencia PRO</button>
+        <button type="button" class="btn ghost block" data-act="lim-close">Ahora no</button>
+        <span class="small muted">Tu rutina no cambia: puedes seguir moviendo los días y editando los ejercicios a mano, y guardarla. Mañana tendrás otros ${n} ajustes.</span>
+      </div>
+    </div>`;
+  }
   const rut = st.limite && st.limite.tipo === 'rutinas', que = rut ? 'rutinas' : 'ejercicios propios';
   return `<div class="sheet-back" data-act="lim-close"></div>
     <div class="sheet short limite" role="alertdialog" aria-modal="true" aria-label="Límite gratuito alcanzado">
@@ -1998,6 +2170,14 @@ root.addEventListener('click', async (e) => {
     return;
   }
   if (re && act === 're-mix') { re.mix = !re.mix; return render(); }
+  // ajustes con IA bajo la rutina propuesta
+  if (re && re.src === 'rw' && act === 'rch-sug') { const c = chatDe(re); c.txt = RCH_SUG[Number(v)] || ''; c.err = ''; render(); const ta = document.querySelector('[data-rch]'); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } return; }
+  if (re && re.src === 'rw' && act === 'rch-send') return void rchEnviar();
+  if (re && re.src === 'rw' && act === 'rch-undo') {
+    const c = chatDe(re); if (!c.undo || c.busy) return;
+    re.draft = c.undo.draft; re.fold = c.undo.fold; re.alt = re.ses = re.copy = null; re.dirty = true; c.undo = null; c.msg = 'Ajuste deshecho. Tu rutina vuelve a estar como antes (esto no gasta ajustes).'; c.avisos = []; c.resumen = resumenSemana(re.draft); c.err = '';
+    return render();
+  }
   // editor de rutina
   if (re && act.startsWith('re-')) {
     const R = re.draft, kind = goalsKind();
@@ -2012,6 +2192,12 @@ root.addEventListener('click', async (e) => {
       else if (act === 're-int-del' && ints.length > 1) ints.pop();
       touch();
     }
+    else if (act === 're-up' || act === 're-dn') { // intercambia con el día de entreno anterior / siguiente (sin IA)
+      const orden = [...R.dias].sort((a, b) => a - b), d = Number(v), j = orden.indexOf(d) + (act === 're-up' ? -1 : 1);
+      if (orden[j] == null) return;
+      reMover(re, d, orden[j]); render(); toast(`${E.DIAS_LARGO[d]} y ${E.DIAS_LARGO[orden[j]]} intercambiados`); return irADia(orden[j]);
+    }
+    else if (act === 're-goto') { re.fold = { ...(re.fold || {}), [v]: false }; render(); return irADia(Number(v)); }
     else if (act === 're-ses-open') re.ses = Number(v);
     else if (act === 're-ses-close') re.ses = null;
     else if (act === 're-ses') { const s = R.sesiones[Number(v)], x = E.sesionPorId(b.dataset.id); s.ses = x.id; s.nombre = x.n; s.min = x.min; s.km = x.km || ''; E.aplicarGuia(s, { exp: R.exp, kind: goalsKind() }); re.ses = null; touch(); }
@@ -2199,6 +2385,11 @@ root.addEventListener('input', (e) => {
     if (oEl) { const h = ormHTML(st.live.ex[Number(i)]); oEl.innerHTML = h; oEl.hidden = !h; }
     return;
   }
+  if (st.re && t.dataset.rch != null) { // texto del chat de ajustes: se guarda sin repintar (no pierde el foco) y activa/desactiva el botón de enviar
+    const c = chatDe(st.re); c.txt = t.value; c.err = '';
+    const b = document.querySelector('[data-act="rch-send"]'); if (b && !c.busy && rchCuota(c).quedan !== 0) b.disabled = !c.txt.trim();
+    return;
+  }
   if (st.re && t.dataset.re) {
     const p = t.dataset.re.split('.'), s = st.re.draft.sesiones[Number(p[0])];
     if (p[1] === 'ej' && p[3] === 'int') { const q = intervalosDe(s.ej[Number(p[2])])[Number(p[4])]; if (q) q[p[5]] = t.value; }
@@ -2247,6 +2438,14 @@ root.addEventListener('change', async (e) => {
   }
   if (st.lib && t.dataset.libeq != null) { st.lib.soloEq = t.checked; const l = document.getElementById('lib-list'); if (l) l.innerHTML = libListHTML(); return; }
   if (st.lib && st.lib.crear && t.dataset.libc) { st.lib.crear[t.dataset.libc] = t.value; return; }
+  // Pasar la sesión de un día a otro día de la semana (intercambia si está ocupado).
+  if (st.re && t.dataset.rem != null) {
+    const de = Number(t.dataset.rem), a = Number(t.value);
+    if (t.value === '' || !Number.isInteger(a)) return;
+    const r = reMover(st.re, de, a); render();
+    if (r) { toast(r === 'swap' ? `${E.DIAS_LARGO[de]} y ${E.DIAS_LARGO[a]} intercambiados` : `Sesión movida al ${E.DIAS_LARGO[a].toLowerCase()}`); irADia(a); }
+    return;
+  }
   // Cambiar el tipo de un día de la rutina.
   if (st.re && t.dataset.ret != null) {
     const d = Number(t.dataset.ret), R = st.re.draft;

@@ -396,6 +396,8 @@ const COACH_INTENTOS = [[MODELO_COACH, 0, 'medium', 20000], [MODELO_COACH, 1500,
 const COACH_CANDADO_MS = 85000; // un análisis en marcha bloquea otro igual durante este tiempo (cabe en timeoutSeconds)
 // Errores de Google que merece la pena reintentar: saturación/cuota por minuto (429, 500, 502, 503, 504), modelo retirado (404 → pasa al respaldo),
 // red caída, tiempo agotado y respuestas vacías o con JSON roto/cortado (el modelo es aleatorio: otra vez puede salir bien).
+// Configuración de cada uso de Gemini: prompt de sistema, esquema de la respuesta y temperatura. El Coach AI es la de por defecto; el chat de ajustes de rutina trae la suya (CFG_RUTINA).
+const CFG_COACH = { prompt: PROMPT_COACH, esquema: ESQUEMA_COACH, temperature: 0.4 };
 const COACH_REINTENTABLE = (s) => [404, 429, 500, 502, 503, 504, 'timeout', 'red', 'vacio', 'json'].includes(s);
 // Gemini a veces envuelve el JSON en ```json … ``` o añade texto alrededor: se queda con lo que hay entre la primera «{» y la última «}».
 function jsonDeGemini(txt) {
@@ -404,7 +406,7 @@ function jsonDeGemini(txt) {
   return JSON.parse(a >= 0 && b > a ? s.slice(a, b + 1) : s);
 }
 // UNA llamada a UN modelo. Si falla lanza un Error con .status = código HTTP de Google, 'timeout', 'red', 'vacio' o 'json'.
-async function geminiUna(modelo, clave, entrada, ms, pensar) {
+async function geminiUna(modelo, clave, entrada, ms, pensar, cfg = CFG_COACH) {
   const ctrl = new AbortController(), t = setTimeout(() => ctrl.abort(), ms);
   const fallo = (msg, status) => { const e = new Error(msg); e.status = status; return e; };
   try {
@@ -414,10 +416,10 @@ async function geminiUna(modelo, clave, entrada, ms, pensar) {
         method: 'POST', signal: ctrl.signal,
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave },
         body: JSON.stringify({
-          systemInstruction: { parts: [{ text: PROMPT_COACH }] },
+          systemInstruction: { parts: [{ text: cfg.prompt }] },
           contents: [{ role: 'user', parts: [{ text: JSON.stringify(entrada) }] }],
           // Gemini 3 «piensa» antes de responder y esos tokens cuentan en maxOutputTokens: con poco margen el JSON sale cortado.
-          generationConfig: { responseMimeType: 'application/json', responseSchema: ESQUEMA_COACH, temperature: 0.4, maxOutputTokens: 8192, ...(pensar ? { thinkingConfig: { thinkingLevel: pensar } } : {}) },
+          generationConfig: { responseMimeType: 'application/json', responseSchema: cfg.esquema, temperature: cfg.temperature, maxOutputTokens: 8192, ...(pensar ? { thinkingConfig: { thinkingLevel: pensar } } : {}) },
         }),
       });
       j = await r.json().catch(() => ({}));
@@ -431,7 +433,7 @@ async function geminiUna(modelo, clave, entrada, ms, pensar) {
     try { return jsonDeGemini(txt); } catch (e) { throw fallo(`JSON no válido (${(c && c.finishReason) || '¿?'}): ${txt.slice(0, 200)}`, 'json'); }
   } finally { clearTimeout(t); }
 }
-async function llamarGemini(clave, entrada) {
+async function llamarGemini(clave, entrada, cfg = CFG_COACH) {
   const fin = Date.now() + COACH_PRESUPUESTO_MS;
   let ultimo = null, usarPensar = true;
   for (const [modelo, espera, pensar, maxMs] of COACH_INTENTOS) {
@@ -440,7 +442,7 @@ async function llamarGemini(clave, entrada) {
     if (espera) await new Promise((r) => setTimeout(r, espera));
     const t0 = Date.now();
     try {
-      const res = await geminiUna(modelo, clave, entrada, Math.min(maxMs, queda), usarPensar ? pensar : null);
+      const res = await geminiUna(modelo, clave, entrada, Math.min(maxMs, queda), usarPensar ? pensar : null, cfg);
       console.log('Coach AI ok', modelo, `${Date.now() - t0} ms`);
       return res;
     } catch (e) {
@@ -530,6 +532,159 @@ exports.coach = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 90, memory: '2
   } finally {
     await candado.delete().catch(() => {}); // libera el candado tanto si sale bien como si falla (el siguiente intento ya puede entrar)
     if (hecho) console.log('Coach AI guardado', id);
+  }
+});
+
+/* ------------------------------------------------------------------ */
+/* Ajustes de la rutina propuesta con IA (chat bajo la previsualización) */
+/* ------------------------------------------------------------------ */
+// La app la llama desde el asistente de rutinas, con la rutina propuesta (borrador), el catálogo de ejercicios permitidos y la instrucción escrita. El perfil se lee de Firestore
+// (no se fía del móvil). Devuelve la rutina modificada; la app la valida contra su biblioteca antes de enseñarla. NO guarda nada: la rutina solo se guarda al pulsar «Guardar rutina».
+// Límite diario por persona (contador en iaUso/{uid}_{día}, campo «rutina», hora de Madrid): 3 sin Pro y 10 con Pro. Si Gemini falla, la solicitud no cuenta.
+const LIMITE_AJUSTES_FREE = 3;
+const LIMITE_AJUSTES_PRO = 10;
+const LIMITE_AJUSTES_GLOBAL = 600; // solicitudes al día entre todas las personas (seguridad de gasto)
+const AJUSTE_TIPOS = ['fuerza', 'cardio', 'bici', 'otro'];
+const AJUSTE_FOCOS = ['push', 'pull', 'legs', 'torso', 'pierna', 'full', 'fullB', 'fullC', 'pecho', 'espalda', 'hombro', 'brazos', 'gluIsq', 'cuadGlu', 'lowerFull', 'torsoL', 'fullG', 'fullG2'];
+const COACH_PRIO = { inferior: 'glúteo y pierna', torso: 'pecho y espalda', brazos: 'hombros y brazos', equilibrado: 'todo equilibrado' };
+const COACH_EQ_RUTINA = { maquina: 'máquinas y poleas', mancuernas: 'mancuernas', barra: 'barras', banda: 'bandas elásticas', kettlebell: 'kettlebells', ninguno: 'solo su cuerpo' };
+const PROMPT_RUTINA = `Eres un entrenador personal experto en fuerza e hipertrofia. La persona ha generado una rutina semanal en una app (Cadencia) y te pide UN cambio concreto escrito con sus palabras. Devuelves la rutina completa ya modificada, en español de España, tuteando.
+Datos que recibes:
+- "perfil": datos de la persona (sexo, edad, peso, objetivos, experiencia, lugares y material, minutos por sesión, días por semana, obstáculo…). Úsalos para mantener la coherencia, sin citarlos como una lista.
+- "contexto": nivel, lugares, material y prioridad que eligió al crear ESTA rutina.
+- "rutina": la rutina actual. "dias" es una lista de sesiones: "dia" (0 = lunes … 6 = domingo), "tipo" (fuerza, cardio, bici u otro), "nombre", "foco" (si lo tiene), "ejercicios" ({nombre, series, reps}) en las de fuerza y "min" en las demás.
+- "catalogo": los ejercicios que puedes usar, agrupados por grupo muscular. Ya están filtrados por su material: no hay nada más.
+- "instruccion": lo que pide la persona.
+Reglas estrictas:
+1. Haz exactamente lo que pide y NO toques lo demás: conserva los días, ejercicios, series y repeticiones que no tengan que cambiar.
+2. Usa SOLO nombres de ejercicio que aparezcan en "catalogo" o que ya estén en la rutina actual, copiados TAL CUAL, sin cambiar letras ni inventar variantes. Si pide un ejercicio que no está, usa el más parecido del catálogo y dilo en "mensaje".
+3. Mantén el mismo NÚMERO de días de entrenamiento salvo que pida añadir, quitar o dividir días. Si pide dividir un día en dos (por ejemplo la pierna) y hay un día libre en la semana, usa ese día para la segunda parte; si ya hay 7 días con sesión, reorganiza sin pasar de 7 y explícalo. Los días van de 0 a 6, sin repetir ninguno.
+4. En cada sesión de fuerza deja entre 3 y 8 ejercicios según "minutosSesion" del perfil (15-30 min: 3-4; 45: 4-5; 60: 5-6; 90: 6-8) y el nivel (principiante: pocos ejercicios, simples y guiados). Series de 1 a 10 y repeticiones como texto corto (por ejemplo "8-12", "10", "12-15", "30 s", "10 por lado", máximo 20 caracteres).
+5. Reparte los grupos musculares con sentido: evita cargar el mismo grupo grande dos días seguidos cuando se pueda, y respeta la prioridad y los objetivos de la persona.
+6. Las sesiones de cardio, bici u otro déjalas como están (mismo "tipo", "nombre" y "min") salvo que pida cambiarlas o moverlas de día.
+7. "origen": para cada sesión de tu respuesta, el "dia" que tenía en la rutina actual la sesión de la que parte (aunque la cambies de día o de ejercicios). Usa -1 solo para una sesión nueva sin equivalente (por ejemplo la segunda parte de una pierna dividida: allí pon como origen el día de la pierna original en la parte que conserva el nombre y -1 en la nueva).
+8. "foco" (solo en fuerza, opcional): push, pull, legs, torso, pierna, full, fullB, fullC, pecho, espalda, hombro, brazos, gluIsq (glúteo e isquios), cuadGlu (cuádriceps y glúteo), lowerFull (pierna completa), torsoL (torso ligero), fullG, fullG2. Si no encaja ninguno, déjalo vacío.
+9. Si la petición no tiene que ver con la rutina, es imposible con su material, o pide algo peligroso o un consejo médico, devuelve la rutina SIN cambios y explícalo con tacto en "mensaje" (no inventes lesiones ni diagnósticos).
+10. "mensaje": 1 o 2 frases (máximo 280 caracteres) que dicen qué has cambiado, citando días y ejercicios reales, en tono cercano y motivador. Si no has cambiado nada, di por qué.
+Responde solo con el JSON del esquema.`;
+const ESQUEMA_RUTINA = {
+  type: 'OBJECT',
+  properties: {
+    mensaje: { type: 'STRING' },
+    dias: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          dia: { type: 'INTEGER' }, origen: { type: 'INTEGER' }, tipo: { type: 'STRING', enum: AJUSTE_TIPOS }, nombre: { type: 'STRING' }, foco: { type: 'STRING' }, min: { type: 'INTEGER' },
+          ejercicios: { type: 'ARRAY', items: { type: 'OBJECT', properties: { nombre: { type: 'STRING' }, series: { type: 'INTEGER' }, reps: { type: 'STRING' } }, required: ['nombre', 'series', 'reps'] } },
+        },
+        required: ['dia', 'origen', 'tipo', 'nombre'],
+      },
+    },
+  },
+  required: ['mensaje', 'dias'],
+};
+const CFG_RUTINA = { prompt: PROMPT_RUTINA, esquema: ESQUEMA_RUTINA, temperature: 0.3 };
+const txtAj = (v, n) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
+const entAj = (v, lo, hi) => { const n = Math.round(Number(v)); return Number.isFinite(n) && n >= lo && n <= hi ? n : null; };
+// Rutina que manda la app → versión limpia para el prompt (o null si no tiene forma de rutina).
+function rutinaParaPrompt(r) {
+  const dias = r && Array.isArray(r.dias) ? r.dias.slice(0, 7) : [];
+  const out = [], vistos = new Set();
+  for (const x of dias) {
+    const dia = entAj(x && x.dia, 0, 6), tipo = x && x.tipo;
+    if (dia == null || vistos.has(dia) || !AJUSTE_TIPOS.includes(tipo)) continue;
+    vistos.add(dia);
+    const o = { dia, tipo, nombre: txtAj(x.nombre, 40) };
+    if (typeof x.foco === 'string' && AJUSTE_FOCOS.includes(x.foco)) o.foco = x.foco;
+    if (tipo === 'fuerza') o.ejercicios = (Array.isArray(x.ejercicios) ? x.ejercicios : []).slice(0, 12).map((e) => ({ nombre: txtAj(e && e.nombre, 60), series: entAj(e && e.series, 1, 10) || 3, reps: txtAj(e && e.reps, 20) || '10' })).filter((e) => e.nombre);
+    else { const m = entAj(x.min, 5, 600); if (m) o.min = m; }
+    out.push(o);
+  }
+  return out.length ? { dias: out.sort((a, b) => a.dia - b.dia) } : null;
+}
+// Catálogo {grupo: [nombres]} que manda la app (solo texto, con tope de tamaño).
+function catalogoLimpio(c) {
+  const out = {};
+  let total = 0;
+  if (c && typeof c === 'object' && !Array.isArray(c)) {
+    for (const g of Object.keys(c).slice(0, 20)) {
+      const nombres = (Array.isArray(c[g]) ? c[g] : []).map((n) => txtAj(n, 60)).filter(Boolean).slice(0, 80);
+      if (!nombres.length || total + nombres.length > 400) continue;
+      out[txtAj(g, 24)] = nombres; total += nombres.length;
+    }
+  }
+  return out;
+}
+// Contexto de la rutina (lo que se eligió en el asistente) con listas cerradas: nada de texto libre del móvil en el prompt.
+function contextoRutina(c) {
+  const o = {};
+  if (c && typeof c === 'object') {
+    if (Object.prototype.hasOwnProperty.call(COACH_EXP, c.exp)) o.nivel = COACH_EXP[c.exp];
+    const donde = lista(c.donde, COACH_DONDE); if (donde.length) o.lugares = donde;
+    const eq = lista(c.eq, COACH_EQ_RUTINA); if (eq.length) o.material = eq;
+    if (Object.prototype.hasOwnProperty.call(COACH_PRIO, c.prio)) o.prioridad = COACH_PRIO[c.prio];
+  }
+  return o;
+}
+// Respuesta de Gemini → { mensaje, dias[] } limpia (días 0-6 sin repetir, tipos y tamaños acotados). La app vuelve a validar los nombres de ejercicio con su biblioteca.
+function limpiarRutinaIA(x) {
+  if (Array.isArray(x)) x = x[0];
+  const dias = [], vistos = new Set();
+  for (const d of (x && Array.isArray(x.dias) ? x.dias : []).slice(0, 14)) {
+    const dia = entAj(d && d.dia, 0, 6), tipo = d && d.tipo;
+    if (dia == null || vistos.has(dia) || !AJUSTE_TIPOS.includes(tipo)) continue;
+    vistos.add(dia);
+    const o = { dia, origen: entAj(d.origen, 0, 6) == null ? -1 : entAj(d.origen, 0, 6), tipo, nombre: txtAj(d.nombre, 40) };
+    if (typeof d.foco === 'string' && AJUSTE_FOCOS.includes(d.foco)) o.foco = d.foco;
+    if (tipo === 'fuerza') o.ejercicios = (Array.isArray(d.ejercicios) ? d.ejercicios : []).slice(0, 10).map((e) => ({ nombre: txtAj(e && e.nombre, 60), series: entAj(e && e.series, 1, 10) || 3, reps: txtAj(e && e.reps, 20) || '10' })).filter((e) => e.nombre);
+    else { const m = entAj(d.min, 5, 600); if (m) o.min = m; }
+    dias.push(o);
+  }
+  if (!dias.length) throw Object.assign(new Error('rutina vacía'), { status: 'json' });
+  return { mensaje: txtAj(x.mensaje, 320) || 'Rutina actualizada.', dias: dias.sort((a, b) => a.dia - b.dia) };
+}
+exports.ajustarRutina = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 90, memory: '256MiB', concurrency: 10 }, async (req) => {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión para usar la IA.');
+  const uid = req.auth.uid, data = req.data || {}, dia = hoyMadrid();
+  const usr = await userRef(uid).get();
+  const p = usr.exists ? usr.data() : {};
+  const pro = proVigente(p), limite = pro ? LIMITE_AJUSTES_PRO : LIMITE_AJUSTES_FREE;
+  if (data.modo === 'estado') { // cuántos ajustes le quedan hoy (no gasta ninguno)
+    const s = await usoRef(uid, dia).get();
+    const usadas = Math.min(limite, (s.exists && Number(s.data().rutina)) || 0);
+    return { usadas, quedan: Math.max(0, limite - usadas), limite, pro };
+  }
+  const instruccion = txtAj(data.instruccion, 300), rutina = rutinaParaPrompt(data.rutina);
+  if (instruccion.length < 3 || !rutina) throw new HttpsError('invalid-argument', 'Escribe qué quieres cambiar de la rutina.');
+  const catalogo = catalogoLimpio(data.catalogo), contexto = contextoRutina(data.contexto);
+
+  // Reserva la solicitud en el contador del día (por persona y global). Si Gemini falla, se devuelve abajo.
+  let usadas = 0;
+  await db.runTransaction(async (tx) => {
+    const [u, g] = await Promise.all([tx.get(usoRef(uid, dia)), tx.get(globalRef(dia))]);
+    usadas = (u.exists && Number(u.data().rutina)) || 0;
+    const total = (g.exists && Number(g.data().rutina)) || 0;
+    if (usadas >= limite) throw new HttpsError('resource-exhausted', pro ? `Ya has usado tus ${limite} ajustes PRO de hoy. Mañana tendrás otros ${limite}.` : `Ya has usado tus ${limite} ajustes de hoy. Con Cadencia PRO tienes hasta ${LIMITE_AJUSTES_PRO} al día.`, { codigo: 'ajustes-limite', usadas, limite, pro });
+    if (total >= LIMITE_AJUSTES_GLOBAL) throw new HttpsError('resource-exhausted', 'La IA ha llegado a su límite de hoy. Prueba mañana.', { codigo: 'ajustes-global' });
+    tx.set(usoRef(uid, dia), { uid, dia, rutina: usadas + 1, ultima: FieldValue.serverTimestamp() }, { merge: true });
+    tx.set(globalRef(dia), { rutina: total + 1 }, { merge: true });
+  });
+  try {
+    const res = limpiarRutinaIA(await llamarGemini(GEMINI_CLAVE.value(), { perfil: perfilCoach(p), contexto, rutina, catalogo, instruccion }, CFG_RUTINA));
+    console.log('Ajuste de rutina ok', pro ? 'pro' : 'free', usadas + 1, '/', limite);
+    return { ...res, usadas: usadas + 1, quedan: limite - usadas - 1, limite, pro };
+  } catch (e) {
+    const dec = FieldValue.increment(-1); // si falla, la solicitud no cuenta
+    await Promise.all([usoRef(uid, dia).set({ rutina: dec }, { merge: true }), globalRef(dia).set({ rutina: dec }, { merge: true })]).catch(() => {});
+    if (e instanceof HttpsError) throw e;
+    console.error('Ajuste de rutina', e && e.status, e && e.message);
+    const st = e && e.status, http = Number.isInteger(st) ? st : null, motivo = typeof st === 'string' ? st : (http ? null : 'interno');
+    const msg = [429, 500, 502, 503, 504].includes(http) ? 'La IA está saturada ahora mismo. Prueba otra vez en un minuto (esta solicitud no se ha descontado).'
+      : motivo === 'timeout' ? 'La IA ha tardado demasiado. Prueba otra vez (esta solicitud no se ha descontado).'
+      : 'La IA no ha podido ajustar la rutina. Prueba otra vez o cámbialo con otras palabras (esta solicitud no se ha descontado).';
+    throw new HttpsError('unavailable', msg, { codigo: 'ajuste-fallo', http, motivo });
   }
 });
 
