@@ -2098,10 +2098,12 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 /* 2026-11-23 · Botón de sugerencia o fallo en Perfil y su valoración (1-5) */
 .fb-wrap { padding: 4px 16px 0; }
 .fb-btn { display: block; width: 100%; min-height: 46px; border: 1px solid var(--bd); background: transparent; color: var(--muted); font: inherit; font-size: 13.5px; font-weight: 600; letter-spacing: .02em; padding: 12px 14px; border-radius: 2px; text-align: center; }
-.fb-btn:active { color: var(--ink); border-color: var(--accent); }
+.fb-btn { border-radius: var(--r-sm); }
+.fb-btn:active { color: var(--ink); border-color: var(--brand-yellow); }
+.fb-btn:focus-visible, .fb-n:focus-visible { outline: 2px solid var(--brand-yellow); outline-offset: 2px; }
 .fb-pun { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 8px; }
-.fb-n { min-height: 46px; border: 1px solid var(--bd); background: var(--surface2); color: var(--ink); font: inherit; font-size: 16px; font-weight: 700; border-radius: 2px; }
-.fb-n.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.fb-n { min-height: 46px; border: 1px solid var(--bd); background: var(--surface2); color: var(--ink); font: inherit; font-size: 16px; font-weight: 700; border-radius: var(--r-sm); }
+.fb-n.on { background: var(--brand-yellow); border-color: var(--brand-yellow); color: var(--text-on-brand); }
 
 /* ---------- 2026-11-23 · Mis rutinas › Modificar: propuesta de la IA como borrador (59) ---------- */
 .rut-mod-ia { display: inline-flex; align-items: center; gap: 6px; }
