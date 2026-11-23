@@ -44,7 +44,27 @@ async function firebaseBackend(config) {
   const weightRef = (uid, date) => F.doc(db, 'users', uid, 'pesos', date);
 
   const err = (code) => { const e = new Error(code); e.code = code; return e; };
-  const toUser = (u) => (u ? { uid: u.uid, email: u.email, name: u.displayName || '' } : null);
+  const toUser = (u) => (u ? { uid: u.uid, email: u.email, name: u.displayName || '', emailVerified: u.emailVerified === true } : null);
+  // Verificación de correo (las funciones de IA la exigen en el servidor: `email_verified` del token). Si falta, se avisa a la app con un evento para que abra la hoja «Confirma tu correo».
+  const pedirVerificacion = () => {
+    try { window.dispatchEvent(new CustomEvent('cadencia:verificar-email')); } catch (e) { /* sin ventana */ }
+    return Object.assign(new Error('Confirma tu correo electrónico para usar la IA.'), { code: 'email/no-verificado' });
+  };
+  // true si el correo está confirmado. Con `refrescar` relee la cuenta (por si se confirmó en otro dispositivo o pestaña) y renueva el token, que es lo que mira el servidor.
+  const correoVerificado = async (refrescar) => {
+    const u = auth.currentUser;
+    if (!u) return false;
+    if (u.emailVerified) return true;
+    if (!refrescar) return false;
+    try { await u.reload(); if (u.emailVerified) { await u.getIdToken(true); return true; } } catch (e) { /* sin red: se queda como no verificado */ }
+    return false;
+  };
+  // Antes de una llamada de IA: si no está verificado, no se gasta ni la llamada. Y si el servidor lo rechaza igualmente (token antiguo), se traduce al mismo error.
+  const conVerificacion = async (hacer, necesita = true) => {
+    if (necesita && !(await correoVerificado(true))) throw pedirVerificacion();
+    try { return await hacer(); }
+    catch (e) { if (e && e.details && e.details.codigo === 'email-no-verificado') throw pedirVerificacion(); throw e; }
+  };
   // Llama a una Cloud Function de referidos y traduce sus errores (los mensajes de la IA no valen aquí).
   const llamar = async (nombre, data) => {
     const Fn = await import(/* @vite-ignore */ FB + 'firebase-functions.js');
@@ -63,6 +83,7 @@ async function firebaseBackend(config) {
     async register(name, email, pass) {
       const cred = await A.createUserWithEmailAndPassword(auth, email, pass);
       if (name) await A.updateProfile(cred.user, { displayName: name });
+      try { auth.languageCode = 'es'; await A.sendEmailVerification(cred.user); } catch (e) { /* se puede reenviar desde la app */ }
       const nombre = (name || '').trim().split(/\s+/)[0] || '';
       await F.setDoc(userRef(cred.user.uid), { nombre, nombreCompleto: (name || '').trim(), email, creado: F.serverTimestamp(), onboarded: false, onboardingCompletado: false, isPro: false, proPlan: 'none', referidos: 0, recompensas: [] }, { merge: true });
       llamar('miCodigo').catch(() => {}); // el servidor le asigna su código de invitación (si falla, se pide al abrir la app)
@@ -73,6 +94,14 @@ async function firebaseBackend(config) {
     async loginGoogle() { return toUser((await A.signInWithPopup(auth, new A.GoogleAuthProvider())).user); },
     async loginApple() { const p = new A.OAuthProvider('apple.com'); p.addScope('email'); p.addScope('name'); return toUser((await A.signInWithPopup(auth, p)).user); },
     async logout() { await A.signOut(auth); },
+    // Correo confirmado (true/false). `refrescar` consulta de nuevo a Firebase. Y reenvío del correo de verificación.
+    emailVerificado(refrescar) { return correoVerificado(!!refrescar); },
+    async reenviarVerificacion() {
+      const u = auth.currentUser;
+      if (!u) throw err('auth/no-current-user');
+      auth.languageCode = 'es';
+      await A.sendEmailVerification(u);
+    },
     // Cuenta: proveedores de acceso, contraseña, Google y foto de perfil (Firebase Storage).
     providers() { return ((auth.currentUser && auth.currentUser.providerData) || []).map((p) => p.providerId); },
     async changePassword(actual, nueva) {
@@ -153,22 +182,29 @@ async function firebaseBackend(config) {
     },
     // IA (foto del plato y Taller) a través de la Cloud Function «ia».
     async ia(data) {
-      if (!iaFn) {
-        const Fn = await import(/* @vite-ignore */ FB + 'firebase-functions.js');
-        iaFn = Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), 'ia', { timeout: 95000 });
-      }
-      return (await iaFn(data)).data;
+      const gasta = !data || (data.modo !== 'estado' && data.modo !== 'borrar'); // «estado» y «borrar» no exigen correo confirmado
+      return conVerificacion(async () => {
+        if (!iaFn) {
+          const Fn = await import(/* @vite-ignore */ FB + 'firebase-functions.js');
+          iaFn = Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), 'ia', { timeout: 95000 });
+        }
+        return (await iaFn(data)).data;
+      }, gasta);
     },
     // Coach AI (Gemini) a través de la Cloud Function «coach»: analiza el entreno guardado y lo guarda en su documento.
     async coach(id) {
-      const Fn = await import(/* @vite-ignore */ FB + 'firebase-functions.js');
-      return (await Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), 'coach', { timeout: 95000 })({ id })).data;
+      return conVerificacion(async () => {
+        const Fn = await import(/* @vite-ignore */ FB + 'firebase-functions.js');
+        return (await Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), 'coach', { timeout: 95000 })({ id })).data;
+      });
     },
     // Ajustes de la rutina propuesta con IA (Gemini) a través de «ajustarRutina»: { modo:'estado' } = cuántos ajustes quedan hoy; con { rutina, catalogo, contexto, instruccion } devuelve la rutina modificada.
     // El contador diario (3 sin Pro, 10 con Pro) lo lleva el servidor.
     async ajustarRutina(data) {
-      const Fn = await import(/* @vite-ignore */ FB + 'firebase-functions.js');
-      return (await Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), 'ajustarRutina', { timeout: 95000 })(data || {})).data;
+      return conVerificacion(async () => {
+        const Fn = await import(/* @vite-ignore */ FB + 'firebase-functions.js');
+        return (await Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), 'ajustarRutina', { timeout: 95000 })(data || {})).data;
+      }, !(data && data.modo === 'estado'));
     },
     // Strava a través de la Cloud Function «strava» (conectar, actividades, desconectar). Los tokens nunca llegan al móvil.
     async strava(data) {
@@ -260,6 +296,8 @@ function localBackend() {
     async loginGoogle() { throw err('local/no-social'); },
     async loginApple() { throw err('local/no-social'); },
     async logout() { const s = read(); s.session = null; write(s); emit(); },
+    async emailVerificado() { return true; }, // modo prueba: no hay correo que confirmar
+    async reenviarVerificacion() { throw err('local/no-verif'); },
     providers() { return ['password']; },
     async changePassword(actual, nueva) {
       const s = read(), u = s.session && s.users[s.session];
@@ -396,6 +434,8 @@ const MESSAGES = {
   'auth/wrong-password': 'Email o contraseña incorrectos.',
   'auth/user-not-found': 'Email o contraseña incorrectos.',
   'auth/missing-password': 'Escribe tu contraseña.',
+  'email/no-verificado': 'Confirma tu correo electrónico para usar la IA.',
+  'local/no-verif': 'En el modo de prueba no hay correo que verificar.',
   'auth/too-many-requests': 'Demasiados intentos seguidos. Espera unos minutos y vuelve a probar.',
   'auth/network-request-failed': 'Sin conexión. Comprueba internet y vuelve a probar.',
   'auth/operation-not-allowed': 'Ese método de acceso no está activado en Firebase (Authentication → Sign-in method).',

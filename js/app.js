@@ -103,7 +103,7 @@ function render() {
   C3.enganchar(root);
   RG.pintarMapas(root);
   if (st.view === 'main' && st.compartir) pintarCompartir();
-  document.body.classList.toggle('noscroll', !!(st.limite || st.liveFin || st.rutNuevos || st.compartir || st.calentar || st.moverSel || st.dia7 || st.pf || st.proInfo || st.codigo || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.exView || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.resumen || st.cuerpo3d || st.legal || st.del || st.pro || st.proWelcome || st.recAsk));
+  document.body.classList.toggle('noscroll', !!(st.verif || st.limite || st.liveFin || st.rutNuevos || st.compartir || st.calentar || st.moverSel || st.dia7 || st.pf || st.proInfo || st.codigo || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.exView || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.resumen || st.cuerpo3d || st.legal || st.del || st.pro || st.proWelcome || st.recAsk));
 }
 
 /* ================================================================== */
@@ -527,6 +527,45 @@ function codigoSheetHTML() {
       </form>
     </div>`;
 }
+// ---- Verificación de correo (las funciones de IA la exigen en el servidor) ----
+// `data.js` lanza el evento «cadencia:verificar-email» cuando una llamada de IA falla porque el correo no está confirmado; aquí se abre la hoja.
+const VERIF_ESPERA_MS = 60000; // entre un reenvío y otro (Firebase además limita por su cuenta)
+function verifSheetHTML() {
+  const v = st.verif, email = (st.user && st.user.email) || 'tu correo', espera = Math.max(0, Math.ceil((v.hasta - Date.now()) / 1000));
+  return `<div class="sheet-back sheet-back-top" data-act="verif-close"></div>
+    <div class="sheet short pw-aviso verif-sheet" role="dialog" aria-modal="true" aria-label="Confirma tu correo">
+      <div class="sheet-grab"></div>
+      <div class="pw-aviso-b">
+        <h2>Confirma tu correo</h2>
+        <p>Para usar la IA (generar y ajustar rutinas, Coach AI y el escáner de comidas) necesitamos confirmar que <b>${esc(email)}</b> es tuyo. Abre el enlace del correo que te enviamos y vuelve aquí. Mira también en spam.</p>
+        ${v.msg ? `<p class="cod-msg" role="${v.ok ? 'status' : 'alert'}">${esc(v.msg)}</p>` : ''}
+        <button type="button" class="btn block" data-act="verif-ya"${v.busy ? ' disabled' : ''}>${v.busy === 'ya' ? '<span class="spinner"></span>' : 'Ya lo he confirmado'}</button>
+        <button type="button" class="btn ghost block" data-act="verif-reenviar"${v.busy || espera > 0 ? ' disabled' : ''}>${v.busy === 'envio' ? '<span class="spinner"></span>' : espera > 0 ? `Reenviar correo (${espera} s)` : 'Reenviar correo'}</button>
+        <button type="button" class="btn ghost block pw-ghost" data-act="verif-close">Ahora no</button>
+      </div>
+    </div>`;
+}
+function verifAbrir() {
+  if (st.verif || !st.user) return;
+  st.verif = { msg: '', ok: false, busy: false, hasta: 0 }; render();
+}
+async function verifYa() {
+  const v = st.verif; if (!v || v.busy) return;
+  v.busy = 'ya'; v.msg = ''; render();
+  let ok = false;
+  try { ok = await api.emailVerificado(true); } catch (e) { ok = false; }
+  if (st.verif !== v) return;
+  if (ok) { st.verif = null; if (st.user) st.user = { ...st.user, emailVerified: true }; render(); return toast('Correo confirmado. Ya puedes usar la IA; vuelve a pulsar el botón que usabas.'); }
+  v.busy = false; v.ok = false; v.msg = 'Todavía no aparece confirmado. Abre el enlace del correo y pulsa de nuevo.'; render();
+}
+async function verifReenviar() {
+  const v = st.verif; if (!v || v.busy || v.hasta > Date.now()) return;
+  v.busy = 'envio'; v.msg = ''; render();
+  try { await api.reenviarVerificacion(); v.ok = true; v.msg = 'Correo enviado. Puede tardar un minuto en llegar.'; v.hasta = Date.now() + VERIF_ESPERA_MS; setTimeout(() => { if (st.verif === v) render(); }, VERIF_ESPERA_MS + 300); }
+  catch (e) { v.ok = false; v.msg = errorText(e); if (e && e.code === 'auth/too-many-requests') v.hasta = Date.now() + VERIF_ESPERA_MS; }
+  v.busy = false; if (st.verif === v) render();
+}
+window.addEventListener('cadencia:verificar-email', verifAbrir);
 async function canjearCodigo(codigo) {
   const c = st.codigo; if (!c || c.busy) return;
   const cod = String(codigo || '').trim().toUpperCase().replace(/[\s-]/g, '');
@@ -673,7 +712,7 @@ let stravaRet = CICLISMO ? leerRetorno() : null; // si venimos de la pantalla de
 
 const gearHTML = () => `<button type="button" class="gear" data-act="cfg-open" aria-label="Configuración">${I.gear}</button>`;
 function viewMain() {
-  const sheet = st.dia7 ? dia7SheetHTML() : st.rutNuevos ? rutNuevosSheetHTML() : st.compartir ? compartirSheetHTML() : st.cuerpo3d ? cuerpoSheetHTML() : st.codigo ? codigoSheetHTML() : st.limite ? limiteSheetHTML() : st.proInfo ? proInfoHTML() : st.legal ? legalSheetHTML() : st.pf ? pfSheetHTML() : st.liveFin && st.live ? finSheetHTML() : st.calentar ? calentarSheetHTML() : st.moverSel ? moverSheetHTML() : st.rutShare ? rutShareSheetHTML() : st.modoSel ? modoSheetHTML() : st.resumen ? resumenSheetHTML() : st.del ? delSheetHTML() : st.exView ? exViewHTML() : st.lib ? libSheetHTML() : st.rutDelAsk ? rutDelSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
+  const sheet = st.verif ? verifSheetHTML() : st.dia7 ? dia7SheetHTML() : st.rutNuevos ? rutNuevosSheetHTML() : st.compartir ? compartirSheetHTML() : st.cuerpo3d ? cuerpoSheetHTML() : st.codigo ? codigoSheetHTML() : st.limite ? limiteSheetHTML() : st.proInfo ? proInfoHTML() : st.legal ? legalSheetHTML() : st.pf ? pfSheetHTML() : st.liveFin && st.live ? finSheetHTML() : st.calentar ? calentarSheetHTML() : st.moverSel ? moverSheetHTML() : st.rutShare ? rutShareSheetHTML() : st.modoSel ? modoSheetHTML() : st.resumen ? resumenSheetHTML() : st.del ? delSheetHTML() : st.exView ? exViewHTML() : st.lib ? libSheetHTML() : st.rutDelAsk ? rutDelSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
   if (st.rw) return viewRutWizard() + sheet;
   if (st.live && !st.liveMin) return viewLive() + sheet;
   if (st.wk) return viewWkForm();
@@ -1577,7 +1616,7 @@ async function enter(u) {
   if (u && st.view === 'paywall' && st.vieneDeRegistro) return; // aviso de sesión repetido mientras se ve el paywall: no entrar en la app todavía
   st.user = u; st.busy = false;
   if (!u && M) M.pararPro();
-  if (!u) { pwQuitar(); st.vieneDeRegistro = false; const anon = st.ob && st.ob.anon && !st.ob.justRegistered ? st.ob : null; /* un cuestionario sin cuenta en marcha NO se pierde por un aviso «sin sesión» */ st.cfg = st.pwd = st.pf = st.proInfo = st.rutShare = st.codigo = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = anon && st.view === 'onboarding' ? 'onboarding' : 'auth'; st.ob = anon; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
+  if (!u) { pwQuitar(); st.vieneDeRegistro = false; const anon = st.ob && st.ob.anon && !st.ob.justRegistered ? st.ob : null; /* un cuestionario sin cuenta en marcha NO se pierde por un aviso «sin sesión» */ st.cfg = st.pwd = st.pf = st.proInfo = st.rutShare = st.codigo = st.verif = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = anon && st.view === 'onboarding' ? 'onboarding' : 'auth'; st.ob = anon; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
   try {
     // PUERTA OBLIGATORIA: antes de pintar la app (y antes de pedir entrenos, peso, racha…) se lee el perfil.
     // Sin `onboardingCompletado: true` solo se ve el cuestionario: nada de cabecera, barra inferior ni secciones.
@@ -1649,6 +1688,9 @@ root.addEventListener('click', async (e) => {
   else if (act === 'pf-open') { st.pf = { v, f: {}, busy: false }; st.editGoals = null; render(); if (v === 'referidos') refAbrir(); }
   else if (act === 'cod-open') { st.codigo = { val: refGuardado(), msg: '', busy: false }; render(); const i = root.querySelector('.cod-input'); if (i) i.focus(); }
   else if (act === 'cod-close') { st.codigo = null; render(); }
+  else if (act === 'verif-close') { st.verif = null; render(); }
+  else if (act === 'verif-ya') verifYa();
+  else if (act === 'verif-reenviar') verifReenviar();
   else if (act === 'ref-reclamar') reclamarReferido(v);
   else if (act === 'plan-sel') { if (planActivo() === 'siempre' && RECURRENTES.includes(v)) return; const actual = (st.pf && st.pf.plan) || planActivo() || 'anual'; if (v === actual) return; if (st.pf && PLANES.some((x) => x.id === v)) { st.pf.plan = v; if (!pintarSeleccion(v)) render(); } }
   else if (act === 'plan-go') { const pa = planActivo(), el = (st.pf && st.pf.plan) || pa || 'anual'; if (subCta(el, pa).act !== 'plan-go') return; const url = planUrl((st.pf && st.pf.plan) || 'anual', st.user); if (!url) { toast('La suscripción estará disponible muy pronto.'); return; } const w = window.open(url, '_blank'); if (!w) location.assign(url); }

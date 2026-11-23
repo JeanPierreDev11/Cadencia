@@ -318,7 +318,7 @@ async function pedirCoach(id) {
       const maxRe = corto ? 3 : (c === 'functions/unavailable' || c === 'functions/deadline-exceeded') ? 1 : 0;
       const sinRed = typeof navigator !== 'undefined' && navigator.onLine === false;
       if (intento < maxRe && !sinRed && Date.now() - t0 < 150000) { diagnosticoCoach(e, id); await new Promise((r) => setTimeout(r, c === 'functions/aborted' ? 6000 : 4000)); if (!st.user || !st.workouts.some((x) => x.id === id)) { delete st.aiPend[id]; return render(); } continue; }
-      st.aiPend[id] = { error: `${textoCoach(e)} (${diagnosticoCoach(e, id)})` }; // p. ej. «… (Error 503)» / «(Timeout)»
+      st.aiPend[id] = { error: c === 'email/no-verificado' ? errorText(e) : `${textoCoach(e)} (${diagnosticoCoach(e, id)})` }; // sin correo confirmado: mensaje limpio (la hoja «Confirma tu correo» se abre sola) // p. ej. «… (Error 503)» / «(Timeout)»
       break;
     }
   }

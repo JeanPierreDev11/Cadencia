@@ -31,6 +31,9 @@ const LIMITE_GLOBAL_FREE = 150; // fotos de plato gratuitas al día entre todas 
 // App Check (verifica que la llamada viene de la app real y no de un script con una cuenta cualquiera). Déjalo en false hasta que la app envíe el token
 // (ver «App Check» en claude/contexto-seguridad-produccion.md); con true y sin App Check en la app, TODAS las llamadas de IA fallarían.
 const EXIGIR_APPCHECK = false;
+// Verificación de correo: las funciones de IA (ia en modo plato/taller, coach y ajustarRutina) solo atienden a cuentas con el correo confirmado
+// (token de Firebase Auth con email_verified === true; Google y Apple ya lo traen). Poner en false para desactivar la exigencia sin tocar nada más.
+const EXIGIR_EMAIL_VERIFICADO = true;
 const MODELO_PLATO = 'claude-haiku-5-5'; // rápido y barato, ve imágenes
 const MODELO_TALLER = 'claude-sonnet-5-5'; // más conocimiento de componentes y compatibilidades
 
@@ -38,6 +41,13 @@ const hoyMadrid = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Mad
 const usoRef = (uid, dia) => db.doc(`iaUso/${uid}_${dia}`);
 const globalRef = (dia) => db.doc(`iaGlobal/${dia}`);
 const userRef = (uid) => db.doc(`users/${uid}`);
+// Lanza `failed-precondition` con details.codigo === 'email-no-verificado' si la cuenta no ha confirmado su correo. El token se refresca en el cliente (getIdToken(true)) tras verificar.
+const exigirEmailVerificado = (req, funcion) => {
+  if (!EXIGIR_EMAIL_VERIFICADO) return;
+  const t = (req.auth && req.auth.token) || {};
+  if (t.email_verified === true) return;
+  throw new HttpsError('failed-precondition', 'Confirma tu correo electrónico para usar la IA. Te hemos enviado un enlace; si no lo encuentras, puedes reenviarlo desde la app.', { codigo: 'email-no-verificado', funcion, http: 412 });
+};
 // Pro vigente: isPro y, si son días regalados por referidos (proCaduca), que no hayan caducado.
 const proVigente = (d) => !!d && d.isPro === true && !(Number(d.proCaduca) > 0 && Number(d.proCaduca) <= Date.now());
 const esPro = async (uid) => { const d = await userRef(uid).get(); return d.exists && proVigente(d.data()); };
@@ -254,6 +264,7 @@ function leerJSON(r) {
 exports.ia = onCall({ secrets: [CLAVE], timeoutSeconds: 90, memory: '512MiB', cpu: 1, concurrency: 10, enforceAppCheck: EXIGIR_APPCHECK }, async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión para usar la IA.');
   const uid = req.auth.uid, data = req.data || {}, modo = data.modo, dia = hoyMadrid();
+  if (modo !== 'estado' && modo !== 'borrar') exigirEmailVerificado(req, 'ia'); // «estado» y «borrar» (borrar la cuenta) funcionan sin verificar
   // La IA es de Cadencia Pro. Se comprueba aquí, en el servidor, antes de leer nada de la petición.
   const pro = await esPro(uid);
   if (modo === 'estado') {
@@ -510,6 +521,7 @@ function limpiarCoach(x) {
 
 exports.coach = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 90, memory: '256MiB', concurrency: 10, enforceAppCheck: EXIGIR_APPCHECK }, async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión para usar la IA.');
+  exigirEmailVerificado(req, 'coach');
   const uid = req.auth.uid, id = String((req.data && req.data.id) || '');
   if (!/^[\w-]{1,80}$/.test(id)) throw new HttpsError('invalid-argument', 'Petición no válida.');
   const [usr, doc] = await Promise.all([userRef(uid).get(), db.doc(`users/${uid}/entrenos/${id}`).get()]);
@@ -691,6 +703,7 @@ function limpiarRutinaIA(x) {
 exports.ajustarRutina = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 90, memory: '256MiB', concurrency: 10, enforceAppCheck: EXIGIR_APPCHECK }, async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión para usar la IA.');
   const uid = req.auth.uid, data = req.data || {}, dia = hoyMadrid();
+  if (data.modo !== 'estado') exigirEmailVerificado(req, 'ajustarRutina'); // «estado» solo cuenta los ajustes que quedan
   const usr = await userRef(uid).get();
   const p = usr.exists ? usr.data() : {};
   const pro = proVigente(p), limite = pro ? LIMITE_AJUSTES_PRO : LIMITE_AJUSTES_FREE;
