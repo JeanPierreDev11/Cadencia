@@ -11,6 +11,9 @@ export const FIREBASE_CONFIG = {
   appId: "1:1098610128516:web:2de3814aa3179a46d534d1"
 };
 
+// Firebase App Check (reCAPTCHA v3): clave de SITIO, pública por diseño (la clave secreta vive en la consola de Firebase).
+export const APPCHECK_SITE_KEY = '6LfEHC4uAAAAAA1k8h4skLI0Atrug4UnlEgzi1oo';
+
 export const APP_NAME = 'Cadencia';
 
 // Interruptor del ciclismo (pestaña Bici, rutas y mapas, Taller, Strava y tipo de entreno «Bici»).

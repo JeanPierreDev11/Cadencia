@@ -8,7 +8,7 @@ const conPlan = (p) => {
   return p.proPlan ? p : { ...p, proPlan: 'none' };
 };
 
-import { FIREBASE_CONFIG, CICLISMO } from './config.js';
+import { FIREBASE_CONFIG, CICLISMO, APPCHECK_SITE_KEY } from './config.js';
 const sinBici = (l) => (CICLISMO ? l : l.filter((w) => w.tipo !== 'bici')); // con el ciclismo apagado, los entrenos de bici guardados no se enseñan
 
 const FB = 'https://www.gstatic.com/firebasejs/10.14.1/';
@@ -25,12 +25,21 @@ const nuevoCodigo = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), 
 /* Firebase                                                           */
 /* ------------------------------------------------------------------ */
 async function firebaseBackend(config) {
-  const [{ initializeApp }, A, F] = await Promise.all([
+  const [{ initializeApp }, A, F, AC] = await Promise.all([
     import(/* @vite-ignore */ FB + 'firebase-app.js'),
     import(/* @vite-ignore */ FB + 'firebase-auth.js'),
     import(/* @vite-ignore */ FB + 'firebase-firestore.js'),
+    import(/* @vite-ignore */ FB + 'firebase-app-check.js').catch(() => null), // si no carga, la app sigue sin App Check
   ]);
   const app = initializeApp(config);
+  // App Check (reCAPTCHA v3): va justo tras initializeApp y ANTES de Auth/Firestore/Functions, que lo recogen al crearse.
+  // Mientras EXIGIR_APPCHECK sea false en el servidor, esto solo envía tokens (métricas) y nunca bloquea: un fallo aquí no debe romper la app.
+  if (AC && APPCHECK_SITE_KEY) {
+    try {
+      if (location.hostname === 'localhost') self.FIREBASE_APPCHECK_DEBUG_TOKEN = true; // solo en local: el SDK imprime un token de depuración en la consola para registrarlo en Firebase
+      AC.initializeAppCheck(app, { provider: new AC.ReCaptchaV3Provider(APPCHECK_SITE_KEY), isTokenAutoRefreshEnabled: true });
+    } catch (e) { console.warn('App Check no se pudo iniciar', e); }
+  }
   const auth = A.getAuth(app);
   auth.languageCode = 'es';
   let db;
