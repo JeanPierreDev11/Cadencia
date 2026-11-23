@@ -4,7 +4,7 @@ import { APP_NAME, CICLISMO } from './config.js';
 import * as E from './entreno.js';
 import { crearSecciones, NOV_V } from './secciones.js';
 import { crearEntreno } from './entreno-ui.js';
-import { LEGAL_V, legalHTML, CONTACTO } from './legal.js';
+import { LEGAL_V, legalDoc, legalTab, legalLinksHTML, legalCheckHTML, LEGAL_TABS, LEGAL_TITULOS, CONTACTO } from './legal.js';
 import { PORTAL_LINK, planUrl } from './pro.js';
 import * as CAL from './calorias.js';
 import { leerRetorno } from './strava.js';
@@ -141,7 +141,7 @@ function viewAuth() {
       <div class="auth-or"><span>o</span></div>
       <button type="button" class="btn block quiet" data-act="login-google" ${st.busy ? 'disabled' : ''}>Continuar con Google</button>
       <button type="button" class="btn block quiet" data-act="login-apple" ${st.busy ? 'disabled' : ''}>Continuar con Apple</button>
-      <p class="small muted">¿Todavía no tienes cuenta? Vuelve atrás y pulsa «Empezar»: la creas al final del cuestionario. Si entras con Google o Apple por primera vez aquí, aceptas los <button type="button" class="link" data-act="legal-open">Términos de Uso, la Política de Privacidad y el aviso de salud</button>.</p>
+      <p class="small muted">¿Todavía no tienes cuenta? Vuelve atrás y pulsa «Empezar»: la creas al final del cuestionario. Si entras con Google o Apple por primera vez aquí, aceptas los ${legalCheckHTML()}.</p>
       <button type="button" class="link" data-act="auth-volver">${I.arrl} Volver</button>
       ${api.mode === 'local' ? `<p class="note"><span>●</span><span><b>Modo prueba.</b> Las cuentas y los datos se guardan solo en este dispositivo hasta que conectes Firebase.</span></p>` : ''}
     </div>
@@ -150,12 +150,14 @@ function viewAuth() {
 
 /* ---------- términos, privacidad y borrar la cuenta ---------- */
 function legalSheetHTML() {
+  const cur = legalTab(st.legal);
   return `<div class="sheet-back" data-act="legal-close"></div>
-    <div class="sheet" role="dialog" aria-modal="true" aria-label="Términos, privacidad y aviso de salud">
+    <div class="sheet legal-sheet" role="dialog" aria-modal="true" aria-label="Información legal">
       <div class="sheet-grab"></div>
-      <div class="sheet-head"><button type="button" class="iconbtn" data-act="legal-close" aria-label="Cerrar">${I.back}</button><h2>Términos y privacidad</h2><span style="width:36px"></span></div>
-      <div class="sheet-list legal">${legalHTML()}</div>
-      <div class="sheet-foot"><button class="btn block" data-act="legal-close">Entendido</button></div>
+      <div class="sheet-head"><span style="width:44px"></span><h2>Información legal</h2><button type="button" class="iconbtn" data-act="legal-close" aria-label="Cerrar">${I.close}</button></div>
+      <div class="seg mini legal-seg" role="tablist" aria-label="Documentos legales">${LEGAL_TABS.map((t) => `<button type="button" role="tab" id="legal-t-${t.id}" aria-selected="${t.id === cur}" aria-controls="legal-panel" tabindex="${t.id === cur ? 0 : -1}" data-act="legal-tab" data-v="${t.id}">${t.t}</button>`).join('')}</div>
+      <div class="sheet-list legal" id="legal-panel" role="tabpanel" aria-labelledby="legal-t-${cur}"><h2 class="legal-h">${LEGAL_TITULOS[cur]}</h2>${legalDoc(cur)}</div>
+      <div class="sheet-foot"><button type="button" class="btn block" data-act="legal-close">Cerrar</button></div>
     </div>`;
 }
 function delSheetHTML() {
@@ -1263,24 +1265,21 @@ function viewPerfil() {
       tienePass() ? pfRow('key', 'Modificar contraseña', { act: 'pwd-open' }) : '',
       tieneGoogle() ? pfRow('link', 'Cuenta de Google', { tag: '<span class="tag ok">Vinculada</span>' }) : pfRow('link', 'Vincular cuenta de Google', { act: 'google-link' }),
     ])}
-    ${pfGrupo('Soporte y legal', [
+    ${pfGrupo('Soporte', [
       pfRow('zap', 'Solicitar una función', { act: 'pf-open', v: 'func' }),
       pfRow('mail', 'Correo de soporte', { href: `mailto:${CONTACTO}?subject=${encodeURIComponent('Soporte Cadencia')}` }),
       pfRow('help', 'FAQ', { act: 'pf-open', v: 'faq' }),
-      pfRow('file', 'Términos y condiciones', { act: 'pf-open', v: 'terminos' }),
-      pfRow('shield', 'Política de privacidad', { act: 'pf-open', v: 'privacidad' }),
     ])}
     ${pfGrupo('Acciones de la cuenta', [
       pfRow('out', 'Cerrar sesión', { act: 'logout', cls: 'mute' }),
       pfRow('trash', 'Eliminar cuenta', { act: 'del-open', cls: 'danger' }),
     ])}
-    <p class="small muted pf-foot">${api.mode === 'firebase' ? 'Tus datos se guardan en la nube y los verás en cualquier dispositivo.' : 'Modo prueba: tus datos se guardan solo en este dispositivo.'}</p>`;
+    <p class="small muted pf-foot">${api.mode === 'firebase' ? 'Tus datos se guardan en la nube y los verás en cualquier dispositivo.' : 'Modo prueba: tus datos se guardan solo en este dispositivo.'}</p>
+    ${legalLinksHTML('pf-legal')}`;
 }
 
-const PF_TITULO = { referidos: 'Invita a tus amigos', editar: 'Editar perfil', detalles: 'Detalles personales', prefs: 'Preferencias', idioma: 'Idioma', suscripcion: 'Administrar suscripción', integraciones: 'Integraciones', func: 'Solicitar una función', faq: 'Preguntas frecuentes', terminos: 'Términos y condiciones', privacidad: 'Política de privacidad' };
+const PF_TITULO = { referidos: 'Invita a tus amigos', editar: 'Editar perfil', detalles: 'Detalles personales', prefs: 'Preferencias', idioma: 'Idioma', suscripcion: 'Administrar suscripción', integraciones: 'Integraciones', func: 'Solicitar una función', faq: 'Preguntas frecuentes' };
 const pfV = (k, d) => (st.pf.f && k in st.pf.f ? st.pf.f[k] : d); // lo escrito se conserva si la hoja se redibuja (p. ej. tras cambiar la foto)
-// El texto legal es uno solo (legal.js); cada vista toma las secciones que le tocan.
-const pfLegal = (re) => `<div class="sheet-list legal">${legalHTML().split(/(?=<h3>)/).filter((x) => re.test(x.slice(0, 60))).join('')}</div>`;
 
 // «Guardar» solo se activa cuando algún valor es distinto del que había al abrir la hoja.
 const pfCambios = () => { const P = st.pf, g = (x) => JSON.stringify([...(x || [])].sort()); return !!P.ini && (Object.keys(P.f).some((k) => k in P.ini && P.f[k] !== P.ini[k]) || (P.v === 'detalles' && !!st.editGoals && g(st.editGoals) !== g(st.profile.objetivos))); };
@@ -1348,7 +1347,7 @@ function pfCuerpo(v) {
       ['¿Mis datos son privados?', 'Sí. Solo tú puedes verlos y no los compartimos con anunciantes. Puedes borrarlos cuando quieras con «Eliminar cuenta».']];
     return `<div class="sheet-list">${Q.map(([q, a]) => `<details class="faq"><summary>${q}</summary><p class="small muted">${a}</p></details>`).join('')}</div>`;
   }
-  return pfLegal(v === 'terminos' ? /Aviso|Términos/ : /Privacidad/);
+  return '';
 }
 const PLANES = [
   { id: 'mensual', n: 'PRO Mensual', precio: '4,99 €', nota: 'Facturado mensualmente' },
@@ -1622,6 +1621,7 @@ async function entrarApp(u, { fade = false } = {}) {
 
 UI.iniciarHojas(root);
 OB.iniciarFirma(root, obFirmado);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && st.legal) { const b = root.querySelector('.sheet-back[data-act="legal-close"]'); if (b) b.click(); } });
 root.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.tap')) { e.preventDefault(); e.target.click(); } });
 root.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-act]');
@@ -1644,7 +1644,8 @@ root.addEventListener('click', async (e) => {
   else if (act === 'pw-cerrar') { if (st.vieneDeRegistro) { st.pwAviso = true; render(); } else pwSalir(); }
   else if (act === 'pw-aviso-cerrar') { st.pwAviso = false; render(); }
   else if (act === 'pw-seguir') pwSeguir();
-  else if (act === 'legal-open') { if (st.view === 'auth') { const f = root.querySelector('form'); st.authKeep = f && f.email ? { email: f.email.value, pass: f.pass.value } : null; } st.legal = true; render(); if (st.authKeep) keepForm(st.authKeep); }
+  else if (act === 'legal-open') { if (st.view === 'auth') { const f = root.querySelector('form'); st.authKeep = f && f.email ? { email: f.email.value, pass: f.pass.value } : null; } st.legal = legalTab(v); render(); if (st.authKeep) keepForm(st.authKeep); }
+  else if (act === 'legal-tab') { st.legal = legalTab(v); render(); const t = root.querySelector('.legal-seg [aria-selected="true"]'); if (t) t.focus({ preventScroll: true }); }
   else if (act === 'legal-close') { st.legal = false; render(); if (st.view === 'auth' && st.authKeep) { keepForm(st.authKeep); st.authKeep = null; } }
   else if (act === 'pf-open') { st.pf = { v, f: {}, busy: false }; st.editGoals = null; render(); if (v === 'referidos') refAbrir(); }
   else if (act === 'cod-open') { st.codigo = { val: refGuardado(), msg: '', busy: false }; render(); const i = root.querySelector('.cod-input'); if (i) i.focus(); }

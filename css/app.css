@@ -2075,6 +2075,26 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .rch-lim p { margin: 0; }
 .rch-undo { justify-self: start; }
 
+/* ---------- 2026-11-23 · Información legal: modal con pestañas + accesos discretos ---------- */
+.legal-sheet { gap: 8px; }
+.legal-seg { flex: none; }
+.legal-seg button { text-transform: uppercase; letter-spacing: .04em; min-height: 44px; min-width: 0; }
+.legal-seg button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); box-shadow: none; }
+.legal-seg button:focus-visible { outline: 2px solid var(--accent-text); outline-offset: -2px; }
+.legal-sheet .sheet-list { -webkit-overflow-scrolling: touch; padding-top: 4px; }
+.legal .legal-h { font-size: 18px; margin: 4px 0 0; text-transform: none; letter-spacing: 0; font-stretch: 100%; }
+.legal p { margin: 0; font-size: 14.5px; line-height: 1.5; }
+.legal .small { font-size: 13px; }
+.legal a { color: var(--accent-text); text-decoration: underline; }
+.legal .link { display: inline; padding: 0; font-size: inherit; text-transform: none; letter-spacing: 0; font-weight: 700; text-align: left; text-decoration: underline; }
+.legal-warn { border: 1px solid var(--accent); border-left-width: 4px; background: color-mix(in srgb, var(--accent) 10%, transparent); border-radius: 2px; padding: 12px 14px; font-size: 14.5px; line-height: 1.5; }
+.legal-sheet .sheet-foot { padding-top: 2px; }
+.legal-links { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 2px 6px; margin: 6px 0 0; color: var(--muted); font-size: 12.5px; }
+.legal-links button { border: 0; background: none; color: var(--muted); font: inherit; font-weight: 600; padding: 10px 6px; min-height: 44px; text-decoration: underline; text-underline-offset: 3px; }
+.legal-links button:active { color: var(--ink); }
+.legal-links.pf-legal { margin: 2px 0 10px; }
+.bv-foot .legal-links { margin-top: 0; }
+
 /* ============================================================
    2026-11-17 · Escritorio (≥ 1024 px). Todo dentro de la media query:
    el móvil no cambia. Sidebar, columna central y vistas a dos columnas.

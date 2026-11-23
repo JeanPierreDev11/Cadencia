@@ -4,6 +4,7 @@
 //   → ritmo (con la fecha en vivo) → obstaculos → psicologia → historia → carga (sin menú ni botón, se salta sola) → plan → firma (con pausa dramática) → registro (solo si el cuestionario se hizo SIN cuenta: `o.anon`)
 // Desde la Fase 3 el cuestionario se hace ANTES de crear la cuenta; «Tus datos» se reparte en pantallas sueltas (nombre, sexo, edad, altura, exp), sin número de paso.
 import { esc, nf, num, I } from './util.js';
+import { legalLinksHTML, legalCheckHTML } from './legal.js';
 
 /* ---------- datos ---------- */
 // Los ids de «dónde» son los mismos que usa el asistente de rutinas (gym, casa, parque), así lo guardado le sirve de punto de partida.
@@ -246,6 +247,7 @@ export function bienvenidaHTML(hero, hayAvance) {
     <div class="bv-foot">
       <button type="button" class="btn block" data-act="ob-empezar">${hayAvance ? 'SEGUIR DONDE LO DEJÉ' : 'EMPEZAR'}</button>
       <button type="button" class="link bv-in" data-act="auth-ingresar">¿Ya tienes cuenta? Iniciar sesión</button>
+      ${legalLinksHTML()}
     </div>
   </div>`;
 }
@@ -255,7 +257,7 @@ export function registroHTML(o) {
   const ocupado = !!o.saving;
   return `<h1 class="ob-title">Regístrate para guardar tu plan personalizado</h1>
     <p class="ob-sub">No compartimos tus datos.</p>
-    <label class="check"><input type="checkbox" data-ob="acepto" ${o.acepto ? 'checked' : ''}><span>Acepto los <button type="button" class="link" data-act="legal-open">Términos de Uso, la Política de Privacidad y el aviso de salud</button></span></label>
+    <label class="check"><input type="checkbox" data-ob="acepto" ${o.acepto ? 'checked' : ''}><span>Acepto los ${legalCheckHTML()}</span></label>
     <div class="reg-btns">
       <button type="button" class="btn block" data-act="reg-google" ${ocupado ? 'disabled' : ''}>Continuar con Google</button>
       <button type="button" class="btn block" data-act="reg-apple" ${ocupado ? 'disabled' : ''}>Continuar con Apple</button>
