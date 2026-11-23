@@ -33,11 +33,12 @@ async function firebaseBackend(config) {
   ]);
   const app = initializeApp(config);
   // App Check (reCAPTCHA v3): va justo tras initializeApp y ANTES de Auth/Firestore/Functions, que lo recogen al crearse.
-  // Mientras EXIGIR_APPCHECK sea false en el servidor, esto solo envía tokens (métricas) y nunca bloquea: un fallo aquí no debe romper la app.
+  // Un fallo aquí no debe romper la app: el servidor (APPCHECK_MODO 'suave') deja pasar a quien tenga sesión aunque no llegue token.
+  let appCheck = null;
   if (AC && APPCHECK_SITE_KEY) {
     try {
       if (location.hostname === 'localhost') self.FIREBASE_APPCHECK_DEBUG_TOKEN = true; // solo en local: el SDK imprime un token de depuración en la consola para registrarlo en Firebase
-      AC.initializeAppCheck(app, { provider: new AC.ReCaptchaV3Provider(APPCHECK_SITE_KEY), isTokenAutoRefreshEnabled: true });
+      appCheck = AC.initializeAppCheck(app, { provider: new AC.ReCaptchaV3Provider(APPCHECK_SITE_KEY), isTokenAutoRefreshEnabled: true });
     } catch (e) { console.warn('App Check no se pudo iniciar', e); }
   }
   const auth = A.getAuth(app);
@@ -54,17 +55,36 @@ async function firebaseBackend(config) {
 
   const err = (code) => { const e = new Error(code); e.code = code; return e; };
   const toUser = (u) => (u ? { uid: u.uid, email: u.email, name: u.displayName || '' } : null);
+  // Espera a que Auth haya cargado la sesión (al abrir la app, currentUser tarda un instante en estar listo).
+  const authLista = () => new Promise((res) => {
+    if (auth.currentUser) return res(auth.currentUser);
+    let off = () => {};
+    const t = setTimeout(() => { off(); res(auth.currentUser); }, 6000);
+    off = A.onAuthStateChanged(auth, (u) => { clearTimeout(t); off(); res(u); });
+  });
+  // Antes de CUALQUIER llamada a una Cloud Function: (1) sesión cargada y ID token FRESCO (getIdToken(true)); el SDK lo manda solo en la
+  // cabecera «Authorization: Bearer», no hace falta un fetch a mano; (2) token de App Check si hay, sin bloquear si reCAPTCHA falla (webviews).
+  const preparar = async () => {
+    const u = await authLista();
+    if (!u) throw Object.assign(new Error('Inicia sesión otra vez para continuar.'), { code: 'functions/unauthenticated' });
+    try { await u.getIdToken(true); }
+    catch (e) { throw Object.assign(new Error('Tu sesión ha caducado. Cierra sesión y vuelve a entrar.'), { code: 'functions/unauthenticated' }); }
+    if (appCheck) { try { await AC.getToken(appCheck, false); } catch (e) { console.warn('App Check: no se obtuvo token (la llamada sigue sin él)', e && e.code); } }
+  };
+  const cf = async (nombre, data, timeout) => {
+    await preparar();
+    const Fn = await import(/* @vite-ignore */ FB + 'firebase-functions.js');
+    return (await Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), nombre, { timeout })(data || {})).data;
+  };
   // Llama a una Cloud Function de referidos y traduce sus errores (los mensajes de la IA no valen aquí).
   const llamar = async (nombre, data) => {
-    const Fn = await import(/* @vite-ignore */ FB + 'firebase-functions.js');
-    try { return (await Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), nombre, { timeout: 30000 })(data || {})).data; }
+    try { return await cf(nombre, data, 30000); }
     catch (e) {
       const c = String((e && e.code) || ''), hayMsg = e && e.details && e.details.codigo;
-      const msg = hayMsg ? e.message : c === 'functions/not-found' ? 'Los referidos todavía no están activados en el servidor.' : c === 'functions/unauthenticated' ? 'Inicia sesión otra vez para continuar.' : c === 'functions/failed-precondition' || c === 'functions/invalid-argument' || c === 'functions/already-exists' || c === 'functions/resource-exhausted' ? e.message : 'No se ha podido completar ahora mismo. Prueba más tarde.';
+      const msg = hayMsg || c === 'functions/unauthenticated' ? e.message : c === 'functions/not-found' ? 'Los referidos todavía no están activados en el servidor.' : c === 'functions/failed-precondition' || c === 'functions/invalid-argument' || c === 'functions/already-exists' || c === 'functions/resource-exhausted' ? e.message : 'No se ha podido completar ahora mismo. Prueba más tarde.';
       throw Object.assign(new Error(msg), { code: 'ref/' + (hayMsg || c) });
     }
   };
-  let iaFn = null, stravaFn = null; // funciones «ia» y «strava» en Cloud Functions (europe-west1), se cargan la primera vez
 
   return {
     mode: 'firebase',
@@ -167,41 +187,20 @@ async function firebaseBackend(config) {
       await A.deleteUser(u);
     },
     // IA (foto del plato y Taller) a través de la Cloud Function «ia».
-    async ia(data) {
-      if (!iaFn) {
-        const Fn = await import(/* @vite-ignore */ FB + 'firebase-functions.js');
-        iaFn = Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), 'ia', { timeout: 95000 });
-      }
-      return (await iaFn(data)).data;
-    },
+    async ia(data) { return cf('ia', data, 95000); },
     // Coach AI (Gemini) a través de la Cloud Function «coach»: analiza el entreno guardado y lo guarda en su documento.
-    async coach(id) {
-      const Fn = await import(/* @vite-ignore */ FB + 'firebase-functions.js');
-      return (await Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), 'coach', { timeout: 95000 })({ id })).data;
-    },
+    async coach(id) { return cf('coach', { id }, 95000); },
     // Ajustes de la rutina propuesta con IA (Gemini) a través de «ajustarRutina»: { modo:'estado' } = cuántos ajustes quedan hoy; con { rutina, catalogo, contexto, instruccion } devuelve la rutina modificada.
     // El contador diario (3 sin Pro, 10 con Pro) lo lleva el servidor.
-    async ajustarRutina(data) {
-      const Fn = await import(/* @vite-ignore */ FB + 'firebase-functions.js');
-      return (await Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), 'ajustarRutina', { timeout: 95000 })(data || {})).data;
-    },
+    async ajustarRutina(data) { return cf('ajustarRutina', data, 95000); },
     // Strava a través de la Cloud Function «strava» (conectar, actividades, desconectar). Los tokens nunca llegan al móvil.
-    async strava(data) {
-      if (!stravaFn) {
-        const Fn = await import(/* @vite-ignore */ FB + 'firebase-functions.js');
-        stravaFn = Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), 'strava', { timeout: 60000 });
-      }
-      return (await stravaFn(data)).data;
-    },
+    async strava(data) { return cf('strava', data, 60000); },
     // Referidos (todo lo decide el servidor): su código, canjear el de un amigo y reclamar una semana por hito.
     miCodigo() { return llamar('miCodigo'); },
     canjearCodigo(codigo) { return llamar('canjearCodigo', { codigo }); },
     reclamarReferido(hito) { return llamar('reclamarReferido', { hito }); },
     // Sesión del portal de Stripe (cambiar tarjeta / cancelar). Devuelve { url }.
-    async portal(volver) {
-      const Fn = await import(/* @vite-ignore */ FB + 'firebase-functions.js');
-      return (await Fn.httpsCallable(Fn.getFunctions(app, 'europe-west1'), 'portalStripe', { timeout: 30000 })({ volver })).data;
-    },
+    async portal(volver) { return cf('portalStripe', { volver }, 30000); },
     // Notificaciones push (Firebase Cloud Messaging). El token identifica este dispositivo; se guarda en users/{uid}.fcmTokens.
     async pushToken(vapidKey) {
       const M = await import(/* @vite-ignore */ FB + 'firebase-messaging.js');

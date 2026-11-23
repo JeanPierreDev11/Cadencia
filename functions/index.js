@@ -28,9 +28,15 @@ setGlobalOptions({ region: 'europe-west1', maxInstances: 3 });
 const LIMITE_USUARIO = 10; // consultas de IA por persona y día (fotos + Taller)
 const LIMITE_GLOBAL = 300; // consultas al día entre todas las personas CON PRO (seguridad de gasto)
 const LIMITE_GLOBAL_FREE = 150; // fotos de plato gratuitas al día entre todas las personas SIN Pro: tope aparte, para que cuentas gratuitas masivas no agoten la cuota de quien paga
-// App Check (verifica que la llamada viene de la app real y no de un script con una cuenta cualquiera). Déjalo en false hasta que la app envíe el token
-// (ver «App Check» en claude/contexto-seguridad-produccion.md); con true y sin App Check en la app, TODAS las llamadas de IA fallarían.
-const EXIGIR_APPCHECK = true;
+// App Check (verifica que la llamada viene de la app real y no de un script con una cuenta cualquiera).
+// OJO: con `enforceAppCheck: true` el SDK rechaza SIN LOG y con el mismo 401 «unauthenticated» que un fallo de sesión, y el cliente
+// enseñaba «Inicia sesión otra vez» aunque la sesión estuviera bien (23-11 (59)). Ahora lo comprobamos nosotros en `verificarAcceso`:
+//  - 'suave' (por defecto): sin sesión → 401 (unauthenticated); sin token de App Check válido → se REGISTRA el motivo y se deja pasar
+//    (reCAPTCHA falla a menudo en webviews de Instagram/WhatsApp, Safari con bloqueo de rastreo, etc.; la sesión + las cuotas diarias
+//    por persona y globales (50) siguen acotando el abuso).
+//  - 'estricto': además rechaza con failed-precondition `{codigo:'appcheck'}` (NO unauthenticated) cuando falta el token.
+const APPCHECK_MODO = 'suave'; // 'suave' | 'estricto'
+const EXIGIR_APPCHECK = APPCHECK_MODO === 'estricto';
 const MODELO_PLATO = 'claude-haiku-5-5'; // rápido y barato, ve imágenes
 const MODELO_TALLER = 'claude-sonnet-5-5'; // más conocimiento de componentes y compatibilidades
 
@@ -38,6 +44,22 @@ const hoyMadrid = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Mad
 const usoRef = (uid, dia) => db.doc(`iaUso/${uid}_${dia}`);
 const globalRef = (dia) => db.doc(`iaGlobal/${dia}`);
 const userRef = (uid) => db.doc(`users/${uid}`);
+// Puerta común de las funciones de IA y del canje de código. Devuelve el uid. Registra SIEMPRE el motivo de un rechazo
+// (buscar «[acceso]» en los registros). Nunca escribe tokens.
+const verificarAcceso = (req, fn) => {
+  const cab = (req.rawRequest && req.rawRequest.headers) || {};
+  const ctx = `origen=${cab.origin || '-'} ua=${String(cab['user-agent'] || '-').slice(0, 90)}`;
+  if (!req.auth) {
+    console.warn(`[acceso] ${fn} 401 AUTH: la petición llegó sin sesión válida (sin cabecera Authorization o ID token inválido/caducado) ${ctx}`);
+    throw new HttpsError('unauthenticated', 'Inicia sesión para continuar.', { codigo: 'auth' });
+  }
+  if (!req.app) {
+    const motivo = cab['x-firebase-appcheck'] ? 'token de App Check presente pero NO válido (caducado, dominio/clave mal registrados o proveedor distinto)' : 'sin token de App Check (reCAPTCHA no devolvió token: webview, bloqueo de rastreo o clave no cargada)';
+    console.warn(`[acceso] ${fn} APPCHECK uid=${req.auth.uid} modo=${APPCHECK_MODO}: ${motivo} ${ctx}`);
+    if (APPCHECK_MODO === 'estricto') throw new HttpsError('failed-precondition', 'No hemos podido verificar la app. Recarga la página e inténtalo de nuevo.', { codigo: 'appcheck' });
+  }
+  return req.auth.uid;
+};
 // Pro vigente: isPro y, si son días regalados por referidos (proCaduca), que no hayan caducado.
 const proVigente = (d) => !!d && d.isPro === true && !(Number(d.proCaduca) > 0 && Number(d.proCaduca) <= Date.now());
 const esPro = async (uid) => { const d = await userRef(uid).get(); return d.exists && proVigente(d.data()); };
@@ -251,8 +273,8 @@ function leerJSON(r) {
 /* ------------------------------------------------------------------ */
 /* Función pública                                                     */
 /* ------------------------------------------------------------------ */
-exports.ia = onCall({ secrets: [CLAVE], timeoutSeconds: 90, memory: '512MiB', cpu: 1, concurrency: 10, enforceAppCheck: EXIGIR_APPCHECK }, async (req) => {
-  if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión para usar la IA.');
+exports.ia = onCall({ secrets: [CLAVE], timeoutSeconds: 90, memory: '512MiB', cpu: 1, concurrency: 10 }, async (req) => {
+  verificarAcceso(req, 'ia');
   const uid = req.auth.uid, data = req.data || {}, modo = data.modo, dia = hoyMadrid();
   // La IA es de Cadencia Pro. Se comprueba aquí, en el servidor, antes de leer nada de la petición.
   const pro = await esPro(uid);
@@ -508,8 +530,8 @@ function limpiarCoach(x) {
   return { nota: Math.round(Math.max(0, Math.min(10, nota)) * 10) / 10, titulo: txt(x.titulo, 60) || 'Análisis del entreno', resumen: txt(x.resumen != null ? x.resumen : x.analisis, 500), paraLlegarAl10, consejos };
 }
 
-exports.coach = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 90, memory: '256MiB', concurrency: 10, enforceAppCheck: EXIGIR_APPCHECK }, async (req) => {
-  if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión para usar la IA.');
+exports.coach = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 90, memory: '256MiB', concurrency: 10 }, async (req) => {
+  verificarAcceso(req, 'coach');
   const uid = req.auth.uid, id = String((req.data && req.data.id) || '');
   if (!/^[\w-]{1,80}$/.test(id)) throw new HttpsError('invalid-argument', 'Petición no válida.');
   const [usr, doc] = await Promise.all([userRef(uid).get(), db.doc(`users/${uid}/entrenos/${id}`).get()]);
@@ -688,8 +710,8 @@ function limpiarRutinaIA(x) {
   if (!dias.length) throw Object.assign(new Error('rutina vacía'), { status: 'json' });
   return { mensaje: txtAj(x.mensaje, 320) || 'Rutina actualizada.', dias: dias.sort((a, b) => a.dia - b.dia) };
 }
-exports.ajustarRutina = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 90, memory: '256MiB', concurrency: 10, enforceAppCheck: EXIGIR_APPCHECK }, async (req) => {
-  if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión para usar la IA.');
+exports.ajustarRutina = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 90, memory: '256MiB', concurrency: 10 }, async (req) => {
+  verificarAcceso(req, 'ajustarRutina');
   const uid = req.auth.uid, data = req.data || {}, dia = hoyMadrid();
   const usr = await userRef(uid).get();
   const p = usr.exists ? usr.data() : {};
@@ -1091,7 +1113,7 @@ const codigoRef = () => Array.from(require('crypto').randomBytes(6), (b) => ALFA
 const tienePagado = (d) => d.isPro === true && !(Number(d.proCaduca) > 0) && !!(d.stripeSubscriptionId || d.proPlan === 'siempre'); // Pro de pago activo: la semana regalada no le sirve
 // Fin del Pro regalado tras sumar 7 días: desde hoy, o desde la caducidad actual si todavía le queda Pro regalado.
 const masUnaSemana = (d) => Math.max(Date.now(), proVigente(d) && Number(d.proCaduca) > 0 ? Number(d.proCaduca) : 0) + SEMANA_MS;
-const exigirSesion = (req) => { if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión para continuar.'); return req.auth.uid; };
+const exigirSesion = (req) => { if (!req.auth) { console.warn('[acceso] 401 AUTH en función de sesión: petición sin sesión válida'); throw new HttpsError('unauthenticated', 'Inicia sesión para continuar.', { codigo: 'auth' }); } return req.auth.uid; };
 
 // Devuelve el código de invitación de la persona; si aún no tiene (cuentas nuevas o anteriores a los referidos), lo crea. Idempotente.
 exports.miCodigo = onCall({ memory: '256MiB', timeoutSeconds: 30, concurrency: 10 }, async (req) => {
@@ -1111,8 +1133,8 @@ exports.miCodigo = onCall({ memory: '256MiB', timeoutSeconds: 30, concurrency: 1
 });
 
 // El invitado canjea el código de un amigo: +7 días de Pro para él y +1 en «referidos» del dueño.
-exports.canjearCodigo = onCall({ memory: '256MiB', timeoutSeconds: 30, concurrency: 10, enforceAppCheck: EXIGIR_APPCHECK }, async (req) => {
-  const uid = exigirSesion(req);
+exports.canjearCodigo = onCall({ memory: '256MiB', timeoutSeconds: 30, concurrency: 10 }, async (req) => {
+  const uid = verificarAcceso(req, 'canjearCodigo');
   const codigo = String((req.data && req.data.codigo) || '').trim().toUpperCase().replace(/[\s-]/g, '');
   if (!/^[A-Z0-9]{6}$/.test(codigo)) throw new HttpsError('invalid-argument', 'El código tiene 6 letras y números.', { codigo: 'ref-formato' });
   return db.runTransaction(async (tx) => {
