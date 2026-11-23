@@ -3,7 +3,7 @@
 // vienen de la librería de la app «Bilbao Ride» (js/br.js); aquí está la parte visual y los datos de cada persona.
 import { FOODS, FOODS_BY_ID, prepOf, prepVals, prepKcal100, normTxt as normFood } from './alimentos.js';
 import { I } from './util.js';
-import { PRO_LINK, PORTAL_LINK, proUrl } from './pro.js';
+import { PRO_LINK, PORTAL_LINK, proUrl, PAGOS_ACTIVOS, listaProHTML, ventajasBetaHTML } from './pro.js';
 import * as CAL from './calorias.js';
 import { leerGPX, MAX_BYTES } from './gpx.js';
 import { trazado, IDA_Y_VUELTA } from './trazados.js';
@@ -1102,7 +1102,13 @@ export function crearSecciones(ctx) {
       // IA
       case 'pro-open': st.pro = { from: v }; render(); return true;
       case 'pro-close': st.pro = null; render(); return true;
-      case 'pro-go': if (!PRO_LINK) { toast('La suscripción estará disponible muy pronto.'); return true; } vigilarPago(); return false; // con enlace, el navegador abre Stripe
+      case 'pro-lista': { // beta sin cobros: apunta a la persona en la lista prioritaria PRO (users/{uid}.interesPro + fechaInteresPro del servidor)
+        if (st.listaBusy || (st.profile && st.profile.interesPro === true)) return true;
+        st.listaBusy = true; render();
+        (async () => { try { await api.interesPro(uid()); st.profile = { ...st.profile, interesPro: true }; } catch (e) { toast(errorText(e)); } st.listaBusy = false; render(); })();
+        return true;
+      }
+      case 'pro-go': if (!PAGOS_ACTIVOS) return true; if (!PRO_LINK) { toast('La suscripción estará disponible muy pronto.'); return true; } vigilarPago(); return false; // con enlace, el navegador abre Stripe
       case 'pro-welcome-close': st.proWelcome = false; render(); return true;
       case 'pro-welcome-go': st.proWelcome = false; st.tab = 'nutricion'; st.food = null; st.tl = null; lsSet('cadencia-tab', 'nutricion'); render(); window.scrollTo(0, 0); return true;
       case 'pro-refresh': refrescarPro(true); return true;
@@ -1278,7 +1284,8 @@ export function crearSecciones(ctx) {
       </div>`;
   }
   function proSheet() {
-    const go = PRO_LINK
+    const beta = !PAGOS_ACTIVOS;
+    const go = beta ? listaProHTML(st.profile, st.listaBusy) : PRO_LINK
       ? `<a class="btn block" id="pro-go" href="${esc(proUrl(st.user))}" target="_blank" rel="noopener" data-act="pro-go">Suscribirme</a>`
       : '<button type="button" class="btn block" id="pro-go" data-act="pro-go">Suscribirme</button>';
     return `<div class="sheet-back" data-act="pro-close"></div>
@@ -1287,10 +1294,11 @@ export function crearSecciones(ctx) {
         <div class="sheet-head"><button type="button" class="iconbtn" data-act="pro-close" aria-label="Cerrar">${I.back}</button><h2>Cadencia Pro</h2><span style="width:36px"></span></div>
         <div class="sheet-list pw">
           ${st.pro && st.pro.from === 'limite-scan' ? `<div class="pw-limit" role="alert"><span class="pw-limit-i">${ICO.lock}</span><b>Límite diario alcanzado.</b><span>Escanea sin límites con Cadencia Pro</span></div>` : ''}
-          <ul class="pw-list">${proVentajas().map(([ic, t, d]) => `<li><span class="pw-li-i">${ic}</span><span><b>${t}</b><small>${d}</small></span></li>`).join('')}</ul>
+          ${beta ? '<p class="small muted">Cadencia está en beta abierta y todo es gratis por ahora. Esto incluirá Cadencia PRO:</p>' : ''}
+          ${beta ? ventajasBetaHTML(I.check) : `<ul class="pw-list">${proVentajas().map(([ic, t, d]) => `<li><span class="pw-li-i">${ic}</span><span><b>${t}</b><small>${d}</small></span></li>`).join('')}</ul>`}
           ${go}
-          ${PRO_LINK ? '<p class="small muted">Paga con el mismo email de tu cuenta de Cadencia. Al volver a la app, tu cuenta se actualiza sola.</p>' : ''}
-          ${st.vuelveDePago ? '<button type="button" class="btn ghost block" data-act="pro-refresh">Ya he pagado: actualizar</button>' : ''}
+          ${!beta && PRO_LINK ? '<p class="small muted">Paga con el mismo email de tu cuenta de Cadencia. Al volver a la app, tu cuenta se actualiza sola.</p>' : ''}
+          ${!beta && st.vuelveDePago ? '<button type="button" class="btn ghost block" data-act="pro-refresh">Ya he pagado: actualizar</button>' : ''}
         </div>
       </div>`;
   }

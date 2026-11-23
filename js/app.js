@@ -5,7 +5,7 @@ import * as E from './entreno.js';
 import { crearSecciones, NOV_V } from './secciones.js';
 import { crearEntreno } from './entreno-ui.js';
 import { LEGAL_V, legalDoc, legalTab, legalLinksHTML, legalCheckHTML, LEGAL_TABS, LEGAL_TITULOS, CONTACTO } from './legal.js';
-import { PORTAL_LINK, planUrl } from './pro.js';
+import { PORTAL_LINK, planUrl, PAGOS_ACTIVOS, betaTagHTML, listaProHTML, ventajasBetaHTML } from './pro.js';
 import * as CAL from './calorias.js';
 import { leerRetorno } from './strava.js';
 import { crearRecordatorios, leerIr } from './push.js';
@@ -128,6 +128,7 @@ function viewAuth() {
   return `<div class="screen">
     <div class="auth-hero">${heroHTML()}</div>
     <div class="auth-card">
+      ${betaTagHTML('beta-l')}
       <h2 class="auth-h">Iniciar sesión</h2>
       <form data-form="login" class="form-grid" novalidate>
         <label class="field"><span>Email</span><input class="input" type="email" name="email" autocomplete="email" inputmode="email" autocapitalize="off" required placeholder="tu@email.com"></label>
@@ -505,8 +506,10 @@ function viewPaywall() {
   return `<div class="screen pw-full">
     <div class="pw-top"><button type="button" class="iconbtn" data-act="pw-cerrar" aria-label="Cerrar"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <h1 class="ob-title">Tu plan está listo</h1>
-    <p class="ob-sub">Desbloquéalo con Cadencia PRO: Coach AI, rutinas ilimitadas y todas las funciones.</p>
+    ${PAGOS_ACTIVOS ? '' : betaTagHTML('beta-c')}
+    <p class="ob-sub">${PAGOS_ACTIVOS ? 'Desbloquéalo con Cadencia PRO: Coach AI, rutinas ilimitadas y todas las funciones.' : 'Todo es gratis durante la beta abierta. Apúntate a la lista prioritaria y te avisaremos cuando llegue Cadencia PRO.'}</p>
     ${suscripcionHTML()}
+    ${PAGOS_ACTIVOS ? '' : '<button type="button" class="btn ghost block" data-act="pw-seguir">Continuar gratis</button>'}
     ${st.profile && st.profile.codigoUsado === true ? '' : `<button type="button" class="btn ghost block pw-codigo" data-act="cod-open">${I.gift} Tengo un código de invitación</button>`}
   </div>${st.proInfo ? proInfoHTML() : ''}${st.pwAviso ? pwAvisoHTML() : ''}${st.codigo ? codigoSheetHTML() : ''}`;
 }
@@ -1194,6 +1197,7 @@ async function delWeight(fecha) {
 }
 
 /* ---------- pestaña Perfil ---------- */
+const listaTxt = (pr) => (pr && pr.interesPro === true ? 'Estás en la lista PRO' : 'Ver Cadencia PRO');
 function planCardHTML() {
   const pr = st.profile || {}, pro = pr.isPro === true;
   const dia = (ms) => fmtDate(new Date(ms).toISOString().slice(0, 10));
@@ -1201,8 +1205,8 @@ function planCardHTML() {
   const renueva = regalo ? `Tu PRO de regalo (referidos) dura hasta el <b>${dia(regalo)}</b>.` : pro && pr.proRenueva ? (pr.proCancela ? `Tu suscripción está cancelada: sigues con Pro hasta el <b>${dia(pr.proRenueva)}</b>.` : `Próxima renovación: <b>${dia(pr.proRenueva)}</b>.`) : '';
   if (!pro) return `<section class="card" id="plan-card">
       <div class="card-head"><h2>Tu plan</h2><span class="tag" id="plan-tag">Gratuita</span></div>
-      <p class="small muted">El registro manual, las rutinas y el resto de la app son gratis. Con Pro desbloqueas la IA: Escanear alimento y el Coach AI.</p>
-      <button class="btn block" data-act="pro-open" data-v="perfil">Hazte Pro</button>
+      <p class="small muted">${PAGOS_ACTIVOS ? 'El registro manual, las rutinas y el resto de la app son gratis. Con Pro desbloqueas la IA: Escanear alimento y el Coach AI.' : 'Estás en la beta abierta: todo es gratis por ahora. Cadencia PRO llegará más adelante con más ajustes de IA y el Coach AI ampliado.'}</p>
+      <button class="btn block" data-act="pro-open" data-v="perfil">${PAGOS_ACTIVOS ? 'Hazte Pro' : listaTxt(pr)}</button>
     </section>`;
   return `<section class="card" id="plan-card">
       <div class="card-head"><h2>Tu plan</h2><span class="tag ok" id="plan-tag">Pro</span></div>
@@ -1253,6 +1257,7 @@ function viewPerfil() {
       <h2 class="pf-user">${p.usuario ? `@${esc(p.usuario)}` : esc((p.nombreCompleto || p.nombre || st.user.name || 'Tu perfil').trim())}</h2>
       ${p.isPro === true ? `<span class="pro-badge">${I.crown} PRO</span>` : ''}
       <p class="small muted">${esc(st.user.email || '')}</p>
+      ${betaTagHTML()}
       <button type="button" class="btn ghost small" data-act="pf-open" data-v="editar">Editar perfil</button></header>
     ${planCardHTML()}
     ${pfGrupo('Cuenta', [
@@ -1390,6 +1395,18 @@ function pintarSeleccion(sel) {
 }
 function suscripcionHTML() {
   const pro = st.profile && st.profile.isPro === true, act = planActivo();
+  if (!PAGOS_ACTIVOS && !act) { // beta abierta sin cobros: ventajas de PRO + lista prioritaria (sin precios ni pasarela)
+    return `<div class="sheet-list sub">
+    <section class="sub-sec"><h3 class="pf-title">Suscripción actual</h3>
+      <div class="sub-cur ${pro ? 'is-pro' : ''}"><b>${pro ? 'Cadencia PRO' : 'Beta abierta · Gratuita'}</b>
+        <span class="small muted">${pro ? (proRegalo(st.profile) ? `Tu PRO de regalo dura hasta el ${diaPro(proRegalo(st.profile))}.` : 'Tienes todas las funciones Pro desbloqueadas.') : 'Todo lo gratuito está incluido sin coste durante la beta. Aún no se cobra nada.'}</span></div></section>
+    ${pro ? '' : `<section class="sub-sec"><h3 class="pf-title">Cadencia PRO</h3>
+      <p class="small muted">Próximamente. Esto incluirá:</p>
+      ${ventajasBetaHTML(I.check)}
+      ${listaProHTML(st.profile, st.listaBusy)}</section>`}
+    <button type="button" class="sub-link" data-act="pro-info-open">Gratis vs PRO</button>
+  </div>`;
+  }
   const sel = (st.pf && st.pf.plan) || act || 'anual';
   const nomAct = act ? PLANES.find((x) => x.id === act).n.replace('PRO ', '') : '';
   return `<div class="sheet-list sub">
@@ -1413,7 +1430,7 @@ function proInfoHTML() {
         <thead><tr><th scope="col"><span class="sr">Función</span></th><th scope="col">Gratis</th><th scope="col" class="cmp-pro">PRO</th></tr></thead>
         <tbody>${COMPARATIVA.map(([f, g, p, d]) => `<tr><th scope="row">${f}${d ? `<small class="cmp-d">${d}</small>` : ''}</th><td>${cmpCelda(g)}</td><td class="cmp-pro">${cmpCelda(p)}</td></tr>`).join('')}</tbody>
       </table></div>
-      <div class="pinfo-foot"><button type="button" class="btn block" data-act="pro-info-close">${pro ? 'Cerrar' : 'Elegir Plan'}</button></div>
+      <div class="pinfo-foot"><button type="button" class="btn block" data-act="pro-info-close">${pro || !PAGOS_ACTIVOS ? 'Cerrar' : 'Elegir Plan'}</button></div>
     </div>`;
 }
 function pfSheetHTML() {
@@ -1641,7 +1658,7 @@ root.addEventListener('click', async (e) => {
   else if (act === 'reg-google') obRegistrar('google');
   else if (act === 'reg-apple') obRegistrar('apple');
   else if (act === 'reg-email') { st.ob.regEmail = true; st.ob.msg = ''; render(); const i = root.querySelector('[data-ob="regEmail"]'); if (i) i.focus(); }
-  else if (act === 'pw-cerrar') { if (st.vieneDeRegistro) { st.pwAviso = true; render(); } else pwSalir(); }
+  else if (act === 'pw-cerrar') { if (st.vieneDeRegistro && PAGOS_ACTIVOS) { st.pwAviso = true; render(); } else pwSalir(); }
   else if (act === 'pw-aviso-cerrar') { st.pwAviso = false; render(); }
   else if (act === 'pw-seguir') pwSeguir();
   else if (act === 'legal-open') { if (st.view === 'auth') { const f = root.querySelector('form'); st.authKeep = f && f.email ? { email: f.email.value, pass: f.pass.value } : null; } st.legal = legalTab(v); render(); if (st.authKeep) keepForm(st.authKeep); }
@@ -1652,7 +1669,7 @@ root.addEventListener('click', async (e) => {
   else if (act === 'cod-close') { st.codigo = null; render(); }
   else if (act === 'ref-reclamar') reclamarReferido(v);
   else if (act === 'plan-sel') { if (planActivo() === 'siempre' && RECURRENTES.includes(v)) return; const actual = (st.pf && st.pf.plan) || planActivo() || 'anual'; if (v === actual) return; if (st.pf && PLANES.some((x) => x.id === v)) { st.pf.plan = v; if (!pintarSeleccion(v)) render(); } }
-  else if (act === 'plan-go') { const pa = planActivo(), el = (st.pf && st.pf.plan) || pa || 'anual'; if (subCta(el, pa).act !== 'plan-go') return; const url = planUrl((st.pf && st.pf.plan) || 'anual', st.user); if (!url) { toast('La suscripción estará disponible muy pronto.'); return; } const w = window.open(url, '_blank'); if (!w) location.assign(url); }
+  else if (act === 'plan-go') { if (!PAGOS_ACTIVOS) return; const pa = planActivo(), el = (st.pf && st.pf.plan) || pa || 'anual'; if (subCta(el, pa).act !== 'plan-go') return; const url = planUrl((st.pf && st.pf.plan) || 'anual', st.user); if (!url) { toast('La suscripción estará disponible muy pronto.'); return; } const w = window.open(url, '_blank'); if (!w) location.assign(url); }
   else if (act === 'pro-info-open') { st.proInfo = true; render(); }
   else if (act === 'pro-info-close') { st.proInfo = null; render(); }
   else if (act === 'pf-close') { st.pf = null; st.editGoals = null; render(); }

@@ -2174,6 +2174,16 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .d7-empty { padding: 28px 8px; }
 .d7-empty b { color: var(--ink); font-size: 17px; }
 
+/* Beta abierta (54): etiqueta discreta y lista prioritaria PRO */
+.beta-tag { display: inline-block; align-self: center; font-size: 11px; font-weight: 800; letter-spacing: .14em; color: var(--accent-text); border: 1px solid var(--accent-text); padding: 3px 12px; border-radius: 999px; line-height: 1.5; white-space: nowrap; }
+.bv-body .beta-tag, .auth-card .beta-tag { margin-bottom: 12px; }
+.beta-c, .beta-r { justify-self: center; margin: 0 auto; }
+.beta-nota { margin: -4px 0 4px; }
+.perfil-hero .beta-tag { margin: -2px 0 0; }
+.lista-ok { display: grid; gap: 4px; padding: 14px; border: 1px solid var(--accent-text); border-radius: 2px; text-align: center; }
+.lista-ok b { color: var(--accent-text); font-family: Archivo, sans-serif; text-transform: uppercase; letter-spacing: .04em; }
+.lista-ok span { font-size: 14px; color: var(--muted); }
+
 @media (min-width: 1024px) {
   :root { --sb-w: 104px; --col: 800px; }
 

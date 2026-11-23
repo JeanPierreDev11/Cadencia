@@ -5,6 +5,7 @@
 // Desde la Fase 3 el cuestionario se hace ANTES de crear la cuenta; «Tus datos» se reparte en pantallas sueltas (nombre, sexo, edad, altura, exp), sin número de paso.
 import { esc, nf, num, I } from './util.js';
 import { legalLinksHTML, legalCheckHTML } from './legal.js';
+import { betaTagHTML, BETA_AVISO_REGISTRO } from './pro.js';
 
 /* ---------- datos ---------- */
 // Los ids de «dónde» son los mismos que usa el asistente de rutinas (gym, casa, parque), así lo guardado le sirve de punto de partida.
@@ -241,6 +242,7 @@ export function bienvenidaHTML(hero, hayAvance) {
   return `<div class="screen bv">
     <div class="auth-hero">${hero}</div>
     <div class="bv-body">
+      ${betaTagHTML()}
       <h1 class="ob-title">Construye tu mejor versión</h1>
       <p class="ob-sub">Responde unas preguntas y te preparamos un plan hecho para ti.</p>
     </div>
@@ -257,6 +259,8 @@ export function registroHTML(o) {
   const ocupado = !!o.saving;
   return `<h1 class="ob-title">Regístrate para guardar tu plan personalizado</h1>
     <p class="ob-sub">No compartimos tus datos.</p>
+    ${betaTagHTML('beta-r')}
+    <p class="small muted beta-nota">${BETA_AVISO_REGISTRO}</p>
     <label class="check"><input type="checkbox" data-ob="acepto" ${o.acepto ? 'checked' : ''}><span>Acepto los ${legalCheckHTML()}</span></label>
     <div class="reg-btns">
       <button type="button" class="btn block" data-act="reg-google" ${ocupado ? 'disabled' : ''}>Continuar con Google</button>

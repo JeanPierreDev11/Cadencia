@@ -43,16 +43,15 @@ function terminos() {
     </ul>
     <p>Si detectamos un uso así, podemos limitar o suspender la cuenta.</p>
 
-    <h3>4. Cuenta gratuita y Cadencia Pro</h3>
+    <h3>4. Beta abierta gratuita, cuenta y Cadencia Pro</h3>
     <ul class="bul">
+      <li><b>Beta abierta gratuita:</b> Cadencia está en fase beta (acceso anticipado). Durante esta fase el servicio se ofrece <b>sin coste para ti</b>: no te cobramos nada ni te pedimos datos de pago. Al ser una beta, funciones y límites pueden cambiar o fallar, y podemos modificarlos o retirarlos.</li>
+      <li><b>Pagos futuros:</b> cualquier modalidad de pago que se active más adelante (por ejemplo Cadencia Pro) será <b>opcional</b>. Se te mostrará su precio y condiciones antes de contratar y requerirá tu <b>aceptación expresa previa</b>. No se te cobrará nada de forma automática por haber usado la beta.</li>
+      <li><b>Lista prioritaria PRO:</b> si pulsas «Unirme a la lista prioritaria PRO», solo nos indicas que te interesa y te avisaremos cuando exista. No es una compra ni te obliga a nada.</li>
       <li><b>Cuenta gratuita:</b> registro de peso, entrenos y comidas, hasta 3 rutinas y 3 ejercicios propios, 1 análisis de plato con IA al día y hasta 3 ajustes de rutina con IA al día.</li>
-      <li><b>Cadencia Pro:</b> quita el límite de rutinas y ejercicios propios, e incluye el Coach AI y el Taller IA, hasta 10 consultas de IA al día (foto del plato y Taller), 10 análisis del Coach AI al día y 10 ajustes de rutina al día, además de otras funciones avanzadas.</li>
+      <li><b>Cadencia Pro (todavía no se puede contratar):</b> está previsto que quite el límite de rutinas y ejercicios propios, e incluya el Coach AI y el Taller IA, más consultas de IA y ajustes de rutina al día, y otras funciones avanzadas. Las personas que reciben Pro por un código de invitación lo disfrutan como regalo de duración limitada, sin valor económico y sin posibilidad de canjearlo por dinero.</li>
       <li>Los límites diarios se cuentan por persona y por día, y se reinician cada día. Podemos ajustarlos para mantener el servicio estable; los vigentes son los que ves en la app.</li>
-      <li><b>Precios:</b> Mensual 4,99 €, Anual 39,99 € y Para Siempre 89,99 € (pago único). Los precios vigentes se muestran siempre antes de pagar. El pago lo gestiona Stripe.</li>
-      <li><b>Suscripciones:</b> los planes Mensual y Anual se renuevan solos cada periodo hasta que los canceles. Puedes cancelar cuando quieras en <b>Perfil → Administrar suscripción</b>: mantienes Pro hasta el final del periodo ya pagado. Borrar la cuenta no cancela la suscripción: cancélala antes.</li>
-      <li><b>Para Siempre:</b> pago único que da acceso a Cadencia Pro mientras Cadencia se siga ofreciendo.</li>
-      <li><b>Desistimiento y reembolsos:</b> si eres consumidor en la UE tienes 14 días para desistir de un contrato a distancia, salvo cuando el servicio digital ya se haya empezado a prestar con tu consentimiento expreso y hayas aceptado perder ese derecho. Para cualquier duda o petición de reembolso escribe a ${mail}.</li>
-      <li><b>Códigos de invitación:</b> el Pro que se consigue con códigos de amigo es un regalo de duración limitada, no tiene valor económico y no se puede canjear por dinero.</li>
+      <li><b>Cuando existan planes de pago:</b> el precio vigente se mostrará siempre antes de pagar y el pago lo gestionará Stripe. Si son suscripciones, se renovarán hasta que las canceles y podrás cancelarlas cuando quieras. Si eres consumidor en la UE tendrás el derecho de desistimiento de 14 días que marca la ley, salvo cuando el servicio digital ya se haya empezado a prestar con tu consentimiento expreso. Para cualquier duda escribe a ${mail}.</li>
     </ul>
 
     <h3>5. Funciones con IA y contenido orientativo</h3>
@@ -94,7 +93,7 @@ function privacidad() {
       <li><b>Perfil físico:</b> sexo, edad o fecha de nacimiento, estatura, peso, peso objetivo y objetivos; tu composición corporal si la apuntas (grasa, músculo, agua, hueso y desglose por zonas); y las respuestas del cuestionario inicial (experiencia, material, días y tiempo disponibles, obstáculos).</li>
       <li><b>Tu actividad:</b> rutinas, registros de entrenamiento (ejercicios, series, pesos, repeticiones, RIR y notas del Coach AI), nutrición (comidas, calorías y macros) e hidratación (agua que apuntas).</li>
       <li><b>Foto de perfil (opcional):</b> se guarda en Firebase Storage. La foto de un plato que analizas con IA <b>no se guarda</b> en Cadencia.</li>
-      <li><b>Datos técnicos:</b> si activas los recordatorios, un identificador de tu dispositivo (token de notificaciones), tus horas elegidas y tu zona horaria; si eres Pro, los identificadores de cliente y suscripción de Stripe (nunca tu tarjeta); y las preferencias que la app guarda en tu móvil.</li>
+      <li><b>Datos técnicos:</b> si activas los recordatorios, un identificador de tu dispositivo (token de notificaciones), tus horas elegidas y tu zona horaria; si en el futuro contratas un plan de pago, los identificadores de cliente y suscripción de Stripe (nunca tu tarjeta); si pulsas «Unirme a la lista prioritaria PRO», que lo has pedido y la fecha; y las preferencias que la app guarda en tu móvil.</li>
       ${CICLISMO ? '<li><b>Ciclismo y Strava (opcional):</b> datos de tus bicis, las rutas GPX que guardes y, si lo conectas, tus actividades de Strava.</li>' : ''}
     </ul>
     <p>Tu peso, composición corporal, objetivos y datos de entrenamiento y nutrición son <b>datos de salud</b>, una categoría especial del RGPD. Solo los tratamos con tu <b>consentimiento expreso</b>, que das al crear la cuenta y puedes retirar cuando quieras borrando tu cuenta.</p>
@@ -103,7 +102,8 @@ function privacidad() {
     <ul class="bul">
       <li><b>Prestarte el servicio:</b> personalizar tus rutinas, calcular métricas, calorías, macros e hidratación, y sincronizar tus datos en la nube para que los veas en cualquier dispositivo. (Base legal: ejecución del contrato y tu consentimiento.)</li>
       <li><b>Funciones con IA:</b> generar recomendaciones cuando tú las pides. (Base legal: tu consentimiento al usarlas.)</li>
-      <li><b>Pagos de Cadencia Pro:</b> gestionar tu suscripción y cumplir con obligaciones legales de facturación.</li>
+      <li><b>Lista prioritaria PRO:</b> avisarte cuando Cadencia PRO esté disponible y medir el interés. (Base legal: tu consentimiento al pulsar el botón.)</li>
+      <li><b>Pagos futuros de Cadencia Pro:</b> si algún día contratas un plan, gestionar tu suscripción y cumplir con obligaciones legales de facturación. Hoy no se cobra nada.</li>
       <li><b>Seguridad y límites diarios:</b> evitar abusos y proteger el servicio. (Base legal: interés legítimo.)</li>
       <li><b>Recordatorios:</b> avisarte solo si los activas. (Base legal: tu consentimiento.)</li>
     </ul>
@@ -113,8 +113,7 @@ function privacidad() {
     <ul class="bul">
       <li><b>Firebase / Google Cloud (Google):</b> alojamiento de la app, inicio de sesión, base de datos, almacenamiento de la foto, funciones del servidor y avisos. Los datos se guardan en servidores de la Unión Europea (las funciones se ejecutan en Bélgica), con conexión cifrada y reglas que impiden que otra persona lea tus datos.</li>
       <li><b>APIs de IA:</b> <b>Anthropic (Claude)</b> analiza la foto del plato y atiende el Taller IA; <b>Google (Gemini)</b> genera el Coach AI y los ajustes de rutina. A Gemini le enviamos un resumen de tu entreno o de tu rutina junto con datos de tu perfil sin identificadores (sexo, edad, peso, objetivos, experiencia, material y tiempo disponible), y el texto que escribas al pedir un cambio. <b>No enviamos tu nombre, email ni usuario.</b> No escribas datos personales en esos mensajes. Con el servicio gratuito de la API de Gemini, Google puede usar esas entradas para mejorar sus productos, según sus condiciones.</li>
-      <li><b>Stripe:</b> cobra y gestiona las suscripciones. Recibe tu email y tus datos de pago; Cadencia nunca ve ni guarda tu tarjeta.</li>
-      <li><b>Google reCAPTCHA (Firebase App Check):</b> comprueba que las peticiones vienen de la app y no de un robot. Google puede tratar datos técnicos de tu navegador, como la dirección IP.</li>
+      <li><b>Stripe:</b> cobrará y gestionará las suscripciones cuando se activen los pagos (hoy en la beta gratuita no se cobra). Recibirá tu email y tus datos de pago; Cadencia nunca ve ni guarda tu tarjeta.</li>
       <li><b>Open Food Facts:</b> si buscas o escaneas un producto de marca, se envía el texto o el código de barras, sin ningún dato tuyo.</li>
       ${CICLISMO ? '<li><b>Strava, Open-Meteo y OpenStreetMap:</b> solo si usas esas funciones de ciclismo.</li>' : ''}
     </ul>

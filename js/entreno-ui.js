@@ -3,6 +3,7 @@
 import { esc, num, nf, todayISO, fmtDate, lsSet, lsGet, toast, I } from './util.js';
 import { errorText } from './data.js';
 import { CICLISMO } from './config.js';
+import { PAGOS_ACTIVOS } from './pro.js';
 import * as E from './entreno.js';
 import * as CAL from './calorias.js';
 import { analizarEntreno, diagnosticoCoach } from './coach.js';
@@ -566,7 +567,7 @@ function rchHTML(re) {
   const aviso = agotado
     ? (q.pro
       ? `<p class="small muted rch-lim" role="status">Has usado tus ${q.limite} ajustes PRO de hoy. Mañana tendrás otros ${q.limite}. Mientras tanto puedes mover los días y editar los ejercicios a mano.</p>`
-      : `<div class="rch-lim" role="status"><p><b>Has usado tus ${q.limite} ajustes de hoy.</b> Pasa a PRO y tendrás hasta ${RCH_LIM_PRO} ajustes con IA al día.</p><button type="button" class="btn small" data-act="lim-pro">Ver Cadencia PRO</button></div>`)
+      : `<div class="rch-lim" role="status"><p><b>Has usado tus ${q.limite} ajustes de hoy.</b> ${PAGOS_ACTIVOS ? 'Pasa a PRO y tendrás' : 'Cadencia PRO, próximamente, tendrá'} hasta ${RCH_LIM_PRO} ajustes con IA al día.</p><button type="button" class="btn small" data-act="lim-pro">Ver Cadencia PRO</button></div>`)
     : '';
   return `<section class="card rch" id="rch" aria-label="Ajustes de la rutina con IA">
     <div class="rch-h"><span class="rch-t">${I.brain} Ajusta tu rutina con IA</span><span class="rch-q ${agotado ? 'zero' : ''}" id="rch-q" role="status">${esc(rchTxtCuota(q))}</span></div>
@@ -1353,7 +1354,7 @@ function limiteSheetHTML() {
       <div class="lim-body">
         <span class="lim-ico">${I.lock}</span>
         <span class="lim-count num">${n}/${n}</span>
-        <p class="lim-t">Has usado tus ${n} ajustes con IA de hoy. Pasa a Cadencia PRO y tendrás hasta ${RCH_LIM_PRO} ajustes al día.</p>
+        <p class="lim-t">Has usado tus ${n} ajustes con IA de hoy. ${PAGOS_ACTIVOS ? 'Pasa a Cadencia PRO y tendrás' : 'Cadencia PRO, próximamente, tendrá'} hasta ${RCH_LIM_PRO} ajustes al día.</p>
         <button type="button" class="btn block" data-act="lim-pro">Ver Cadencia PRO</button>
         <button type="button" class="btn ghost block" data-act="lim-close">Ahora no</button>
         <span class="small muted">Tu rutina no cambia: puedes seguir moviendo los días y editando los ejercicios a mano, y guardarla. Mañana tendrás otros ${n} ajustes.</span>
@@ -1367,7 +1368,7 @@ function limiteSheetHTML() {
       <div class="lim-body">
         <span class="lim-ico">${I.lock}</span>
         <span class="lim-count num">${LIM_FREE}/${LIM_FREE}</span>
-        <p class="lim-t">Límite gratuito alcanzado (${LIM_FREE}/${LIM_FREE}). Desbloquea ${rut ? 'rutinas' : 'ejercicios'} ilimitad${rut ? 'as' : 'os'} con Cadencia PRO</p>
+        <p class="lim-t">Límite gratuito alcanzado (${LIM_FREE}/${LIM_FREE}). ${PAGOS_ACTIVOS ? 'Desbloquea' : 'Cadencia PRO, próximamente, tendrá'} ${rut ? 'rutinas' : 'ejercicios'} ilimitad${rut ? 'as' : 'os'}${PAGOS_ACTIVOS ? ' con Cadencia PRO' : ''}</p>
         <button type="button" class="btn block" data-act="lim-pro">Ver Cadencia PRO</button>
         <button type="button" class="btn ghost block" data-act="lim-close">Ahora no</button>
         <span class="small muted">Tus ${que} actuales se mantienen: puedes usarlos, editarlos o borrarlos.</span>

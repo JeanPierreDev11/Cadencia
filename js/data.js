@@ -115,6 +115,10 @@ async function firebaseBackend(config) {
     async saveProfile(uid, data) {
       await F.setDoc(userRef(uid), { ...data, actualizado: F.serverTimestamp() }, { merge: true });
     },
+    // Lista prioritaria de Cadencia PRO (beta, sin cobros): guarda el interés con fecha del SERVIDOR en users/{uid}.
+    async interesPro(uid) {
+      await F.setDoc(userRef(uid), { interesPro: true, fechaInteresPro: F.serverTimestamp(), actualizado: F.serverTimestamp() }, { merge: true });
+    },
     // Avisa en directo de los cambios del perfil (p. ej. cuando el servidor activa Pro). Devuelve la función para dejar de escuchar.
     watchProfile(uid, cb) {
       return F.onSnapshot(userRef(uid), (s) => { if (s.exists()) cb(conPlan(s.data())); }, () => {});
@@ -292,6 +296,10 @@ function localBackend() {
     async saveProfile(uid, data) {
       const s = read(); const u = byUid(s, uid); if (!u) return;
       u.profile = { ...u.profile, ...data, actualizado: Date.now() }; write(s);
+    },
+    async interesPro(uid) {
+      const s = read(); const u = byUid(s, uid); if (!u) return;
+      u.profile = { ...u.profile, interesPro: true, fechaInteresPro: Date.now(), actualizado: Date.now() }; write(s);
     },
     async addWeight(uid, date, kg, extra = {}) { const s = read(); const u = byUid(s, uid); if (!u) return; u.pesos[date] = { ...(u.pesos[date] || {}), fecha: date, kg, ...extra }; write(s); },
     async setWeight(uid, date, kg, extra = {}) { const s = read(); const u = byUid(s, uid); if (!u) return; u.pesos[date] = { fecha: date, kg, ...extra }; write(s); },
