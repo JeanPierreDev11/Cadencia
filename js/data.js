@@ -120,6 +120,8 @@ async function firebaseBackend(config) {
     async addFeatureRequest(uid, email, texto) { await F.addDoc(F.collection(db, 'feature_requests'), { uid, email: email || '', texto, creado: F.serverTimestamp() }); },
     // Sugerencia o fallo (colección «feedback»: solo se crea desde la app; se lee en la consola de Firebase). puntuacion = 1-5 o null.
     async enviarFeedback(uid, email, mensaje, puntuacion) { await F.addDoc(F.collection(db, 'feedback'), { uid, email: email || '', mensaje, puntuacion: puntuacion || null, fecha: F.serverTimestamp() }); },
+    // Cuestionario post-entreno de la beta (misma colección «feedback», tipo 'post_entreno'): respuestas = {interfaz, comodidad, ia, registro, volver} con true/false/null; explicaciones = solo las escritas (≤ 200 caracteres).
+    async enviarPostEntreno(uid, respuestas, explicaciones) { await F.addDoc(F.collection(db, 'feedback'), { tipo: 'post_entreno', uid, respuestas, explicaciones, fecha: F.serverTimestamp() }); },
     // Rutinas compartidas: colección «shared_routines», el id del documento es el código.
     async shareRutina(uid, rut) {
       let code = rut.shareCode;
@@ -286,6 +288,7 @@ function localBackend() {
     },
     async addFeatureRequest(uid, email, texto) { const s = read(); (s.requests = s.requests || []).push({ uid, email, texto, creado: Date.now() }); write(s); },
     async enviarFeedback(uid, email, mensaje, puntuacion) { const s = read(); (s.feedback = s.feedback || []).push({ uid, email: email || '', mensaje, puntuacion: puntuacion || null, fecha: Date.now() }); write(s); },
+    async enviarPostEntreno(uid, respuestas, explicaciones) { const s = read(); (s.feedback = s.feedback || []).push({ tipo: 'post_entreno', uid, respuestas, explicaciones, fecha: Date.now() }); write(s); },
     async shareRutina(uid, rut) {
       const s = read(); s.shared = s.shared || {};
       let code = rut.shareCode; while (!code || (s.shared[code] && s.shared[code].userId !== uid)) code = nuevoCodigo();

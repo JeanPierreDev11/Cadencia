@@ -2157,6 +2157,31 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .rm-conf { display: grid; gap: 8px; }
 .rm-conf p { margin: 0; font-size: 14.5px; line-height: 1.45; }
 
+/* 2026-11-24 · Cuestionario opcional post-entreno de la beta (64): hoja oscura a propósito (también en modo claro), con los tokens de brand-ui.md */
+.sheet.pe { background: var(--bg-surface); color: var(--text-primary); border-radius: 6px 6px 0 0; border-top: 1px solid var(--border-subtle); z-index: 93; }
+.sheet.pe .sheet-grab { background: var(--text-secondary); }
+.sheet.pe .sheet-head h2 { color: var(--text-primary); }
+.sheet.pe .iconbtn { color: var(--text-primary); background: var(--bg-surface-elevated); border-radius: var(--r-md); width: 36px; height: 36px; }
+.pe-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; display: grid; gap: 12px; align-content: start; padding: 6px 16px 12px; }
+.pe-intro { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--text-secondary); }
+.pe-q { display: grid; gap: 8px; padding: 12px; background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle); border-radius: var(--r-md); }
+.pe-qt { margin: 0; font-size: 15px; line-height: 1.4; font-weight: 600; color: var(--text-primary); }
+.pe-yn { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pe-b { min-height: 46px; padding: 0 12px; font: inherit; font-size: 15px; font-weight: 800; letter-spacing: .06em; color: var(--text-primary); background: transparent; border: 1px solid var(--text-secondary); border-radius: var(--r-sm); }
+.pe-b.on { background: var(--brand-yellow); border-color: var(--brand-yellow); color: var(--text-on-brand); }
+.pe-b:disabled { cursor: default; }
+.pe-b:focus-visible, .pe-t:focus-visible { outline: 2px solid var(--brand-yellow); outline-offset: 2px; }
+.pe-t.input { min-height: 44px; padding: 10px 12px; font-size: 14px; color: var(--text-primary); background: var(--bg-primary); border: 1px solid var(--text-secondary); border-radius: var(--r-sm); }
+.pe-t.input:focus { background: var(--bg-primary); border-color: var(--brand-yellow); }
+.pe-t.input::placeholder { color: var(--text-secondary); opacity: 1; }
+.pe-foot { flex: none; display: grid; gap: 8px; padding: 12px 16px calc(14px + var(--safe-b, 0px)); background: var(--bg-surface); border-top: 1px solid var(--border-subtle); }
+.pe-foot .msg { margin: 0; color: var(--status-error); font-size: 13.5px; }
+.sheet.pe .btn { border-radius: var(--r-sm); text-transform: uppercase; letter-spacing: .04em; }
+.sheet.pe .btn:not(.ghost):not([disabled]) { background: var(--brand-yellow); color: var(--text-on-brand); }
+.sheet.pe .btn.ghost { color: var(--text-primary); border-color: var(--text-secondary); }
+.sheet.pe .btn[disabled]:not(.ghost):not(.quiet):not(.danger-solid):not(.danger) { background: var(--bg-surface-elevated); color: var(--text-secondary); border: 1px solid var(--border-subtle); }
+.sheet.pe .btn.ghost[disabled] { opacity: .5; }
+
 /* ============================================================
    2026-11-17 · Escritorio (≥ 1024 px). Todo dentro de la media query:
    el móvil no cambia. Sidebar, columna central y vistas a dos columnas.

@@ -44,16 +44,37 @@ service cloud.firestore {
         && request.resource.data.texto is string && request.resource.data.texto.size() <= 1000;
     }
 
-    // Sugerencias y fallos (feedback): solo crear con sesión y con tu propio uid; texto de 1 a 1000 caracteres; nota opcional de 1 a 5;
-    // solo estos campos y la fecha la pone el servidor. Nadie lo lee, cambia ni borra desde la app (se ve en la consola de Firebase).
+    // Feedback: mensaje libre (Perfil) y cuestionario opcional post-entreno de la beta. Solo crear con sesión y con tu propio uid;
+    // nadie lo lee, cambia ni borra desde la app (se ve en la consola de Firebase). La fecha la pone siempre el servidor.
+    //  (a) Mensaje libre (sin «tipo»): texto de 1 a 1000 caracteres y nota opcional de 1 a 5.
+    //  (b) tipo = 'post_entreno': 5 respuestas sí/no (true, false o null si se dejan sin contestar) y explicaciones opcionales de hasta 200 caracteres.
     match /feedback/{id} {
-      allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['uid', 'email', 'mensaje', 'puntuacion', 'fecha'])
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.mensaje is string && request.resource.data.mensaje.size() >= 1 && request.resource.data.mensaje.size() <= 1000
-        && request.resource.data.email is string && request.resource.data.email.size() <= 254
-        && (request.resource.data.puntuacion == null || (request.resource.data.puntuacion is int && request.resource.data.puntuacion >= 1 && request.resource.data.puntuacion <= 5))
-        && request.resource.data.fecha == request.time;
+      function respOk(r, k) { return r.get(k, null) == null || r.get(k, null) is bool; }
+      function expOk(e, k) { return e.get(k, '') is string && e.get(k, '').size() <= 200; }
+      function mensajeLibre(d) {
+        return d.keys().hasOnly(['uid', 'email', 'mensaje', 'puntuacion', 'fecha'])
+          && d.uid == request.auth.uid
+          && d.mensaje is string && d.mensaje.size() >= 1 && d.mensaje.size() <= 1000
+          && d.email is string && d.email.size() <= 254
+          && (d.puntuacion == null || (d.puntuacion is int && d.puntuacion >= 1 && d.puntuacion <= 5))
+          && d.fecha == request.time;
+      }
+      function postEntreno(d) {
+        return d.keys().hasOnly(['tipo', 'uid', 'respuestas', 'explicaciones', 'fecha'])
+          && d.keys().hasAll(['tipo', 'uid', 'respuestas', 'explicaciones', 'fecha'])
+          && d.tipo == 'post_entreno'
+          && d.uid == request.auth.uid
+          && d.respuestas is map
+          && d.respuestas.keys().hasOnly(['interfaz', 'comodidad', 'ia', 'registro', 'volver'])
+          && respOk(d.respuestas, 'interfaz') && respOk(d.respuestas, 'comodidad') && respOk(d.respuestas, 'ia')
+          && respOk(d.respuestas, 'registro') && respOk(d.respuestas, 'volver')
+          && d.explicaciones is map
+          && d.explicaciones.keys().hasOnly(['interfaz', 'comodidad', 'ia', 'registro', 'volver'])
+          && expOk(d.explicaciones, 'interfaz') && expOk(d.explicaciones, 'comodidad') && expOk(d.explicaciones, 'ia')
+          && expOk(d.explicaciones, 'registro') && expOk(d.explicaciones, 'volver')
+          && d.fecha == request.time;
+      }
+      allow create: if signedIn() && (mensajeLibre(request.resource.data) || postEntreno(request.resource.data));
       allow read, update, delete: if false;
     }
 

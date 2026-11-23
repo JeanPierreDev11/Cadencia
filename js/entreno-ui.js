@@ -2045,6 +2045,65 @@ function ejerciciosNuevos(L, ejs) {
   }
   return items.length ? { rid: ref.rid, d: ref.d, nombre: s.nombre || r.nombre || 'tu rutina', items } : null;
 }
+// Cuestionario opcional post-entreno de la beta (64): 5 preguntas sí/no, todas opcionales (se pueden desmarcar) con una explicación breve opcional.
+// Va el último de la cadena de hojas (tras «Tu rutina», «Compartir Entreno» y el resumen Pro). «OMITIR DE MOMENTO» siempre visible.
+const PE_PREG = [
+  ['interfaz', '¿Has entendido con claridad la interfaz?'],
+  ['comodidad', '¿Te ha resultado cómodo usarlo durante el entreno?'],
+  ['ia', '¿Te ha aportado algo útil la IA (al ajustar rutinas o analizar la sesión)?'],
+  ['registro', '¿Has podido anotar tus series, pesos y sensaciones sin que te frene el ritmo?'],
+  ['volver', '¿Te gustaría volver a usar la app en tu próximo entrenamiento?'],
+];
+const PE_MAX = 200;
+const postEntNuevo = () => ({ r: {}, t: {}, busy: false, msg: '' });
+const postEntListo = () => !!st.postEnt && PE_PREG.some(([k]) => st.postEnt.r[k] === true || st.postEnt.r[k] === false || String(st.postEnt.t[k] || '').trim());
+function postEntSheetHTML() {
+  const P = st.postEnt;
+  const preg = ([k, txt]) => {
+    const r = P.r[k];
+    return `<div class="pe-q"><p class="pe-qt" id="peq-${k}">${esc(txt)}</p>
+      <div class="pe-yn" role="group" aria-labelledby="peq-${k}">
+        <button type="button" class="pe-b${r === true ? ' on' : ''}" data-act="pe-r" data-v="${k}:1" aria-pressed="${r === true}" ${P.busy ? 'disabled' : ''}>SÍ</button>
+        <button type="button" class="pe-b${r === false ? ' on' : ''}" data-act="pe-r" data-v="${k}:0" aria-pressed="${r === false}" ${P.busy ? 'disabled' : ''}>NO</button>
+      </div>
+      <input class="input pe-t" type="text" data-pe="${k}" maxlength="${PE_MAX}" autocomplete="off" placeholder="Explícalo en una línea (opcional)" aria-label="Explicación opcional: ${esc(txt)}" value="${esc(P.t[k] || '')}" ${P.busy ? 'disabled' : ''}></div>`;
+  };
+  return `<div class="sheet-back exv-back" data-act="pe-omitir"></div>
+    <div class="sheet short pe" role="dialog" aria-modal="true" aria-label="Opinión sobre el entreno">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><span style="width:36px"></span><h2>Tu opinión</h2><button type="button" class="iconbtn" data-act="pe-omitir" aria-label="Omitir de momento" ${P.busy ? 'disabled' : ''}>${I.close}</button></div>
+      <div class="pe-body">
+        <p class="pe-intro">Estás en la beta de Cadencia. Son cinco preguntas de sí o no y todas son opcionales: responde solo las que quieras. Para quitar una respuesta, vuelve a pulsarla.</p>
+        ${PE_PREG.map(preg).join('')}
+      </div>
+      <div class="pe-foot">
+        ${P.msg ? `<div class="msg" role="alert">${esc(P.msg)}</div>` : ''}
+        <button type="button" class="btn block" data-act="pe-send" ${postEntListo() && !P.busy ? '' : 'disabled'}>${P.busy ? '<span class="spinner"></span>' : 'Enviar'}</button>
+        <button type="button" class="btn ghost block" data-act="pe-omitir" ${P.busy ? 'disabled' : ''}>OMITIR DE MOMENTO</button>
+      </div>
+    </div>`;
+}
+// Cambia SÍ/NO y el botón «Enviar» sin repintar la hoja (no pierde el scroll ni el foco del texto).
+function postEntPintar(k) {
+  const P = st.postEnt; if (!P) return;
+  root.querySelectorAll('[data-act="pe-r"]').forEach((b) => { const [q, n] = String(b.dataset.v).split(':'); if (q !== k) return; const on = P.r[k] === (n === '1'); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+  postEntBoton();
+}
+function postEntBoton() { const b = root.querySelector('[data-act="pe-send"]'); if (b && st.postEnt && !st.postEnt.busy) b.disabled = !postEntListo(); }
+async function postEntEnviar() {
+  const P = st.postEnt;
+  if (!P || P.busy || !postEntListo()) return;
+  const respuestas = {}, explicaciones = {};
+  PE_PREG.forEach(([k]) => {
+    respuestas[k] = P.r[k] === true || P.r[k] === false ? P.r[k] : null;
+    const x = String(P.t[k] || '').trim().slice(0, PE_MAX); if (x) explicaciones[k] = x;
+  });
+  const body = root.querySelector('.pe-body'), top = body ? body.scrollTop : 0;
+  const volver = () => { const b = root.querySelector('.pe-body'); if (b) b.scrollTop = top; };
+  P.busy = true; P.msg = ''; render(); volver();
+  try { await api.enviarPostEntreno(st.user.uid, respuestas, explicaciones); st.postEnt = null; render(); toast('Gracias. Hemos recibido tu opinión'); }
+  catch (e) { P.busy = false; P.msg = 'No se ha podido enviar. Revisa la conexión e inténtalo de nuevo.'; render(); volver(); }
+}
 function rutNuevosSheetHTML() {
   const R = st.rutNuevos, varios = R.items.length > 1, sel = R.items.filter((x) => x.on).length;
   const lista = R.items.map((x) => `<b>${esc(x.n)}</b>`);
@@ -2115,6 +2174,7 @@ async function liveFinish() {
     if (esPro() && !editado) st.resumen = { id: o.id, nombre: o.nombre, vol: volTotal, sets: nSets, min, record };
     if (!editado && nSets > 0) st.compartir = { id: o.id, i: 0, fondo: 'oscuro', menu: false }; // «Compartir Entreno» al terminar (para todos); al darle a LISTO sigue el resumen Pro si lo hay
     if (!editado) { const rn = ejerciciosNuevos(L, ejs); if (rn) st.rutNuevos = { ...rn, busy: false, msg: '' }; } // va ANTES que «Compartir» (primero de la cadena de hojas): ejercicios añadidos hoy → ¿a la rutina?
+    if (!editado && nSets > 0) st.postEnt = postEntNuevo(); // cuestionario opcional de la beta: el último de la cadena de hojas, tras «Tu rutina», Compartir y el resumen Pro
     render(); window.scrollTo(0, 0);
     toast(editado ? 'Entreno actualizado' : record ? '¡Nuevo récord personal!' : nSets ? `Entrenamiento guardado · ${nSets} ${nSets === 1 ? 'serie' : 'series'}` : 'Entrenamiento guardado');
   } catch (e) { fail(`No se ha podido guardar: ${errorText(e)}`); }
@@ -2511,6 +2571,9 @@ root.addEventListener('click', async (e) => {
   if (act === 'rn-close') { if (st.rutNuevos && st.rutNuevos.busy) return; st.rutNuevos = null; return render(); } // «Solo por hoy»: no toca la rutina
   if (act === 'rn-toggle' && st.rutNuevos && !st.rutNuevos.busy) { const x = st.rutNuevos.items[Number(v)]; if (x && st.rutNuevos.items.length > 1) { x.on = !x.on; render(); } return; }
   if (act === 'rn-add') return void rutNuevosAplicar();
+  if (act === 'pe-omitir') { if (st.postEnt && st.postEnt.busy) return; st.postEnt = null; return render(); } // «OMITIR DE MOMENTO»: no guarda nada
+  if (act === 'pe-r') { const P = st.postEnt; if (!P || P.busy) return; const [k, n] = String(v).split(':'); if (!PE_PREG.some((q) => q[0] === k)) return; const val = n === '1'; P.r[k] = P.r[k] === val ? null : val; return postEntPintar(k); } // pulsar la respuesta elegida la desmarca
+  if (act === 'pe-send') return void postEntEnviar();
   if (act === 'wk-mover-a' && st.moverSel) {
     const de = st.moverSel, inf = moverInfo(de);
     if (st.salvBusy || !inf || !inf.ok || !inf.destinos.includes(v)) return;
@@ -2578,6 +2641,7 @@ root.addEventListener('input', (e) => {
   if (st.lib && st.lib.crear && t.dataset.libc) { st.lib.crear[t.dataset.libc] = t.value; return; }
   if (st.rw && t.dataset.rw) { st.rw[t.dataset.rw] = t.value; const nb = document.querySelector('[data-rwnext]'); if (nb) nb.disabled = !rwCanNext(); const chs = document.querySelectorAll('[data-act=rw-dep-otro]'); chs.forEach((c) => c.classList.toggle('on', c.dataset.v === t.value)); return; }
   if (st.calentar && t.dataset.calkg != null) { st.calentar.kg = t.value; return; }
+  if (st.postEnt && t.dataset.pe) { if (!PE_PREG.some((q) => q[0] === t.dataset.pe)) return; t.value = t.value.slice(0, PE_MAX); st.postEnt.t[t.dataset.pe] = t.value; postEntBoton(); return; }
   if (st.liveFin && t.dataset.fin) { t.value = t.value.replace(/\D/g, '').slice(0, 2); st.liveFin[t.dataset.fin] = t.value; return; }
   if (st.live && t.dataset.livename != null) { st.live.nombre = t.value; st.live.custom = true; liveSave(); return; }
   if (st.live && t.dataset.lv) {
@@ -2701,5 +2765,5 @@ function recuperacionHTML() {
     ${esPro() ? cuerpo : muro}</section>`;
 }
 function cuerpoSheetHTML() { return C3.sheetHTML(st.cuerpo3d, sexoCuerpo(), datosCuerpo(), todayISO()); }
-  return { exViewHTML, finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, compartirSheetHTML: CP.sheetHTML, pintarCompartir: CP.pintar, limiteSheetHTML, calentarSheetHTML, moverSheetHTML, rutNuevosSheetHTML, rutModSheetHTML, dia7SheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML };
+  return { exViewHTML, finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, compartirSheetHTML: CP.sheetHTML, pintarCompartir: CP.pintar, limiteSheetHTML, calentarSheetHTML, moverSheetHTML, rutNuevosSheetHTML, postEntSheetHTML, rutModSheetHTML, dia7SheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML };
 }
