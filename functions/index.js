@@ -631,6 +631,7 @@ Reglas estrictas:
 8. "foco" (solo en fuerza, opcional): push, pull, legs, torso, pierna, full, fullB, fullC, pecho, espalda, hombro, brazos, gluIsq (glúteo e isquios), cuadGlu (cuádriceps y glúteo), lowerFull (pierna completa), torsoL (torso ligero), fullG, fullG2. Si no encaja ninguno, déjalo vacío.
 9. Si la petición no tiene que ver con la rutina, es imposible con su material, o pide algo peligroso o un consejo médico, devuelve la rutina SIN cambios y explícalo con tacto en "mensaje" (no inventes lesiones ni diagnósticos).
 10. "mensaje": 1 o 2 frases (máximo 280 caracteres) que dicen qué has cambiado, citando días y ejercicios reales, en tono cercano y motivador. Si no has cambiado nada, di por qué.
+11. "ejercicios" es OBLIGATORIO en toda sesión de fuerza y debe ser SIEMPRE la lista COMPLETA de esa sesión ya modificada (los ejercicios que se conservan MÁS los que añades, menos los que quitas), nunca vacía ni omitida, aunque la sesión no cambie. Si añades un ejercicio, tiene que aparecer dentro de "ejercicios" de ese día con su "nombre" (copiado del catálogo), "series" y "reps". El "mensaje" solo puede decir lo que de verdad está en la lista.
 Responde solo con el JSON del esquema.`;
 const ESQUEMA_RUTINA = {
   type: 'OBJECT',
@@ -644,7 +645,7 @@ const ESQUEMA_RUTINA = {
           dia: { type: 'INTEGER' }, origen: { type: 'INTEGER' }, tipo: { type: 'STRING', enum: AJUSTE_TIPOS }, nombre: { type: 'STRING' }, foco: { type: 'STRING' }, min: { type: 'INTEGER' },
           ejercicios: { type: 'ARRAY', items: { type: 'OBJECT', properties: { nombre: { type: 'STRING' }, series: { type: 'INTEGER' }, reps: { type: 'STRING' } }, required: ['nombre', 'series', 'reps'] } },
         },
-        required: ['dia', 'origen', 'tipo', 'nombre'],
+        required: ['dia', 'origen', 'tipo', 'nombre', 'ejercicios'],
       },
     },
   },
@@ -693,6 +694,17 @@ function contextoRutina(c) {
   }
   return o;
 }
+// Un ejercicio de la respuesta de Gemini → {nombre, series, reps} o null. Tolera variantes (cadena suelta, name/ejercicio, sets, repeticiones, números) para no descartar un ejercicio válido por un campo mal nombrado.
+function ejAjIA(e) {
+  if (typeof e === 'string') e = { nombre: e };
+  if (!e || typeof e !== 'object') return null;
+  const nombre = txtAj(e.nombre || e.ejercicio || e.name || e.n, 60);
+  if (!nombre) return null;
+  const sr = String(e.series != null ? e.series : e.sets != null ? e.sets : ''), m = sr.match(/\d+/);
+  const reps = txtAj(e.reps != null ? e.reps : e.repeticiones != null ? e.repeticiones : '', 20) || '10';
+  return { nombre, series: (m && entAj(m[0], 1, 10)) || 3, reps };
+}
+const lstEjIA = (d) => (Array.isArray(d && d.ejercicios) ? d.ejercicios : Array.isArray(d && d.ejercicio) ? d.ejercicio : Array.isArray(d && d.exercises) ? d.exercises : []).slice(0, 14).map(ejAjIA).filter(Boolean);
 // Respuesta de Gemini → { mensaje, dias[] } limpia (días 0-6 sin repetir, tipos y tamaños acotados). La app vuelve a validar los nombres de ejercicio con su biblioteca.
 function limpiarRutinaIA(x) {
   if (Array.isArray(x)) x = x[0];
@@ -703,12 +715,19 @@ function limpiarRutinaIA(x) {
     vistos.add(dia);
     const o = { dia, origen: entAj(d.origen, 0, 6) == null ? -1 : entAj(d.origen, 0, 6), tipo, nombre: txtAj(d.nombre, 40) };
     if (typeof d.foco === 'string' && AJUSTE_FOCOS.includes(d.foco)) o.foco = d.foco;
-    if (tipo === 'fuerza') o.ejercicios = (Array.isArray(d.ejercicios) ? d.ejercicios : []).slice(0, 10).map((e) => ({ nombre: txtAj(e && e.nombre, 60), series: entAj(e && e.series, 1, 10) || 3, reps: txtAj(e && e.reps, 20) || '10' })).filter((e) => e.nombre);
+    if (tipo === 'fuerza') o.ejercicios = lstEjIA(d);
     else { const m = entAj(d.min, 5, 600); if (m) o.min = m; }
     dias.push(o);
   }
   if (!dias.length) throw Object.assign(new Error('rutina vacía'), { status: 'json' });
   return { mensaje: txtAj(x.mensaje, 320) || 'Rutina actualizada.', dias: dias.sort((a, b) => a.dia - b.dia) };
+}
+// Sesiones de fuerza de la respuesta sin ningún ejercicio cuando la sesión de la que parten (origen, o el mismo día) sí tenía.
+const origenDe = (d, rutina) => rutina.dias.find((o) => o.dia === (d.origen >= 0 ? d.origen : d.dia));
+const sesionesVacias = (res, rutina) => res.dias.filter((d) => { if (d.tipo !== 'fuerza' || (d.ejercicios || []).length) return false; const o = origenDe(d, rutina); return !!(o && o.tipo === 'fuerza' && (o.ejercicios || []).length); });
+function rellenarVacias(res, rutina) {
+  const malas = new Set(sesionesVacias(res, rutina));
+  return { ...res, dias: res.dias.map((d) => (malas.has(d) ? { ...d, ejercicios: origenDe(d, rutina).ejercicios.map((e) => ({ ...e })) } : d)) };
 }
 exports.ajustarRutina = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 90, memory: '256MiB', concurrency: 10 }, async (req) => {
   verificarAcceso(req, 'ajustarRutina');
@@ -738,7 +757,14 @@ exports.ajustarRutina = onCall({ secrets: [GEMINI_CLAVE], timeoutSeconds: 90, me
     tx.set(globalRef(dia), { [campoG]: total + 1 }, { merge: true });
   });
   try {
-    const res = limpiarRutinaIA(await llamarGemini(GEMINI_CLAVE.value(), { perfil: perfilCoach(p), contexto, rutina, catalogo, instruccion }, CFG_RUTINA));
+    const pedir = async (ins) => limpiarRutinaIA(await llamarGemini(GEMINI_CLAVE.value(), { perfil: perfilCoach(p), contexto, rutina, catalogo, instruccion: ins }, CFG_RUTINA));
+    let res = await pedir(instruccion);
+    // Sesión de fuerza devuelta sin ejercicios aunque la actual los tenía: un reintento (dentro de esta misma solicitud, no gasta otro ajuste) exigiendo la lista completa.
+    if (sesionesVacias(res, rutina).length) {
+      console.warn('Ajuste de rutina: sesiones sin ejercicios, reintento');
+      try { res = await pedir(`${instruccion}\n\nIMPORTANTE: tu respuesta anterior dejó sesiones de fuerza sin la lista "ejercicios". Devuelve TODAS las sesiones de fuerza con su lista COMPLETA de ejercicios (nombre, series y reps), incluyendo los que añades.`); } catch (e2) { console.warn('Ajuste de rutina: el reintento falló', e2 && e2.message); }
+      res = rellenarVacias(res, rutina); // si aún falta alguna, se conserva la sesión actual (la app lo mostrará como «sin cambios» en vez de perder ejercicios)
+    }
     console.log('Ajuste de rutina ok', pro ? 'pro' : 'free', usadas + 1, '/', limite);
     return { ...res, usadas: usadas + 1, quedan: limite - usadas - 1, limite, pro };
   } catch (e) {

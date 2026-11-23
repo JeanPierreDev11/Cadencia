@@ -601,6 +601,20 @@ function rutinaParaIA(R) {
     return o;
   }) };
 }
+// Nombre de ejercicio devuelto por la IA → ejercicio de la biblioteca. Exacto; si no, el más parecido por raíces de palabras («Abductores en máquina» → «Abducción en máquina»).
+const ESTOP = new Set(['de', 'en', 'con', 'la', 'el', 'a', 'al', 'una', 'un', 'por', 'y', 'del', 'los', 'las']);
+const eTok = (n) => E.normTxt(n).split(/[^a-z0-9]+/).filter((t) => t && !ESTOP.has(t)).map((t) => t.slice(0, 5));
+function ejercicioIA(nombre) {
+  const x = E.ejercicio(nombre); if (x) return { x, aprox: false };
+  const t = eTok(nombre); if (!t.length) return null;
+  let mejor = null, pun = 0;
+  for (const c of E.todosEjercicios()) {
+    if (E.tipoEjercicio(c) !== 'fuerza') continue;
+    const u = eTok(c.n), com = t.filter((k) => u.includes(k)).length, sc = com / Math.max(t.length, u.length);
+    if (com >= Math.min(2, t.length) && sc > pun) { mejor = c; pun = sc; }
+  }
+  return mejor && pun >= 0.66 ? { x: mejor, aprox: true } : null;
+}
 // Rutina devuelta por la IA → nuevo borrador. Valida cada ejercicio con la biblioteca de la app: los que no existen se descartan y se avisa. Lanza si no queda ninguna sesión.
 function aplicarAjusteIA(R, res) {
   const out = clone(R), avisos = [], dias = [];
@@ -616,8 +630,9 @@ function aplicarAjusteIA(R, res) {
       const prevPorNombre = new Map(); for (const dd of R.dias) for (const e of (R.sesiones[dd].ej || [])) prevPorNombre.set(E.normTxt(E.canon(e.n)), e);
       const ej = [];
       for (const e of x.ejercicios || []) {
-        const xe = E.ejercicio(e.nombre);
+        const r = ejercicioIA(e.nombre), xe = r && r.x;
         if (!xe) { avisos.push(`«${e.nombre}» no está en la biblioteca de Cadencia y no se ha añadido.`); continue; }
+        if (r.aprox) avisos.push(`«${e.nombre}» se ha interpretado como «${xe.n}».`);
         if (E.tipoEjercicio(xe) === 'cardio' || ej.some((q) => E.normTxt(q.n) === E.normTxt(xe.n))) continue;
         const prev = prevPorNombre.get(E.normTxt(xe.n)), sr = Math.round(num(e.series)), reps = String(e.reps || '').trim().slice(0, 20);
         ej.push({ ...(prev ? clone(prev) : {}), n: xe.n, m: xe.m, series: sr >= 1 && sr <= 10 ? sr : (prev ? prev.series : 3), reps: reps || (prev ? prev.reps : '8-12') });
@@ -736,7 +751,7 @@ function rutModSheetHTML() {
   if (R.fase === 'prop') {
     body = `${rmBurbujas(R.hist.slice(-1))}
       ${camb.length ? `<div class="rm-sum" role="status"><b>Propuesta de la IA</b><span>${esc(rmResumen(camb))}</span></div>${camb.map(rmDiaHTML).join('')}${igual.length ? `<p class="small muted rm-same">Sin cambios: ${igual.map((x) => E.DIAS[x.d]).join(' · ')}</p>` : ''}`
-        : '<div class="rm-sum" role="status"><b>Sin cambios en tu rutina</b><span>La propuesta es igual a lo que ya tienes. Pide otro ajuste con otras palabras.</span></div>'}
+        : `<div class="rm-sum" role="status"><b>Sin cambios aplicables</b><span>${(R.avisos || []).length ? 'La IA no ha devuelto ningún ejercicio que se pueda aplicar, aunque su mensaje diga lo contrario. No se guardará nada. Pide otro ajuste nombrando el ejercicio y el día.' : 'La propuesta es igual a lo que ya tienes. Pide otro ajuste con otras palabras.'}</span></div>`}
       ${(R.avisos || []).map((a) => `<p class="small muted rm-aviso">${esc(a)}</p>`).join('')}
       ${R.err ? `<div class="msg" role="alert">${esc(R.err)}</div>` : ''}
       ${R.prev ? '<button type="button" class="link rm-undo" data-act="rm-prev">Volver a la propuesta anterior</button>' : ''}`;
@@ -773,10 +788,10 @@ function rutModSheetHTML() {
     </div>`;
 }
 // Cuántos ajustes quedan hoy (no gasta ninguno); actualiza solo el texto para no pisar lo que se esté escribiendo.
-async function rmEstado() {
-  const R = st.rmod; if (!R || R.cuota || R.cargando) return;
+async function rmEstado(forzar) {
+  const R = st.rmod; if (!R || (R.cuota && !forzar) || R.cargando) return;
   R.cargando = true;
-  try { R.cuota = await api.ajustarRutina({ modo: 'estado' }); } catch (e) { /* sin red o servidor sin desplegar: se verá al enviar */ }
+  try { R.cuota = await api.ajustarRutina({ modo: 'estado' }); if (st.re) chatDe(st.re).cuota = R.cuota; } catch (e) { /* sin red o servidor sin desplegar: se verá al enviar */ }
   R.cargando = false;
   if (st.rmod !== R || !R.cuota) return;
   if (rchCuota(R).quedan === 0) return render();
@@ -786,8 +801,8 @@ function rmAbrir(rid) {
   const re = st.re; if (!re || re.src !== 'tab' || re.rid !== rid) return;
   const base = clone(re.draft);
   if (!base.dias.some((d) => base.sesiones[d] && base.sesiones[d].t === 'fuerza')) return toast('La IA solo ajusta rutinas con días de fuerza.');
-  st.rmod = { rid, base, prop: null, prev: null, fase: 'ask', dia: -1, txt: '', busy: false, saving: false, err: '', msg: '', avisos: [], hist: [], cuota: null, confirmar: false, descartar: false };
-  render(); rmEstado();
+  st.rmod = { rid, base, prop: null, prev: null, fase: 'ask', dia: -1, txt: '', busy: false, saving: false, err: '', msg: '', avisos: [], hist: [], cuota: re.chat && re.chat.cuota ? { ...re.chat.cuota } : null, confirmar: false, descartar: false };
+  render(); rmEstado(true);
 }
 async function rmEnviar() {
   const R = st.rmod; if (!R || R.busy || R.saving) return;
@@ -808,11 +823,11 @@ async function rmEnviar() {
     } else ({ draft, avisos } = aplicarAjusteIA(cur, res));
     R.prev = R.prop ? { prop: R.prop, msg: R.msg, avisos: R.avisos } : null;
     R.prop = draft; R.msg = String(res.mensaje || 'He preparado una propuesta.'); R.avisos = avisos; R.hist.push({ q: txt, a: R.msg, dia });
-    R.cuota = { usadas: res.usadas, quedan: res.quedan, limite: res.limite, pro: res.pro }; R.txt = ''; R.fase = 'prop'; R.confirmar = false;
+    R.cuota = { usadas: res.usadas, quedan: res.quedan, limite: res.limite, pro: res.pro }; if (st.re) chatDe(st.re).cuota = R.cuota; R.txt = ''; R.fase = 'prop'; R.confirmar = false;
   } catch (e) {
     if (st.rmod !== R) return;
     const d = e && e.details;
-    if (d && d.codigo === 'ajustes-limite') { R.cuota = { usadas: d.usadas, quedan: 0, limite: d.limite, pro: d.pro }; if (d.pro) R.err = e.message; }
+    if (d && d.codigo === 'ajustes-limite') { R.cuota = { usadas: d.usadas, quedan: 0, limite: d.limite, pro: d.pro }; if (st.re) chatDe(st.re).cuota = R.cuota; if (d.pro) R.err = e.message; }
     else R.err = e && e.code === 'rutina/vacia' ? 'La IA no ha devuelto una rutina válida. Prueba con otras palabras (esta solicitud sí cuenta).' : errorText(e);
   }
   R.busy = false; render();
