@@ -14,11 +14,11 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@v2
-      - name: Registros de stripeWebhook, ia y coach (últimas 3 horas)
+      - name: Registros de stripeWebhook, ia, coach, ajustarRutina y canjearCodigo (últimas 3 horas)
         run: |
-          for SVC in stripewebhook ia coach; do
+          for SVC in stripewebhook ia coach ajustarrutina canjearcodigo; do
             echo "=================== $SVC ==================="
             gcloud logging read "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"$SVC\" AND timestamp>=\"$(date -u -d '3 hours ago' +%Y-%m-%dT%H:%M:%SZ)\"" \
               --project cadencia-11cb6 --limit 40 --order desc \
-              --format='value(timestamp,severity,httpRequest.status,httpRequest.requestMethod,textPayload)' || echo "(no se pudo leer)"
+              --format='value(timestamp,severity,httpRequest.status,httpRequest.requestMethod,textPayload,jsonPayload.message)' || echo "(no se pudo leer)"
           done
