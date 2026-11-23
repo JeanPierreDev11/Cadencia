@@ -12,6 +12,8 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
 const { getMessaging } = require('firebase-admin/messaging');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const DISCORD = require('./discord');
 const Stripe = require('stripe');
 const Anthropic = require('@anthropic-ai/sdk');
 const CATALOGO = require('./catalogo.json');
@@ -23,6 +25,7 @@ const STRIPE_CLAVE = defineSecret('STRIPE_SECRET_KEY'); // clave de la API de St
 const STRIPE_FIRMA = defineSecret('STRIPE_WEBHOOK_SECRET'); // secreto de firma del webhook (empieza por whsec_)
 const STRAVA_ID = defineSecret('STRAVA_CLIENT_ID'); // datos de la aplicación creada en developers.strava.com
 const STRAVA_SECRETO = defineSecret('STRAVA_CLIENT_SECRET'); // el «Client Secret» nunca sale del servidor
+const DISCORD_FEEDBACK = defineSecret('DISCORD_FEEDBACK_WEBHOOK_URL'); // webhook del canal privado de Discord con el feedback de la beta (65); nunca en el repo ni en el cliente
 setGlobalOptions({ region: 'europe-west1', maxInstances: 3 });
 
 const LIMITE_USUARIO = 10; // consultas de IA por persona y día (fotos + Taller)
@@ -1213,4 +1216,25 @@ exports.caducarPro = onSchedule({ schedule: '15 * * * *', timeZone: 'Europe/Madr
     quitados += 1;
   }
   console.log(`caducarPro: ${snap.size} perfiles con fecha vencida, ${quitados} sin Pro`);
+});
+
+// Feedback de la beta → canal privado de Discord (65). Se dispara al CREAR un documento de `feedback` (mensaje libre de Perfil o cuestionario post-entreno),
+// así que el guardado en Firestore ya está hecho cuando esto corre: si Discord tarda, falla o el secreto no está puesto, solo se registra en los logs
+// (buscar «[discord]») y el feedback queda igualmente en Firestore. Nunca lanza ni reintenta el trigger. No se envía el correo, solo @usuario y el id corto.
+exports.feedbackDiscord = onDocumentCreated({ document: 'feedback/{id}', secrets: [DISCORD_FEEDBACK], memory: '256MiB', timeoutSeconds: 60, retry: false }, async (event) => {
+  const id = event.params && event.params.id;
+  try {
+    const snap = event.data;
+    const doc = snap && snap.data();
+    if (!doc) { console.warn(`[discord] feedback ${id}: sin datos`); return; }
+    let perfil = null;
+    try { if (doc.uid) { const u = await userRef(String(doc.uid)).get(); perfil = u.exists ? u.data() : null; } }
+    catch (e) { console.warn(`[discord] feedback ${id}: no se pudo leer el perfil (${e && e.message})`); }
+    const r = await DISCORD.enviar(DISCORD_FEEDBACK.value(), DISCORD.armarMensaje(doc, perfil));
+    if (r.ok) console.log(`[discord] feedback ${id} (${doc.tipo || 'mensaje'}) enviado (${r.motivo})`);
+    else if (r.motivo === 'sin-webhook') console.warn(`[discord] feedback ${id}: el secreto DISCORD_FEEDBACK_WEBHOOK_URL no está configurado (vale «pendiente» o no es un webhook de Discord); no se envía`);
+    else console.error(`[discord] feedback ${id}: no se pudo enviar (${r.motivo}); el feedback sigue guardado en Firestore`);
+  } catch (e) {
+    console.error(`[discord] feedback ${id}: error inesperado (${String((e && e.message) || e).replace(/https?:\/\/\S+/g, '[url]')}); el feedback sigue guardado en Firestore`);
+  }
 });

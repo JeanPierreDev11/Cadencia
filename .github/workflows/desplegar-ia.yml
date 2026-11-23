@@ -8,7 +8,8 @@
 #   STRIPE_WEBHOOK_SECRET     el secreto de firma del webhook de Stripe (whsec_…)      (para cobrar Pro)
 #   STRAVA_CLIENT_ID          el «Client ID» de la aplicación de Strava                (para conectar Strava)
 #   STRAVA_CLIENT_SECRET      el «Client Secret» de la aplicación de Strava            (para conectar Strava)
-# Si aún no has creado los de Stripe o Strava se guarda el valor «pendiente» y esa parte avisa de que no está configurada.
+#   DISCORD_FEEDBACK_WEBHOOK_URL  la URL del webhook del canal privado de Discord       (para recibir el feedback de la beta, (65))
+# Si aún no has creado los de Stripe, Strava o Discord se guarda el valor «pendiente» y esa parte avisa de que no está configurada.
 name: Publicar IA en Firebase
 
 on:
@@ -59,10 +60,11 @@ jobs:
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
           STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
+          DISCORD_FEEDBACK_WEBHOOK_URL: ${{ secrets.DISCORD_FEEDBACK_WEBHOOK_URL }}
           FORZAR: ${{ github.event.inputs.actualizar_clave }}
         run: |
           FB="npx --yes firebase-tools@15.34.0"
-          for NAME in ANTHROPIC_API_KEY STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STRAVA_CLIENT_ID STRAVA_CLIENT_SECRET; do
+          for NAME in ANTHROPIC_API_KEY STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STRAVA_CLIENT_ID STRAVA_CLIENT_SECRET DISCORD_FEEDBACK_WEBHOOK_URL; do
             VAL="${!NAME}"
             if CUR=$($FB functions:secrets:access $NAME --project cadencia-11cb6 2>/dev/null); then EXISTE=1; else EXISTE=0; CUR=""; fi
             if [ -n "$VAL" ]; then
