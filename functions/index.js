@@ -852,7 +852,7 @@ exports.portalStripe = onCall({ secrets: [STRIPE_CLAVE], memory: '256MiB', timeo
   const stripe = new Stripe(String(STRIPE_CLAVE.value() || '').trim());
   try {
     const volver = String((req.data && req.data.volver) || ''); // solo se vuelve a dominios de Cadencia (si no, a la web principal)
-    const s = await stripe.billingPortal.sessions.create({ customer: d.stripeCustomerId, return_url: /^https:\/\/cadencia-11cb6\.(web\.app|firebaseapp\.com)(\/|$|\?|#)/.test(volver) ? volver : 'https://cadencia-11cb6.web.app/' });
+    const s = await stripe.billingPortal.sessions.create({ customer: d.stripeCustomerId, return_url: /^https:\/\/(cadenciafit\.app|www\.cadenciafit\.app|cadencia-11cb6\.(web\.app|firebaseapp\.com))(\/|$|\?|#)/.test(volver) ? volver : 'https://cadenciafit.app/' });
     return { url: s.url };
   } catch (e) { console.error('portal', e && e.message); throw new HttpsError('internal', 'portal'); }
 });

@@ -58,10 +58,10 @@ const applyTheme = () => {
 applyTheme();
 try { matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if (themePref() === 'system') applyTheme(); }); } catch (e) { /* navegador antiguo */ }
 
-/* ---------- enlace de invitación: https://cadencia-11cb6.web.app/?ref=CÓDIGO ---------- */
+/* ---------- enlace de invitación: https://cadenciafit.app/?ref=CÓDIGO ---------- */
 // Al abrir la app se lee `ref`, se guarda en localStorage (`cadencia-ref`, para que sobreviva al cuestionario) y se quita de la barra de direcciones.
 // Solo se quita `ref`: el resto de parámetros (`ir` de los avisos, `code` de Strava…) los siguen leyendo `push.js` y `strava.js`, por eso esto va ANTES de ellos.
-const REF_URL = 'https://cadencia-11cb6.web.app/';
+const REF_URL = 'https://cadenciafit.app/';
 const REF_TEXTO = 'Únete a Cadencia, la app de entrenamiento con IA. Usa mi enlace y llévate 1 semana PRO gratis.';
 const REF_CLAVE = 'cadencia-ref';
 let refMem = ''; // copia en memoria por si el navegador no deja usar localStorage
