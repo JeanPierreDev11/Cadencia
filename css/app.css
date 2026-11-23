@@ -2244,6 +2244,52 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .lista-ok b { color: var(--accent-text); font-family: Archivo, sans-serif; text-transform: uppercase; letter-spacing: .04em; }
 .lista-ok span { font-size: 14px; color: var(--muted); }
 
+/* ---------- 2026-11-23 · Acabado visual (60): maquetación móvil, geometría industrial, badge PRO y estados inactivos ----------
+   Guía: claude/brand-ui.md. Solo CSS. Va ANTES del bloque de escritorio, que sigue siendo el último. */
+:root { --brand-yellow: #F2C116; --brand-yellow-muted: #8C7010; --text-on-brand: #000000; --status-success: #22C55E; --r-md: 4px; --r-sm: 2px; }
+
+/* 1a · Entreno (y el resto de pestañas): el título nunca queda bajo la hora/barra de estado. Si la zona segura vale 0 pero la barra tapa
+   el contenido (PWA a pantalla completa), el mínimo de 20 px lo cubre. Solo móvil: en escritorio no cambia nada. */
+@media (max-width: 1023.98px) {
+  .main { padding-top: calc(max(var(--safe-t), 20px) + 24px); } /* --safe-t = env(safe-area-inset-top) */
+}
+/* 1b · Forma física › Peso: el botón flotante «Añadir registro» ya no tapa la última tarjeta (alto del botón ≈ 54 px + aire). */
+.fab-space { height: 104px; }
+
+/* 2a · Radios: botones, pestañas y etiquetas 2–4 px; tarjetas y contenedores 4–6 px. Sin píldoras. Los círculos que quedan son
+   puntos, radios, avatares y anillos (no son botones). */
+.lchip, .lrow-h .kg-pill, .rcv-chip, .exv-chip, .rec-n, .ref-n, .cp-circ, .sheet.exview .iconbtn, .sheet.rnv .iconbtn { border-radius: 4px; }
+.rcv-pill, .pro-badge, .beta-tag, .protag { border-radius: 2px; }
+.hid-bar, .hid-bar i { border-radius: 2px; }
+.nd-main, .nd-mac, .mcard, .mc-th, .lcard, .thumb, .det-hero, .rcv-card, .rcv-week, .rcv-body, .pf-list, .faq, .share-code, .c3-vivo, .c3-info,
+.rp-d, .rch-lim, .exv-hero, .exv-sec, .cp-frame, .ref-code, .ref-lista, .det-body, .exdb { border-radius: 6px; }
+.exv-hero .exdb { border-radius: 4px; }
+.sheet { border-radius: 6px 6px 0 0; }
+.sheet.exview, .sheet.rnv { border-radius: 6px 6px 0 0; }
+
+/* 2b · Etiqueta PRO única: rectángulo amarillo con texto negro, en todas las vistas. El verde queda para «En uso» y estados hechos. */
+.protag, .protag.inv, .pro-badge, .tag.ok#plan-tag, .hello-r .protag.pill {
+  display: inline-flex; align-items: center; gap: 5px; background: var(--brand-yellow); color: var(--text-on-brand); border: 0;
+  font-size: 11px; font-weight: 800; letter-spacing: .08em; line-height: 1.35; text-transform: uppercase; padding: 2px 7px; margin-left: 4px; vertical-align: 1px;
+}
+.pro-badge { margin-left: 0; padding: 3px 9px; }
+.tag.ok#plan-tag { margin-left: 0; vertical-align: baseline; }
+.hello-r .protag.pill { margin: 0 8px 0 0; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+.protag svg, .pro-badge svg { color: var(--text-on-brand); }
+/* Sobre un botón amarillo el rectángulo amarillo se perdería: lleva un filo negro para seguir leyéndose igual. */
+.btn:not(.ghost):not(.quiet):not([disabled]) .protag { box-shadow: 0 0 0 1.5px var(--text-on-brand); }
+.beta-tag { border-radius: 2px; }
+
+/* 2c · Estado inactivo limpio: nada de amarillo con opacidad (queda mostaza/marrón). Superficie carbón, borde sutil y texto apagado
+   con buen contraste (el texto apagado cumple 4,5:1 sobre la superficie en oscuro y en claro). */
+.btn[disabled]:not(.ghost):not(.quiet):not(.danger-solid):not(.danger),
+.btn.is-locked:not(.ghost):not(.quiet):not(.danger-solid):not(.danger) {
+  opacity: 1; background: var(--surface2); color: var(--muted); border: 1px solid var(--bd); box-shadow: none;
+}
+.btn.is-locked:not(.ghost):not(.quiet) { cursor: pointer; }
+.btn[disabled]:not(.ghost):not(.quiet) .spinner { border-color: var(--muted); border-right-color: transparent; }
+.rm-dias .chipbtn.on:disabled { opacity: 1; background: var(--surface2); color: var(--muted); border-color: var(--brand-yellow-muted); }
+
 @media (min-width: 1024px) {
   :root { --sb-w: 104px; --col: 800px; }
 
