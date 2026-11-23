@@ -1280,10 +1280,11 @@ function viewPerfil() {
       pfRow('trash', 'Eliminar cuenta', { act: 'del-open', cls: 'danger' }),
     ])}
     <p class="small muted pf-foot">${api.mode === 'firebase' ? 'Tus datos se guardan en la nube y los verás en cualquier dispositivo.' : 'Modo prueba: tus datos se guardan solo en este dispositivo.'}</p>
+    <div class="fb-wrap"><button type="button" class="fb-btn" data-act="pf-open" data-v="feedback">Enviar sugerencia o reportar fallo</button></div>
     ${legalLinksHTML('pf-legal')}`;
 }
 
-const PF_TITULO = { referidos: 'Invita a tus amigos', editar: 'Editar perfil', detalles: 'Detalles personales', prefs: 'Preferencias', idioma: 'Idioma', suscripcion: 'Administrar suscripción', integraciones: 'Integraciones', func: 'Solicitar una función', faq: 'Preguntas frecuentes' };
+const PF_TITULO = { referidos: 'Invita a tus amigos', editar: 'Editar perfil', detalles: 'Detalles personales', prefs: 'Preferencias', idioma: 'Idioma', suscripcion: 'Administrar suscripción', integraciones: 'Integraciones', func: 'Solicitar una función', feedback: 'Sugerencia o fallo', faq: 'Preguntas frecuentes' };
 const pfV = (k, d) => (st.pf.f && k in st.pf.f ? st.pf.f[k] : d); // lo escrito se conserva si la hoja se redibuja (p. ej. tras cambiar la foto)
 
 // «Guardar» solo se activa cuando algún valor es distinto del que había al abrir la hoja.
@@ -1344,6 +1345,15 @@ function pfCuerpo(v) {
       <label class="field"><span>¿Qué te gustaría que hiciera Cadencia?</span><textarea class="input" name="texto" rows="6" maxlength="1000" placeholder="Cuéntanos tu idea…">${esc(pfV('texto', ''))}</textarea></label>
       <button class="btn block" type="submit" ${st.pf.busy ? 'disabled' : ''}>${st.pf.busy ? '<span class="spinner"></span>' : 'Enviar'}</button>
       <a class="small muted" href="mailto:${CONTACTO}?subject=${encodeURIComponent('Idea para Cadencia')}">O envíanosla por correo</a></form>`;
+  }
+  if (v === 'feedback') {
+    const pun = Number(pfV('puntuacion', 0)) || 0;
+    return `<form class="sheet-list form-grid" data-form="pf-feedback" novalidate>
+      <label class="field"><span>Cuéntanos qué mejorar o qué ha fallado</span><textarea class="input" name="mensaje" rows="6" maxlength="1000" placeholder="Escribe aquí tu sugerencia o el fallo que has visto…">${esc(pfV('mensaje', ''))}</textarea></label>
+      <div class="field"><span>¿Qué nota le das a Cadencia? (opcional)</span>
+        <div class="fb-pun" role="group" aria-label="Valoración de 1 a 5">${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="fb-n${pun === n ? ' on' : ''}" data-act="fb-pun" data-v="${n}" aria-pressed="${pun === n}">${n}</button>`).join('')}</div></div>
+      <button class="btn block" type="submit" ${st.pf.busy ? 'disabled' : ''}>${st.pf.busy ? '<span class="spinner"></span>' : 'Enviar'}</button>
+      <a class="small muted" href="mailto:${CONTACTO}?subject=${encodeURIComponent('Sugerencia o fallo en Cadencia')}">O escríbenos por correo</a></form>`;
   }
   if (v === 'faq') {
     const Q = [['¿Cómo registro mi peso?', 'En Forma física, pulsa «Añadir registro». También puedes cambiarlo en Perfil → Detalles personales.'],
@@ -1470,6 +1480,13 @@ async function pfGuardar(kind, f) {
       if (k1 !== currentKg()) { await api.addWeight(uid, todayISO(), k1); st.weights = await api.listWeights(uid); data.pesoKg = k1; }
     } catch (e) { return toast(errorText(e)); }
     data.calorias = CAL.resumen({ ...st.profile, ...data }, k1);
+  } else if (kind === 'pf-feedback') {
+    const mensaje = f.mensaje.value.trim(), pun = Number(st.pf.f.puntuacion) || 0;
+    if (mensaje.length < 5) return toast('Cuéntanos un poco más');
+    st.pf.busy = true; render();
+    try { await api.enviarFeedback(uid, st.user.email, mensaje.slice(0, 1000), pun >= 1 && pun <= 5 ? pun : null); st.pf = null; render(); toast('¡Gracias! Hemos recibido tu mensaje'); }
+    catch (e) { st.pf.busy = false; st.pf.f = { mensaje, puntuacion: pun }; render(); toast(errorText(e)); }
+    return;
   } else { // pf-func
     const texto = f.texto.value.trim();
     if (texto.length < 5) return toast('Cuéntanos un poco más');
@@ -1673,6 +1690,7 @@ root.addEventListener('click', async (e) => {
   else if (act === 'pro-info-open') { st.proInfo = true; render(); }
   else if (act === 'pro-info-close') { st.proInfo = null; render(); }
   else if (act === 'pf-close') { st.pf = null; st.editGoals = null; render(); }
+  else if (act === 'fb-pun') { if (st.pf) { const n = Number(v); st.pf.f.puntuacion = Number(st.pf.f.puntuacion) === n ? 0 : n; render(); } } // vuelve a pulsar la misma nota = sin nota
   else if (act === 'pf-idioma') { st.profile.idioma = v; render(); try { await api.saveProfile(st.user.uid, { idioma: v }); } catch (e) { toast(errorText(e)); } }
   else if (act === 'del-open') { st.del = { pass: '', txt: '', msg: '', busy: false }; render(); }
   else if (act === 'del-close') { if (!st.del || !st.del.busy) { st.del = null; render(); } }

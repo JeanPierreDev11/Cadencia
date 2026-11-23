@@ -98,6 +98,8 @@ async function firebaseBackend(config) {
       return `${await S.getDownloadURL(r)}&v=${Date.now()}`;
     },
     async addFeatureRequest(uid, email, texto) { await F.addDoc(F.collection(db, 'feature_requests'), { uid, email: email || '', texto, creado: F.serverTimestamp() }); },
+    // Sugerencia o fallo (colección «feedback»: solo se crea desde la app; se lee en la consola de Firebase). puntuacion = 1-5 o null.
+    async enviarFeedback(uid, email, mensaje, puntuacion) { await F.addDoc(F.collection(db, 'feedback'), { uid, email: email || '', mensaje, puntuacion: puntuacion || null, fecha: F.serverTimestamp() }); },
     // Rutinas compartidas: colección «shared_routines», el id del documento es el código.
     async shareRutina(uid, rut) {
       let code = rut.shareCode;
@@ -284,6 +286,7 @@ function localBackend() {
       return new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => no(err('local/foto')); r.readAsDataURL(blob); });
     },
     async addFeatureRequest(uid, email, texto) { const s = read(); (s.requests = s.requests || []).push({ uid, email, texto, creado: Date.now() }); write(s); },
+    async enviarFeedback(uid, email, mensaje, puntuacion) { const s = read(); (s.feedback = s.feedback || []).push({ uid, email: email || '', mensaje, puntuacion: puntuacion || null, fecha: Date.now() }); write(s); },
     async shareRutina(uid, rut) {
       const s = read(); s.shared = s.shared || {};
       let code = rut.shareCode; while (!code || (s.shared[code] && s.shared[code].userId !== uid)) code = nuevoCodigo();

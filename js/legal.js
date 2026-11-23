@@ -5,8 +5,8 @@ import { CICLISMO } from './config.js';
 export const LEGAL_V = '2026-11-23';
 // Correo de contacto, soporte y ejercicio de derechos (RGPD). Es el mismo que usa «Correo de soporte» en Perfil.
 export const CONTACTO = 'soporte@cadenciafit.app';
-// Identificación del titular del servicio. Mientras sea una beta gratuita sin cobros solo se muestran nombre y correo; al activar pagos hay que rellenar `nif` y `domicilio` (se muestran solos si no están vacíos).
-export const TITULAR = { nombre: 'Jean Pierre Ramirez Cova', nif: '', domicilio: '' };
+// Identificación del titular del servicio. Mientras sea una beta gratuita sin actividad económica solo se muestran nombre, ciudad y correo. Al activar pagos hay que añadir `nif` y `domicilio` (se muestran solos si existen y no están vacíos).
+export const TITULAR = { nombre: 'Jean Pierre Ramirez Cova', ciudad: 'Bilbao, España' };
 
 export const LEGAL_TABS = [
   { id: 'terminos', t: 'Términos' },
@@ -19,7 +19,7 @@ export const legalTab = (id) => (LEGAL_TITULOS[id] ? id : 'terminos');
 const fecha = () => LEGAL_V.split('-').reverse().join('/');
 const mail = `<a href="mailto:${CONTACTO}">${CONTACTO}</a>`;
 const tab = (id, txt) => `<button type="button" class="link" data-act="legal-tab" data-v="${id}">${txt}</button>`;
-const titular = () => `<b>${TITULAR.nombre}</b>${TITULAR.nif ? ` (NIF ${TITULAR.nif})` : ''}${TITULAR.domicilio ? `, con domicilio en ${TITULAR.domicilio}` : ''}. Correo de contacto: ${mail}.`;
+const titular = () => `<b>${TITULAR.nombre}</b>${TITULAR.nif ? ` (NIF ${TITULAR.nif})` : ''}${TITULAR.domicilio ? `, con domicilio en ${TITULAR.domicilio}` : TITULAR.ciudad ? `, ${TITULAR.ciudad}` : ''}. Correo de contacto: ${mail}.`;
 
 function terminos() {
   return `

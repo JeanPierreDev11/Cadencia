@@ -44,6 +44,19 @@ service cloud.firestore {
         && request.resource.data.texto is string && request.resource.data.texto.size() <= 1000;
     }
 
+    // Sugerencias y fallos (feedback): solo crear con sesión y con tu propio uid; texto de 1 a 1000 caracteres; nota opcional de 1 a 5;
+    // solo estos campos y la fecha la pone el servidor. Nadie lo lee, cambia ni borra desde la app (se ve en la consola de Firebase).
+    match /feedback/{id} {
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'mensaje', 'puntuacion', 'fecha'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.mensaje is string && request.resource.data.mensaje.size() >= 1 && request.resource.data.mensaje.size() <= 1000
+        && request.resource.data.email is string && request.resource.data.email.size() <= 254
+        && (request.resource.data.puntuacion == null || (request.resource.data.puntuacion is int && request.resource.data.puntuacion >= 1 && request.resource.data.puntuacion <= 5))
+        && request.resource.data.fecha == request.time;
+      allow read, update, delete: if false;
+    }
+
     // Rutinas compartidas por código: el id del documento es el código. Con sesión se puede leer UNA si se sabe el código (get), no listarlas;
     // solo su autor la crea, la actualiza o la borra, y no puede cambiarle el autor.
     match /shared_routines/{code} {
