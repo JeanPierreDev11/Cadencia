@@ -4,7 +4,7 @@
 import { CICLISMO } from './config.js';
 export const LEGAL_V = '2026-11-23';
 // Correo de contacto, soporte y ejercicio de derechos (RGPD). Es el mismo que usa «Correo de soporte» en Perfil.
-export const CONTACTO = 'jeanpierreramirezcova@gmail.com';
+export const CONTACTO = 'soporte@cadenciafit.app';
 // Identificación del titular del servicio (obligatoria por el art. 10 de la LSSI-CE). RELLENAR antes del lanzamiento: se ve tal cual en «Términos» y «Privacidad».
 export const TITULAR = { nombre: '[PON_AQUI_TU_NOMBRE_O_RAZON_SOCIAL]', nif: '[PON_AQUI_TU_NIF]', domicilio: '[PON_AQUI_TU_DOMICILIO]' };
 
