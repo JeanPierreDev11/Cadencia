@@ -1560,21 +1560,21 @@ html, body, main, .sheet-list, .sheet-scroll, .modal-body { overscroll-behavior-
 .exp3 .choice small { font-weight: 400; color: var(--muted); font-size: 12px; }
 .choice.freq .ico.num { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
 
-/* termómetro del peso (colores fijos a propósito: verde / naranja / rojo) */
+/* termómetro del peso (verde / amarillo / rojo; el tramo medio usa --brand-yellow, registro (63)) */
 .term { display: grid; gap: 12px; }
 .term-wrap { position: relative; padding-top: 12px; }
 .term-pin { position: absolute; top: 0; left: calc(var(--p) * 1%); width: 0; height: 0; margin-left: -6px; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 9px solid var(--ink); transition: left .3s cubic-bezier(.2,.8,.2,1); }
 .term-bar { display: flex; height: 10px; overflow: hidden; border-radius: 2px; }
 .term-bar i { display: block; }
 .term-bar i:nth-child(1) { flex: 40; background: var(--ok); }
-.term-bar i:nth-child(2) { flex: 20; background: #FF9F1C; }
+.term-bar i:nth-child(2) { flex: 20; background: var(--brand-yellow); }
 .term-bar i:nth-child(3) { flex: 40; background: var(--bad); }
 .term-scale { display: flex; justify-content: space-between; margin-top: 4px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .term-box { display: grid; gap: 3px; padding: 13px 14px; border: 1.5px solid var(--tc); border-left-width: 5px; background: var(--tb); border-radius: 2px; }
 .term-box b { color: var(--ink); font-size: 17px; line-height: 1.25; }
 .term-box small { color: var(--muted); font-size: 13px; }
 .term-box.ok { --tc: var(--ok); --tb: rgba(61, 220, 132, .14); }
-.term-box.mid { --tc: #FF9F1C; --tb: rgba(255, 159, 28, .16); }
+.term-box.mid { --tc: var(--brand-yellow); --tb: rgba(242, 193, 22, .14); }
 .term-box.high { --tc: var(--bad); --tb: var(--bad-soft); }
 .term-box.none { --tc: var(--line); --tb: var(--surface); }
 
@@ -2247,6 +2247,16 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 /* ---------- 2026-11-23 · Acabado visual (60): maquetación móvil, geometría industrial, badge PRO y estados inactivos ----------
    Guía: claude/brand-ui.md. Solo CSS. Va ANTES del bloque de escritorio, que sigue siendo el último. */
 :root { --brand-yellow: #F2C116; --brand-yellow-muted: #8C7010; --text-on-brand: #000000; --status-success: #22C55E; --r-md: 4px; --r-sm: 2px; }
+/* 2026-11-23 · Tokens de marca restantes (63). Solo oscuro; sin override claro; los usan los componentes nuevos o modificados. */
+:root {
+  --bg-primary: #000000;
+  --bg-surface: #121212;
+  --bg-surface-elevated: #181818;
+  --border-subtle: #262626;
+  --text-primary: #FFFFFF;
+  --text-secondary: #9E9E9E;
+  --status-error: #EF4444;
+}
 
 /* 1a · Entreno (y el resto de pestañas): el título nunca queda bajo la hora/barra de estado. Si la zona segura vale 0 pero la barra tapa
    el contenido (PWA a pantalla completa), el mínimo de 20 px lo cubre. Solo móvil: en escritorio no cambia nada. */
