@@ -1344,7 +1344,7 @@ function pfCuerpo(v) {
     const Q = [['¿Cómo registro mi peso?', 'En Forma física, pulsa «Añadir registro». También puedes cambiarlo en Perfil → Detalles personales.'],
       ['¿Cómo se calcula la recuperación muscular?', 'Al entrenar un músculo baja a 0–20 % según las series, y se recupera en torno a un 33 % cada 24 horas hasta el 100 % a las 72 horas.'],
       ['¿Cómo cancelo Cadencia Pro?', 'Desde Perfil → Administrar suscripción, con «Gestionar suscripción». Seguirás con Pro hasta que termine el periodo pagado.'],
-      ['¿Mis datos son privados?', 'Sí. Solo tú puedes verlos y no los compartimos con anunciantes. Puedes borrarlos cuando quieras con «Eliminar cuenta».']];
+      ['¿Mis datos son privados?', 'Solo tú puedes verlos en la app, y no los vendemos ni los usamos para publicidad. Las funciones de IA envían solo lo necesario a sus proveedores (detalles en Privacidad, al final de Perfil). Puedes borrar todo cuando quieras con «Eliminar cuenta».']];
     return `<div class="sheet-list">${Q.map(([q, a]) => `<details class="faq"><summary>${q}</summary><p class="small muted">${a}</p></details>`).join('')}</div>`;
   }
   return '';
