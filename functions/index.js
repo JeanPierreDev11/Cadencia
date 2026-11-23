@@ -30,7 +30,7 @@ const LIMITE_GLOBAL = 300; // consultas al día entre todas las personas CON PRO
 const LIMITE_GLOBAL_FREE = 150; // fotos de plato gratuitas al día entre todas las personas SIN Pro: tope aparte, para que cuentas gratuitas masivas no agoten la cuota de quien paga
 // App Check (verifica que la llamada viene de la app real y no de un script con una cuenta cualquiera). Déjalo en false hasta que la app envíe el token
 // (ver «App Check» en claude/contexto-seguridad-produccion.md); con true y sin App Check en la app, TODAS las llamadas de IA fallarían.
-const EXIGIR_APPCHECK = false;
+const EXIGIR_APPCHECK = true;
 const MODELO_PLATO = 'claude-haiku-5-5'; // rápido y barato, ve imágenes
 const MODELO_TALLER = 'claude-sonnet-5-5'; // más conocimiento de componentes y compatibilidades
 
