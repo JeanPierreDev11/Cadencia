@@ -673,6 +673,184 @@ async function rchEnviar() {
   c.busy = false; render();
 }
 
+/* ---------- Mis rutinas › Modificar: propuesta de la IA como BORRADOR (no toca la rutina guardada hasta «Aceptar cambios») ---------- */
+// Estado en st.rmod = { rid, base, prop, prev, fase:'ask'|'prop', dia:-1|0..6, txt, busy, saving, err, msg, avisos, hist:[{q,a,dia}], cuota, confirmar, descartar }.
+//  base = la rutina tal como se ve en el editor al abrir (nunca cambia); prop = borrador actual de la IA (se calcula SIEMPRE sobre prop si existe: así «Pedir otro ajuste» afina la propuesta).
+const RM_SUG = ['Añade abductores al día de pierna', 'Cambia un ejercicio por otro parecido', 'Menos ejercicios y más series'];
+const RM_MAX = 240; // el servidor corta la petición en 300: queda sitio para el prefijo del día
+const rmClave = (e) => E.normTxt(E.canon(e.n));
+const rmSerie = (e) => `${Math.round(num(e.series)) || 3} × ${String(e.reps || '').trim() || '10'}`;
+const rmFuerza = (s) => (s && s.t === 'fuerza' ? s.ej || [] : []);
+// Compara la rutina original (A) con la propuesta (B), día a día. Devuelve una lista de {d, estado:'nuevo'|'quitado'|'cambio'|'igual', ...} con las filas ya marcadas.
+function difRutina(A, B) {
+  const dias = [...new Set([...A.dias, ...B.dias])].sort((x, y) => x - y), out = [];
+  for (const d of dias) {
+    const a = A.dias.includes(d) ? A.sesiones[d] : null, b = B.dias.includes(d) ? B.sesiones[d] : null;
+    if (!a && !b) continue;
+    if (!a) { out.push({ d, estado: 'nuevo', s: b, filas: rmFuerza(b).map((e) => ({ n: e.n, ser: rmSerie(e), tag: 'nuevo' })), quita: [], notas: [] }); continue; }
+    if (!b) { out.push({ d, estado: 'quitado', s: a, filas: [], quita: rmFuerza(a).map((e) => ({ n: e.n, ser: rmSerie(e) })), notas: [] }); continue; }
+    const notas = [];
+    if (a.t !== b.t) notas.push(`Pasa de ${RT[a.t]} a ${RT[b.t]}.`);
+    if (String(a.nombre || '') !== String(b.nombre || '')) notas.push(`Nombre: «${a.nombre || RT[a.t]}» → «${b.nombre || RT[b.t]}».`);
+    let filas = [], quita = [];
+    if (a.t === 'fuerza' && b.t === 'fuerza') {
+      const mA = new Map(rmFuerza(a).map((e) => [rmClave(e), e])), mB = new Map(rmFuerza(b).map((e) => [rmClave(e), e]));
+      filas = rmFuerza(b).map((e) => { const o = mA.get(rmClave(e)); return !o ? { n: e.n, ser: rmSerie(e), tag: 'nuevo' } : rmSerie(o) !== rmSerie(e) ? { n: e.n, ser: rmSerie(e), tag: 'ajustado', antes: rmSerie(o) } : { n: e.n, ser: rmSerie(e), tag: '' }; });
+      quita = rmFuerza(a).filter((e) => !mB.has(rmClave(e))).map((e) => ({ n: e.n, ser: rmSerie(e) }));
+      const oA = rmFuerza(a).map(rmClave).filter((k) => mB.has(k)).join('|'), oB = rmFuerza(b).map(rmClave).filter((k) => mA.has(k)).join('|');
+      if (oA !== oB) notas.push('Cambia el orden de los ejercicios.');
+    } else if (b.t === 'fuerza') filas = rmFuerza(b).map((e) => ({ n: e.n, ser: rmSerie(e), tag: 'nuevo' }));
+    else {
+      if (num(a.min) !== num(b.min)) notas.push(`Duración: ${nf(num(a.min))} → ${nf(num(b.min))} min.`);
+      if (num(a.km) !== num(b.km)) notas.push(`Distancia: ${nf(num(a.km))} → ${nf(num(b.km))} km.`);
+    }
+    const cambia = notas.length || quita.length || filas.some((f) => f.tag);
+    out.push({ d, estado: cambia ? 'cambio' : 'igual', s: b, filas, quita, notas });
+  }
+  return out;
+}
+const rmCambios = (R) => (R.prop ? difRutina(R.base, R.prop).filter((x) => x.estado !== 'igual') : []);
+function rmResumen(dif) {
+  let n = 0, q = 0, a = 0, dn = 0, dq = 0;
+  for (const x of dif) { if (x.estado === 'nuevo') dn++; else if (x.estado === 'quitado') dq++; n += x.filas.filter((f) => f.tag === 'nuevo').length; a += x.filas.filter((f) => f.tag === 'ajustado').length; q += x.quita.length; }
+  const pl = (k, s, p) => `${k} ${k === 1 ? s : p}`, t = [];
+  if (n) t.push(`Añade ${pl(n, 'ejercicio', 'ejercicios')}`); if (q) t.push(`Quita ${pl(q, 'ejercicio', 'ejercicios')}`); if (a) t.push(`Ajusta ${pl(a, 'ejercicio', 'ejercicios')}`);
+  if (dn) t.push(`${pl(dn, 'día nuevo', 'días nuevos')}`); if (dq) t.push(`${pl(dq, 'día quitado', 'días quitados')}`);
+  return t.join(' · ');
+}
+function rmDiaHTML(x) {
+  const nm = x.s && (x.s.nombre || RT[x.s.t]), tag = { nuevo: 'Día nuevo', quitado: 'Día quitado', cambio: 'Modificado' }[x.estado];
+  return `<section class="rm-day ${x.estado}" aria-label="${esc(E.DIAS_LARGO[x.d])}: ${esc(tag)}">
+    <div class="rm-dh"><b>${E.DIAS_LARGO[x.d]}</b><span class="rm-dn">${esc(nm || '')}</span><span class="rm-st">${tag}</span></div>
+    ${x.notas.map((t) => `<p class="small muted rm-nota">${esc(t)}</p>`).join('')}
+    <div class="rm-rows">${x.filas.map((f) => `<div class="rm-row ${f.tag}"><span class="rm-en">${f.tag === 'nuevo' ? '<i class="rm-tag" aria-hidden="true">Nuevo</i>' : f.tag === 'ajustado' ? '<i class="rm-tag" aria-hidden="true">Ajustado</i>' : ''}${esc(f.n)}</span><span class="rm-es">${f.tag === 'ajustado' ? `<s>${esc(f.antes)}</s> ` : ''}${esc(f.ser)}</span></div>`).join('')}
+      ${x.quita.map((f) => `<div class="rm-row quita"><span class="rm-en"><i class="rm-tag" aria-hidden="true">Se quita</i><s>${esc(f.n)}</s></span><span class="rm-es"><s>${esc(f.ser)}</s></span></div>`).join('')}</div>
+  </section>`;
+}
+const rmBurbujas = (arr) => arr.map((h) => `<div class="rm-bub me"><span class="rm-who">Tú${h.dia >= 0 ? ` · ${E.DIAS_LARGO[h.dia]}` : ''}</span>${esc(h.q)}</div><div class="rm-bub"><span class="rm-who">Cadencia</span>${esc(h.a)}</div>`).join('');
+function rutModSheetHTML() {
+  const R = st.rmod, cur = R.prop || R.base, q = rchCuota(R), agotado = q.quedan === 0, off = R.busy || R.saving || agotado;
+  const nombre = (rutinasList().find((x) => x.id === R.rid) || {}).nombre || 'Rutina';
+  const dif = R.fase === 'prop' ? difRutina(R.base, R.prop) : [], camb = dif.filter((x) => x.estado !== 'igual'), igual = dif.filter((x) => x.estado === 'igual');
+  let body = '', foot = '';
+  if (R.fase === 'prop') {
+    body = `${rmBurbujas(R.hist.slice(-1))}
+      ${camb.length ? `<div class="rm-sum" role="status"><b>Propuesta de la IA</b><span>${esc(rmResumen(camb))}</span></div>${camb.map(rmDiaHTML).join('')}${igual.length ? `<p class="small muted rm-same">Sin cambios: ${igual.map((x) => E.DIAS[x.d]).join(' · ')}</p>` : ''}`
+        : '<div class="rm-sum" role="status"><b>Sin cambios en tu rutina</b><span>La propuesta es igual a lo que ya tienes. Pide otro ajuste con otras palabras.</span></div>'}
+      ${(R.avisos || []).map((a) => `<p class="small muted rm-aviso">${esc(a)}</p>`).join('')}
+      ${R.err ? `<div class="msg" role="alert">${esc(R.err)}</div>` : ''}
+      ${R.prev ? '<button type="button" class="link rm-undo" data-act="rm-prev">Volver a la propuesta anterior</button>' : ''}`;
+    foot = `<button type="button" class="btn block" data-act="rm-ok" ${R.saving || !camb.length ? 'disabled' : ''}>${R.saving ? '<span class="spinner"></span>' : 'Aceptar cambios'}</button>
+         <div class="rm-two"><button type="button" class="btn quiet" data-act="rm-otro" ${R.saving ? 'disabled' : ''}>Pedir otro ajuste</button><button type="button" class="btn ghost" data-act="rm-cancel" ${R.saving ? 'disabled' : ''}>Dejar como estaba</button></div>`;
+  } else {
+    const dias = [...cur.dias].sort((a, b) => a - b).filter((d) => cur.sesiones[d]);
+    const aviso = agotado
+      ? (q.pro ? `<p class="small muted rch-lim" role="status">Has usado tus ${q.limite} ajustes PRO de hoy. Mañana tendrás otros ${q.limite}. Mientras tanto puedes editar los ejercicios a mano.</p>`
+        : `<div class="rch-lim" role="status"><p><b>Has usado tus ${q.limite} ajustes de hoy.</b> ${PAGOS_ACTIVOS ? 'Pasa a PRO y tendrás' : 'Cadencia PRO, próximamente, tendrá'} hasta ${RCH_LIM_PRO} ajustes con IA al día.</p><button type="button" class="btn small" data-act="lim-pro">Ver Cadencia PRO</button></div>`) : '';
+    body = `${R.hist.length ? `<div class="rm-chat" aria-label="Conversación">${rmBurbujas(R.hist)}</div>` : ''}
+      ${R.prop ? `<p class="small muted rm-recap">Borrador actual: ${esc(rmResumen(rmCambios(R)) || 'sin cambios todavía')}. Tu rutina guardada no cambia hasta que aceptes.</p>` : ''}
+      <div class="rm-sec"><span class="rm-lbl" id="rm-l-dia">¿Qué día quieres cambiar?</span>
+        <div class="rm-dias" role="group" aria-labelledby="rm-l-dia"><button type="button" class="chip chipbtn ${R.dia < 0 ? 'on' : ''}" data-act="rm-dia" data-v="-1" aria-pressed="${R.dia < 0}" ${off ? 'disabled' : ''}>Toda la rutina</button>${dias.map((d) => `<button type="button" class="chip chipbtn ${R.dia === d ? 'on' : ''}" data-act="rm-dia" data-v="${d}" aria-pressed="${R.dia === d}" ${off ? 'disabled' : ''}>${E.DIAS[d]} · ${esc(nombreCorto(cur.sesiones[d]))}</button>`).join('')}</div>
+        <p class="small muted">${R.dia >= 0 ? `Solo se tocará el ${E.DIAS_LARGO[R.dia].toLowerCase()}. Para repartir o mover días, elige «Toda la rutina».` : 'La IA puede tocar cualquier día si hace falta.'}</p></div>
+      <div class="rm-sec"><label class="rm-lbl" for="rm-in">Tu petición</label>
+        <div class="rch-sug">${RM_SUG.map((t, i) => `<button type="button" class="chip chipbtn" data-act="rm-sug" data-v="${i}" ${off ? 'disabled' : ''}>${esc(t)}</button>`).join('')}</div>
+        <textarea class="input rch-in rm-in" id="rm-in" data-rm rows="3" maxlength="${RM_MAX}" placeholder="Ej. Quiero añadir abductores el día de pierna" ${off ? 'disabled' : ''}>${esc(R.txt)}</textarea></div>
+      <p class="small muted rm-q ${agotado ? 'zero' : ''}" id="rm-q" role="status">${esc(rchTxtCuota(q))}</p>
+      ${R.busy ? '<p class="small muted" role="status"><span class="spinner"></span> Preparando tu propuesta…</p>' : ''}
+      ${R.err ? `<div class="msg" role="alert">${esc(R.err)}</div>` : ''}${aviso}`;
+    foot = `<button type="button" class="btn block" data-act="rm-send" ${R.busy || R.saving || agotado || R.txt.trim().length < 3 ? 'disabled' : ''}>${R.busy ? '<span class="spinner"></span>' : 'Proponer cambios'}</button>
+      <div class="rm-two">${R.prop ? '<button type="button" class="btn quiet" data-act="rm-ver" ' + (R.busy ? 'disabled' : '') + '>Ver la propuesta</button>' : ''}<button type="button" class="btn ghost" data-act="rm-cancel" ${R.busy ? 'disabled' : ''}>${R.prop ? 'Dejar como estaba' : 'Cancelar'}</button></div>`;
+  }
+  if (R.confirmar) foot = `<div class="rm-conf" role="alertdialog" aria-label="Descartar la propuesta"><p><b>Tienes una propuesta sin aplicar.</b> Si sales, se descarta y tu rutina se queda como estaba.</p>
+      <button type="button" class="btn block" data-act="rm-seguir">Seguir revisando</button><button type="button" class="btn ghost block" data-act="rm-cancel">Descartar propuesta</button></div>`;
+  return `<div class="sheet-back" data-act="rm-salir"></div>
+    <div class="sheet rmod" role="dialog" aria-modal="true" aria-label="Modificar rutina con IA">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><span style="width:44px"></span><h2>Modificar rutina</h2><button type="button" class="iconbtn" data-act="rm-salir" aria-label="Cerrar">${I.close}</button></div>
+      <p class="small muted rm-sub">${esc(nombre)} · ${R.fase === 'prop' ? 'Revisa la propuesta antes de guardar.' : 'Cuéntale a la IA qué quieres cambiar.'}</p>
+      <div class="sheet-list rm-body" id="rm-body">${body}</div>
+      <div class="sheet-foot rm-foot">${foot}</div>
+    </div>`;
+}
+// Cuántos ajustes quedan hoy (no gasta ninguno); actualiza solo el texto para no pisar lo que se esté escribiendo.
+async function rmEstado() {
+  const R = st.rmod; if (!R || R.cuota || R.cargando) return;
+  R.cargando = true;
+  try { R.cuota = await api.ajustarRutina({ modo: 'estado' }); } catch (e) { /* sin red o servidor sin desplegar: se verá al enviar */ }
+  R.cargando = false;
+  if (st.rmod !== R || !R.cuota) return;
+  if (rchCuota(R).quedan === 0) return render();
+  const q = document.getElementById('rm-q'); if (q) q.textContent = rchTxtCuota(rchCuota(R));
+}
+function rmAbrir(rid) {
+  const re = st.re; if (!re || re.src !== 'tab' || re.rid !== rid) return;
+  const base = clone(re.draft);
+  if (!base.dias.some((d) => base.sesiones[d] && base.sesiones[d].t === 'fuerza')) return toast('La IA solo ajusta rutinas con días de fuerza.');
+  st.rmod = { rid, base, prop: null, prev: null, fase: 'ask', dia: -1, txt: '', busy: false, saving: false, err: '', msg: '', avisos: [], hist: [], cuota: null, confirmar: false, descartar: false };
+  render(); rmEstado();
+}
+async function rmEnviar() {
+  const R = st.rmod; if (!R || R.busy || R.saving) return;
+  const q = rchCuota(R), txt = R.txt.trim();
+  if (q.quedan === 0 || txt.length < 3) return;
+  const cur = R.prop || R.base;
+  if (R.dia >= 0 && !(cur.dias.includes(R.dia) && cur.sesiones[R.dia])) R.dia = -1;
+  const dia = R.dia, instruccion = (dia >= 0 ? `Solo el ${E.DIAS_LARGO[dia].toLowerCase()} (${nombreCorto(cur.sesiones[dia]).slice(0, 20)}): ${txt}` : txt).slice(0, 300);
+  R.busy = true; R.err = ''; render();
+  try {
+    const res = await api.ajustarRutina({ rutina: rutinaParaIA(cur), catalogo: catalogoParaIA(cur), contexto: { exp: cur.exp || '', donde: dondeDe(cur.donde), eq: cur.eqSel || [], prio: cur.prio || '' }, instruccion });
+    if (st.rmod !== R) return; // cerró el panel mientras esperaba
+    let draft, avisos;
+    if (dia >= 0) { // con un día elegido solo cuenta ese día: los demás se conservan tal cual, diga lo que diga la IA
+      const x = (res.dias || []).find((z) => Number(z.dia) === dia && Number(z.origen) === dia);
+      if (!x) { draft = cur; avisos = [`La IA no ha dejado el ${E.DIAS_LARGO[dia].toLowerCase()} como se esperaba y no se ha cambiado nada. Prueba con otras palabras o elige «Toda la rutina».`]; }
+      else { const r2 = aplicarAjusteIA(cur, { ...res, dias: [x] }); draft = clone(cur); draft.sesiones[dia] = r2.draft.sesiones[dia]; draft.tipos = r2.draft.tipos; avisos = r2.avisos; }
+    } else ({ draft, avisos } = aplicarAjusteIA(cur, res));
+    R.prev = R.prop ? { prop: R.prop, msg: R.msg, avisos: R.avisos } : null;
+    R.prop = draft; R.msg = String(res.mensaje || 'He preparado una propuesta.'); R.avisos = avisos; R.hist.push({ q: txt, a: R.msg, dia });
+    R.cuota = { usadas: res.usadas, quedan: res.quedan, limite: res.limite, pro: res.pro }; R.txt = ''; R.fase = 'prop'; R.confirmar = false;
+  } catch (e) {
+    if (st.rmod !== R) return;
+    const d = e && e.details;
+    if (d && d.codigo === 'ajustes-limite') { R.cuota = { usadas: d.usadas, quedan: 0, limite: d.limite, pro: d.pro }; if (d.pro) R.err = e.message; }
+    else R.err = e && e.code === 'rutina/vacia' ? 'La IA no ha devuelto una rutina válida. Prueba con otras palabras (esta solicitud sí cuenta).' : errorText(e);
+  }
+  R.busy = false; render();
+  const ta = document.getElementById('rm-in'); if (R.fase === 'ask' && ta) ta.focus();
+}
+// «Aceptar cambios»: aquí (y solo aquí) se sobrescribe la rutina guardada. saveRutina valida (normRutina) y conserva id, nombre y código de compartir.
+async function rmAceptar() {
+  const R = st.rmod; if (!R || R.busy || R.saving || !R.prop || !rmCambios(R).length) return;
+  R.saving = true; R.err = ''; render();
+  try {
+    const err = await saveRutina(R.prop, R.rid);
+    if (st.rmod !== R) return;
+    if (err) { R.saving = false; R.err = err; return render(); }
+    st.rmod = null; st.re = null; render(); toast('Rutina actualizada');
+  } catch (e) { if (st.rmod !== R) return; R.saving = false; R.err = errorText(e); render(); }
+}
+// Cierre «suave» (fondo, X, arrastrar, Esc): con una propuesta sin aplicar pide confirmación; «Dejar como estaba» (rm-cancel) descarta directamente pasando por la animación de cierre.
+function rmSalir() {
+  const R = st.rmod; if (!R) return;
+  if (R.busy || R.saving) return toast(R.saving ? 'Guardando la rutina…' : 'La IA está preparando tu propuesta…');
+  if (!R.descartar && R.prop && rmCambios(R).length && !R.confirmar) { R.confirmar = true; return render(); }
+  st.rmod = null; render();
+}
+function rmClick(act, b) {
+  const R = st.rmod; if (!R) return false;
+  if (act === 'rm-salir') { rmSalir(); return true; }
+  if (act === 'rm-cancel') { if (R.busy || R.saving) return true; R.descartar = true; const f = document.querySelector('.sheet-back[data-act="rm-salir"]'); if (f) f.click(); else rmSalir(); return true; }
+  if (act === 'rm-seguir') { R.confirmar = false; render(); return true; }
+  if (act === 'rm-dia') { if (!R.busy) { R.dia = Number(b.dataset.v); render(); } return true; }
+  if (act === 'rm-sug') { R.txt = RM_SUG[Number(b.dataset.v)] || ''; R.err = ''; render(); const ta = document.getElementById('rm-in'); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } return true; }
+  if (act === 'rm-send') { rmEnviar(); return true; }
+  if (act === 'rm-ok') { rmAceptar(); return true; }
+  if (act === 'rm-otro') { R.fase = 'ask'; R.err = ''; R.txt = ''; R.confirmar = false; render(); const ta = document.getElementById('rm-in'); if (ta) ta.focus(); return true; }
+  if (act === 'rm-ver') { if (R.prop) { R.fase = 'prop'; R.err = ''; render(); } return true; }
+  if (act === 'rm-prev') { if (R.prev && !R.busy) { R.prop = R.prev.prop; R.msg = R.prev.msg; R.avisos = R.prev.avisos; R.prev = null; R.hist.pop(); R.err = ''; render(); } return true; }
+  return false;
+}
+
 // Limpia y valida la rutina antes de guardarla. Devuelve { rutina } o { error }.
 function normRutina(R) {
   const used = [...new Set(R.dias.map((d) => R.sesiones[d].t))];
@@ -755,6 +933,7 @@ function wkRutina() {
       <p class="small muted">${r.modo === 'propuesta' ? 'Propuesta de la app según tus objetivos.' : 'Rutina creada por ti.'} Toca «Cambiar» en un ejercicio o sesión para ver alternativas.</p>
       ${esActiva ? '' : `<button class="btn block" data-act="rut-use">Usar esta rutina</button>`}
       <div class="rut-acts">
+        <button class="btn small rut-mod-ia" data-act="rm-open" data-rid="${esc(r.id)}">${I.brain} Modificar</button>
         <button class="btn ghost small" data-act="rw-start" data-rid="${esc(r.id)}">Cambiar días o tipos</button>
         <button class="btn ghost small" data-act="rut-dup">Duplicar</button>
         <button class="btn ghost small" data-act="rut-share">${I.share} Compartir</button>
@@ -2048,6 +2227,10 @@ root.addEventListener('click', async (e) => {
   if (act === 'cp-open') return CP.abrir(v);
   if (act.startsWith('cp-')) return CP.click(act, b);
 
+  // Mis rutinas › Modificar (borrador de la IA)
+  if (act === 'rm-open') return rmAbrir(b.dataset.rid);
+  if (act.startsWith('rm-') && rmClick(act, b)) return;
+
   // ficha del ejercicio (foto o nombre en una rutina)
   if (act === 'ex-view') { st.exView = { n: b.dataset.n }; return render(); }
   if (act === 'ex-close') { st.exView = null; return render(); }
@@ -2393,6 +2576,11 @@ root.addEventListener('input', (e) => {
     if (oEl) { const h = ormHTML(st.live.ex[Number(i)]); oEl.innerHTML = h; oEl.hidden = !h; }
     return;
   }
+  if (st.rmod && t.dataset.rm != null) { // texto de la petición: se guarda sin repintar (no pierde el foco) y activa o desactiva «Proponer cambios»
+    st.rmod.txt = t.value; st.rmod.err = '';
+    const b = document.querySelector('[data-act="rm-send"]'); if (b && !st.rmod.busy && rchCuota(st.rmod).quedan !== 0) b.disabled = st.rmod.txt.trim().length < 3;
+    return;
+  }
   if (st.re && t.dataset.rch != null) { // texto del chat de ajustes: se guarda sin repintar (no pierde el foco) y activa/desactiva el botón de enviar
     const c = chatDe(st.re); c.txt = t.value; c.err = '';
     const b = document.querySelector('[data-act="rch-send"]'); if (b && !c.busy && rchCuota(c).quedan !== 0) b.disabled = !c.txt.trim();
@@ -2498,5 +2686,5 @@ function recuperacionHTML() {
     ${esPro() ? cuerpo : muro}</section>`;
 }
 function cuerpoSheetHTML() { return C3.sheetHTML(st.cuerpo3d, sexoCuerpo(), datosCuerpo(), todayISO()); }
-  return { exViewHTML, finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, compartirSheetHTML: CP.sheetHTML, pintarCompartir: CP.pintar, limiteSheetHTML, calentarSheetHTML, moverSheetHTML, rutNuevosSheetHTML, dia7SheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML };
+  return { exViewHTML, finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, compartirSheetHTML: CP.sheetHTML, pintarCompartir: CP.pintar, limiteSheetHTML, calentarSheetHTML, moverSheetHTML, rutNuevosSheetHTML, rutModSheetHTML, dia7SheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML };
 }
