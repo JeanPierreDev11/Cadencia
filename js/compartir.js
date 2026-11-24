@@ -6,7 +6,7 @@ import { esc, nf, fmtDate, toast, I } from './util.js';
 import * as E from './entreno.js';
 
 /* ---------- constantes fáciles de editar ---------- */
-export const TEXTO_ETIQUETA = 'Comparte tu entreno · Etiqueta a @cadencia.app'; // texto discreto bajo las acciones
+export const TEXTO_ETIQUETA = 'Comparte tu entreno · Etiqueta a @cadenciafit.app'; // texto discreto bajo las acciones
 export const MARCA = 'CADENCIA';                                                // logo de texto de las tarjetas
 const ACENTO = '#F2BE1A';                                                       // amarillo de la app (--accent)
 const ESCALA_EXPORT = 1;       // 1 = 1080 px de ancho (el tamaño nativo de Stories/posts). 2 = 2160 px; se limita solo para no pasar el máximo de iOS (~16 M px)

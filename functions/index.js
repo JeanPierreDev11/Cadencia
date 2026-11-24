@@ -1237,12 +1237,31 @@ exports.caducarPro = onSchedule({ schedule: '15 * * * *', timeZone: 'Europe/Madr
 // Feedback de la beta → canal privado de Discord (65). Se dispara al CREAR un documento de `feedback` (mensaje libre de Perfil o cuestionario post-entreno),
 // así que el guardado en Firestore ya está hecho cuando esto corre: si Discord tarda, falla o el secreto no está puesto, solo se registra en los logs
 // (buscar «[discord]») y el feedback queda igualmente en Firestore. Nunca lanza ni reintenta el trigger. No se envía el correo, solo @usuario y el id corto.
+// Anti-spam (68): máximo LIMITE_DISCORD_FEEDBACK_DIA avisos a Discord por persona y día (día de Madrid, hoyMadrid). El contador vive en el campo `feedback`
+// de iaUso/{uid}_{día} (solo servidor), se reserva en una transacción y NO sube una vez alcanzado el tope. Pasado el tope el feedback se guarda igualmente
+// en Firestore (eso ya ocurrió antes de que corra este trigger) y solo se omite el aviso a Discord, con una línea de registro «[discord]».
+const LIMITE_DISCORD_FEEDBACK_DIA = 5;
+async function reservarAvisoDiscord(uid, dia) {
+  return db.runTransaction(async (tx) => {
+    const ref = usoRef(uid, dia), u = await tx.get(ref);
+    const usados = Math.max(0, Math.floor(Number(u.exists && u.data().feedback) || 0));
+    if (usados >= LIMITE_DISCORD_FEEDBACK_DIA) return { ok: false, usados };
+    tx.set(ref, { uid, dia, feedback: usados + 1 }, { merge: true });
+    return { ok: true, usados: usados + 1 };
+  });
+}
 exports.feedbackDiscord = onDocumentCreated({ document: 'feedback/{id}', secrets: [DISCORD_FEEDBACK], memory: '256MiB', timeoutSeconds: 60, retry: false }, async (event) => {
   const id = event.params && event.params.id;
   try {
     const snap = event.data;
     const doc = snap && snap.data();
     if (!doc) { console.warn(`[discord] feedback ${id}: sin datos`); return; }
+    if (doc.uid) {
+      let cupo = null;
+      try { cupo = await reservarAvisoDiscord(String(doc.uid), hoyMadrid()); }
+      catch (e) { console.warn(`[discord] feedback ${id}: no se pudo comprobar el límite diario (${String((e && e.message) || e).replace(/https?:\/\/\S+/g, '[url]')}); se envía igualmente`); }
+      if (cupo && !cupo.ok) { console.warn(`[discord] feedback ${id}: el usuario ${String(doc.uid).slice(0, 8)} ya ha enviado ${LIMITE_DISCORD_FEEDBACK_DIA} avisos hoy; no se envía a Discord (el feedback sigue guardado en Firestore)`); return; }
+    }
     let perfil = null;
     try { if (doc.uid) { const u = await userRef(String(doc.uid)).get(); perfil = u.exists ? u.data() : null; } }
     catch (e) { console.warn(`[discord] feedback ${id}: no se pudo leer el perfil (${e && e.message})`); }

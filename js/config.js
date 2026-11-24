@@ -19,3 +19,7 @@ export const APP_NAME = 'Cadencia';
 // Interruptor del ciclismo (pestaña Bici, rutas y mapas, Taller, Strava y tipo de entreno «Bici»).
 // En false todo queda oculto; el código y los datos guardados se conservan. Poner true para volver a enseñarlo.
 export const CICLISMO = false;
+
+// Interruptor del inicio de sesión con Apple (botón «Continuar con Apple» en el registro y en «Iniciar sesión»).
+// En false el botón queda oculto; `loginApple()` de data.js se conserva. Poner true para volver a enseñarlo (requiere Apple activado en Firebase Auth).
+export const APPLE_LOGIN = false;

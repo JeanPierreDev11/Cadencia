@@ -104,6 +104,7 @@ function privacidad() {
       <li><b>Funciones con IA:</b> generar recomendaciones cuando tú las pides. (Base legal: tu consentimiento al usarlas.)</li>
       <li><b>Lista prioritaria PRO:</b> avisarte cuando Cadencia PRO esté disponible y medir el interés. (Base legal: tu consentimiento al pulsar el botón.)</li>
       <li><b>Pagos futuros de Cadencia Pro:</b> si algún día contratas un plan, gestionar tu suscripción y cumplir con obligaciones legales de facturación. Hoy no se cobra nada.</li>
+      <li><b>Atención durante la beta:</b> reenviar a un canal privado de soporte los textos que envíes desde «Enviar sugerencia o reportar fallo» y el cuestionario opcional de la beta, para atenderlos antes. (Base legal: tu consentimiento al enviarlos.)</li>
       <li><b>Seguridad y límites diarios:</b> evitar abusos y proteger el servicio. (Base legal: interés legítimo.)</li>
       <li><b>Recordatorios:</b> avisarte solo si los activas. (Base legal: tu consentimiento.)</li>
     </ul>
@@ -113,6 +114,7 @@ function privacidad() {
     <ul class="bul">
       <li><b>Firebase / Google Cloud (Google):</b> alojamiento de la app, inicio de sesión, base de datos, almacenamiento de la foto, funciones del servidor y avisos. Los datos se guardan en servidores de la Unión Europea (las funciones se ejecutan en Bélgica), con conexión cifrada y reglas que impiden que otra persona lea tus datos.</li>
       <li><b>APIs de IA:</b> <b>Anthropic (Claude)</b> analiza la foto del plato y atiende el Taller IA; <b>Google (Gemini)</b> genera el Coach AI y los ajustes de rutina. A Gemini le enviamos un resumen de tu entreno o de tu rutina junto con datos de tu perfil sin identificadores (sexo, edad, peso, objetivos, experiencia, material y tiempo disponible), y el texto que escribas al pedir un cambio. <b>No enviamos tu nombre, email ni usuario.</b> No escribas datos personales en esos mensajes. Con el servicio gratuito de la API de Gemini, Google puede usar esas entradas para mejorar sus productos, según sus condiciones.</li>
+      <li><b>Discord (canal privado de soporte):</b> durante la beta, el texto de tus sugerencias, reportes de fallo y cuestionarios, asociado a tu nombre de usuario (<b>sin tu correo electrónico</b>), se reenvía a un canal privado de Discord al que solo accede el equipo de Cadencia. Sigue guardado también en nuestra base de datos.</li>
       <li><b>Stripe:</b> cobrará y gestionará las suscripciones cuando se activen los pagos (hoy en la beta gratuita no se cobra). Recibirá tu email y tus datos de pago; Cadencia nunca ve ni guarda tu tarjeta.</li>
       <li><b>Google reCAPTCHA (Firebase App Check):</b> comprueba que las peticiones vienen de la app y no de un robot. Google puede tratar datos técnicos de tu navegador, como la dirección IP.</li>
       <li><b>Open Food Facts:</b> si buscas o escaneas un producto de marca, se envía el texto o el código de barras, sin ningún dato tuyo.</li>

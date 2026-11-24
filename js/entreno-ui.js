@@ -2047,6 +2047,33 @@ function ejerciciosNuevos(L, ejs) {
 }
 // Cuestionario opcional post-entreno de la beta (64): 5 preguntas sí/no, todas opcionales (se pueden desmarcar) con una explicación breve opcional.
 // Va el último de la cadena de hojas (tras «Tu rutina», «Compartir Entreno» y el resumen Pro). «OMITIR DE MOMENTO» siempre visible.
+// Frecuencia (editar aquí): tras ENVIAR no vuelve a salir en PE_DIAS_TRAS_ENVIO días; tras OMITIR (o cerrar la hoja) no vuelve a salir hasta que pasen
+// PE_ENTRENOS_TRAS_OMITIR entrenos de fuerza completados sin cuestionario o PE_DIAS_TRAS_OMITIR días (lo que ocurra antes).
+const PE_DIAS_TRAS_ENVIO = 14;
+const PE_DIAS_TRAS_OMITIR = 7;
+const PE_ENTRENOS_TRAS_OMITIR = 3;
+const PE_CLAVE = (uid) => 'cadencia-pe-freq-' + uid; // localStorage por usuario: { a: 'envio' | 'omitir', t: ms, n: entrenos completados desde omitir }
+const PE_DIA_MS = 86400000;
+// Pura: dado el estado guardado y la hora, decide si toca enseñar la hoja y cuál es el estado nuevo (suma un entreno completado si estaba omitida).
+function peDecidir(est, ahora) {
+  if (!est || (est.a !== 'envio' && est.a !== 'omitir') || !Number.isFinite(est.t)) return { mostrar: true, est: est || null };
+  const dias = (ahora - est.t) / PE_DIA_MS;
+  if (dias < 0) return { mostrar: true, est: null }; // reloj raro (fecha futura): se ignora el estado
+  if (est.a === 'envio') return { mostrar: dias >= PE_DIAS_TRAS_ENVIO, est };
+  const n = Math.max(0, Math.floor(Number(est.n) || 0));
+  if (n >= PE_ENTRENOS_TRAS_OMITIR || dias >= PE_DIAS_TRAS_OMITIR) return { mostrar: true, est };
+  return { mostrar: false, est: { ...est, n: n + 1 } }; // este entreno cuenta como uno completado sin cuestionario
+}
+function peLeer() { try { return JSON.parse(localStorage.getItem(PE_CLAVE(st.user.uid)) || 'null'); } catch { return null; } }
+function peGuardar(est) { try { localStorage.setItem(PE_CLAVE(st.user.uid), JSON.stringify(est)); } catch { /* sin almacenamiento: se enseña como siempre */ } }
+// Se llama una vez al terminar un entreno de fuerza nuevo: ¿toca enseñar «Tu opinión»?
+function postEntToca() {
+  if (!st.user) return false;
+  const d = peDecidir(peLeer(), Date.now());
+  if (d.est) peGuardar(d.est);
+  return d.mostrar;
+}
+const postEntRegistrar = (a) => { if (st.user) peGuardar({ a, t: Date.now(), n: 0 }); }; // 'envio' u 'omitir'
 const PE_PREG = [
   ['interfaz', '¿Has entendido con claridad la interfaz?'],
   ['comodidad', '¿Te ha resultado cómodo usarlo durante el entreno?'],
@@ -2101,7 +2128,7 @@ async function postEntEnviar() {
   const body = root.querySelector('.pe-body'), top = body ? body.scrollTop : 0;
   const volver = () => { const b = root.querySelector('.pe-body'); if (b) b.scrollTop = top; };
   P.busy = true; P.msg = ''; render(); volver();
-  try { await api.enviarPostEntreno(st.user.uid, respuestas, explicaciones); st.postEnt = null; render(); toast('Gracias. Hemos recibido tu opinión'); }
+  try { await api.enviarPostEntreno(st.user.uid, respuestas, explicaciones); postEntRegistrar('envio'); st.postEnt = null; render(); toast('Gracias. Hemos recibido tu opinión'); }
   catch (e) { P.busy = false; P.msg = 'No se ha podido enviar. Revisa la conexión e inténtalo de nuevo.'; render(); volver(); }
 }
 function rutNuevosSheetHTML() {
@@ -2174,7 +2201,7 @@ async function liveFinish() {
     if (esPro() && !editado) st.resumen = { id: o.id, nombre: o.nombre, vol: volTotal, sets: nSets, min, record };
     if (!editado && nSets > 0) st.compartir = { id: o.id, i: 0, fondo: 'oscuro', menu: false }; // «Compartir Entreno» al terminar (para todos); al darle a LISTO sigue el resumen Pro si lo hay
     if (!editado) { const rn = ejerciciosNuevos(L, ejs); if (rn) st.rutNuevos = { ...rn, busy: false, msg: '' }; } // va ANTES que «Compartir» (primero de la cadena de hojas): ejercicios añadidos hoy → ¿a la rutina?
-    if (!editado && nSets > 0) st.postEnt = postEntNuevo(); // cuestionario opcional de la beta: el último de la cadena de hojas, tras «Tu rutina», Compartir y el resumen Pro
+    if (!editado && nSets > 0 && postEntToca()) st.postEnt = postEntNuevo(); // cuestionario opcional de la beta: el último de la cadena de hojas, tras «Tu rutina», Compartir y el resumen Pro
     render(); window.scrollTo(0, 0);
     toast(editado ? 'Entreno actualizado' : record ? '¡Nuevo récord personal!' : nSets ? `Entrenamiento guardado · ${nSets} ${nSets === 1 ? 'serie' : 'series'}` : 'Entrenamiento guardado');
   } catch (e) { fail(`No se ha podido guardar: ${errorText(e)}`); }
@@ -2571,7 +2598,7 @@ root.addEventListener('click', async (e) => {
   if (act === 'rn-close') { if (st.rutNuevos && st.rutNuevos.busy) return; st.rutNuevos = null; return render(); } // «Solo por hoy»: no toca la rutina
   if (act === 'rn-toggle' && st.rutNuevos && !st.rutNuevos.busy) { const x = st.rutNuevos.items[Number(v)]; if (x && st.rutNuevos.items.length > 1) { x.on = !x.on; render(); } return; }
   if (act === 'rn-add') return void rutNuevosAplicar();
-  if (act === 'pe-omitir') { if (st.postEnt && st.postEnt.busy) return; st.postEnt = null; return render(); } // «OMITIR DE MOMENTO»: no guarda nada
+  if (act === 'pe-omitir') { if (st.postEnt && st.postEnt.busy) return; if (st.postEnt) postEntRegistrar('omitir'); st.postEnt = null; return render(); } // «OMITIR DE MOMENTO»: no guarda nada
   if (act === 'pe-r') { const P = st.postEnt; if (!P || P.busy) return; const [k, n] = String(v).split(':'); if (!PE_PREG.some((q) => q[0] === k)) return; const val = n === '1'; P.r[k] = P.r[k] === val ? null : val; return postEntPintar(k); } // pulsar la respuesta elegida la desmarca
   if (act === 'pe-send') return void postEntEnviar();
   if (act === 'wk-mover-a' && st.moverSel) {

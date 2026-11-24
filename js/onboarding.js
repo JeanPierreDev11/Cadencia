@@ -6,6 +6,7 @@
 import { esc, nf, num, I } from './util.js';
 import { legalLinksHTML, legalCheckHTML } from './legal.js';
 import { betaTagHTML, BETA_AVISO_REGISTRO } from './pro.js';
+import { APPLE_LOGIN } from './config.js';
 
 /* ---------- datos ---------- */
 // Los ids de «dónde» son los mismos que usa el asistente de rutinas (gym, casa, parque), así lo guardado le sirve de punto de partida.
@@ -264,7 +265,7 @@ export function registroHTML(o) {
     <label class="check"><input type="checkbox" data-ob="acepto" ${o.acepto ? 'checked' : ''}><span>Acepto los ${legalCheckHTML()}</span></label>
     <div class="reg-btns">
       <button type="button" class="btn block" data-act="reg-google" ${ocupado ? 'disabled' : ''}>Continuar con Google</button>
-      <button type="button" class="btn block" data-act="reg-apple" ${ocupado ? 'disabled' : ''}>Continuar con Apple</button>
+      ${APPLE_LOGIN ? `<button type="button" class="btn block" data-act="reg-apple" ${ocupado ? 'disabled' : ''}>Continuar con Apple</button>` : ''}
       ${o.regEmail ? `<div class="reg-email">
         <label class="field"><span>Email</span><input class="input" type="email" data-ob="regEmailV" value="${esc(o.regEmailV || '')}" autocomplete="email" inputmode="email" autocapitalize="off" placeholder="tu@email.com"></label>
         <label class="field"><span>Contraseña</span><div class="pass-wrap"><input class="input" type="password" data-ob="regPass" value="${esc(o.regPass || '')}" autocomplete="new-password" minlength="6" placeholder="Mínimo 6 caracteres"><button type="button" data-act="peek">Ver</button></div></label>

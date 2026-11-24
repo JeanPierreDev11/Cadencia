@@ -1,6 +1,6 @@
 import './br.js'; // Fórmulas de Bilbao Ride (globalThis.BR): debe cargarse antes que secciones.js
 import { createBackend, errorText, REF_MAX } from './data.js';
-import { APP_NAME, CICLISMO } from './config.js';
+import { APP_NAME, CICLISMO, APPLE_LOGIN } from './config.js';
 import * as E from './entreno.js';
 import { crearSecciones, NOV_V } from './secciones.js';
 import { crearEntreno } from './entreno-ui.js';
@@ -141,8 +141,8 @@ function viewAuth() {
       </form>
       <div class="auth-or"><span>o</span></div>
       <button type="button" class="btn block quiet" data-act="login-google" ${st.busy ? 'disabled' : ''}>Continuar con Google</button>
-      <button type="button" class="btn block quiet" data-act="login-apple" ${st.busy ? 'disabled' : ''}>Continuar con Apple</button>
-      <p class="small muted">¿Todavía no tienes cuenta? Vuelve atrás y pulsa «Empezar»: la creas al final del cuestionario. Si entras con Google o Apple por primera vez aquí, aceptas los ${legalCheckHTML()}.</p>
+      ${APPLE_LOGIN ? `<button type="button" class="btn block quiet" data-act="login-apple" ${st.busy ? 'disabled' : ''}>Continuar con Apple</button>` : ''}
+      <p class="small muted">¿Todavía no tienes cuenta? Vuelve atrás y pulsa «Empezar»: la creas al final del cuestionario. Si entras con ${APPLE_LOGIN ? 'Google o Apple' : 'Google'} por primera vez aquí, aceptas los ${legalCheckHTML()}.</p>
       <button type="button" class="link" data-act="auth-volver">${I.arrl} Volver</button>
       ${api.mode === 'local' ? `<p class="note"><span>●</span><span><b>Modo prueba.</b> Las cuentas y los datos se guardan solo en este dispositivo hasta que conectes Firebase.</span></p>` : ''}
     </div>
@@ -1446,6 +1446,17 @@ function pfSheetHTML() {
     </div>`;
 }
 
+// Enfriamiento del formulario «Enviar sugerencia o reportar fallo»: mínimo FB_ENFRIAR_MS entre envíos de la misma persona (anti-spam; también hacia Discord).
+// La hora del último envío correcto se guarda en localStorage por usuario para que recargar la app no lo salte.
+const FB_ENFRIAR_MS = 60000;
+const fbClave = (uid) => 'cadencia-fb-ultimo-' + uid;
+const fbEspera = (uid) => { // segundos que faltan para poder enviar otro (0 = ya se puede)
+  let t = 0; try { t = Number(localStorage.getItem(fbClave(uid))) || 0; } catch { /* sin almacenamiento: sin enfriamiento persistente */ }
+  const falta = FB_ENFRIAR_MS - (Date.now() - t);
+  return t > 0 && falta > 0 && falta <= FB_ENFRIAR_MS ? Math.ceil(falta / 1000) : 0;
+};
+const fbMarcar = (uid) => { try { localStorage.setItem(fbClave(uid), String(Date.now())); } catch { /* idem */ } };
+
 async function pfGuardar(kind, f) {
   const uid = st.user.uid;
   let data;
@@ -1475,9 +1486,11 @@ async function pfGuardar(kind, f) {
     data.calorias = CAL.resumen({ ...st.profile, ...data }, k1);
   } else if (kind === 'pf-feedback') {
     const mensaje = f.mensaje.value.trim(), pun = Number(st.pf.f.puntuacion) || 0;
+    if (st.pf.busy) return;
     if (mensaje.length < 5) return toast('Cuéntanos un poco más');
+    const espera = fbEspera(uid); if (espera) return toast(`Acabas de enviar un mensaje. Espera ${espera} s para enviar otro.`); // el texto escrito se conserva
     st.pf.busy = true; render();
-    try { await api.enviarFeedback(uid, st.user.email, mensaje.slice(0, 1000), pun >= 1 && pun <= 5 ? pun : null); st.pf = null; render(); toast('¡Gracias! Hemos recibido tu mensaje'); }
+    try { await api.enviarFeedback(uid, st.user.email, mensaje.slice(0, 1000), pun >= 1 && pun <= 5 ? pun : null); fbMarcar(uid); st.pf = null; render(); toast('¡Gracias! Hemos recibido tu mensaje'); }
     catch (e) { st.pf.busy = false; st.pf.f = { mensaje, puntuacion: pun }; render(); toast(errorText(e)); }
     return;
   }
