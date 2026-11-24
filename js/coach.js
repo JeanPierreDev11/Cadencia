@@ -3,13 +3,17 @@
 // En modo prueba (sin Firebase, api.local) devuelve un análisis de EJEMPLO (demo:true) que guarda la propia app.
 // Forma de la respuesta: { nota: 8.5, titulo, resumen, paraLlegarAl10: ['…'], consejos: ['…'], demo, guardado } (`analisis` = alias antiguo de `resumen`).
 
+const hasD = (v) => v != null && String(v).trim() !== '';
 // Datos mínimos del entreno: sin uid, correo ni nombre (solo los usa el ejemplo; el servidor lee Firestore).
 export function datosParaCoach(o, extra = {}) {
   return {
     nombre: o.nombre, fecha: o.fecha, min: o.min,
     ejercicios: (o.ejercicios || []).map((e) => (e.tipo === 'cardio'
       ? { n: e.n, cardio: true, series: (e.series || []).map((s) => ({ ...s })) } // bloques de cardio: min, km, kmh, inc, nivel, int
-      : { n: e.n, uni: !!e.uni, series: (e.series || []).filter((s) => !s.w).map((s) => ({ kg: s.kg, reps: s.reps, rir: s.rir })) })),
+      : { n: e.n, uni: !!e.uni, ...(e.carga === 'por_lado' || e.carga === 'total' ? { carga: e.carga } : {}), // carga solo si consta (no se inventa); mismo formato que resumenEntreno del servidor (67)
+        series: (e.series || []).filter((s) => !s.w).map((s) => (e.uni
+          ? { izq: { kg: s.kg, reps: s.reps }, der: { kgD: hasD(s.kgD) ? s.kgD : s.kg, repsD: hasD(s.repsD) ? s.repsD : s.reps }, rir: s.rir } // unilateral: ambos lados; D vacío = igual que I (como E.ladosSerie)
+          : { kg: s.kg, reps: s.reps, rir: s.rir })) })),
     ...extra,
   };
 }

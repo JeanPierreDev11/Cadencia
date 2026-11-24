@@ -359,6 +359,9 @@ Reglas de datos (muy importantes):
 - "objetivoRutina" (dentro de cada ejercicio, si viene) es lo que mandaba la rutina para ese ejercicio, por ejemplo "4 × 8-12" (series × repeticiones). Compara las series y repeticiones reales con él. Si no viene, no hables de objetivo de la rutina ni de series faltantes respecto a ella.
 - "sesionAnterior" (si viene) es la misma sesión de la última vez: úsala para valorar la progresión (más peso, más repeticiones o más series en un ejercicio clave) con las cifras reales de ambas. Si no viene, no menciones progresión respecto a otra sesión.
 - kg = peso por serie (0 = peso corporal), uni = ejercicio unilateral, rir = repeticiones en reserva, drop = drop set.
+- Carga por lado (67): si un ejercicio bilateral trae carga = "por_lado" (p. ej. mancuernas), su kg es el peso de CADA lado (la carga total es el doble): habla con propiedad («20 kg por mano», «20 kg c/u») y nunca lo confundas con el peso total. Con carga = "total" el kg ya es todo el peso movido. Si no viene carga, no afirmes si es por lado o total.
+- Unilateral (67): si uni = true, cada serie trae izq { kg, reps } y der { kgD, repsD } (lado izquierdo y derecho): evalúa AMBOS lados y menciona un desequilibrio solo si hay una diferencia real y relevante entre lados (peso o repeticiones claramente distintos); si son iguales o casi, no lo menciones.
+- "volumenKg" (por ejercicio) y "volumenTotalKg" (sesión) ya vienen calculados con estas reglas (×2 en bilateral por lado; izquierda + derecha en unilateral): cítalos tal cual y no los recalcules.
 - Los ejercicios con cardio = true son bloques de cardio (no series de fuerza): min = minutos, km = distancia, kmh = velocidad, inc = inclinación %, nivel = resistencia de la máquina, int = ritmo (caminata, trote o correr). En la caminadora/cinta cada bloque es un INTERVALO (HIIT si alterna ritmos, LISS si es constante). Valóralos como cardio, no por kilos.
 - "perfil" puede traer datos del cuestionario inicial; úsalos (si faltan, ignóralos) para personalizar sin decirlos como una lista:
   · experiencia: adapta el nivel de exigencia y la progresión (principiante: técnica y constancia antes que cargas; avanzado: volumen, intensidad y RIR).
@@ -442,13 +445,26 @@ const resumenEntreno = (w, objetivos = {}) => {
       }).filter((o) => Object.keys(o).length),
     }
     : (() => {
-      const series = (e.series || []).filter((s) => !s.w).slice(0, 15).map((s) => ({ kg: Number(s.kg) || 0, reps: Number(s.reps) || 0, ...(s.rir != null && s.rir !== '' && Number.isFinite(Number(s.rir)) ? { rir: Number(s.rir) } : {}), ...(s.isDropSet ? { drop: true } : {}) }));
-      return { n: String(e.n || '').slice(0, 60), uni: !!e.uni, ...(objetivos[normEj(e.n)] ? { objetivoRutina: objetivos[normEj(e.n)] } : {}), ...intensidad(series), series };
+      // Carga y lados (67). `uni` = estructura: unilateral lleva una fila por lado (izq: { kg, reps }, der: { kgD, repsD }); si kgD/repsD vienen vacíos se toma el valor de la izquierda (igual que `ladosSerie`/`volumenSerie` del cliente).
+      // `carga` ('total' | 'por_lado') solo se envía si el entreno la trae guardada (no se inventa por el nombre del ejercicio). En unilateral la carga no cuenta.
+      const uni = !!e.uni, carga = (e.carga === 'por_lado' || e.carga === 'total') ? e.carga : null;
+      const num = (v) => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
+      const hayD = (v) => v != null && String(v).trim() !== '';
+      const series = (e.series || []).filter((s) => !s.w).slice(0, 15).map((s) => {
+        const extra = { ...(s.rir != null && s.rir !== '' && Number.isFinite(Number(s.rir)) ? { rir: Number(s.rir) } : {}), ...(s.isDropSet ? { drop: true } : {}) };
+        if (!uni) return { kg: num(s.kg), reps: num(s.reps), ...extra };
+        const kg = num(s.kg), reps = num(s.reps);
+        return { izq: { kg, reps }, der: { kgD: hayD(s.kgD) ? num(s.kgD) : kg, repsD: hayD(s.repsD) ? num(s.repsD) : reps }, ...extra };
+      });
+      // Volumen calculado aquí (el modelo no suma de cabeza): bilateral total = kg × reps; bilateral por_lado = kg × 2 × reps; unilateral = izquierda + derecha.
+      const volumenKg = Math.round(series.reduce((t, x) => t + (uni ? x.izq.kg * x.izq.reps + x.der.kgD * x.der.repsD : x.kg * x.reps * (carga === 'por_lado' ? 2 : 1)), 0));
+      return { n: String(e.n || '').slice(0, 60), uni, ...(carga ? { carga } : {}), ...(objetivos[normEj(e.n)] ? { objetivoRutina: objetivos[normEj(e.n)] } : {}), ...intensidad(series), volumenKg, series };
     })())).filter((e) => e.series.length);
   // Cifras que el modelo NO debe calcular de cabeza: series de trabajo de fuerza y densidad real (series por hora de la duración registrada).
   const seriesTotales = ejercicios.reduce((t, e) => t + (e.cardio ? 0 : e.series.length), 0);
+  const volumenTotalKg = ejercicios.reduce((t, e) => t + (e.cardio ? 0 : e.volumenKg), 0);
   const min = Number(w.min) > 0 ? Math.round(Number(w.min)) : null;
-  return { fecha: String(w.fecha || '').slice(0, 10), nombre: String(w.nombre || '').slice(0, 80), min, seriesTotales, ...(min && seriesTotales ? { seriesPorHora: Math.round((seriesTotales / min) * 600) / 10 } : {}), ejercicios };
+  return { fecha: String(w.fecha || '').slice(0, 10), nombre: String(w.nombre || '').slice(0, 80), min, seriesTotales, volumenTotalKg, ...(min && seriesTotales ? { seriesPorHora: Math.round((seriesTotales / min) * 600) / 10 } : {}), ejercicios };
 };
 // `analisis` se mantiene como alias de `resumen` para las apps que aún no conocen el campo nuevo.
 const devolverCoach = (w) => ({ nota: w.aiNota, titulo: w.aiTitulo || '', resumen: w.aiTexto || '', analisis: w.aiTexto || '', paraLlegarAl10: w.aiParaLlegarAl10 || [], consejos: w.aiConsejos || [], demo: false, aiFecha: w.aiFecha || null });
