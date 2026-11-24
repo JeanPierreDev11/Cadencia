@@ -1271,7 +1271,6 @@ function viewPerfil() {
       tieneGoogle() ? pfRow('link', 'Cuenta de Google', { tag: '<span class="tag ok">Vinculada</span>' }) : pfRow('link', 'Vincular cuenta de Google', { act: 'google-link' }),
     ])}
     ${pfGrupo('Soporte', [
-      pfRow('zap', 'Solicitar una función', { act: 'pf-open', v: 'func' }),
       pfRow('mail', 'Correo de soporte', { href: `mailto:${CONTACTO}?subject=${encodeURIComponent('Soporte Cadencia')}` }),
       pfRow('help', 'FAQ', { act: 'pf-open', v: 'faq' }),
     ])}
@@ -1284,7 +1283,7 @@ function viewPerfil() {
     ${legalLinksHTML('pf-legal')}`;
 }
 
-const PF_TITULO = { referidos: 'Invita a tus amigos', editar: 'Editar perfil', detalles: 'Detalles personales', prefs: 'Preferencias', idioma: 'Idioma', suscripcion: 'Administrar suscripción', integraciones: 'Integraciones', func: 'Solicitar una función', feedback: 'Sugerencia o fallo', faq: 'Preguntas frecuentes' };
+const PF_TITULO = { referidos: 'Invita a tus amigos', editar: 'Editar perfil', detalles: 'Detalles personales', prefs: 'Preferencias', idioma: 'Idioma', suscripcion: 'Administrar suscripción', integraciones: 'Integraciones', feedback: 'Sugerencia o fallo', faq: 'Preguntas frecuentes' };
 const pfV = (k, d) => (st.pf.f && k in st.pf.f ? st.pf.f[k] : d); // lo escrito se conserva si la hoja se redibuja (p. ej. tras cambiar la foto)
 
 // «Guardar» solo se activa cuando algún valor es distinto del que había al abrir la hoja.
@@ -1340,16 +1339,10 @@ function pfCuerpo(v) {
     return `<div class="sheet-list"><div class="pf-list">${[['es', 'Español'], ['en', 'English']].map(([k, n]) => `<button type="button" class="pf-row" data-act="pf-idioma" data-v="${k}"><span class="pf-t">${n}</span>${l === k ? `<span class="pf-ok">${I.check}</span>` : ''}</button>`).join('')}</div>
       <p class="small muted">Cadencia por ahora solo está traducida al español. Guardamos tu elección para activar el inglés en cuanto esté lista.</p></div>`;
   }
-  if (v === 'func') {
-    return `<form class="sheet-list form-grid" data-form="pf-func" novalidate>
-      <label class="field"><span>¿Qué te gustaría que hiciera Cadencia?</span><textarea class="input" name="texto" rows="6" maxlength="1000" placeholder="Cuéntanos tu idea…">${esc(pfV('texto', ''))}</textarea></label>
-      <button class="btn block" type="submit" ${st.pf.busy ? 'disabled' : ''}>${st.pf.busy ? '<span class="spinner"></span>' : 'Enviar'}</button>
-      <a class="small muted" href="mailto:${CONTACTO}?subject=${encodeURIComponent('Idea para Cadencia')}">O envíanosla por correo</a></form>`;
-  }
   if (v === 'feedback') {
     const pun = Number(pfV('puntuacion', 0)) || 0;
     return `<form class="sheet-list form-grid" data-form="pf-feedback" novalidate>
-      <label class="field"><span>Cuéntanos qué mejorar o qué ha fallado</span><textarea class="input" name="mensaje" rows="6" maxlength="1000" placeholder="Escribe aquí tu sugerencia o el fallo que has visto…">${esc(pfV('mensaje', ''))}</textarea></label>
+      <label class="field"><span>Cuéntanos tu idea, qué mejorar o qué ha fallado</span><textarea class="input" name="mensaje" rows="6" maxlength="1000" placeholder="Escribe aquí tu idea, sugerencia o el fallo que has visto…">${esc(pfV('mensaje', ''))}</textarea></label>
       <div class="field"><span>¿Qué nota le das a Cadencia? (opcional)</span>
         <div class="fb-pun" role="group" aria-label="Valoración de 1 a 5">${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="fb-n${pun === n ? ' on' : ''}" data-act="fb-pun" data-v="${n}" aria-pressed="${pun === n}">${n}</button>`).join('')}</div></div>
       <button class="btn block" type="submit" ${st.pf.busy ? 'disabled' : ''}>${st.pf.busy ? '<span class="spinner"></span>' : 'Enviar'}</button>
@@ -1486,13 +1479,6 @@ async function pfGuardar(kind, f) {
     st.pf.busy = true; render();
     try { await api.enviarFeedback(uid, st.user.email, mensaje.slice(0, 1000), pun >= 1 && pun <= 5 ? pun : null); st.pf = null; render(); toast('¡Gracias! Hemos recibido tu mensaje'); }
     catch (e) { st.pf.busy = false; st.pf.f = { mensaje, puntuacion: pun }; render(); toast(errorText(e)); }
-    return;
-  } else { // pf-func
-    const texto = f.texto.value.trim();
-    if (texto.length < 5) return toast('Cuéntanos un poco más');
-    st.pf.busy = true; render();
-    try { await api.addFeatureRequest(uid, st.user.email, texto); st.pf = null; render(); toast('¡Gracias! Hemos recibido tu idea'); }
-    catch (e) { st.pf.busy = false; st.pf.f = { texto }; render(); toast(errorText(e)); }
     return;
   }
   st.pf.busy = true; render();
