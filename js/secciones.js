@@ -38,7 +38,6 @@ const ICO = {
   spark: svg('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>', 18),
   bici: svg('<circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5l4-8h6l3 8M9.5 8.5h-2M12 16.5l3.5-8"/>'),
   camara: svg('<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>', 15),
-  scan: svg('<path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M8 8v8M11 8v8M14 8v8M17 8v8"/>', 22),
   bell: svg('<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>', 22),
   sparkles: svg('<path d="M10 4l1.9 5.1L17 11l-5.1 1.9L10 18l-1.9-5.1L3 11l5.1-1.9z"/><path d="M18.5 3v4M16.5 5h4M18.5 16v4M16.5 18h4"/>', 22),
 };
@@ -333,6 +332,7 @@ export function crearSecciones(ctx) {
       const rec = recientes();
       return `${rec.length ? `<div class="lgroup">Tus habituales</div>${rec.map(foodRow).join('')}` : '<p class="muted small" style="padding:6px 2px">Escribe qué has comido y pon el peso: calculamos calorías y macros.</p>'}
         <div class="lgroup">Explorar</div><div class="chips">${['pollo', 'arroz', 'pasta', 'huevo', 'yogur', 'plátano', 'pan', 'tortilla', 'bocadillo', 'pizza'].map((c) => `<button type="button" class="chip chipbtn" data-act="n-q" data-v="${c}">${c}</button>`).join('')}</div>
+        <button type="button" class="btn ghost small" style="margin-top:8px" data-act="n-scan">${I.barcode} Escanear código de barras</button>
         <button type="button" class="btn ghost small" style="margin-top:8px" data-act="n-quick">Apuntar calorías a mano</button>`;
     }
     const all = searchFoods(q), res = all.slice(0, 30), O = F.off && F.off.q === q ? F.off : null;
@@ -371,11 +371,14 @@ export function crearSecciones(ctx) {
       </div>
       <div class="sheet-foot"><button class="btn block" data-act="n-addquick">Añadir a ${MEALS[F.meal].toLowerCase()}</button></div>`;
     } else if (F.scan) {
-      const S = F.scan;
+      const S = F.scan, er = S.err;
       body = `<div class="sheet-list form-grid">
-        <div class="scanbox ${S.cam ? '' : 'nocam'}"><video id="scan-video" playsinline muted autoplay></video><span class="scanframe"></span>
-          <p id="scan-msg" class="scanmsg">${esc(S.msg || 'Abriendo la cámara…')}</p></div>
-        <form class="quick" data-form="scan" novalidate><input class="input" name="code" inputmode="numeric" maxlength="14" placeholder="O escribe el código (8 a 14 cifras)" aria-label="Código de barras" value="${esc(S.code || '')}"><button class="btn small" type="submit">Buscar</button></form>
+        ${S.busy ? `<p class="scanstat" role="status"><span class="spinner" aria-hidden="true"></span>Buscando ${esc(S.code)} en Open Food Facts…</p>`
+        : er ? `<div class="scanerr" role="alert"><b>${esc(er.t)}</b><span>${esc(er.d)}</span>${er.retry ? `<button type="button" class="btn small" data-act="n-scan-retry">Reintentar</button>` : ''}</div>`
+        : '<p class="small muted">Apunta la cámara al código de barras del envase o escríbelo aquí debajo.</p>'}
+        <button type="button" class="btn block" data-act="n-scan">${I.barcode} Abrir cámara</button>
+        <form class="quick" data-form="scan" novalidate><input class="input" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="14" placeholder="Código de 8 a 14 cifras" aria-label="Código de barras" value="${esc(S.code || '')}"><button class="btn small" type="submit">Buscar</button></form>
+        <div class="scanalt"><button type="button" class="btn ghost small" data-act="n-unpick">Buscar por nombre</button><button type="button" class="btn ghost small" data-act="n-quick">Apuntar a mano</button></div>
         <p class="offnote">Datos de productos de marca de <a href="https://es.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a> (Licencia <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">ODbL</a>)</p>
       </div>`;
     } else if (food) {
@@ -390,7 +393,7 @@ export function crearSecciones(ctx) {
       </div>
       <div class="sheet-foot"><button class="btn block" id="food-add" data-act="n-addfood" ${c.grams > 0 ? '' : 'disabled'}>Añadir a ${MEALS[F.meal].toLowerCase()}</button></div>`;
     } else {
-      body = `<div class="fsearch"><input class="input" type="search" data-fq value="${esc(F.q)}" placeholder="Busca: pollo, arroz, yogur…" autocomplete="off" enterkeyhint="search" aria-label="Buscar alimento"><button type="button" class="iconbtn scanbtn" data-act="n-scan" aria-label="Escanear código de barras">${ICO.scan}</button></div>
+      body = `<div class="fsearch"><input class="input" type="search" data-fq value="${esc(F.q)}" placeholder="Busca: pollo, arroz, yogur…" autocomplete="off" enterkeyhint="search" aria-label="Buscar alimento"><button type="button" class="iconbtn scanbtn" data-act="n-scan" aria-label="Escanear código de barras" title="Escanear código de barras">${I.barcode}</button></div>
         <div class="sheet-list" id="food-res">${foodResults()}</div>`;
     }
     const back = food || F.quick || F.scan;
@@ -432,86 +435,116 @@ export function crearSecciones(ctx) {
     }
     if (st.food && st.food.off && st.food.off.q === q) { st.food.off = res; refreshRes(); }
   }
-  /* ----- escáner de código de barras ----- */
-  // Cámara trasera + lector nativo del navegador si existe (Android) o ZXing (iPhone), cargado solo al escanear.
-  let scanCtl = null;
-  const scanMsg = (t) => { const el = document.getElementById('scan-msg'); if (el) el.textContent = t; if (st.food && st.food.scan) st.food.scan.msg = t; };
-  function stopScan() {
-    const c = scanCtl; scanCtl = null;
-    if (!c) return;
-    try { c.stop(); } catch (e) { /* nada */ }
-  }
-  async function startScan() {
-    stopScan();
-    const video = document.getElementById('scan-video');
-    if (!video) return;
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { scanMsg('Este dispositivo no deja usar la cámara aquí. Escribe el código debajo.'); return; }
-    const token = {}; scanCtl = { stop() {} , token };
-    const found = (code) => { if (scanCtl && scanCtl.token === token) { stopScan(); buscarCodigo(code); } };
+  /* ----- lector de códigos de barras (69): gratis, sin IA ----- */
+  // Un único lector (la cámara a pantalla completa de `abrirCamara`) sirve a «Escanear alimento» y al botón de código de barras de «Añadir alimento».
+  // Usa el BarcodeDetector del navegador solo si de verdad lee EAN/UPC (Android/Chrome); si no (iPhone/Safari) usa ZXing, que se carga solo en ese momento.
+  const FORMATOS_BARRAS = ['ean_13', 'ean_8', 'upc_a', 'upc_e'];
+  let zxingP = null;
+  const cargarZXing = () => (zxingP = zxingP || import('./vendor/zxing.js').catch((e) => { zxingP = null; throw e; }));
+  async function detectorNativo() {
     try {
-      if ('BarcodeDetector' in window) {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
-        if (!scanCtl || scanCtl.token !== token) { stream.getTracks().forEach((t) => t.stop()); return; }
-        let timer = 0;
-        scanCtl.stop = () => { clearTimeout(timer); stream.getTracks().forEach((t) => t.stop()); };
-        video.srcObject = stream; await video.play().catch(() => {});
-        st.food.scan.cam = true; document.querySelector('.scanbox')?.classList.remove('nocam');
-        scanMsg('Apunta al código de barras');
-        const det = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'] });
-        const loop = async () => {
-          if (!scanCtl || scanCtl.token !== token) return;
-          try { const r = await det.detect(video); if (r && r[0] && r[0].rawValue) return found(r[0].rawValue); } catch (e) { /* sigue */ }
-          timer = setTimeout(loop, 250);
-        };
-        loop();
-      } else {
-        scanMsg('Abriendo la cámara…');
-        const Z = await import('./vendor/zxing.js');
-        if (!scanCtl || scanCtl.token !== token) return;
-        const hints = new Map([[Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.UPC_E]]]);
-        const reader = new Z.BrowserMultiFormatReader(hints);
-        const ctl = await reader.decodeFromConstraints({ video: { facingMode: 'environment' }, audio: false }, video, (res) => { if (res) found(res.getText()); });
-        if (!scanCtl || scanCtl.token !== token) { ctl.stop(); return; }
-        scanCtl.stop = () => ctl.stop();
-        st.food.scan.cam = true; document.querySelector('.scanbox')?.classList.remove('nocam');
-        scanMsg('Apunta al código de barras');
-      }
-    } catch (e) {
-      stopScan();
-      scanMsg(e && e.name === 'NotAllowedError' ? 'Sin permiso para la cámara. Actívalo en los ajustes del navegador o escribe el código debajo.' : 'No se ha podido abrir la cámara. Escribe el código debajo.');
+      if (!('BarcodeDetector' in window)) return null;
+      const ok = typeof window.BarcodeDetector.getSupportedFormats === 'function' ? await window.BarcodeDetector.getSupportedFormats() : FORMATOS_BARRAS;
+      const formats = FORMATOS_BARRAS.filter((f) => ok.includes(f));
+      return formats.length ? new window.BarcodeDetector({ formats }) : null;
+    } catch (e) { return null; }
+  }
+  // Cámara trasera si existe (`ideal`, nunca obligatoria) y sin audio. iOS solo reproduce en línea con playsinline y muted.
+  async function abrirStream() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('sin-camara');
+    return navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+  }
+  async function reproducir(video, stream) {
+    video.muted = true; video.playsInline = true;
+    video.setAttribute('muted', ''); video.setAttribute('playsinline', ''); video.setAttribute('webkit-playsinline', '');
+    video.srcObject = stream;
+    await video.play().catch(() => {});
+  }
+  // Mira el vídeo cada ~200 ms y llama a onCode(texto) con el primer código EAN/UPC válido. Devuelve { stop }. Lanza si no se puede cargar ZXing.
+  async function lector(video, onCode) {
+    let vivo = true, timer = 0;
+    const stop = () => { vivo = false; clearTimeout(timer); };
+    const nativo = await detectorNativo();
+    if (nativo) {
+      const loop = async () => {
+        if (!vivo) return;
+        try { const r = await nativo.detect(video); if (vivo && r && r[0] && r[0].rawValue) { vivo = false; onCode(r[0].rawValue); return; } } catch (e) { /* sigue */ }
+        timer = setTimeout(loop, 200);
+      };
+      loop();
+      return { stop };
     }
+    const Z = await cargarZXing();
+    if (!vivo) return { stop };
+    const hints = new Map([
+      [Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.UPC_E]],
+      [Z.DecodeHintType.TRY_HARDER, true],
+    ]);
+    const reader = new Z.BrowserMultiFormatReader(hints);
+    const cv = document.createElement('canvas'), cx = cv.getContext('2d', { willReadFrequently: true });
+    const loop = () => {
+      if (!vivo) return;
+      const vw = video.videoWidth, vh = video.videoHeight;
+      if (vw && vh && video.readyState >= 2) {
+        // Banda central del fotograma (la del marco), reducida a 960 px de ancho: más rápido y igual de legible.
+        const sh = Math.round(vh * 0.5), sy = Math.round((vh - sh) / 2), k = Math.min(1, 960 / vw);
+        cv.width = Math.round(vw * k); cv.height = Math.round(sh * k);
+        cx.drawImage(video, 0, sy, vw, sh, 0, 0, cv.width, cv.height);
+        try { const r = reader.decodeFromCanvas(cv); if (r && vivo) { vivo = false; onCode(r.getText()); return; } } catch (e) { /* no hay código legible en este fotograma */ }
+      }
+      timer = setTimeout(loop, 160);
+    };
+    loop();
+    return { stop };
+  }
+  // Tras leer (o querer escribir) un código: abre «Añadir alimento» en la vista del código y, si hay código, consulta Open Food Facts.
+  function abrirCodigo(meal, code) {
+    const q = st.food ? st.food.q : '';
+    st.food = { meal, q, sel: null, mode: 'g', amt: '', prep: null, oil: '', scan: { code: code || '' } };
+    if (code) { buscarCodigo(code); return; }
+    render(); focusSheet();
+    const i = document.querySelector('.sheet input[name="code"]'); if (i) i.focus();
+  }
+  // Producto de Open Food Facts por código. null = no existe (404); lanza si no hay red o el servicio falla. Un UPC-A de 12 cifras se prueba también con 0 delante (EAN-13).
+  async function consultarOFF(code) {
+    for (const c of code.length === 12 ? [code, '0' + code] : [code]) {
+      const ctrl = new AbortController(), tm = setTimeout(() => ctrl.abort(), 15000);
+      let r;
+      try { r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${c}.json?fields=code,product_name,product_name_es,brands,nutriments,serving_quantity`, { signal: ctrl.signal }); } finally { clearTimeout(tm); }
+      if (r.status === 404) continue;
+      if (!r.ok) throw new Error('off');
+      const j = await r.json();
+      if (j && j.product) return { ...j.product, code: j.product.code || c };
+    }
+    return null;
   }
   async function buscarCodigo(raw) {
-    const code = String(raw || '').replace(/\D/g, '');
-    if (!(code.length >= 8 && code.length <= 14)) { toast('El código tiene entre 8 y 14 cifras'); return; }
     const F = st.food; if (!F) return;
-    F.scan = { ...(F.scan || {}), code, msg: `Buscando ${code}…` }; scanMsg(`Buscando ${code}…`);
+    const code = String(raw || '').replace(/\D/g, '');
+    if (!(code.length >= 8 && code.length <= 14)) { F.scan = { code, err: { t: 'Código no válido', d: 'Un código de barras tiene entre 8 y 14 cifras. Revisa lo que has escrito.' } }; render(); return; }
     try { if (navigator.vibrate) navigator.vibrate(60); } catch (e) { /* nada */ }
     const ya = misAlim().find((x) => x.id === 'o:' + code);
     if (ya) { F.scan = null; F.sel = ya.id; F.mode = ya.u ? 'u' : 'g'; F.amt = ''; render(); return; }
+    F.scan = { code, busy: true }; render();
+    const vigente = () => st.food === F && F.scan && F.scan.code === code;
     try {
-      const ctrl = new AbortController(), tm = setTimeout(() => ctrl.abort(), 15000);
-      const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=code,product_name,product_name_es,brands,nutriments,serving_quantity`, { signal: ctrl.signal });
-      clearTimeout(tm);
-      const j = r.ok ? await r.json() : null;
-      const f = j && j.product ? offFood({ ...j.product, code: j.product.code || code }) : null;
-      if (!st.food) return;
-      if (!f) { st.food.scan = { ...st.food.scan, msg: `El código ${code} no está en Open Food Facts o no tiene calorías. Búscalo por nombre o apúntalo a mano.` }; render(); return; }
+      const p = await consultarOFF(code);
+      if (!vigente()) return;
+      const f = p ? offFood(p) : null;
+      if (!f) {
+        F.scan = { code, err: p
+          ? { t: 'Datos incompletos', d: `Open Food Facts conoce el código ${code}, pero no trae nombre o calorías. Apúntalo a mano con la etiqueta.` }
+          : { t: 'Producto no encontrado', d: `El código ${code} no está en Open Food Facts. Búscalo por nombre o apúntalo a mano.` } };
+        render(); return;
+      }
       offCache[f.id] = f;
-      st.food.scan = null; st.food.sel = f.id; st.food.mode = f.u ? 'u' : 'g'; st.food.amt = ''; st.food.prep = null;
+      F.scan = null; F.sel = f.id; F.mode = f.u ? 'u' : 'g'; F.amt = ''; F.prep = null;
       render(); toast(f.n);
     } catch (e) {
-      if (st.food && st.food.scan) { st.food.scan.msg = 'No se ha podido buscar ahora (sin conexión). Prueba en un momento.'; render(); }
+      if (vigente()) { F.scan = { code, err: { t: 'No se pudo consultar el producto', d: 'Open Food Facts no responde ahora. Revisa la conexión y vuelve a intentarlo, o apúntalo a mano.', retry: true } }; render(); }
     }
   }
-  function afterRender() {
-    pintarMapa();
-    // Si la pantalla del escáner ya no está, apaga la cámara; si acaba de aparecer, enciéndela.
-    const v = document.getElementById('scan-video');
-    if (!v) { stopScan(); return; }
-    if (!scanCtl && st.food && st.food.scan && !st.food.scan.code && !st.food.scan.off) startScan();
-    else if (scanCtl && st.food && st.food.scan && v.srcObject == null && !st.food.scan.code) { stopScan(); startScan(); }
-  }
+  function afterRender() { pintarMapa(); }
 
   // Los productos de marca que usas se guardan en «tus alimentos» para encontrarlos siempre.
   function recordarAlimento(food) {
@@ -1014,8 +1047,8 @@ export function crearSecciones(ctx) {
       case 'n-ir': st.nDate = v; render(); window.scrollTo(0, 0); return true;
       case 'n-add': st.food = { meal: Number(v), q: '', sel: null, mode: 'g', amt: '', prep: null, oil: '' }; render(); focusSheet(); return true;
       case 'n-hoy': st.tab = 'nutricion'; lsSet('cadencia-tab', 'nutricion'); st.nDate = todayISO(); st.food = { meal: mealNow(), q: '', sel: null, mode: 'g', amt: '', prep: null, oil: '' }; render(); focusSheet(); return true;
-      case 'n-close': stopScan(); st.food = null; render(); return true;
-      case 'n-unpick': stopScan(); st.food.scan = null; st.food.sel = null; st.food.quick = null; st.food.amt = ''; st.food.prep = null; st.food.oil = ''; render(); focusSheet(); return true;
+      case 'n-close': st.food = null; render(); return true;
+      case 'n-unpick': st.food.scan = null; st.food.sel = null; st.food.quick = null; st.food.amt = ''; st.food.prep = null; st.food.oil = ''; render(); focusSheet(); return true;
       case 'n-meal': st.food.meal = Number(v); render(); return true;
       case 'n-q': st.food.q = v; render(); return true;
       case 'n-pick': { const f = asFood(v); st.food.sel = v; st.food.mode = f && f.u ? 'u' : 'g'; st.food.amt = ''; st.food.prep = null; st.food.oil = ''; render(); const i = document.querySelector('[data-famt]'); if (i) i.focus({ preventScroll: true }); return true; }
@@ -1112,7 +1145,7 @@ export function crearSecciones(ctx) {
       case 'pro-welcome-close': st.proWelcome = false; render(); return true;
       case 'pro-welcome-go': st.proWelcome = false; st.tab = 'nutricion'; st.food = null; st.tl = null; lsSet('cadencia-tab', 'nutricion'); render(); window.scrollTo(0, 0); return true;
       case 'pro-refresh': refrescarPro(true); return true;
-      case 'scan-open': if (libreAgotado()) { st.pro = { from: 'limite-scan' }; render(); return true; } abrirCamara(Number(v)); return true;
+      case 'scan-open': abrirCamara(Number(v)); return true; // si el cupo de IA está agotado, abre en modo código de barras
       case 'scan-quitar': st.scans = (st.scans || []).filter((x) => x.id !== v); render(); return true;
       case 'scan-reintentar': { const sc = (st.scans || []).find((x) => x.id === v); if (sc) analizarScan(sc); return true; }
       case 'meal-open': st.mealDet = Number(v); st.mealMsg = ''; st.mealCorr = ''; render(); return true;
@@ -1125,7 +1158,8 @@ export function crearSecciones(ctx) {
         g.mejora.deseos = [...g.mejora.deseos, { id: nid('d'), n: `${x.pieza}${x.modelo_ejemplo ? ` (${x.modelo_ejemplo})` : ''}`.slice(0, 80), precio, iaKey: key }];
         await saveGaraje(g); toast('Añadido a tu lista de compra'); return true;
       }
-      case 'n-scan': st.food.scan = { msg: '' }; render(); return true;
+      case 'n-scan': abrirCamara(st.food.meal, 'codigo'); return true; // directo al lector de barras: gratis, no mira ni gasta el cupo de IA
+      case 'n-scan-retry': if (st.food && st.food.scan && st.food.scan.code) buscarCodigo(st.food.scan.code); return true;
       // Novedades
       case 'nov-open': st.novOpen = true; render(); return true;
       case 'nov-ok': novCerrar(); render(); return true;
@@ -1199,7 +1233,7 @@ export function crearSecciones(ctx) {
     return false;
   }
   async function submit(kind, f) {
-    if (kind === 'scan') { stopScan(); buscarCodigo(f.code.value); return true; }
+    if (kind === 'scan') { buscarCodigo(f.code.value); return true; }
     if (kind === 'gpx') { await guardarRuta(f); return true; }
     if (kind === 'deseo') {
       const n = f.n.value.trim(), pr = String(f.precio.value).trim() ? num(f.precio.value) : 0;
@@ -1217,10 +1251,8 @@ export function crearSecciones(ctx) {
   // Gratis: 1 escaneo de comida al día. La fecha del último escaneo la guarda el servidor en users/{uid}.ultimoEscaneo (día de Madrid).
   const hoyES = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date());
   const libreAgotado = () => !esPro() && !!st.profile && st.profile.ultimoEscaneo === hoyES();
-  // Botón «Escanear alimento»: Pro y gratis con el escaneo del día disponible abren la cámara; gratis con el escaneo ya gastado va DIRECTO al modal Pro (sin cámara ni galería).
-  const scanBtn = (i, extra = '') => libreAgotado()
-    ? `<button type="button" class="chipbtn chip iachip" data-act="pro-open" data-v="limite-scan" ${extra}>${ICO.camara} Escanear alimento <span class="protag">Pro</span></button>`
-    : `<button type="button" class="chipbtn chip iachip" data-act="scan-open" data-v="${i}" ${extra}>${ICO.camara} Escanear alimento</button>`;
+  // Botón «Escanear alimento»: abre la cámara con dos modos. Plato (IA) gasta cupo; si el gratis ya gastó su escaneo del día, entra en «Código de barras» (gratis) y la pestaña Plato lleva la etiqueta Pro y abre el modal Pro.
+  const scanBtn = (i, extra = '') => `<button type="button" class="chipbtn chip iachip" data-act="scan-open" data-v="${i}" ${extra}>${ICO.camara} Escanear alimento</button>`;
   // Cuando la cuenta pasa a Pro (el servidor lo activa al cobrar), se actualiza sola y se da la bienvenida.
   const bienvenidaKey = () => `cadencia-pro-bienvenida-${st.user ? st.user.uid : ''}`;
   function revisarBienvenida() {
@@ -1378,42 +1410,107 @@ export function crearSecciones(ctx) {
     }
   }, 400);
 
-  // Cámara propia a pantalla completa. Vive fuera de #root para que ningún render() la cierre. Si falla, queda el botón de galería.
-  async function abrirCamara(meal) {
-    if (libreAgotado()) { st.pro = { from: 'limite-scan' }; render(); return; }
-    if (st.iaQuedan === 0) { toast('Ya has usado tus consultas de IA de hoy'); return; }
+  // Cámara propia a pantalla completa con dos modos: «Plato (IA)» (foto, gasta una consulta de IA) y «Código de barras» (lectura automática, gratis, sin IA).
+  // Vive fuera de #root para que ningún render() la cierre. Si no hay cámara, queda la galería (plato) o escribir el código (barras).
+  async function abrirCamara(meal, modoIni) {
+    if (document.querySelector('.cam')) return;
+    // La IA de plato no está disponible si el usuario gratis ya gastó su escaneo de hoy o si no quedan consultas; el código de barras sigue funcionando.
+    const sinIA = () => libreAgotado() || st.iaQuedan === 0;
+    let modo = modoIni === 'plato' && !sinIA() ? 'plato' : modoIni === 'codigo' || sinIA() ? 'codigo' : 'plato';
     const m = document.createElement('div');
     m.className = 'cam';
     m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-label', 'Escanear alimento');
     m.innerHTML = `<video playsinline muted autoplay></video>
       <svg class="cam-frame" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><g fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 28V16a4 4 0 0 1 4-4h12"/><path d="M72 12h12a4 4 0 0 1 4 4v12"/><path d="M88 72v12a4 4 0 0 1-4 4H72"/><path d="M28 88H16a4 4 0 0 1-4-4V72"/></g></svg>
+      <div class="cam-box" aria-hidden="true"><i class="cam-laser"></i></div>
       <button type="button" class="cam-x" data-cam="x" aria-label="Cerrar">${ICO.close}</button>
-      <p class="cam-t">Centra el plato dentro del marco</p>
+      <p class="cam-t"></p>
       <p class="cam-err" hidden></p>
-      <div class="cam-bar"><label class="cam-gal" aria-label="Elegir de la galería"><input type="file" accept="image/*" hidden>${ICO.imagen || 'Galería'}<span>Galería</span></label>
-        <button type="button" class="cam-shot" data-cam="shot" aria-label="Hacer foto" disabled><i></i></button><span></span></div>`;
+      <div class="cam-bar">
+        <div class="cam-modes" role="group" aria-label="Qué quieres escanear">
+          <button type="button" class="cam-mode" data-cam="plato" aria-pressed="false">Plato (IA)${libreAgotado() ? ' <span class="protag">Pro</span>' : ''}</button>
+          <button type="button" class="cam-mode" data-cam="codigo" aria-pressed="false">${I.barcode} Código de barras</button>
+        </div>
+        <div class="cam-row">
+          <label class="cam-gal" aria-label="Elegir de la galería"><input type="file" accept="image/*" hidden>${ICO.imagen || 'Galería'}<span>Galería</span></label>
+          <button type="button" class="cam-shot" data-cam="shot" aria-label="Hacer foto" disabled><i></i></button><span></span>
+        </div>
+        <div class="cam-cod">
+          <p class="cam-s" role="status" aria-live="polite"></p>
+          <button type="button" class="cam-manual" data-cam="escribir">Escribir el código</button>
+        </div>
+      </div>`;
     document.body.appendChild(m);
-    const video = m.querySelector('video'), shot = m.querySelector('[data-cam=shot]'), err = m.querySelector('.cam-err');
-    let stream = null, cerrado = false;
-    const cerrar = () => { if (cerrado) return; cerrado = true; document.removeEventListener('keydown', tecla); if (stream) stream.getTracks().forEach((t) => t.stop()); m.remove(); };
+    const video = m.querySelector('video'), shot = m.querySelector('[data-cam=shot]'), err = m.querySelector('.cam-err'), tit = m.querySelector('.cam-t'), est = m.querySelector('.cam-s');
+    const AUTO = 'Detecta el código solo. No hace falta hacer foto.';
+    let stream = null, cerrado = false, fallo = null, lec = null, aviso = 0;
+    const pararLector = () => { clearTimeout(aviso); if (lec) lec.stop(); lec = null; };
+    const cerrar = () => {
+      if (cerrado) return; cerrado = true; pararLector();
+      document.removeEventListener('keydown', tecla);
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+      m.remove();
+    };
     const tecla = (e) => { if (e.key === 'Escape') cerrar(); };
     document.addEventListener('keydown', tecla);
-    m.querySelector('[data-cam=x]').onclick = cerrar;
-    m.querySelector('input[type=file]').onchange = (e) => { const f = e.target.files && e.target.files[0]; cerrar(); if (libreAgotado()) { st.pro = { from: 'limite-scan' }; render(); return; } fotoPlato(f, meal); };
-    shot.onclick = () => {
-      if (!video.videoWidth) return;
-      const c = document.createElement('canvas'); c.width = video.videoWidth; c.height = video.videoHeight;
-      c.getContext('2d').drawImage(video, 0, 0);
-      c.toBlob((b) => { cerrar(); if (b) fotoPlato(b, meal); }, 'image/jpeg', 0.92);
+    const iniciarLector = async () => {
+      if (lec || cerrado || !stream) return;
+      const mio = lec = { stop() {} };
+      est.textContent = AUTO;
+      clearTimeout(aviso);
+      aviso = setTimeout(() => { if (!cerrado && lec) est.textContent = 'Sin lectura todavía. Acerca el envase, busca buena luz y mantén las barras rectas dentro del marco.'; }, 12000);
+      try {
+        const r = await lector(video, (code) => { if (cerrado) return; cerrar(); abrirCodigo(meal, code); });
+        if (lec !== mio || cerrado) { r.stop(); return; }
+        lec = r;
+      } catch (e) {
+        lec = null; clearTimeout(aviso);
+        est.textContent = 'No se ha podido cargar el lector de códigos. Comprueba la conexión e inténtalo de nuevo, o escribe el código.';
+      }
     };
+    const aplicar = () => {
+      m.classList.toggle('cod', modo === 'codigo');
+      m.classList.toggle('fail', !!fallo);
+      tit.textContent = modo === 'codigo' ? 'Apunta al código de barras del envase' : 'Centra el plato dentro del marco';
+      m.querySelectorAll('.cam-mode').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.cam === modo)));
+      shot.disabled = !stream;
+      if (fallo) {
+        const permiso = fallo === 'permiso';
+        err.hidden = false;
+        err.textContent = modo === 'codigo'
+          ? (permiso ? 'No tenemos permiso para usar la cámara. Actívalo en los ajustes del navegador o escribe el código del envase.' : 'No se ha podido abrir la cámara. Puedes escribir el código del envase.')
+          : (permiso ? 'No tenemos permiso para usar la cámara. Puedes elegir una foto de tu galería.' : 'No se ha podido abrir la cámara. Puedes elegir una foto de tu galería.');
+      } else err.hidden = true;
+      if (modo === 'codigo' && stream) iniciarLector(); else { pararLector(); est.textContent = AUTO; }
+    };
+    m.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-cam]'); if (!b) return;
+      const a = b.dataset.cam;
+      if (a === 'x') cerrar();
+      else if (a === 'codigo') { modo = 'codigo'; aplicar(); }
+      else if (a === 'plato') {
+        if (!sinIA()) { modo = 'plato'; aplicar(); }
+        else if (libreAgotado()) { cerrar(); st.pro = { from: 'limite-scan' }; render(); }
+        else toast('Ya has usado tus consultas de IA de hoy');
+      }
+      else if (a === 'escribir') { cerrar(); abrirCodigo(meal, ''); }
+      else if (a === 'shot') {
+        if (!video.videoWidth) return;
+        const c = document.createElement('canvas'); c.width = video.videoWidth; c.height = video.videoHeight;
+        c.getContext('2d').drawImage(video, 0, 0);
+        c.toBlob((bl) => { cerrar(); if (bl) fotoPlato(bl, meal); }, 'image/jpeg', 0.92);
+      }
+    });
+    m.querySelector('input[type=file]').onchange = (e) => { const f = e.target.files && e.target.files[0]; cerrar(); if (libreAgotado()) { st.pro = { from: 'limite-scan' }; render(); return; } fotoPlato(f, meal); };
+    aplicar();
     try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('sin-camara');
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 } }, audio: false });
+      stream = await abrirStream();
       if (cerrado) { stream.getTracks().forEach((t) => t.stop()); return; }
-      video.srcObject = stream; await video.play().catch(() => {}); shot.disabled = false;
+      await reproducir(video, stream);
+      aplicar();
     } catch (e) {
-      m.classList.add('fail'); err.hidden = false;
-      err.textContent = e && e.name === 'NotAllowedError' ? 'No tenemos permiso para usar la cámara. Puedes elegir una foto de tu galería.' : 'No se ha podido abrir la cámara. Puedes elegir una foto de tu galería.';
+      fallo = e && e.name === 'NotAllowedError' ? 'permiso' : 'otro';
+      aplicar();
     }
   }
   // Respuesta de la IA → filas que se revisan en pantalla.
