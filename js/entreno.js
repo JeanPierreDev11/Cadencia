@@ -175,14 +175,17 @@ export function records(ws) {
           car.set(ck, c);
           continue;
         }
-        const e = map.get(key) || { key, n: ej.n.trim(), veces: 0, best: null, last: '' };
+        const e = map.get(key) || { key, n: ej.n.trim(), veces: 0, best: null, last: '', orm: null };
         e.veces++;
-        if (w.fecha > e.last) e.last = w.fecha;
+        if (w.fecha > e.last) { e.last = w.fecha; e.carga = cargaDe(ej); e.uni = !!ej.uni; } // cómo se apuntó la última vez (para leer el 1RM: total, c/u o por lado)
         for (const s of seriesLados(ej)) {
           const reps = s.reps || 0, kg = s.kg || 0;
           if (!reps) continue;
-          const score = kg > 0 ? kg * (1 + reps / 30) : reps; // 1RM estimado (Epley) o repeticiones
+          const score = kg > 0 ? kg * (1 + reps / 30) : reps; // orden de la «mejor serie» (Epley; también decide los PR): no es el 1RM que se enseña
           if (!e.best || score > e.best.score) e.best = { kg, reps, score, fecha: w.fecha };
+          // 1RM estimado: la MISMA fórmula y rango que el entreno en vivo (orm1, Brzycki, 1–12 reps). En unilateral cuenta cada lado; el kg es el escrito (por lado si la carga es por lado).
+          const v = orm1(kg, reps);
+          if (v != null && (!e.orm || v > e.orm.v)) e.orm = { v, kg, reps, fecha: w.fecha };
         }
         map.set(key, e);
       }
@@ -229,6 +232,28 @@ export function mejor1RM(series, parse = Number, uni = false) {
   let best = null;
   for (const s of trabajo(series)) for (const l of (uni ? ladosSerie(s, parse) : [{ kg: parse(s.kg), reps: parse(s.reps) }])) { const v = orm1(l.kg, l.reps); if (v != null && (best == null || v > best)) best = v; }
   return best;
+}
+// Calculadora de discos: qué discos poner en CADA lado de la barra para llegar a `pesoTotal` (kg) con una barra de `barraKg` (0 = máquina o sin barra)
+// y los discos `disponibles` (kg, sin límite de unidades). Si el peso no es exacto, da el más cercano alcanzable (a igual distancia, el de abajo).
+// → { porLado: [{ kg, n }] (de más pesado a más ligero), pesoPorLado, pesoReal (barra + 2 × lado), diferencia (real − pedido), menorQueBarra }.
+export function calcularDiscos(pesoTotal, barraKg = 20, disponibles = [25, 20, 15, 10, 5, 2.5, 1.25]) {
+  const U = 0.05, u = (x) => Math.round(x / U); // todo en unidades de 50 g (1,25 kg = 25) para no arrastrar errores de coma flotante
+  const r2 = (x) => Math.round(x * 100) / 100;
+  const total = Math.max(0, Number(pesoTotal) || 0), barra = Math.max(0, Number(barraKg) || 0);
+  const discos = [...new Set((disponibles || []).map(Number).filter((d) => d > 0 && d <= 100).map((d) => u(d)))].sort((a, b) => b - a);
+  if (total < barra) return { porLado: [], pesoPorLado: 0, pesoReal: barra, diferencia: r2(barra - total), menorQueBarra: true };
+  const obj = u((total - barra) / 2), tope = obj + (discos[0] || 0);
+  // Mínimo número de discos para cada peso por lado alcanzable (0..tope); `de` guarda el último disco puesto para reconstruir.
+  const min = new Array(tope + 1).fill(Infinity), de = new Array(tope + 1).fill(0);
+  min[0] = 0;
+  for (let s = 1; s <= tope; s++) for (const d of discos) if (d <= s && min[s - d] + 1 < min[s]) { min[s] = min[s - d] + 1; de[s] = d; }
+  let mejor = 0;
+  for (let s = 0; s <= tope; s++) if (min[s] < Infinity && Math.abs(s - obj) < Math.abs(mejor - obj)) mejor = s;
+  const cuenta = new Map();
+  for (let s = mejor; s > 0; s -= de[s]) cuenta.set(de[s], (cuenta.get(de[s]) || 0) + 1);
+  const porLado = [...cuenta].sort((a, b) => b[0] - a[0]).map(([d, n]) => ({ kg: r2(d * U), n }));
+  const pesoPorLado = r2(mejor * U), pesoReal = r2(barra + 2 * pesoPorLado);
+  return { porLado, pesoPorLado, pesoReal, diferencia: r2(pesoReal - total), menorQueBarra: false };
 }
 // Pro: Calentamiento Inteligente. Según cuántas series elijas (1, 2 o 3), porcentaje del peso de trabajo × repeticiones,
 // redondeado a 2,5 kg (mínimo 2,5). Sin número → 3 series.

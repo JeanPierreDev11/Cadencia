@@ -2384,6 +2384,54 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .lex-desc button[aria-pressed="true"] { background: var(--brand-yellow); border-color: var(--brand-yellow); color: var(--text-on-brand); }
 .lex-chip:focus-visible, .lex-nota:focus-visible, .lex-desc button:focus-visible { outline: 2px solid var(--brand-yellow); outline-offset: 2px; }
 
+/* 2026-11-25 · Fase B paso 2 (71): calculadora de discos, 1RM estimado en Récords y aviso PRO único.
+   Superficie y texto con variables del tema (claro y oscuro); acento y radios con tokens de brand-ui.md. Un solo relleno amarillo: «Listo». */
+.disc-sheet { display: flex; flex-direction: column; overflow: hidden; }
+.disc-body { flex: 1; min-height: 0; overflow-y: auto; display: grid; gap: 10px; align-content: start; padding-bottom: 12px; }
+.disc-ej { margin: 0; }
+.disc-lbl { margin: 4px 0 0; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.disc-peso { display: grid; grid-template-columns: 64px minmax(0, 1fr) 64px; gap: 8px; }
+.disc-peso .input { min-height: 52px; font-size: 24px; font-weight: 800; text-align: center; }
+.disc-step, .disc-chip { min-height: 44px; border: 1px solid var(--muted); border-radius: var(--r-sm); background: transparent; color: var(--ink); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; padding: 0 4px; }
+.disc-step { font-size: 16px; }
+.disc-chips { display: grid; gap: 6px; }
+.disc-chips.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.disc-chips.c7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.disc-chips.c7 .disc-chip { font-size: 13px; }
+/* Elegido: borde amarillo y superficie; sin elegir: borde discontinuo y texto apagado tachado (no depende solo del color). */
+.disc-chip.on { border: 1.5px solid var(--brand-yellow); background: var(--surface2); }
+.disc-chips.c7 .disc-chip:not(.on) { border-style: dashed; color: var(--muted); text-decoration: line-through; }
+.disc-step:focus-visible, .disc-chip:focus-visible { outline: 2px solid var(--brand-yellow); outline-offset: 2px; }
+.disc-res { display: grid; gap: 6px; margin: 4px 0 2px; padding: 14px 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+/* Un lado de la barra: tope, discos de dentro (más pesado) a fuera, y la manga. Rectángulos proporcionales, sin colores por peso. */
+.disc-vis { display: flex; align-items: center; gap: 3px; height: 108px; overflow-x: auto; padding: 0 2px; }
+.disc-manga { flex: 1 0 24px; height: 8px; background: var(--muted); border-radius: 1px; opacity: .7; }
+.disc-tope { flex: none; width: 6px; height: 36%; background: var(--muted); border-radius: 1px; }
+.disc-fin { flex: 0 0 28px; height: 10px; margin-left: -3px; background: var(--muted); border-radius: 1px; opacity: .7; }
+.disc-p { flex: none; position: relative; width: 20px; height: var(--h); background: var(--card-bg2); border: 1px solid var(--muted); border-radius: var(--r-sm); }
+.disc-p.fino { width: 13px; }
+.disc-p i { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-90deg); font-style: normal; font-size: 10px; font-weight: 800; color: var(--ink); white-space: nowrap; }
+.disc-p.fino i { font-size: 9px; }
+.disc-lado { margin: 0; font-size: 15px; line-height: 1.4; color: var(--ink); }
+.disc-real { margin: 0; font-size: 13px; }
+.disc-real .num { font-size: 26px; font-weight: 800; color: var(--ink); }
+.disc-msg { margin: 0; font-size: 14px; line-height: 1.4; color: var(--muted); }
+.disc-msg.ok { color: var(--ok); }
+.disc-msg b { color: var(--ink); }
+.disc-sheet .sheet-foot .btn { background: var(--brand-yellow); color: var(--text-on-brand); border-radius: var(--r-sm); }
+
+/* Récords: 1RM estimado bajo la mejor serie (Pro) y un único aviso arriba para quien no es Pro. */
+.rec-v { display: grid; justify-items: end; gap: 2px; text-align: right; margin-left: auto; }
+.rec-orm { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); white-space: nowrap; }
+.rec-orm .ic { width: 14px; height: 14px; vertical-align: 0; }
+.rec-orm .num { color: var(--ink); font-weight: 700; }
+.rec-pro { display: grid; gap: 8px; margin: 0 16px 10px; padding: 12px; border: 1px solid var(--line); border-left: 2px solid var(--brand-yellow-muted); border-radius: var(--r-md); background: var(--surface); }
+.rec-pro p { display: flex; gap: 8px; align-items: flex-start; margin: 0; font-size: 14px; line-height: 1.4; color: var(--ink); }
+.rec-pro p .ic { flex: none; margin-top: 2px; color: var(--muted); }
+.rec-pro-btn { justify-self: start; min-height: 44px; padding: 0 14px; border: 1px solid var(--muted); border-radius: var(--r-sm); background: transparent; color: var(--ink); font: inherit; font-size: 13px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; cursor: pointer; }
+.rec-pro-btn:focus-visible { outline: 2px solid var(--brand-yellow); outline-offset: 2px; }
+@media (min-width: 1024px) { .main:has(> .rec-acc) > .rec-pro { grid-column: 1 / -1; } }
+
 @media (min-width: 1024px) {
   :root { --sb-w: 104px; --col: 800px; }
 

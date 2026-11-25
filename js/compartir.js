@@ -373,7 +373,7 @@ export function crearCompartir(ctx) {
     return d;
   };
 
-  function abrir(id) { st.compartir = { id, i: 0, fondo: 'oscuro', menu: false }; render(); }
+  function abrir(id, i = 0) { st.compartir = { id, i: i >= 0 && i < PLANTILLAS.length ? i : 0, fondo: 'oscuro', menu: false }; render(); }
   const cerrar = () => { st.compartir = null; render(); };
 
   function sheetHTML() {

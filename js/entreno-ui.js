@@ -9,7 +9,7 @@ import * as CAL from './calorias.js';
 import { analizarEntreno, diagnosticoCoach } from './coach.js';
 import * as C3 from './cuerpo.js';
 import { pautas } from './tecnica.js';
-import { crearCompartir } from './compartir.js';
+import { crearCompartir, PLANTILLAS } from './compartir.js';
 
 export function crearEntreno(ctx) {
   const { st, root } = ctx;
@@ -61,7 +61,59 @@ function notaGuardar(el) {
   const txt = el.value.replace(/\s+/g, ' ').trim().slice(0, NOTA_MAX);
   if (txt !== notaDe(e.n)) guardarMapaEj('notasEj', E.claveEj(e.n), txt || null);
 }
-const ormHTML = (ex) => { const v = E.mejor1RM(ex.s, num, ex.uni); return v == null ? '' : `${I.crown} 1RM estimado: ${kgTxt(v)} kg`; };
+// 1RM con un decimal solo si lo tiene (coma española): 102,5 · 100. Mismo formato en el entreno en vivo y en Récords.
+const ormTxt = (v) => { const r = Math.round(v * 10) / 10; return nf(r, Number.isInteger(r) ? 0 : 1); };
+const ormHTML = (ex) => { const v = E.mejor1RM(ex.s, num, ex.uni); return v == null ? '' : `${I.crown} 1RM estimado: ${ormTxt(v)} kg`; };
+// Calculadora de discos (st.discos = { i, n, total (texto), barra, nota }). Los discos que tienes se guardan en este dispositivo.
+const DISC_TODOS = [25, 20, 15, 10, 5, 2.5, 1.25], DISC_BARRAS = [20, 15, 10, 0], DISC_CLAVE = 'cadencia-discos';
+const discKg = (v) => String(v).replace('.', ',');
+function discDisp() {
+  try { const a = JSON.parse(lsGet(DISC_CLAVE) || 'null'); if (Array.isArray(a)) return DISC_TODOS.filter((d) => a.map(Number).includes(d)); } catch (e) { /* valor roto: los de siempre */ }
+  return [...DISC_TODOS];
+}
+function discosResHTML() {
+  const D = st.discos, total = num(D.total), disp = discDisp();
+  if (!(total >= 0) || total > 600) return `<p class="disc-msg" role="status">Escribe un peso total entre 0 y 600 kg.</p>`;
+  const r = E.calcularDiscos(total, D.barra, disp), K = 25;
+  const barraTxt = D.barra ? `la barra (${discKg(D.barra)} kg)` : 'sin barra';
+  if (r.menorQueBarra) return `<p class="disc-msg" role="status">${discKg(total)} kg es menos que la barra de ${discKg(D.barra)} kg. Elige otra barra o usa solo la barra.</p>`;
+  const placas = r.porLado.flatMap((d) => Array.from({ length: d.n }, () => d.kg));
+  const vis = `<div class="disc-vis" aria-hidden="true"><span class="disc-manga"></span><span class="disc-tope"></span>${placas.map((kg) => `<span class="disc-p ${kg < 10 ? 'fino' : ''}" style="--h:${Math.round(38 + 62 * Math.min(1, kg / K))}%"><i>${discKg(kg)}</i></span>`).join('')}<span class="disc-fin"></span></div>`;
+  const lado = r.porLado.length ? `Por lado: ${r.porLado.map((d) => `${d.n} × ${discKg(d.kg)} kg`).join(' · ')}` : (D.barra ? 'Solo la barra, sin discos.' : 'Sin discos.');
+  const exacto = Math.abs(r.diferencia) < 0.001;
+  const est = exacto ? `Peso exacto con ${barraTxt}.`
+    : !disp.length ? 'Elige al menos un disco de los que tienes.'
+    : `No sale exacto con tus discos. Lo más cercano: <b class="num">${discKg(r.pesoReal)} kg</b> (${r.diferencia > 0 ? '+' : '−'}${discKg(Math.abs(r.diferencia))} kg).`;
+  return `${vis}
+    <p class="disc-lado"><b>${esc(lado)}</b></p>
+    <p class="disc-real"><span class="num">${discKg(r.pesoReal)}</span> kg <span class="small muted">en total</span></p>
+    <p class="disc-msg ${exacto ? 'ok' : ''}" role="status">${est}</p>`;
+}
+function discosSheetHTML() {
+  const D = st.discos, disp = discDisp();
+  const chip = (attr, on, txt, aria) => `<button type="button" class="disc-chip ${on ? 'on' : ''}" ${attr} aria-pressed="${on}" aria-label="${aria}">${txt}</button>`;
+  return `<div class="sheet-back" data-act="disc-close"></div>
+    <div class="sheet short disc-sheet" role="dialog" aria-modal="true" aria-label="Calculadora de discos">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><span style="width:44px"></span><h2>Discos</h2><button type="button" class="iconbtn" data-act="disc-close" aria-label="Cerrar">${I.close}</button></div>
+      <div class="sheet-list disc-body">
+        ${D.n ? `<p class="small muted disc-ej">${esc(D.n)}${D.nota ? ` · ${esc(D.nota)}` : ''}</p>` : ''}
+        <label class="disc-lbl" for="disc-total">Peso total (kg)</label>
+        <div class="disc-peso">
+          <button type="button" class="disc-step" data-act="disc-step" data-v="-2.5" aria-label="Restar 2,5 kg">-2,5</button>
+          <input class="input num" id="disc-total" data-disc-total inputmode="decimal" value="${esc(D.total)}" placeholder="Ej. 80" autocomplete="off">
+          <button type="button" class="disc-step" data-act="disc-step" data-v="2.5" aria-label="Sumar 2,5 kg">+2,5</button>
+        </div>
+        <div class="disc-res" id="disc-res">${discosResHTML()}</div>
+        <p class="disc-lbl">Barra</p>
+        <div class="disc-chips c4" role="group" aria-label="Peso de la barra">${DISC_BARRAS.map((b) => chip(`data-act="disc-barra" data-v="${b}"`, D.barra === b, `${discKg(b)} kg`, b ? `Barra de ${discKg(b)} kg` : 'Sin barra (máquina)')).join('')}</div>
+        <p class="disc-lbl">Discos que tienes</p>
+        <div class="disc-chips c7" role="group" aria-label="Discos disponibles">${DISC_TODOS.map((d) => chip(`data-act="disc-disp" data-v="${d}"`, disp.includes(d), discKg(d), `Discos de ${discKg(d)} kg${disp.includes(d) ? ', disponibles' : ', no disponibles'}`)).join('')}</div>
+      </div>
+      <div class="sheet-foot"><button type="button" class="btn block" data-act="disc-close">Listo</button></div>
+    </div>`;
+}
+const discosPintar = () => { const el = document.getElementById('disc-res'); if (el && st.discos) el.innerHTML = discosResHTML(); };
 const rutinaOf = () => { const r = st.profile && st.profile.rutina; return r && Array.isArray(r.dias) && r.dias.length && r.sesiones ? r : null; };
 // Todas tus rutinas guardadas; la activa es la que usa la semana, Inicio y el entrenamiento en directo.
 function rutinasList() {
@@ -292,6 +344,7 @@ const aiDe = (w) => (w && Number.isFinite(Number(w.aiNota)) && !(w.aiDemo && !ap
   ? { nota: Number(w.aiNota), titulo: w.aiTitulo || '', resumen: w.aiTexto || '', llegar10: Array.isArray(w.aiParaLlegarAl10) ? w.aiParaLlegarAl10 : [], consejos: Array.isArray(w.aiConsejos) ? w.aiConsejos : [], demo: !!w.aiDemo } : null);
 // Compartir entreno (45): modal con plantillas dibujadas en canvas. Se abre al terminar un entreno y desde el botón de compartir de cada entreno guardado.
 const CP = crearCompartir({ st, root, render: () => render(), aiDe });
+const CP_NOTA = Math.max(0, PLANTILLAS.findIndex((p) => p.id === 'vertical')); // plantilla con la nota del Coach AI
 const puedeCompartir = (w) => w.tipo === 'gym' && (w.ejercicios || []).some((e) => !E.exCardio(e));
 const compartirBtn = (w) => (puedeCompartir(w) ? `<button type="button" class="iconbtn cp-share" data-act="cp-open" data-v="${esc(w.id)}" aria-label="Compartir entreno">${I.share}</button>` : '');
 const aiPosible = (w) => !!w && w.tipo === 'gym' && (w.ejercicios || []).length > 0;
@@ -399,12 +452,15 @@ const grupoRecord = (n) => { const x = E.ejercicio(n), g = x && x.m; const f = R
 function wkRecords() {
   const r = E.records(st.workouts);
   const fecha = (f) => esc(fmtDate(f, { day: 'numeric', month: 'short', year: 'numeric' }));
-  const fila = (t, v, f, extra = '') => `<div class="row rec-row"><span>${esc(t)}<br><span class="muted small">${fecha(f)}${extra}</span></span><b class="nowrap num">${esc(v)}</b></div>`;
+  const fila = (t, v, f, extra = '', sub = '') => `<div class="row rec-row"><span>${esc(t)}<br><span class="muted small">${fecha(f)}${extra}</span></span><span class="rec-v"><b class="nowrap num">${esc(v)}</b>${sub}</span></div>`;
+  const pro = esPro();
+  // 1RM estimado (Pro): el mismo cálculo que el entreno en vivo. Con carga por lado el kg es de cada lado (c/u); en unilateral, de un lado.
+  const ormSub = (e) => (pro && e.orm ? `<span class="rec-orm small">${I.crown}<span>1RM est. <span class="num">${ormTxt(e.orm.v)}</span> kg${e.uni ? ' por lado' : e.carga === 'por_lado' ? ' c/u' : ''}</span></span>` : '');
   const grupos = new Map(); // id → { t, filas[] } en el orden de REC_GRUPOS
   for (const [id, t] of REC_GRUPOS) grupos.set(id, { t, filas: [] });
   grupos.set('otros', { t: 'Otros', filas: [] });
   for (const e of r.gym) {
-    grupos.get(grupoRecord(e.n)).filas.push(fila(cap(e.n), e.best.kg > 0 ? `${nf(e.best.kg, 1)} kg × ${e.best.reps}` : `${e.best.reps} reps`, e.best.fecha, ` · ${e.veces} ${e.veces === 1 ? 'sesión' : 'sesiones'}`));
+    grupos.get(grupoRecord(e.n)).filas.push(fila(cap(e.n), e.best.kg > 0 ? `${nf(e.best.kg, 1)} kg × ${e.best.reps}` : `${e.best.reps} reps`, e.best.fecha, ` · ${e.veces} ${e.veces === 1 ? 'sesión' : 'sesiones'}`, ormSub(e)));
   }
   const cardio = (r.cardio || []).map((c) => {
     const p = [];
@@ -431,8 +487,10 @@ function wkRecords() {
         <h2>${g.t}</h2><span class="rec-n">${g.filas.length}</span><span class="chev" aria-hidden="true">${I.chev}</span></button>
       <div class="list" id="rec-${id}" ${open ? '' : 'hidden'}>${g.filas.join('')}</div></section>`;
   };
-  return `${con.map(acordeon).join('')}
-    <p class="small muted rec-nota">En fuerza cuenta tu mejor serie (más peso para sus repeticiones). Las de calentamiento no cuentan.</p>`;
+  // Sin Pro: un solo aviso arriba (no un candado en cada fila), solo si hay algún ejercicio con 1RM calculable.
+  const aviso = !pro && r.gym.some((e) => e.orm) ? `<section class="rec-pro" aria-label="1RM estimado con Cadencia PRO"><p>${I.crown}<span>Cadencia PRO incluye el cálculo de 1RM estimado en todos tus ejercicios.</span></p><button type="button" class="rec-pro-btn" data-act="rec-pro">Ver Cadencia PRO</button></section>` : '';
+  return `${aviso}${con.map(acordeon).join('')}
+    <p class="small muted rec-nota">En fuerza cuenta tu mejor serie (más peso para sus repeticiones). Las de calentamiento no cuentan.${pro ? ' El 1RM estimado usa la fórmula de Brzycki con series de 1 a 12 repeticiones.' : ''}</p>`;
 }
 
 function wkHistSheetHTML() {
@@ -1547,6 +1605,9 @@ function empezarFuerza(fecha) {
 // Pro: resumen al terminar (st.resumen = { id, nombre, vol, sets, min, record }). El Coach AI NO se pide solo: botón «Solicitar Análisis AI ${I.brain}».
 function resumenSheetHTML() {
   const r = st.resumen, w = st.workouts.find((x) => x.id === r.id);
+  // Un solo foco amarillo: sin análisis, el principal es «Solicitar Análisis AI» (y Compartir va de secundario); con el análisis ya hecho, Compartir pasa a principal
+  // y abre la plantilla vertical, la que lleva la nota del Coach AI.
+  const conAi = !!aiDe(w);
   return `<div class="sheet-back" data-act="sum-close"></div>
     <div class="sheet short ai-sheet" role="dialog" aria-modal="true" aria-label="Resumen del entreno">
       <div class="sheet-grab"></div>
@@ -1555,7 +1616,7 @@ function resumenSheetHTML() {
         <span class="sum-lbl">${esc(r.nombre)}${r.record ? ' · ¡Nuevo récord!' : ''}</span>
         <div class="ai-stats"><span><b class="num">${nf(r.vol)}</b> kg movidos</span><span><b class="num">${r.sets}</b> ${r.sets === 1 ? 'serie' : 'series'}</span><span><b class="num">${esc(fmtDur(r.min))}</b></span></div>
         ${aiHTML(w)}
-        ${w && puedeCompartir(w) ? `<button type="button" class="btn quiet block" data-act="cp-open" data-v="${esc(w.id)}">${I.share} Compartir entreno</button>` : ''}
+        ${w && puedeCompartir(w) ? `<button type="button" class="btn ${conAi ? '' : 'quiet'} block" data-act="cp-open" data-v="${esc(w.id)}"${conAi ? ` data-i="${CP_NOTA}"` : ''}>${I.share} Compartir entreno</button>` : ''}
         <button type="button" class="btn ghost block" data-act="sum-close">Listo</button>
       </div>
     </div>`;
@@ -1789,7 +1850,8 @@ function liveHerramientasHTML(e, i, L, plano, pro, conPeso) {
   // Sin elegir: el descanso por defecto de siempre (se ve el tiempo). Elegido: borde amarillo; Off = no arranca solo.
   const dAct = ds == null ? restDur() : ds;
   const desc = plano ? '' : `<button type="button" class="lex-chip ${ds != null ? 'on' : ''}" data-act="live-desc" data-v="${i}" aria-expanded="${abierto}" aria-label="Descanso tras cada serie de ${esc(e.n)}: ${ds == null ? `${descTxt(dAct)} por defecto` : ds ? descTxt(ds) : 'desactivado'}. Tocar para cambiar">${I.timer}Descanso ${descTxt(dAct)}</button>`;
-  const fila = warm || notaBtn || desc ? `<div class="lex-tools">${warm}${notaBtn}${desc}</div>` : '';
+  const discos = conPeso ? `<button type="button" class="lex-chip" data-act="live-discos" data-v="${i}" aria-label="Calcular los discos para ${esc(e.n)}">${I.plates}Discos</button>` : '';
+  const fila = warm || notaBtn || desc || discos ? `<div class="lex-tools">${warm}${notaBtn}${desc}${discos}</div>` : '';
   const opc = abierto ? `<div class="lex-desc" role="group" aria-label="Descanso entre series de ${esc(e.n)}">${DESC_OPC.map((sec) => `<button type="button" data-act="live-desc-set" data-v="${i}" data-s="${sec}" aria-pressed="${ds === sec}">${descTxt(sec)}</button>`).join('')}</div>` : '';
   const notaH = ed
     ? `<div class="lex-nota-ed"><input class="input" data-nota="${i}" maxlength="${NOTA_MAX}" value="${esc(st.notaBorr != null ? st.notaBorr : nota)}" placeholder="Ajuste de máquina, agarre o recordatorio..." enterkeyhint="done" aria-label="Nota fija de ${esc(e.n)}"><button type="button" class="btn small" data-act="live-nota-ok" data-v="${i}">Guardar</button></div>`
@@ -2235,7 +2297,8 @@ async function liveFinish() {
     if (editado) st.wkHist = true; else { st.wkTab = 'semana'; lsSet('cadencia-wktab', 'semana'); }
     st.wkDia = o.fecha; st.wkSem = E.mondayOf(o.fecha) < E.mondayOf(todayISO()) ? E.mondayOf(o.fecha) : null; // si se registró en una semana anterior, se muestra esa
     if (esPro() && !editado) st.resumen = { id: o.id, nombre: o.nombre, vol: volTotal, sets: nSets, min, record };
-    if (!editado && nSets > 0) st.compartir = { id: o.id, i: 0, fondo: 'oscuro', menu: false }; // «Compartir Entreno» al terminar (para todos); al darle a LISTO sigue el resumen Pro si lo hay
+    // «Compartir Entreno» se abre solo SIN Pro. Con Pro manda «Entreno guardado» (st.resumen): desde ahí se comparte, mejor con la nota del Coach AI ya pedida.
+    if (!editado && nSets > 0 && !st.resumen) st.compartir = { id: o.id, i: 0, fondo: 'oscuro', menu: false };
     if (!editado) { const rn = ejerciciosNuevos(L, ejs); if (rn) st.rutNuevos = { ...rn, busy: false, msg: '' }; } // va ANTES que «Compartir» (primero de la cadena de hojas): ejercicios añadidos hoy → ¿a la rutina?
     if (!editado && nSets > 0 && postEntToca()) st.postEnt = postEntNuevo(); // cuestionario opcional de la beta: el último de la cadena de hojas, tras «Tu rutina», Compartir y el resumen Pro
     render(); window.scrollTo(0, 0);
@@ -2362,7 +2425,7 @@ root.addEventListener('click', async (e) => {
   const w = st.wk, o = st.rw, re = st.re, L = st.lib, Lv = st.live;
 
   // compartir entreno (45): va el primero y antes de cualquier await (iOS exige que copiar/compartir/elegir foto salgan del gesto del toque)
-  if (act === 'cp-open') return CP.abrir(v);
+  if (act === 'cp-open') return CP.abrir(v, Number(b.dataset.i) || 0);
   if (act.startsWith('cp-')) return CP.click(act, b);
 
   // Mis rutinas › Modificar (borrador de la IA)
@@ -2581,6 +2644,13 @@ root.addEventListener('click', async (e) => {
       if (!kg) { const el = document.querySelector('[data-calkg]'); if (el) el.focus(); }
       return;
     }
+    if (act === 'live-discos') { // calculadora de discos: peso escrito (o el de la última vez) y barra de 20 kg si el ejercicio es de barra
+      const ex = Lv.ex[Number(v)]; if (!ex) return;
+      const x = E.ejercicio(ex.n), kg = pesoObjetivo(ex), dobla = !ex.uni && cargaLive(ex) === 'por_lado';
+      const total = Math.round((dobla ? kg * 2 : kg) * 100) / 100;
+      st.discos = { i: Number(v), n: ex.n, total: total ? discKg(total) : '', barra: x && x.eq === 'barra' ? 20 : 0, nota: dobla && kg ? `${discKg(kg)} kg por lado` : '' };
+      return render();
+    }
     if (act === 'live-w-del') { const ex = Lv.ex[Number(v)]; ex.s = ex.s.filter((q) => !q.w); if (!ex.s.length) ex.s.push({ kg: '', reps: '', done: false, rir: '', dropset: false }); liveSave(); return render(); }
     if (act === 'live-drop') { if (!esPro()) { toast('Función Pro'); return; } const [i, j] = v.split('.').map(Number), q = Lv.ex[i].s[j]; q.dropset = !q.dropset; liveSave(); return render(); }
     if (act === 'live-sup') { if (!esPro()) { toast('Función Pro'); return; } const ex = Lv.ex[Number(v)]; if (Number(v) < Lv.ex.length - 1) ex.superset = !ex.superset; liveSave(); return render(); }
@@ -2616,7 +2686,12 @@ root.addEventListener('click', async (e) => {
   if (act === 'fin-ok' && st.liveFin && st.live) return void liveFinish();
   if (act === 'lim-close') { st.limite = null; return render(); }
   if (act === 'lim-pro') return abrirSuscripcion();
+  if (act === 'rec-pro') return abrirSuscripcion();
   if (act === 'cal-close') { st.calentar = null; return render(); }
+  if (act === 'disc-close') { st.discos = null; return render(); }
+  if (st.discos && act === 'disc-step') { const t = num(st.discos.total), n = Math.min(600, Math.max(0, Math.round(((t >= 0 ? t : 0) + Number(v)) * 100) / 100)); st.discos.total = discKg(n); return render(); }
+  if (st.discos && act === 'disc-barra') { const b = Number(v); if (DISC_BARRAS.includes(b)) st.discos.barra = b; return render(); }
+  if (st.discos && act === 'disc-disp') { const d = Number(v); if (!DISC_TODOS.includes(d)) return; const a = discDisp(), nx = a.includes(d) ? a.filter((q) => q !== d) : [...a, d]; lsSet(DISC_CLAVE, JSON.stringify(DISC_TODOS.filter((q) => nx.includes(q)))); return render(); }
   if (act === 'cal-n' && st.calentar) {
     const c = st.calentar, kg = num(c.kg), n = Number(v);
     if (!(kg > 0 && kg <= 600)) { c.msg = 'Escribe un peso de trabajo entre 1 y 600 kg.'; render(); const el = document.querySelector('[data-calkg]'); if (el) el.focus(); return; }
@@ -2713,6 +2788,7 @@ root.addEventListener('input', (e) => {
   if (st.lib && st.lib.crear && t.dataset.libc) { st.lib.crear[t.dataset.libc] = t.value; return; }
   if (st.rw && t.dataset.rw) { st.rw[t.dataset.rw] = t.value; const nb = document.querySelector('[data-rwnext]'); if (nb) nb.disabled = !rwCanNext(); const chs = document.querySelectorAll('[data-act=rw-dep-otro]'); chs.forEach((c) => c.classList.toggle('on', c.dataset.v === t.value)); return; }
   if (st.calentar && t.dataset.calkg != null) { st.calentar.kg = t.value; return; }
+  if (st.discos && t.dataset.discTotal != null) { st.discos.total = t.value; discosPintar(); return; } // sin render: no se pierde el foco
   if (st.postEnt && t.dataset.pe) { if (!PE_PREG.some((q) => q[0] === t.dataset.pe)) return; t.value = t.value.slice(0, PE_MAX); st.postEnt.t[t.dataset.pe] = t.value; postEntBoton(); return; }
   if (st.liveFin && t.dataset.fin) { t.value = t.value.replace(/\D/g, '').slice(0, 2); st.liveFin[t.dataset.fin] = t.value; return; }
   if (st.live && t.dataset.nota != null) { st.notaBorr = t.value; return; } // borrador de la nota: sin render
@@ -2851,5 +2927,5 @@ function recuperacionHTML() {
     ${esPro() ? cuerpo : muro}</section>`;
 }
 function cuerpoSheetHTML() { return C3.sheetHTML(st.cuerpo3d, sexoCuerpo(), datosCuerpo(), todayISO()); }
-  return { exViewHTML, finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, compartirSheetHTML: CP.sheetHTML, pintarCompartir: CP.pintar, limiteSheetHTML, calentarSheetHTML, moverSheetHTML, rutNuevosSheetHTML, postEntSheetHTML, rutModSheetHTML, dia7SheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML };
+  return { exViewHTML, finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, compartirSheetHTML: CP.sheetHTML, pintarCompartir: CP.pintar, limiteSheetHTML, calentarSheetHTML, discosSheetHTML, moverSheetHTML, rutNuevosSheetHTML, postEntSheetHTML, rutModSheetHTML, dia7SheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML };
 }
