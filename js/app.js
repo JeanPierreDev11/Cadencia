@@ -103,7 +103,7 @@ function render() {
   C3.enganchar(root);
   RG.pintarMapas(root);
   if (st.view === 'main' && st.compartir) pintarCompartir();
-  document.body.classList.toggle('noscroll', !!(st.limite || st.liveFin || st.rutNuevos || st.rmod || st.compartir || st.calentar || st.discos || st.moverSel || st.dia7 || st.pf || st.proInfo || st.codigo || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.exView || st.lib || st.food || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.resumen || st.postEnt || st.cuerpo3d || st.legal || st.del || st.pro || st.proWelcome || st.recAsk));
+  document.body.classList.toggle('noscroll', !!(st.limite || st.liveFin || st.rutNuevos || st.rmod || st.compartir || st.calentar || st.discos || st.moverSel || st.dia7 || st.pf || st.proInfo || st.codigo || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.exView || st.lib || st.food || st.checkin || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.resumen || st.postEnt || st.cuerpo3d || st.legal || st.del || st.pro || st.proWelcome || st.recAsk));
 }
 
 /* ================================================================== */
@@ -186,7 +186,7 @@ async function borrarCuenta() {
     await api.deleteAccount(D.pass);
     // Limpia lo que la app guarda en este móvil (salvo el tema claro u oscuro).
     try { Object.keys(localStorage).filter((k) => k.startsWith('cadencia-') && k !== 'cadencia-theme' && k !== 'cadencia-local-v1').forEach((k) => localStorage.removeItem(k)); } catch (e) { /* nada */ }
-    st.del = null; st.modoSel = null; st.resumen = null; st.postEnt = null; st.compartir = null; st.rutNuevos = null; st.rmod = null; st.cuerpo3d = null; st.limite = null; st.calentar = null; st.discos = null; st.moverSel = null; st.dia7 = null; st.liveFin = null; st.live = null; st.tab = 'inicio'; st.authMode = 'login';
+    st.del = null; st.modoSel = null; st.resumen = null; st.postEnt = null; st.compartir = null; st.rutNuevos = null; st.rmod = null; st.cuerpo3d = null; st.limite = null; st.calentar = null; st.discos = null; st.moverSel = null; st.dia7 = null; st.checkin = null; st.liveFin = null; st.live = null; st.tab = 'inicio'; st.authMode = 'login';
     obAnonBorrar();
     st.authMsg = { ok: true, text: 'Tu cuenta y todos tus datos se han borrado.' };
     if (st.user) enter(null); else render();

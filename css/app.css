@@ -2432,6 +2432,46 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .rec-pro-btn:focus-visible { outline: 2px solid var(--brand-yellow); outline-offset: 2px; }
 @media (min-width: 1024px) { .main:has(> .rec-acc) > .rec-pro { grid-column: 1 / -1; } }
 
+/* 2026-11-25 · Fase B paso 3 (72): check-in semanal de calorías adaptativas (Nutrición).
+   Superficie y texto con variables del tema (claro y oscuro); acento y radios con tokens de brand-ui.md.
+   Un solo foco amarillo: el borde de la fila «listo» en Nutrición y el botón principal en la hoja. */
+.ci-wrap { margin: 0 0 12px; }
+.ci { margin: 0; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); color: var(--ink); }
+.ci.is-listo { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 12px; align-items: start; padding: 14px; border-color: var(--brand-yellow); }
+.ci-ico { display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--r-sm); background: var(--surface2); color: var(--ink); }
+.ci-ico .ic { width: 20px; height: 20px; vertical-align: 0; }
+.ci-t { display: grid; gap: 3px; min-width: 0; }
+.ci-t b { font-size: 15px; }
+.ci-t span { font-size: 13px; line-height: 1.4; color: var(--muted); }
+.ci-btn { grid-column: 1 / -1; min-height: 44px; padding: 0 14px; border: 1px solid var(--muted); border-radius: var(--r-sm); background: transparent; color: var(--ink); font: inherit; font-size: 13px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; cursor: pointer; }
+.ci-linea { padding: 12px 14px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.ci-linea b { color: var(--ink); }
+.ci-btn:focus-visible, .ci-aj .link:focus-visible, .ci-reset:focus-visible { outline: 2px solid var(--brand-yellow); outline-offset: 2px; }
+/* Ajuste activo dentro de «Tu plan de calorías» */
+.ci-aj { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 8px 12px; border: 1px solid var(--line); border-left: 2px solid var(--brand-yellow-muted); border-radius: var(--r-sm); background: var(--surface2); }
+.ci-aj p { margin: 0; font-size: 13px; line-height: 1.4; color: var(--ink); }
+.ci-aj .link, .ci-reset { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.ci-aj .link { min-height: 44px; font-size: 13px; }
+/* Hoja «Check-in semanal»: datos primero, propuesta, botones */
+.ci-sheet { display: flex; flex-direction: column; overflow: hidden; }
+.ci-body { flex: 1; min-height: 0; overflow-y: auto; display: grid; gap: 8px; align-content: start; padding-bottom: 12px; }
+.ci-f, .ci-prop { display: grid; gap: 2px; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+.ci-l { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.ci-f > b { font-size: 22px; font-weight: 800; color: var(--ink); }
+.ci-s { font-size: 13px; line-height: 1.4; color: var(--muted); }
+.ci-prop { gap: 6px; }
+.ci-k { margin: 0; font-size: 15px; color: var(--ink); }
+.ci-k .num { font-size: 20px; }
+.ci-k b.num { font-size: 26px; font-weight: 800; }
+.ci-d { margin-left: 4px; font-size: 14px; font-weight: 700; color: var(--ink); }
+.ci-mac { margin: 0; font-size: 14px; font-weight: 700; color: var(--ink); }
+.ci-why { margin: 0; font-size: 14px; line-height: 1.45; color: var(--muted); }
+.ci-why b { color: var(--ink); }
+.ci-reset { justify-self: start; min-height: 44px; font-size: 13px; }
+.ci-foot { display: grid; gap: 8px; }
+.ci-sheet .ci-main { background: var(--brand-yellow); color: var(--text-on-brand); border-radius: var(--r-sm); }
+.ci-sheet .ci-foot .btn.ghost { border-radius: var(--r-sm); }
+
 @media (min-width: 1024px) {
   :root { --sb-w: 104px; --col: 800px; }
 

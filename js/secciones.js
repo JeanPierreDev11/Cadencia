@@ -288,8 +288,81 @@ export function crearSecciones(ctx) {
         <p class="small muted acc-note">Toca un día para ver el entreno que hiciste.</p>
       </div></div>
     </section>`;
+    h += checkinHTML();
     h += planCard();
     return h;
+  }
+
+  /* ----- Check-in semanal (calorías adaptativas) ----- */
+  // Usa lo que Nutrición ya tiene en memoria (st.weights y los últimos 7 días de st.dias): ninguna lectura extra a Firestore.
+  function comidas7d(t) {
+    const out = [];
+    for (let i = 0; i < 7; i++) { const x = E.addDays(t, -i), l = totales(x); if (l.n) out.push({ fecha: x, kcal: l.k }); }
+    return out;
+  }
+  function checkinEval() {
+    const p = P(), kg = currentKg(), t = todayISO();
+    if (!p.alturaCm || !kg) return null;
+    return CAL.evaluarCheckin({ perfil: p, pesos: st.weights || [], comidas7d: comidas7d(t), hoyISO: t, dias: ((rutinaOf() || {}).dias || []).length, actividad: (p.nutri || {}).actividad || 'auto', kg });
+  }
+  function checkinHTML() {
+    const r = checkinEval();
+    if (!r) return '';
+    if (r.estado === 'listo') {
+      return `<section class="ci-wrap" aria-label="Check-in semanal"><div class="ci is-listo">
+        <span class="ci-ico" aria-hidden="true">${I.trend}</span>
+        <div class="ci-t"><b>Check-in semanal</b><span>Tienes ${r.pesajesAct + r.pesajesAnt} pesajes en 2 semanas y ${r.diasComida} días de comidas. Compara tu objetivo con tu ritmo real.</span></div>
+        <button type="button" class="ci-btn" data-act="ci-open" aria-haspopup="dialog">Revisar check-in semanal</button>
+      </div></section>`;
+    }
+    if (r.estado === 'faltan_datos') {
+      const m = r.min, de = (x, n) => `${Math.min(x, n)}/${n}`;
+      return `<section class="ci-wrap" aria-label="Check-in semanal"><p class="ci ci-linea"><b>Check-in semanal</b> · Pesajes: ${de(r.pesajesAct, m.pesajes)} esta semana y ${de(r.pesajesAnt, m.pesajes)} la anterior · Comidas: ${de(r.diasComida, m.dias)} días con 800 kcal o más</p></section>`;
+    }
+    const cuando = r.diasRestantes === 1 ? 'mañana' : `en ${r.diasRestantes} días`;
+    return `<section class="ci-wrap" aria-label="Check-in semanal"><p class="ci ci-linea"><b>Check-in semanal</b> · Próximo check-in ${cuando} (${esc(fmtDate(r.proximoISO, { day: 'numeric', month: 'short' }).replace('.', '')).replace(/ /g, '&nbsp;')}).</p></section>`;
+  }
+  function checkinSheet() {
+    const C = st.checkin, r = C.r, a = r.planActual, b = r.planNuevo, hay = r.diffKcal !== 0;
+    const rit = (x) => { const v = Math.round(x * 100) / 100; return v ? `${sgn(v, 2)} kg/sem` : '0 kg/sem'; };
+    const fila = (lbl, val, sub) => `<div class="ci-f"><span class="ci-l">${lbl}</span><b class="num">${val}</b><span class="ci-s">${sub}</span></div>`;
+    const mant = `Se mantiene tu objetivo: <b class="num">${nf(a.kcal)} kcal</b> al día.`;
+    let prop;
+    if (hay) {
+      prop = `<p class="ci-k"><span class="num">${nf(a.kcal)}</span> → <b class="num">${nf(b.kcal)}</b> kcal/día <span class="ci-d num">${sgn(r.diffKcal)} kcal</span></p>
+        <p class="ci-mac num">P ${nf(b.protG)} g · H ${nf(b.carbG)} g · G ${nf(b.fatG)} g</p>
+        <p class="ci-why">Con lo que registras, tu gasto real queda ${r.paso < 0 ? 'por debajo' : 'por encima'} del calculado. ${r.paso < 0 ? 'Bajamos' : 'Subimos'} el objetivo la mitad de la diferencia, como máximo 150 kcal por semana.</p>`;
+    } else if (r.motivo === 'suelo') {
+      prop = `<p class="ci-why">Tocaría bajar ${nf(Math.abs(r.paso))} kcal, pero ya estás en tu mínimo de seguridad. ${mant}</p>`;
+    } else if (r.motivo === 'tope') {
+      prop = `<p class="ci-why">Ya tienes el ajuste máximo (${sgn(r.ajusteActual)} kcal). ${mant}</p>`;
+    } else {
+      prop = `<p class="ci-why">Tu ritmo va alineado con lo previsto. ${mant}</p>`;
+    }
+    const foot = hay
+      ? `<button type="button" class="btn block ci-main" data-act="ci-apply" ${C.busy ? 'disabled' : ''}>Aplicar ajuste</button><button type="button" class="btn ghost block" data-act="ci-keep" ${C.busy ? 'disabled' : ''}>Mantener como está</button>`
+      : `<button type="button" class="btn block ci-main" data-act="ci-keep" ${C.busy ? 'disabled' : ''}>Confirmar y seguir igual</button>`;
+    return `<div class="sheet-back" data-act="ci-close"></div>
+    <div class="sheet short ci-sheet" role="dialog" aria-modal="true" aria-label="Check-in semanal">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><span style="width:44px"></span><h2>Check-in semanal</h2><button type="button" class="iconbtn" data-act="ci-close" aria-label="Cerrar">${I.close}</button></div>
+      <div class="sheet-list ci-body">
+        ${fila('Peso medio', `${nf(r.mediaPesoAnt, 1)} → ${nf(r.mediaPesoAct, 1)} kg`, `Ritmo real ${rit(r.cambioSemKg)} · objetivo ${a.modo === 'mantenimiento' ? 'mantener' : rit(r.ritmoObjKg)}`)}
+        ${fila('Calorías registradas', `${nf(r.mediaKcal)} kcal/día`, `Media de ${r.diasComida} días con 800 kcal o más.`)}
+        ${fila('Gasto real estimado', `${nf(r.tdeeReal)} kcal/día`, `Calculado: ${nf(a.tdee)} kcal.`)}
+        <div class="ci-prop"><span class="ci-l">${hay ? 'Propuesta' : 'Resultado'}</span>${prop}</div>
+        ${r.ajusteActual ? `<button type="button" class="link ci-reset" data-act="ci-reset">Restablecer cálculo base</button>` : ''}
+      </div>
+      <div class="sheet-foot ci-foot">${foot}</div>
+    </div>`;
+  }
+  // Guarda el check-in (o el restablecimiento) y cierra la hoja; si falla, la hoja sigue abierta.
+  async function guardarCheckin(data, msg) {
+    if (st.checkin) { st.checkin.busy = true; render(); }
+    try { await api.saveProfile(uid(), data); } catch (e) { if (st.checkin) st.checkin.busy = false; toast(errorText(e)); render(); return; }
+    Object.assign(st.profile, data);
+    st.checkin = null; st.nPlanOpen = true;
+    render(); toast(msg(plan()));
   }
 
   function planCard() {
@@ -298,11 +371,13 @@ export function crearSecciones(ctx) {
     const pl = PL.pl;
     const pct = (x) => Math.round((x / (PL.tdee || 1)) * 100), rit = PL.c.ritmo && Math.abs(pl.rateKgPerWeek - PL.c.ritmo) < 0.02 || (PL.c.ritmo && PL.surplus) ? ` Es tu ritmo de ${nf(PL.c.ritmo, 2)} kg por semana (lo cambias en Perfil › Detalles personales).` : '';
     const modo = pl.mode === 'deficit' ? `Déficit del ${pct(pl.dailyDeficit)} % (${nf(pl.dailyDeficit)} kcal al día): unos ${nf(pl.rateKgPerWeek, 2)} kg menos por semana.${rit}` : PL.surplus ? `Superávit del ${pct(PL.surplus)} % (${nf(PL.surplus)} kcal al día) para ganar músculo: unos ${nf((PL.surplus * 7) / 7700, 2)} kg más por semana.${rit}` : 'Mantenimiento: comer lo que gastas.';
+    const aj = PL.c.ajusteKcal || 0;
     return `<details class="card plan"${st.nPlanOpen ? ' open' : ''}>
       <summary><h2>Tu plan de calorías</h2></summary>
+      ${aj ? `<div class="ci-aj"><p>Ajuste adaptativo: <b class="num">${sgn(aj)} kcal</b> sobre tu gasto calculado (${nf(PL.c.tdeeBase)} kcal).</p><button type="button" class="link" data-act="ci-reset">Restablecer base</button></div>` : ''}
       <p>${modo}${pl.weeksToGoal ? ` Llegarías a ${nf(P().pesoObjetivo, 1)} kg en unas <b>${nf(pl.weeksToGoal)} semanas</b>.` : ''}</p>
       ${bul(PL.warnings, 'warn')}
-      <div class="stats">${stat('Metabolismo basal', nf(pl.bmr), 'kcal', esc(pl.bmrMethod || ''))}${stat('Gasto diario', nf(PL.tdee), 'kcal', `basal × ${nf(PL.c.factor, 3)}`)}</div>
+      <div class="stats">${stat('Metabolismo basal', nf(pl.bmr), 'kcal', esc(pl.bmrMethod || ''))}${stat('Gasto diario', nf(PL.tdee), 'kcal', `basal × ${nf(PL.c.factor, 3)}${aj ? ` ${sgn(aj)} de ajuste` : ''}`)}</div>
       <div class="field"><span>Nivel de actividad</span>${seg('n-neat', [['auto', 'Auto'], ['sedentario', 'Sedent.'], ['ligero', 'Ligera'], ['moderado', 'Moder.'], ['activo', 'Activa'], ['muy_activo', 'Muy']], n.actividad || 'auto', 'Nivel de actividad')}<small>${esc(CAL.NIVELES[PL.c.nivel].t)}: ${esc(CAL.NIVELES[PL.c.nivel].d.toLowerCase())}${n.actividad && n.actividad !== 'auto' ? '' : ' (según los días de tu rutina)'}.</small></div>
     </details>`;
   }
@@ -1080,6 +1155,27 @@ export function crearSecciones(ctx) {
         return true;
       }
       case 'n-copiar': { const d = st.nDate || todayISO(); const prev = dia(E.addDays(d, -1)).items.map((x) => ({ ...x, id: nid('f') })); guardarDia(d, prev); toast(`${prev.length} alimentos copiados`); return true; }
+      case 'ci-open': {
+        const r = checkinEval();
+        st.checkin = r && r.estado === 'listo' ? { r, busy: false } : null;
+        render(); return true;
+      }
+      case 'ci-close': st.checkin = null; render(); return true;
+      case 'ci-apply': case 'ci-keep': {
+        const C = st.checkin;
+        if (!C || C.busy) return true;
+        const r = C.r, aplicar = act === 'ci-apply' && r.diffKcal !== 0;
+        const nutri = CAL.nutriTrasCheckin(P().nutri, { hoyISO: todayISO(), kcalAntes: r.planActual.kcal, kcalDespues: aplicar ? r.planNuevo.kcal : r.planActual.kcal, ajusteKcal: aplicar ? r.nuevoAjuste : r.ajusteActual, mediaPeso: r.mediaPesoAct });
+        const data = aplicar ? { nutri, calorias: CAL.resumen({ ...P(), nutri }, currentKg()) } : { nutri };
+        await guardarCheckin(data, (PL) => (aplicar ? `Objetivo actualizado: ${nf(PL ? PL.base : r.planNuevo.kcal)} kcal al día.` : 'Check-in guardado. El próximo, en 7 días.'));
+        return true;
+      }
+      case 'ci-reset': {
+        if (st.checkin && st.checkin.busy) return true;
+        const nutri = { ...(P().nutri || {}), ajusteKcal: 0 };
+        await guardarCheckin({ nutri, calorias: CAL.resumen({ ...P(), nutri }, currentKg()) }, (PL) => `Cálculo base restablecido${PL ? `: ${nf(PL.base)} kcal al día` : ''}.`);
+        return true;
+      }
       case 'n-neat': {
         st.nPlanOpen = true;
         const nutri = { ...(P().nutri || {}), actividad: v };
@@ -1817,7 +1913,7 @@ export function crearSecciones(ctx) {
     render(); toast('Objetivo guardado');
   }
 
-  function sheet() { return st.proWelcome ? proWelcomeSheet() : st.pro ? proSheet() : st.food ? foodSheet() : st.mealDet != null ? mealDetSheet() : st.tl ? tlSheet() : st.meta ? metaSheet() : ''; }
+  function sheet() { return st.proWelcome ? proWelcomeSheet() : st.pro ? proSheet() : st.checkin ? checkinSheet() : st.food ? foodSheet() : st.mealDet != null ? mealDetSheet() : st.tl ? tlSheet() : st.meta ? metaSheet() : ''; }
   function view(tab) {
     if (tab === 'nutricion') return viewNutricion();
     if (tab === 'bici') return viewBici();
