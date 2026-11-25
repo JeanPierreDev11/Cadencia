@@ -1594,6 +1594,64 @@ export function progresionEjercicio(entrenos, nombreEjercicio, rango = 'todo', {
   };
 }
 
+/* ---------- récords personales (79) ---------- */
+// Marcas de fuerza de una lista de entrenos, por ejercicio (claveEj) y por lo que significa el kg: «por lado» (carga por lado o
+// unilateral) o total. Las dos no se comparan: pasar de apuntar 20 kg por lado a 40 kg en total no es un récord.
+function marcasFuerza(entrenos) {
+  const map = new Map();
+  for (const w of entrenos) {
+    for (const e of w.ejercicios || []) {
+      if (exCardio(e) || !claveEj(e.n)) continue;
+      const porLado = !!e.uni || cargaDe(e) === 'por_lado', clave = `${claveEj(e.n)}|${porLado ? 'lado' : 'total'}`;
+      for (const s of seriesHechas(e)) {
+        for (const l of (e.uni ? ladosSerie(s) : [{ kg: Number(s.kg) || 0, reps: Number(s.reps) || 0 }])) { // unilateral: cuenta el mejor de los dos lados
+          if (!(l.reps > 0)) continue;
+          let m = map.get(clave);
+          if (!m) map.set(clave, (m = { ejercicio: canon(e.n), porLado, orm: null, peso: null, mejor: null }));
+          const dato = { kg: l.kg, reps: l.reps, fecha: w.fecha };
+          const v = orm1(l.kg, l.reps);
+          if (v != null && (!m.orm || v > m.orm.v)) m.orm = { ...dato, v };
+          if (l.kg > 0 && (!m.peso || l.kg > m.peso.kg || (l.kg === m.peso.kg && l.reps > m.peso.reps))) m.peso = dato;
+          const score = l.kg > 0 ? l.kg * (1 + l.reps / 30) : l.reps; // misma «mejor serie» que Récords
+          if (!m.mejor || score > m.mejor.score) m.mejor = { ...dato, score };
+        }
+      }
+    }
+  }
+  return map;
+}
+const textoMarca = (m, porLado) => (m.kg > 0 ? `${coma(m.kg)} kg${porLado ? ' por lado' : ''} × ${m.reps}` : `${m.reps} reps`);
+
+// Récords batidos en `entrenoActual` frente a `entrenosPrevios` (el propio entreno se excluye por id: editarlo no lo compara consigo
+// mismo). Un ejercicio sin ninguna serie anterior no da récord. Dos criterios: 1RM estimado (series de 1 a 12 reps, +0,5 kg o más)
+// y peso máximo. Un mismo ejercicio puede batir los dos.
+export function detectarNuevosPR(entrenoActual, entrenosPrevios) {
+  if (!entrenoActual) return [];
+  const antes = marcasFuerza((entrenosPrevios || []).filter((w) => w && w !== entrenoActual && (entrenoActual.id == null || w.id !== entrenoActual.id)));
+  const out = [];
+  for (const [clave, ahora] of marcasFuerza([entrenoActual])) {
+    const a = antes.get(clave);
+    if (!a) continue;
+    const add = (tipo, m, nuevo, viejo) => out.push({
+      ejercicio: ahora.ejercicio, tipo, valorNuevo: r1(nuevo), valorAnterior: r1(viejo), mejoraAbs: r1(r1(nuevo) - r1(viejo)),
+      serieTexto: textoMarca(m, ahora.porLado), fecha: entrenoActual.fecha, kg: m.kg, reps: m.reps, porLado: ahora.porLado,
+    });
+    if (ahora.orm && a.orm && ahora.orm.v - a.orm.v >= 0.5 - 1e-9) add('1RM est.', ahora.orm, ahora.orm.v, a.orm.v);
+    if (ahora.peso && a.peso && ahora.peso.kg > a.peso.kg + 1e-9) add('Peso máximo', ahora.peso, ahora.peso.kg, a.peso.kg);
+  }
+  return out;
+}
+
+// La mejor serie de siempre de un ejercicio (para compartirla desde Récords), o null. Si hay marcas «por lado» y «total», la de la
+// última sesión manda: es como lo apunta ahora.
+export function mejorMarca(entrenos, nombreEjercicio) {
+  const clave = claveEj(nombreEjercicio), propias = [...marcasFuerza(entrenos || [])].filter(([k]) => k.split('|')[0] === clave).map(([, m]) => m);
+  if (!propias.length) return null;
+  const ultima = (m) => (entrenos || []).reduce((a, w) => (w.fecha > a && (w.ejercicios || []).some((e) => claveEj(e.n) === clave && (!!e.uni || cargaDe(e) === 'por_lado') === m.porLado && seriesHechas(e).length) ? w.fecha : a), '');
+  const m = propias.sort((a, b) => ultima(b).localeCompare(ultima(a)))[0];
+  return { ejercicio: m.ejercicio, tipo: null, kg: m.mejor.kg, reps: m.mejor.reps, porLado: m.porLado, serieTexto: textoMarca(m.mejor, m.porLado), fecha: m.mejor.fecha };
+}
+
 /* ---------- racha semanal y resumen mensual (78) ---------- */
 // Semanas naturales de lunes a domingo en la hora local del dispositivo. Cuenta cualquier sesión guardada
 // (fuerza, cardio, bici u otro) y cada día una sola vez.

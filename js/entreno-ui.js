@@ -10,7 +10,7 @@ import { minutosSegHTML } from './onboarding.js';
 import { analizarEntreno, diagnosticoCoach } from './coach.js';
 import * as C3 from './cuerpo.js';
 import { pautas } from './tecnica.js';
-import { crearCompartir, PLANTILLAS } from './compartir.js';
+import { crearCompartir, PLANTILLAS, tarjetasPR } from './compartir.js';
 
 export function crearEntreno(ctx) {
   const { st, root } = ctx;
@@ -419,7 +419,7 @@ function progSheetHTML() {
   return `<div class="sheet-back" data-act="prog-close"></div>
     <div class="sheet prog-sheet" role="dialog" aria-modal="true" aria-label="Progresión: ${esc(nombre)}">
       <div class="sheet-grab"></div>
-      <div class="sheet-head"><h2>${esc(nombre)}</h2><button type="button" class="iconbtn" data-act="prog-close" aria-label="Cerrar">${I.close}</button></div>
+      <div class="sheet-head"><h2>${esc(nombre)}</h2>${E.mejorMarca(st.workouts, st.progEj.n) ? `<button type="button" class="iconbtn prog-share" data-act="pr-open" data-n="${esc(st.progEj.n)}" aria-label="Compartir récord de ${esc(nombre)}">${I.share}</button>` : ''}<button type="button" class="iconbtn" data-act="prog-close" aria-label="Cerrar">${I.close}</button></div>
       <div class="prog-body">${progBodyHTML()}</div>
     </div>`;
 }
@@ -606,7 +606,7 @@ function wkRecords() {
   for (const [id, t] of REC_GRUPOS) grupos.set(id, { t, filas: [] });
   grupos.set('otros', { t: 'Otros', filas: [] });
   for (const e of r.gym) {
-    grupos.get(grupoRecord(e.n)).filas.push(`<button type="button" class="row rec-row rec-prog" data-act="prog-open" data-n="${esc(e.n)}"><span class="rec-t">${esc(cap(e.n))}<br><span class="muted small">${fecha(e.best.fecha)} · ${e.veces} ${e.veces === 1 ? 'sesión' : 'sesiones'}</span></span><span class="rec-v"><b class="nowrap num">${esc(e.best.kg > 0 ? `${nf(e.best.kg, 1)} kg × ${e.best.reps}` : `${e.best.reps} reps`)}</b>${ormSub(e)}</span><span class="rec-ir" aria-hidden="true">${I.chev}</span></button>`);
+    grupos.get(grupoRecord(e.n)).filas.push(`<div class="rec-fila"><button type="button" class="row rec-row rec-prog" data-act="prog-open" data-n="${esc(e.n)}"><span class="rec-t">${esc(cap(e.n))}<br><span class="muted small">${fecha(e.best.fecha)} · ${e.veces} ${e.veces === 1 ? 'sesión' : 'sesiones'}</span></span><span class="rec-v"><b class="nowrap num">${esc(e.best.kg > 0 ? `${nf(e.best.kg, 1)} kg × ${e.best.reps}` : `${e.best.reps} reps`)}</b>${ormSub(e)}</span><span class="rec-ir" aria-hidden="true">${I.chev}</span></button><button type="button" class="rec-share" data-act="pr-open" data-n="${esc(e.n)}" aria-label="Compartir récord de ${esc(cap(e.n))}">${I.share}</button></div>`);
   }
   const cardio = (r.cardio || []).map((c) => {
     const p = [];
@@ -1760,12 +1760,15 @@ function resumenSheetHTML() {
   // Un solo foco amarillo: sin análisis, el principal es «Solicitar Análisis AI» (y Compartir va de secundario); con el análisis ya hecho, Compartir pasa a principal
   // y abre la plantilla vertical, la que lleva la nota del Coach AI.
   const conAi = !!aiDe(w);
+  const nPR = tarjetasPR(st.ultimosPR).length; // récords batidos en este entreno (79)
+  const bloquePR = nPR ? `<section class="sum-pr" aria-label="Récords personales"><p>Has batido ${nPR} ${nPR === 1 ? 'récord personal' : 'récords personales'}</p><button type="button" data-act="pr-share-last">${I.share}<span>Compartir récord</span></button></section>` : '';
   return `<div class="sheet-back" data-act="sum-close"></div>
     <div class="sheet short ai-sheet" role="dialog" aria-modal="true" aria-label="Resumen del entreno">
       <div class="sheet-grab"></div>
       <div class="sheet-head"><span style="width:36px"></span><h2>Entreno guardado</h2><button type="button" class="iconbtn" data-act="sum-close" aria-label="Cerrar">${I.back}</button></div>
       <div class="sum-pro ai-body">
-        <span class="sum-lbl">${esc(r.nombre)}${r.record ? ' · ¡Nuevo récord!' : ''}</span>
+        <span class="sum-lbl">${esc(r.nombre)}${r.record && !nPR ? ' · ¡Nuevo récord!' : ''}</span>
+        ${bloquePR}
         <div class="ai-stats"><span><b class="num">${nf(r.vol)}</b> kg movidos</span><span><b class="num">${r.sets}</b> ${r.sets === 1 ? 'serie' : 'series'}</span><span><b class="num">${esc(fmtDur(r.min))}</b></span></div>
         ${aiHTML(w)}
         ${w && puedeCompartir(w) ? `<button type="button" class="btn ${conAi ? '' : 'quiet'} block" data-act="cp-open" data-v="${esc(w.id)}"${conAi ? ` data-i="${CP_NOTA}"` : ''}>${I.share} Compartir entreno</button>` : ''}
@@ -2444,17 +2447,19 @@ async function liveFinish() {
     // Pro: volumen total movido (peso × reps de todas las series; ×2 en unilateral y en dos mancuernas, igual que el contador en vivo)
     const volTotal = Math.round(E.volumenDe(o)); // los bloques de cardio no suman volumen
     const record = E.beatsRecord(before, after);
+    const prs = editado ? [] : E.detectarNuevosPR(o, resto); // (79) `resto` = historial anterior a guardar
+    st.ultimosPR = prs;
     st.live = null; st.liveMin = false; liveSave();
     st.tab = 'entreno'; lsSet('cadencia-tab', 'entreno');
     if (editado) st.wkHist = true; else { st.wkTab = 'semana'; lsSet('cadencia-wktab', 'semana'); }
     st.wkDia = o.fecha; st.wkSem = E.mondayOf(o.fecha) < E.mondayOf(todayISO()) ? E.mondayOf(o.fecha) : null; // si se registró en una semana anterior, se muestra esa
     if (esPro() && !editado) st.resumen = { id: o.id, nombre: o.nombre, vol: volTotal, sets: nSets, min, record };
     // «Compartir Entreno» se abre solo SIN Pro. Con Pro manda «Entreno guardado» (st.resumen): desde ahí se comparte, mejor con la nota del Coach AI ya pedida.
-    if (!editado && nSets > 0 && !st.resumen) st.compartir = { id: o.id, i: 0, fondo: 'oscuro', menu: false };
+    if (!editado && nSets > 0 && !st.resumen) st.compartir = { id: o.id, i: 0, fondo: 'oscuro', menu: false, ...(prs.length ? { modo: 'pr', prs: tarjetasPR(prs), pr: 0 } : {}) }; // con récord nuevo, abre en «Récord (PR)»
     if (!editado) { const rn = ejerciciosNuevos(L, ejs); if (rn) st.rutNuevos = { ...rn, busy: false, msg: '' }; } // va ANTES que «Compartir» (primero de la cadena de hojas): ejercicios añadidos hoy → ¿a la rutina?
     if (!editado && nSets > 0 && postEntToca()) st.postEnt = postEntNuevo(); // cuestionario opcional de la beta: el último de la cadena de hojas, tras «Tu rutina», Compartir y el resumen Pro
     render(); window.scrollTo(0, 0);
-    toast(editado ? 'Entreno actualizado' : record ? '¡Nuevo récord personal!' : nSets ? `Entrenamiento guardado · ${nSets} ${nSets === 1 ? 'serie' : 'series'}` : 'Entrenamiento guardado');
+    toast(editado ? 'Entreno actualizado' : record || prs.length ? '¡Nuevo récord personal!' : nSets ? `Entrenamiento guardado · ${nSets} ${nSets === 1 ? 'serie' : 'series'}` : 'Entrenamiento guardado');
   } catch (e) { fail(`No se ha podido guardar: ${errorText(e)}`); }
 }
 
@@ -2579,6 +2584,9 @@ root.addEventListener('click', async (e) => {
   // compartir entreno (45): va el primero y antes de cualquier await (iOS exige que copiar/compartir/elegir foto salgan del gesto del toque)
   if (act === 'cp-open') return CP.abrir(v, Number(b.dataset.i) || 0);
   if (act.startsWith('cp-')) return CP.click(act, b);
+  // récord personal (79): desde Récords / progresión (la mejor serie de siempre) o desde «Entreno guardado» (los recién batidos)
+  if (act === 'pr-open') { const m = E.mejorMarca(st.workouts, b.dataset.n); if (m) CP.abrirPR([m]); return; }
+  if (act === 'pr-share-last') return CP.abrirPR(st.ultimosPR, st.resumen && st.resumen.id);
 
   // Mis rutinas › Modificar (borrador de la IA)
   if (act === 'rm-open') return rmAbrir(b.dataset.rid);

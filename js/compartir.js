@@ -1,4 +1,5 @@
 // Compartir entreno (45): modal «Compartir Entreno» con 4 plantillas (resumen, mapa muscular, minimalista 9:16 y lista de ejercicios).
+// (79) Además, tarjeta 9:16 de récord personal (modo 'pr').
 // La imagen se DIBUJA en un <canvas> 2D (nada de html2canvas ni de SVG con foreignObject: fallan en iOS Safari con fuentes y SVG),
 // así el PNG sale igual en cualquier navegador y el fondo transparente sale limpio.
 // Acciones (barra circular): Fondo (oscuro | transparente | foto de la galería), Copiar (portapapeles), Guardar (descarga) y Más (Web Share API).
@@ -347,7 +348,89 @@ export function cargarFuentes() {
   return fuentes;
 }
 
-/* ---------- controlador (estado en st.compartir = { id, i, fondo, menu }) ---------- */
+/* ---------- tarjeta 9:16 de récord personal (79) ---------- */
+// Colores de claude/brand-ui.md (un canvas no lee variables CSS).
+const BRAND = { bg: '#000000', surface: '#121212', borde: '#262626', amarillo: '#F2C116', ok: '#22C55E', texto: '#FFFFFF', secundario: 'rgba(255,255,255,.66)' };
+const PR_W = 1080, PR_H = 1920;
+const PR_TEMAS = {
+  oscuro: { ink: BRAND.texto, mute: BRAND.secundario, sombra: false },
+  transparente: { ink: BRAND.texto, mute: TEMAS.transparente.mute, sombra: TEMAS.transparente.sombra },
+};
+const kgTxt = (v) => { const r = Math.round(v * 10) / 10; return nf(r, Number.isInteger(r) ? 0 : 1); };
+
+// Una tarjeta por ejercicio: si en la sesión batió 1RM y peso máximo, manda el peso levantado de verdad.
+export function tarjetasPR(prs) {
+  const map = new Map();
+  for (const p of prs || []) {
+    const k = `${p.ejercicio}|${p.porLado}`;
+    if (!map.has(k) || p.tipo === 'Peso máximo') map.set(k, p);
+  }
+  return [...map.values()];
+}
+
+// Textos de la tarjeta. Con `tipo` viene de un entreno recién terminado; sin él, de Récords (la mejor serie de siempre).
+export function textosPR(p) {
+  const lado = p.porLado && p.kg > 0 ? ' · POR LADO' : '', orm = p.tipo === '1RM est.';
+  return {
+    etiqueta: p.tipo ? 'NUEVO RÉCORD PERSONAL' : 'RÉCORD PERSONAL',
+    nombre: p.ejercicio,
+    cifra: orm ? `${kgTxt(p.valorNuevo)} KG` : p.kg > 0 ? `${kgTxt(p.kg)} KG × ${p.reps}` : `${p.reps} REPS`,
+    sub: `${orm ? '1RM ESTIMADO' : p.tipo ? 'PESO MÁXIMO' : 'MEJOR SERIE'}${lado}`,
+    serie: orm ? `Serie: ${p.serieTexto}` : '',
+    insignia: p.tipo ? `+${kgTxt(p.mejoraAbs)} kg vs. marca anterior` : 'Mejor marca registrada',
+    fecha: p.fecha ? fmtDate(p.fecha, { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase() : '',
+  };
+}
+
+export function dibujarPR(p, { fondo = 'oscuro', escala = 1 } = {}) {
+  const c = document.createElement('canvas');
+  c.width = Math.round(PR_W * escala); c.height = Math.round(PR_H * escala);
+  const ctx = c.getContext('2d');
+  ctx.scale(escala, escala);
+  const oscuro = fondo !== 'transparente', t = PR_TEMAS[oscuro ? 'oscuro' : 'transparente'];
+  const { txt, titulo, sombra } = crearPincel(ctx, t, escala);
+  const caja = (x, y, w, h, borde, grosor, relleno) => { // radio 12 px en 1080 ≈ 4 px en pantalla (--r-md)
+    const r = 12;
+    ctx.beginPath(); ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+    if (relleno) { ctx.fillStyle = relleno; ctx.fill(); }
+    sombra(true); ctx.strokeStyle = borde; ctx.lineWidth = grosor; ctx.stroke(); sombra(false);
+  };
+  // Texto centrado que se encoge hasta caber en `max`
+  const centrado = (s, y, peso, px, color, { max = 840, esp = 0 } = {}) => {
+    let q = px; const ancho = () => { ctx.font = fnt(peso, q); return ctx.measureText(s).width + esp * Math.max(0, [...s].length - 1); };
+    while (ancho() > max && q > 24) q -= 2;
+    txt(s, PR_W / 2, y, { fuente: fnt(peso, q), color, align: 'center', esp });
+    return ancho();
+  };
+  const pastilla = (s, y, h, peso, px, color, borde, esp = 0) => { // texto con borde, centrado
+    ctx.font = fnt(peso, px);
+    const w = Math.min(880, ctx.measureText(s).width + esp * Math.max(0, [...s].length - 1) + 72);
+    caja((PR_W - w) / 2, y, w, h, borde, 4);
+    centrado(s, y + h / 2 + px * 0.36, peso, px, color, { max: w - 56, esp });
+  };
+  const x = textosPR(p);
+  if (oscuro) { ctx.fillStyle = BRAND.bg; ctx.fillRect(0, 0, PR_W, PR_H); caja(60, 220, 960, 1250, BRAND.borde, 3, BRAND.surface); }
+  const tams = [96, 82, 70, 58];
+  const alto = titulo(x.nombre, 0, 0, 860, { tams, maxLin: 3, seco: true }).alto;
+  const total = 88 + 96 + alto + 270 + 76 + (x.serie ? 64 : 0) + 64 + 100 + 96;
+  let y = 220 + Math.max(40, (1250 - total) / 2);
+  pastilla(x.etiqueta, y, 88, 800, 36, t.ink, BRAND.amarillo, 4); y += 88 + 96;
+  const tt = titulo(x.nombre, PR_W / 2, 0, 860, { tams, maxLin: 3, seco: true });
+  titulo(x.nombre, PR_W / 2, y + tt.px * 0.74, 860, { align: 'center', tams, maxLin: 3 }); y += alto;
+  centrado(x.cifra, y + 220, 800, 220, BRAND.amarillo); y += 270;
+  centrado(x.sub, y + 40, 800, 40, t.ink, { esp: 5 }); y += 76;
+  if (x.serie) { centrado(x.serie, y + 36, 700, 36, t.mute); y += 64; }
+  y += 64;
+  pastilla(x.insignia, y, 100, 700, 40, t.ink, BRAND.ok); y += 100;
+  if (x.fecha) centrado(x.fecha, y + 82, 700, 28, t.mute, { esp: 4 });
+  centrado(MARCA, 1590, 800, 60, t.ink, { esp: 16 });
+  centrado('@cadenciafit.app', 1664, 700, 36, t.ink);
+  centrado('cadenciafit.app', 1718, 700, 32, t.mute);
+  return c;
+}
+
+/* ---------- controlador (estado en st.compartir = { id, i, fondo, menu, modo?, prs?, pr? }; modo 'pr' = récord personal) ---------- */
 const ICO = (d) => `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const ICONOS = {
   fondo: ICO('<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-4.5 3.5 3L16 12l4 4.5"/>'),
@@ -375,37 +458,73 @@ export function crearCompartir(ctx) {
 
   function abrir(id, i = 0) { st.compartir = { id, i: i >= 0 && i < PLANTILLAS.length ? i : 0, fondo: 'oscuro', menu: false }; render(); }
   const cerrar = () => { st.compartir = null; render(); };
+  // Récord personal. Con `id` (el entreno recién terminado) se puede alternar con las plantillas del entreno.
+  function abrirPR(prs, id = null) {
+    const cards = tarjetasPR(prs);
+    if (!cards.length) return;
+    st.compartir = { id, i: 0, fondo: 'oscuro', menu: false, modo: 'pr', prs: cards, pr: 0 }; render();
+  }
+  const enPR = () => !!(st.compartir && st.compartir.modo === 'pr');
+  const tarjeta = () => st.compartir.prs[st.compartir.pr] || st.compartir.prs[0];
+  const tabsHTML = (c) => (c.prs && c.prs.length && workout() ? `<div class="opc-fila cp-modos" role="group" aria-label="Qué compartir">${[['entreno', 'Entreno'], ['pr', 'Récord (PR)']].map(([k, n]) => `<button type="button" data-act="cp-modo" data-v="${k}" aria-pressed="${(c.modo === 'pr') === (k === 'pr')}">${n}</button>`).join('')}</div>` : '');
+  const actHTML = (a, ico, n, extra = '') => `<button type="button" class="cp-act${extra}" data-act="${a}"><span class="cp-circ">${ICONOS[ico]}</span><span class="cp-lbl">${n}</span></button>`;
+  const hojaHTML = (nombre, titulo, cuerpo) => `<div class="sheet-back" data-act="cp-close"></div>
+    <div class="sheet short cp-sheet${enPR() ? ' cp-pr' : ''}" role="dialog" aria-modal="true" aria-label="${nombre}">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><span style="width:44px"></span><h2>${titulo}</h2><button type="button" class="iconbtn" data-act="cp-close" aria-label="Cerrar">${I.back}</button></div>
+      <div class="cp-body">${cuerpo}</div>
+      <div class="cp-foot"><button type="button" class="btn block" data-act="cp-close">LISTO</button></div>
+    </div>`;
+
+  function prSheetHTML(c) {
+    const p = tarjeta(), x = textosPR(p);
+    const varios = c.prs.length > 1 ? `<div class="cp-prs" role="group" aria-label="Ejercicios con récord">${c.prs.map((q, i) => `<button type="button" data-act="cp-pr" data-v="${i}" aria-pressed="${i === c.pr}">${esc(q.ejercicio)}</button>`).join('')}</div>` : '';
+    const fondos = `<div class="opc-fila cp-pr-fondos" role="group" aria-label="Fondo de la tarjeta">${FONDOS.slice(0, 2).map(([k, n]) => `<button type="button" data-act="cp-bg" data-v="${k}" aria-pressed="${c.fondo === k}">${n}</button>`).join('')}</div>`;
+    const alt = [x.etiqueta, x.nombre, x.cifra, x.sub, x.insignia].join('. ');
+    return hojaHTML(c.id ? 'Compartir entreno' : 'Compartir récord', c.id ? 'Compartir Entreno' : 'Compartir récord', `
+        ${tabsHTML(c)}${varios}
+        <div class="cp-car"><div class="cp-slide"><div class="cp-frame${c.fondo === 'transparente' ? ' cp-trans' : ''}" style="aspect-ratio:${PR_W} / ${PR_H};--ar:${(PR_W / PR_H).toFixed(4)}"><canvas data-cp-pr role="img" aria-label="${esc(alt)}"></canvas></div></div></div>
+        ${fondos}
+        <div class="cp-acts cp-acts3" role="group" aria-label="Acciones">${actHTML('cp-copiar', 'copiar', 'Copiar')}${actHTML('cp-guardar', 'guardar', 'Guardar')}${actHTML('cp-compartir', 'mas', 'Más')}</div>
+        <p class="cp-tag">Etiqueta a @cadenciafit.app</p>`);
+  }
 
   function sheetHTML() {
-    const c = st.compartir, d = datos();
+    const c = st.compartir;
+    if (c && c.modo === 'pr') return prSheetHTML(c);
+    const d = datos();
     if (!c || !d) return '';
     const slides = PLANTILLAS.map((P, i) => `<div class="cp-slide"><div class="cp-frame${c.fondo === 'transparente' ? ' cp-trans' : ''}" style="aspect-ratio:${P.w} / ${P.h};--ar:${(P.w / P.h).toFixed(4)}"><canvas data-cp="${i}" role="img" aria-label="Plantilla ${i + 1} de ${PLANTILLAS.length}: ${esc(P.n)}"></canvas></div></div>`).join('');
     const dots = PLANTILLAS.map((P, i) => `<button type="button" class="cp-dot${i === c.i ? ' on' : ''}" data-act="cp-dot" data-v="${i}" aria-label="${esc(P.n)} (${i + 1} de ${PLANTILLAS.length})"></button>`).join('');
     const chips = c.menu ? `<div class="cp-fondos" role="group" aria-label="Fondo de la tarjeta">${FONDOS.map(([k, n]) => `<button type="button" class="cp-chip${c.fondo === k ? ' on' : ''}" data-act="${k === 'foto' ? 'cp-foto' : 'cp-bg'}" data-v="${k}" aria-pressed="${c.fondo === k}">${n}</button>`).join('')}</div>` : '';
-    const act = (a, ico, n, extra = '') => `<button type="button" class="cp-act${extra}" data-act="${a}"><span class="cp-circ">${ICONOS[ico]}</span><span class="cp-lbl">${n}</span></button>`;
-    return `<div class="sheet-back" data-act="cp-close"></div>
-    <div class="sheet short cp-sheet" role="dialog" aria-modal="true" aria-label="Compartir entreno">
-      <div class="sheet-grab"></div>
-      <div class="sheet-head"><span style="width:36px"></span><h2>Compartir Entreno</h2><button type="button" class="iconbtn" data-act="cp-close" aria-label="Cerrar">${I.back}</button></div>
-      <div class="cp-body">
+    return hojaHTML('Compartir entreno', 'Compartir Entreno', `
+        ${tabsHTML(c)}
         <p class="cp-sub">Hiciste el trabajo. Es hora de presumirlo.</p>
         <div class="cp-car" data-cpcar>${slides}</div>
         <div class="cp-dots" role="group" aria-label="Plantillas">${dots}</div>
         ${chips}
         <div class="cp-acts" role="group" aria-label="Acciones">
-          ${act('cp-fondo', 'fondo', 'Fondo', c.menu ? ' on' : '')}${act('cp-copiar', 'copiar', 'Copiar')}${act('cp-guardar', 'guardar', 'Guardar')}${act('cp-compartir', 'mas', 'Más')}
+          ${actHTML('cp-fondo', 'fondo', 'Fondo', c.menu ? ' on' : '')}${actHTML('cp-copiar', 'copiar', 'Copiar')}${actHTML('cp-guardar', 'guardar', 'Guardar')}${actHTML('cp-compartir', 'mas', 'Más')}
         </div>
-        <p class="cp-tag">${esc(TEXTO_ETIQUETA)}</p>
-      </div>
-      <div class="cp-foot"><button type="button" class="btn block" data-act="cp-close">LISTO</button></div>
-    </div>`;
+        <p class="cp-tag">${esc(TEXTO_ETIQUETA)}</p>`);
   }
 
   // Vistas previas: se dibujan tras cada render() (el DOM se reconstruye). Una caché evita volver a dibujar lo mismo.
   function pintar() {
     const c = st.compartir; if (!c) return;
-    const d = datos(); if (!d) return;
     if (!fuentesOk) cargarFuentes().then(() => { cache.clear(); if (st.compartir) pintar(); });
+    if (c.modo === 'pr') {
+      const cv = root.querySelector('canvas[data-cp-pr]'); if (!cv) return;
+      const p = tarjeta(), clave = `pr|${JSON.stringify(p)}|${c.fondo}|${fuentesOk}`;
+      let src = cache.get(clave);
+      if (!src) { src = dibujarPR(p, { fondo: c.fondo, escala: ESCALA_PREVIA }); if (cache.size > 24) cache.clear(); cache.set(clave, src); }
+      cv.width = src.width; cv.height = src.height;
+      cv.getContext('2d').drawImage(src, 0, 0);
+      const fila = root.querySelector('.cp-prs'), on = fila && fila.querySelector('[aria-pressed="true"]');
+      if (on) fila.scrollLeft = on.offsetLeft - fila.offsetLeft - (fila.clientWidth - on.offsetWidth) / 2;
+      return;
+    }
+    const d = datos(); if (!d) return;
     root.querySelectorAll('canvas[data-cp]').forEach((cv) => {
       const i = Number(cv.dataset.cp), clave = `${d.id}|${i}|${c.fondo}|${fotoN}|${fuentesOk}|${d.ai ? d.ai.nota : ''}|${d.ejercicios.length}`;
       let src = cache.get(clave);
@@ -428,12 +547,14 @@ export function crearCompartir(ctx) {
 
   /* ---- imagen final ---- */
   async function blobActual() {
-    const c = st.compartir, d = datos(); if (!c || !d) return null;
+    const c = st.compartir; if (!c) return null;
+    const pr = c.modo === 'pr' ? tarjeta() : null, d = pr ? null : datos(), fondo = c.fondo, i = c.i;
+    if (!pr && !d) return null;
     await cargarFuentes();
-    const P = PLANTILLAS[c.i], cv = dibujar(c.i, d, { fondo: c.fondo, escala: escalaExport(P) });
+    const cv = pr ? dibujarPR(pr, { fondo, escala: ESCALA_EXPORT }) : dibujar(i, d, { fondo, escala: escalaExport(PLANTILLAS[i]) });
     return new Promise((res) => cv.toBlob((b) => res(b), 'image/png'));
   }
-  const nombreArchivo = () => `cadencia-entreno-${(workout() || {}).fecha || 'hoy'}-${PLANTILLAS[st.compartir.i].id}.png`;
+  const nombreArchivo = () => (enPR() ? `cadencia-record-${tarjeta().fecha || 'hoy'}.png` : `cadencia-entreno-${(workout() || {}).fecha || 'hoy'}-${PLANTILLAS[st.compartir.i].id}.png`);
   const flash = (act, txt) => { // cambia un momento la etiqueta del botón (sin render())
     const l = root.querySelector(`[data-act="${act}"] .cp-lbl`); if (!l) return;
     const ant = l.textContent; l.textContent = txt;
@@ -459,9 +580,9 @@ export function crearCompartir(ctx) {
   }
   async function compartirNativo() {
     const b = await blobActual(); if (!b) return toast('No se ha podido crear la imagen.');
-    const nombre = nombreArchivo(), file = new File([b], nombre, { type: 'image/png' });
+    const nombre = nombreArchivo(), file = new File([b], nombre, { type: 'image/png' }), title = enPR() ? 'Mi récord en Cadencia' : 'Mi entreno en Cadencia';
     try {
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Mi entreno en Cadencia' }); return; }
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title }); return; }
     } catch (e) { if (e && e.name === 'AbortError') return; /* cerró el menú: nada */ }
     descargar(b, nombre); toast('Tu navegador no puede compartir archivos: se ha descargado la imagen'); // sin Web Share con archivos
   }
@@ -500,10 +621,12 @@ export function crearCompartir(ctx) {
     if (act === 'cp-fondo') { c.menu = !c.menu; return render(); }
     if (act === 'cp-bg') { c.fondo = b.dataset.v === 'transparente' ? 'transparente' : 'oscuro'; c.menu = false; return render(); }
     if (act === 'cp-foto') return elegirFoto();
+    if (act === 'cp-modo') { c.modo = b.dataset.v === 'pr' ? 'pr' : 'entreno'; c.menu = false; if (c.modo === 'pr' && c.fondo === 'foto') c.fondo = 'oscuro'; return render(); }
+    if (act === 'cp-pr') { c.pr = Number(b.dataset.v) || 0; return render(); }
     if (act === 'cp-copiar') return void copiar();
     if (act === 'cp-guardar') return void guardar();
     if (act === 'cp-compartir') return void compartirNativo();
   }
 
-  return { abrir, sheetHTML, pintar, click, cerrar };
+  return { abrir, abrirPR, sheetHTML, pintar, click, cerrar };
 }

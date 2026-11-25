@@ -2693,6 +2693,32 @@ body:has(.prog-sheet) .ib { visibility: hidden; }
 body:has(.mes-sheet) .ib { visibility: hidden; }
 @media (min-width: 1024px) { .main:has(> .rec-acc) > .mes-chip { grid-column: 1 / -1; } }
 
+/* (79) Récords personales: botón de compartir en Récords y progresión, aviso en «Entreno guardado» y hoja de la tarjeta 9:16. */
+.rec-fila { display: flex; align-items: stretch; gap: 6px; border-top: 1px solid var(--line); }
+.rec-fila:first-child { border-top: 0; }
+.list .rec-fila .row.rec-prog { flex: 1; width: auto; min-width: 0; border-top: 0; }
+.rec-share { flex: none; align-self: center; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 1px solid var(--line); border-radius: var(--r-sm); background: transparent; color: var(--ink); }
+.rec-share:active { border-color: var(--brand-yellow); }
+.sheet.prog-sheet .sheet-head h2 { flex: 1; }
+.sum-pr { display: grid; gap: 8px; width: 100%; padding: 12px; border: 1px solid var(--brand-yellow); border-radius: var(--r-md); text-align: left; }
+.sum-pr p { margin: 0; color: var(--ink); font-size: 15px; font-weight: 800; }
+.sum-pr button { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; border: 0; border-radius: var(--r-sm); background: var(--brand-yellow); color: var(--text-on-brand); font: inherit; font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+/* Con récord, el foco amarillo es su botón: el de Compartir entreno y el del Coach AI pasan a neutros. */
+.sum-pro:has(> .sum-pr) .btn:not(.ghost), .sum-pro:has(> .sum-pr) .ai-btn { background: transparent; color: var(--ink); border: 1px solid var(--muted); }
+.cp-modos, .cp-pr-fondos { margin: 0; }
+.cp-prs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; min-width: 0; flex: none; }
+.cp-prs button { flex: none; min-height: 44px; max-width: 70%; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-prs button[aria-pressed="true"] { border-color: var(--ink); background: var(--surface2); color: var(--ink); }
+.cp-pr .cp-body { grid-template-columns: minmax(0, 1fr); }
+.cp-pr { --cp-tabs: 0px; --cp-sel: 0px; }
+.cp-pr:has(.cp-modos) { --cp-tabs: 50px; }
+.cp-pr:has(.cp-prs) { --cp-sel: 50px; }
+.cp-pr .cp-car { --cp-h: clamp(170px, calc(88dvh - 330px - var(--cp-tabs) - var(--cp-sel)), 52vh); }
+.cp-pr .cp-frame:not(.cp-trans) { background: #000000; }
+.cp-acts.cp-acts3 { grid-template-columns: repeat(3, 1fr); }
+.cp-sheet .sheet-head .iconbtn { width: 44px; height: 44px; }
+.rec-share:focus-visible, .sum-pr button:focus-visible, .cp-prs button:focus-visible, .cp-sheet .opc-fila button:focus-visible { outline: 2px solid var(--brand-yellow); outline-offset: 2px; }
+
 @media (min-width: 1024px) {
   :root { --sb-w: 104px; --col: 800px; }
 
