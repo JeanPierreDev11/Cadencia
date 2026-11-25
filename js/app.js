@@ -104,7 +104,7 @@ function render() {
   C3.enganchar(root);
   RG.pintarMapas(root);
   if (st.view === 'main' && st.compartir) pintarCompartir();
-  document.body.classList.toggle('noscroll', !!(st.limite || st.liveFin || st.rutNuevos || st.rmod || st.compartir || st.calentar || st.discos || st.moverSel || st.dia7 || st.pf || st.proInfo || st.codigo || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.progEj || st.exView || st.lib || st.food || st.checkin || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.resumen || st.postEnt || st.cuerpo3d || st.legal || st.apoyo || st.importar || st.del || st.pro || st.proWelcome || st.recAsk));
+  document.body.classList.toggle('noscroll', !!(st.limite || st.liveFin || st.rutNuevos || st.rmod || st.compartir || st.calentar || st.discos || st.moverSel || st.dia7 || st.pf || st.proInfo || st.codigo || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.progEj || st.resumenMes || st.exView || st.lib || st.food || st.checkin || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.resumen || st.postEnt || st.cuerpo3d || st.legal || st.apoyo || st.importar || st.del || st.pro || st.proWelcome || st.recAsk));
 }
 
 /* ================================================================== */
@@ -782,7 +782,7 @@ function focusFirst() {
 /* ================================================================== */
 // Entreno vive en entreno-ui.js; Nutrición, Rutas, Taller, Progreso y Objetivos en secciones.js.
 const W = crearEntreno({ st, root, get api() { return api; }, render, get M() { return M; }, currentKg: () => currentKg(), goalById: (id) => goalById(id), stravaBtn: () => (CICLISMO ? S.syncBtnHTML() : ''), gearHTML: () => gearHTML() });
-const { exViewHTML, progSheetHTML, rutinaOf, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, regSheetHTML, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, limiteSheetHTML, calentarSheetHTML, discosSheetHTML, moverSheetHTML, dia7SheetHTML, rutNuevosSheetHTML, postEntSheetHTML, rutModSheetHTML, resumenSheetHTML, compartirSheetHTML, pintarCompartir, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML, finSheetHTML } = W;
+const { exViewHTML, progSheetHTML, rutinaOf, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, regSheetHTML, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, modoSheetHTML, limiteSheetHTML, calentarSheetHTML, discosSheetHTML, moverSheetHTML, dia7SheetHTML, rutNuevosSheetHTML, postEntSheetHTML, rutModSheetHTML, resumenSheetHTML, compartirSheetHTML, pintarCompartir, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML, finSheetHTML } = W;
 const M = crearSecciones({
   st, get api() { return api; }, render, toast, esc, num, nf, todayISO, fmtDate, lsGet, lsSet, I, E, errorText,
   currentKg: () => currentKg(), rutinaOf: () => rutinaOf(), viewPeso: (sub) => viewPeso(sub), gearHTML: () => gearHTML(),
@@ -834,7 +834,8 @@ function viewInicio() {
       <div class="hello-r">${st.profile && st.profile.isPro === true ? '<button class="protag pill" data-act="tab" data-v="perfil" aria-label="Tu plan: Cadencia Pro">Pro</button>' : ''}<div class="hello-ico">${M.novBell()}${gearHTML()}</div></div>
     </header>
 
-    <section class="racha-home tap" data-act="tab" data-v="entreno" role="button" tabindex="0" aria-label="Tu racha: abrir Entreno">${fuegoHTML(rachaActual(), true)}<span class="racha-t"><b>${rachaActual() === 1 ? 'Día' : 'Días'} de racha</b><span class="small muted">${rachaActual() ? 'No la rompas hoy' : 'Entrena y enciende el fuego'}</span></span></section>
+    ${M.avisoMesHTML()}
+    ${M.rachaSemanalHTML()}
 
     <section class="card weight-hero tap" data-act="p-peso" role="button" tabindex="0" aria-label="Peso actual: abrir Forma física">
       <h2>Peso actual</h2>
@@ -1738,7 +1739,7 @@ async function enter(u) {
   if (u && st.view === 'paywall' && st.vieneDeRegistro) return; // aviso de sesión repetido mientras se ve el paywall: no entrar en la app todavía
   st.user = u; st.busy = false;
   if (!u && M) M.pararPro();
-  if (!u) { pwQuitar(); st.vieneDeRegistro = false; const anon = st.ob && st.ob.anon && !st.ob.justRegistered ? st.ob : null; /* un cuestionario sin cuenta en marcha NO se pierde por un aviso «sin sesión» */ st.cfg = st.pwd = st.pf = st.proInfo = st.rutShare = st.codigo = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.apoyo = false; st.importar = null; st.progEj = null; st.exView = null; st.volModo = null; st.exportando = null; st.view = anon && st.view === 'onboarding' ? 'onboarding' : 'auth'; st.ob = anon; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
+  if (!u) { pwQuitar(); st.vieneDeRegistro = false; const anon = st.ob && st.ob.anon && !st.ob.justRegistered ? st.ob : null; /* un cuestionario sin cuenta en marcha NO se pierde por un aviso «sin sesión» */ st.cfg = st.pwd = st.pf = st.proInfo = st.rutShare = st.codigo = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.apoyo = false; st.importar = null; st.progEj = null; st.resumenMes = null; st.exView = null; st.volModo = null; st.exportando = null; st.view = anon && st.view === 'onboarding' ? 'onboarding' : 'auth'; st.ob = anon; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
   try {
     // PUERTA OBLIGATORIA: antes de pintar la app (y antes de pedir entrenos, peso, racha…) se lee el perfil.
     // Sin `onboardingCompletado: true` solo se ve el cuestionario: nada de cabecera, barra inferior ni secciones.
@@ -1782,7 +1783,7 @@ async function entrarApp(u, { fade = false } = {}) {
 }
 
 UI.iniciarHojas(root);
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && st.progEj && !st.legal) { const b = root.querySelector('.sheet-back[data-act="prog-close"]'); if (b) b.click(); return; } if (e.key === 'Escape' && st.rmod && !st.legal) { const b = root.querySelector('.sheet-back[data-act="rm-salir"]'); if (b) b.click(); return; } if (e.key === 'Escape' && st.importar && !st.legal) { const b = root.querySelector('.sheet-back[data-act="imp-close"]'); if (b) b.click(); return; } if (e.key === 'Escape' && st.apoyo && !st.legal) { const b = root.querySelector('.sheet-back[data-act="apoyo-close"]'); if (b) b.click(); return; } if (e.key === 'Escape' && st.legal) { const b = root.querySelector('.sheet-back[data-act="legal-close"]'); if (b) b.click(); } });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && st.resumenMes && !st.legal) { const b = root.querySelector('.sheet-back[data-act="mes-close"]'); if (b) b.click(); return; } if (e.key === 'Escape' && st.progEj && !st.legal) { const b = root.querySelector('.sheet-back[data-act="prog-close"]'); if (b) b.click(); return; } if (e.key === 'Escape' && st.rmod && !st.legal) { const b = root.querySelector('.sheet-back[data-act="rm-salir"]'); if (b) b.click(); return; } if (e.key === 'Escape' && st.importar && !st.legal) { const b = root.querySelector('.sheet-back[data-act="imp-close"]'); if (b) b.click(); return; } if (e.key === 'Escape' && st.apoyo && !st.legal) { const b = root.querySelector('.sheet-back[data-act="apoyo-close"]'); if (b) b.click(); return; } if (e.key === 'Escape' && st.legal) { const b = root.querySelector('.sheet-back[data-act="legal-close"]'); if (b) b.click(); } });
 root.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.tap')) { e.preventDefault(); e.target.click(); } });
 root.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-act]');

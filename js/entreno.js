@@ -1495,6 +1495,19 @@ export function parsearCSVEntrenos(textoCSV, entrenosExistentes = [], opciones =
 // Series de trabajo realmente hechas: sin calentamiento y sin las marcadas como no completadas.
 const seriesHechas = (e) => trabajo(e.series).filter((s) => s && s.done !== false);
 
+// Suma a `o` las series efectivas por músculo de un entreno (principal 1, secundario 0,5): volumen semanal (77) y resumen mensual (78).
+function sumarMusculos(o, w) {
+  for (const e of w.ejercicios || []) {
+    if (exCardio(e)) continue;
+    const x = ejercicio(e.n), n = seriesHechas(e).length;
+    if (!x || !n) continue;
+    let { p, s } = musculosDet(x);
+    if (!p.length && GRUPO_DET[x.m]) p = [GRUPO_DET[x.m]];
+    for (const k of p) o[k] = (o[k] || 0) + n;
+    for (const k of s) if (!p.includes(k)) o[k] = (o[k] || 0) + n / 2;
+  }
+}
+
 // Series efectivas por músculo (las mismas claves que la fatiga y el cuerpo 3D, MUSC_DET): principal 1, secundario 0,5.
 // modo 'semana' = lunes a domingo en curso frente a la semana anterior completa; '7d' = últimos 7 días frente a los 7 previos.
 export function seriesSemanalesPorMusculo(entrenos, hoyISO, modo = 'semana') {
@@ -1503,15 +1516,7 @@ export function seriesSemanalesPorMusculo(entrenos, hoyISO, modo = 'semana') {
   for (const w of entrenos || []) {
     const o = w.fecha >= desde && w.fecha <= hasta ? act : w.fecha >= antes && w.fecha < desde ? ant : null;
     if (!o) continue;
-    for (const e of w.ejercicios || []) {
-      if (exCardio(e)) continue;
-      const x = ejercicio(e.n), n = seriesHechas(e).length;
-      if (!x || !n) continue;
-      let { p, s } = musculosDet(x);
-      if (!p.length && GRUPO_DET[x.m]) p = [GRUPO_DET[x.m]];
-      for (const k of p) o[k] = (o[k] || 0) + n;
-      for (const k of s) if (!p.includes(k)) o[k] = (o[k] || 0) + n / 2;
-    }
+    sumarMusculos(o, w);
   }
   return Object.keys(MUSC_DET).filter((k) => act[k] || ant[k])
     .map((k) => ({ musculo: k, etiqueta: MUSC_DET[k], series: act[k] || 0, seriesAnt: ant[k] || 0, delta: (act[k] || 0) - (ant[k] || 0) }))
@@ -1586,5 +1591,112 @@ export function progresionEjercicio(entrenos, nombreEjercicio, rango = 'todo', {
       ultimoValor: fin ? fin[campo] : null, ultimaFecha: fin ? fin.fecha : null,
       deltaAbs, deltaPct: deltaAbs == null ? null : r1((deltaAbs / ini[campo]) * 100),
     },
+  };
+}
+
+/* ---------- racha semanal y resumen mensual (78) ---------- */
+// Semanas naturales de lunes a domingo en la hora local del dispositivo. Cuenta cualquier sesión guardada
+// (fuerza, cardio, bici u otro) y cada día una sola vez.
+const objetivoSemanal = (v) => clamp(Number(v) || 4, 1, 7);
+// Lunes de cada semana con actividad → días distintos entrenados (sin fechas posteriores a `hastaISO`).
+function diasPorSemana(entrenos, hastaISO) {
+  const sem = new Map();
+  for (const f of new Set((entrenos || []).map((w) => w.fecha))) {
+    if (!f || f > hastaISO) continue;
+    const l = mondayOf(f);
+    sem.set(l, (sem.get(l) || 0) + 1);
+  }
+  return sem;
+}
+
+// La semana en curso suma en cuanto llega al objetivo; mientras no llega, no rompe nada.
+export function calcularRachaSemanal(entrenos, objetivoDias = 4, hoyISO = toISO(new Date())) {
+  const objetivo = objetivoSemanal(objetivoDias), sem = diasPorSemana(entrenos, hoyISO), actual = mondayOf(hoyISO);
+  const cumple = (l) => (sem.get(l) || 0) >= objetivo;
+  const diasActual = sem.get(actual) || 0, actualCumplida = diasActual >= objetivo;
+  let rachaActual = actualCumplida ? 1 : 0;
+  for (let l = addDays(actual, -7); cumple(l); l = addDays(l, -7)) rachaActual++;
+  let mejorRacha = 0, seguidas = 0;
+  for (let l = [...sem.keys()].sort()[0]; l && l <= actual; l = addDays(l, 7)) {
+    seguidas = cumple(l) ? seguidas + 1 : 0;
+    mejorRacha = Math.max(mejorRacha, seguidas);
+  }
+  return { rachaActual, mejorRacha, diasActual, objetivo, actualCumplida, faltanDias: Math.max(0, objetivo - diasActual) };
+}
+
+export const mesAnterior = (mesYYYYMM) => addDays(`${mesYYYYMM}-01`, -1).slice(0, 7);
+
+// Meses con entrenos, del más reciente al más antiguo. Si hay algún dato, el actual y el anterior salen siempre.
+export function mesesDisponibles(entrenos, hoyISO = toISO(new Date())) {
+  const hoyMes = hoyISO.slice(0, 7);
+  const meses = new Set((entrenos || []).map((w) => String(w.fecha || '').slice(0, 7)).filter((m) => m.length === 7 && m <= hoyMes));
+  if (meses.size) { meses.add(hoyMes); meses.add(mesAnterior(hoyMes)); }
+  return [...meses].sort().reverse();
+}
+
+// Cifras de un mes ('2026-11'). Las semanas son las mismas de la racha (lunes a domingo) y cada una pertenece
+// al mes en el que cae su jueves; la semana en curso solo se cuenta si ya está cumplida.
+export function resumenMensual(entrenos, pesos = [], mesYYYYMM, objetivoDias = 4, hoyISO = toISO(new Date())) {
+  const delMes = (x) => String(x.fecha || '').slice(0, 7) === mesYYYYMM;
+  const lista = (entrenos || []).filter(delMes);
+  let seriesEfectivas = 0, volumen = 0, minutos = 0;
+  const musc = {}, ejs = new Map();
+  for (const w of lista) {
+    sumarMusculos(musc, w);
+    let nSeries = 0, minCardio = 0;
+    for (const e of w.ejercicios || []) {
+      if (exCardio(e)) { for (const s of e.series || []) if (s.done !== false) minCardio += Number(cv(s, 'min')) || 0; continue; }
+      const hechas = seriesHechas(e);
+      nSeries += hechas.length;
+      for (const s of hechas) {
+        volumen += volumenSerie(s, e);
+        for (const l of e.uni ? ladosSerie(s) : [{ kg: Number(s.kg) || 0, reps: Number(s.reps) || 0 }]) {
+          if (!(l.reps > 0)) continue;
+          const clave = claveEj(e.n), ant = ejs.get(clave);
+          const conPeso = l.kg > 0, valor = conPeso ? l.kg * (1 + l.reps / 30) : l.reps; // misma «mejor serie» que Récords
+          if (ant && (ant.conPeso > conPeso || (ant.conPeso === conPeso && ant.valor >= valor))) continue;
+          const sufijo = e.uni ? ' por lado' : cargaDe(e) === 'por_lado' ? ' c/u' : '';
+          ejs.set(clave, { nombre: canon(e.n), conPeso, valor, kg: l.kg, reps: l.reps, texto: conPeso ? `${coma(l.kg)} kg${sufijo} × ${l.reps}` : `${l.reps} reps` });
+        }
+      }
+    }
+    seriesEfectivas += nSeries;
+    // Sin duración guardada: los minutos de cardio más 3 por serie de fuerza.
+    minutos += Number(w.min) > 0 ? Number(w.min) : minCardio + nSeries * 3;
+  }
+
+  const objetivo = objetivoSemanal(objetivoDias), sem = diasPorSemana(entrenos, hoyISO);
+  let semanasCumplidas = 0, semanasTotales = 0;
+  for (let l = mondayOf(`${mesYYYYMM}-01`); l <= hoyISO && addDays(l, 3).slice(0, 7) <= mesYYYYMM; l = addDays(l, 7)) {
+    if (addDays(l, 3).slice(0, 7) < mesYYYYMM) continue;
+    const ok = (sem.get(l) || 0) >= objetivo;
+    if (!ok && addDays(l, 6) >= hoyISO) continue;
+    semanasTotales++;
+    if (ok) semanasCumplidas++;
+  }
+
+  const ps = (pesos || []).filter((x) => delMes(x) && Number(x.kg) > 0).sort((a, b) => a.fecha.localeCompare(b.fecha));
+  let pesoDelta = null;
+  if (ps.length > 1) {
+    const d = r1(Number(ps[ps.length - 1].kg) - Number(ps[0].kg));
+    pesoDelta = `${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(d).toFixed(1).replace('.', ',')} kg`;
+  }
+
+  return {
+    mes: mesYYYYMM,
+    totalEntrenos: lista.length,
+    diasUnicos: new Set(lista.map((w) => w.fecha)).size,
+    seriesEfectivas,
+    volumenKg: Math.round(volumen),
+    minutosTotales: Math.round(minutos),
+    semanasCumplidas,
+    semanasTotales,
+    topMusculos: Object.entries(musc).filter(([k]) => MUSC_DET[k])
+      .map(([k, series]) => ({ musculo: k, etiqueta: MUSC_DET[k], series }))
+      .sort((a, b) => b.series - a.series || a.etiqueta.localeCompare(b.etiqueta, 'es')).slice(0, 3),
+    topEjercicios: [...ejs.values()]
+      .sort((a, b) => b.conPeso - a.conPeso || b.valor - a.valor || a.nombre.localeCompare(b.nombre, 'es')).slice(0, 3)
+      .map(({ nombre, kg, reps, texto }) => ({ nombre, kg, reps, texto })),
+    pesoDelta,
   };
 }

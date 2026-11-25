@@ -1076,6 +1076,74 @@ export function crearSecciones(ctx) {
       </section>`;
   }
   /* ================================================================ */
+  /* Racha semanal y resumen mensual (78)                              */
+  /* ================================================================ */
+  // Días por semana: los de tu rutina; sin rutina, los del cuestionario.
+  const objetivoSem = () => { const r = rutinaOf(); return (r && r.dias && r.dias.length) || P().diasSemana || 4; };
+  const mesHoy = () => todayISO().slice(0, 7);
+  const nombreMes = (mes) => new Date(`${mes}-15T12:00:00`).toLocaleDateString('es-ES', { month: 'long' });
+  const claveMesVisto = () => `cadencia-mes-visto-${st.user.uid}`;
+  const mesesResumen = () => { const m = E.mesesDisponibles(st.workouts, todayISO()); return m.length ? m : [mesHoy()]; };
+  const plural = (n, uno, varios) => (n === 1 ? uno : varios);
+
+  function rachaSemanalHTML() {
+    const r = E.calcularRachaSemanal(st.workouts, objetivoSem(), todayISO());
+    const titulo = r.rachaActual ? `${r.rachaActual} ${plural(r.rachaActual, 'semana seguida', 'semanas seguidas')}` : '1.ª semana en marcha';
+    const prog = `${r.diasActual} de ${r.objetivo} ${plural(r.objetivo, 'día', 'días')} esta semana`;
+    return `<section class="sem-racha tap" data-act="mes-open" role="button" tabindex="0" aria-label="${titulo}. ${prog}. Mejor: ${r.mejorRacha} ${plural(r.mejorRacha, 'semana', 'semanas')}. Abrir el resumen mensual">
+      <span class="sem-ico" aria-hidden="true">${I.flame}</span>
+      <span class="sem-t"><b>${titulo}</b><span class="sem-d"><span>${prog}</span><span>Mejor: ${r.mejorRacha} sem</span></span>
+        <span class="sem-bar" aria-hidden="true">${Array.from({ length: r.objetivo }, (_, i) => `<i${i < r.diasActual ? ' class="on"' : ''}></i>`).join('')}</span></span></section>`;
+  }
+
+  // Aviso de cierre de mes: solo con 3 entrenos o más el mes pasado y hasta que se abre ese resumen.
+  function avisoMesHTML() {
+    const prev = E.mesAnterior(mesHoy());
+    if (st.workouts.filter((w) => String(w.fecha).startsWith(prev)).length < 3 || lsGet(claveMesVisto()) === prev) return '';
+    return `<section class="mes-aviso" aria-label="Resumen mensual"><p>Resumen de ${nombreMes(prev)} disponible</p><button type="button" class="btn ghost" data-act="mes-open-prev">Ver resumen</button></section>`;
+  }
+
+  function verMes(mes) {
+    st.resumenMes = { mes };
+    if (mes === E.mesAnterior(mesHoy())) lsSet(claveMesVisto(), mes);
+    render();
+  }
+
+  function resumenMesBody(mes) {
+    const r = E.resumenMensual(st.workouts, st.weights, mes, objetivoSem(), todayISO());
+    if (!r.totalEntrenos) return `<div class="prog-vacio"><b>Sin entrenos en ${nombreMes(mes)}</b><span>Cuando guardes un entreno de este mes, verás aquí tus cifras.</span></div>`;
+    const met = (t, v) => `<div><span>${t}</span><b class="num">${v}</b></div>`;
+    const semanas = `${r.semanasCumplidas} de ${r.semanasTotales}`;
+    const h = Math.floor(r.minutosTotales / 60), min = r.minutosTotales % 60;
+    const max = Math.max(1, ...r.topMusculos.map((m) => m.series));
+    const datos = [`${r.diasUnicos} ${plural(r.diasUnicos, 'día entrenado', 'días entrenados')}`];
+    if (r.minutosTotales) datos.push(h ? `${h} h${min ? ` ${min} min` : ''}` : `${min} min`);
+    if (r.pesoDelta && r.semanasTotales) datos.push(`${semanas} semanas cumplidas`);
+    return `<div class="mes-grid">
+        ${met('Entrenos', nf(r.totalEntrenos))}${met('Series efectivas', nf(r.seriesEfectivas))}
+        ${met('Volumen total', r.volumenKg >= 1000 ? `${nf(r.volumenKg / 1000, 1)} t` : `${nf(r.volumenKg)} kg`)}
+        ${r.pesoDelta ? met('Cambio de peso', r.pesoDelta) : met('Semanas cumplidas', semanas)}
+      </div>
+      <p class="mes-datos">${datos.join(' · ')}</p>
+      ${r.topMusculos.length ? `<h3 class="prog-h3">Músculos más trabajados</h3><ul class="mes-musc">${r.topMusculos.map((m) => `<li><span>${esc(m.etiqueta)}</span><b class="num">${nf(m.series, m.series % 1 ? 1 : 0)} series</b><span class="mes-barra" aria-hidden="true"><i style="width:${Math.round((m.series / max) * 100)}%"></i></span></li>`).join('')}</ul>` : ''}
+      ${r.topEjercicios.length ? `<h3 class="prog-h3">Mejores marcas del mes</h3><ul class="prog-lista">${r.topEjercicios.map((x) => `<li><b>${esc(x.nombre)}</b><span class="num">${x.texto}</span></li>`).join('')}</ul>` : ''}`;
+  }
+
+  function resumenMesSheet() {
+    const mes = st.resumenMes.mes, meses = mesesResumen(), i = meses.indexOf(mes);
+    const flecha = (act, ico, texto, hay) => `<button type="button" class="iconbtn" data-act="${act}" aria-label="${texto}"${hay ? '' : ' disabled'}>${ico}</button>`;
+    return `<div class="sheet-back" data-act="mes-close"></div>
+      <div class="sheet mes-sheet" role="dialog" aria-modal="true" aria-label="Resumen mensual">
+        <div class="sheet-grab"></div>
+        <div class="sheet-head"><h2>Resumen mensual</h2><button type="button" class="iconbtn" data-act="mes-close" aria-label="Cerrar">${I.close}</button></div>
+        <div class="mes-nav">${flecha('mes-prev', I.back, 'Mes anterior', i >= 0 && i < meses.length - 1)}
+          <h3 aria-live="polite">${nombreMes(mes)} ${mes.slice(0, 4)}</h3>
+          ${flecha('mes-next', I.chev, 'Mes siguiente', i > 0)}</div>
+        <div class="mes-body">${resumenMesBody(mes)}</div>
+      </div>`;
+  }
+
+  /* ================================================================ */
   /* Inicio                                                            */
   /* ================================================================ */
   function homeCards() {
@@ -1161,6 +1229,17 @@ export function crearSecciones(ctx) {
         render(); return true;
       }
       case 'ci-close': st.checkin = null; render(); return true;
+      case 'mes-open': verMes(mesHoy()); return true;
+      case 'mes-open-prev': verMes(E.mesAnterior(mesHoy())); return true;
+      case 'mes-prev': case 'mes-next': {
+        const meses = mesesResumen(), i = st.resumenMes ? meses.indexOf(st.resumenMes.mes) + (act === 'mes-prev' ? 1 : -1) : -1;
+        if (!meses[i]) return true;
+        verMes(meses[i]);
+        const f = document.querySelector(`.mes-nav [data-act="${act}"]:not([disabled])`);
+        if (f) f.focus({ preventScroll: true });
+        return true;
+      }
+      case 'mes-close': st.resumenMes = null; render(); return true;
       case 'ci-apply': case 'ci-keep': {
         const C = st.checkin;
         if (!C || C.busy) return true;
@@ -1913,7 +1992,7 @@ export function crearSecciones(ctx) {
     render(); toast('Objetivo guardado');
   }
 
-  function sheet() { return st.proWelcome ? proWelcomeSheet() : st.pro ? proSheet() : st.checkin ? checkinSheet() : st.food ? foodSheet() : st.mealDet != null ? mealDetSheet() : st.tl ? tlSheet() : st.meta ? metaSheet() : ''; }
+  function sheet() { return st.proWelcome ? proWelcomeSheet() : st.pro ? proSheet() : st.checkin ? checkinSheet() : st.food ? foodSheet() : st.mealDet != null ? mealDetSheet() : st.tl ? tlSheet() : st.meta ? metaSheet() : st.resumenMes ? resumenMesSheet() : ''; }
   function view(tab) {
     if (tab === 'nutricion') return viewNutricion();
     if (tab === 'bici') return viewBici();
@@ -1921,5 +2000,5 @@ export function crearSecciones(ctx) {
     return '';
   }
 
-  return { pararPro, afterRender, tabs, tabActual, tieneBici, cargar, view, sheet, homeCards, wkBiciHTML, click, input, change, submit, novBell, novModalHTML, novCerrar, viewObjetivos };
+  return { pararPro, afterRender, tabs, tabActual, tieneBici, cargar, view, sheet, homeCards, rachaSemanalHTML, avisoMesHTML, wkBiciHTML, click, input, change, submit, novBell, novModalHTML, novCerrar, viewObjetivos };
 }

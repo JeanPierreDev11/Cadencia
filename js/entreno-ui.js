@@ -622,8 +622,9 @@ function wkRecords() {
   grupos.set('cardio', { t: 'Cardio', filas: cardio });
   if (CICLISMO) grupos.set('bici', { t: 'Bici', filas: bici });
   const con = [...grupos].filter(([, g]) => g.filas.length);
+  const mensual = st.workouts.length ? `<button type="button" class="mes-chip" data-act="mes-open">${I.trend}<span>Resumen mensual</span>${I.chev}</button>` : '';
   if (!con.length) {
-    return `<section class="card"><div class="empty"><b>Aún no hay récords</b><span>Termina un entreno y aquí verás tu mejor serie de cada ejercicio, tus marcas de cardio${CICLISMO ? ' y tus salidas en bici' : ''}.</span></div></section>`;
+    return `${mensual}<section class="card"><div class="empty"><b>Aún no hay récords</b><span>Termina un entreno y aquí verás tu mejor serie de cada ejercicio, tus marcas de cardio${CICLISMO ? ' y tus salidas en bici' : ''}.</span></div></section>`;
   }
   const rec = st.recOpen || {}, primero = con[0][0];
   const acordeon = ([id, g]) => {
@@ -635,7 +636,7 @@ function wkRecords() {
   };
   // Sin Pro: un solo aviso arriba (no un candado en cada fila), solo si hay algún ejercicio con 1RM calculable.
   const aviso = !pro && r.gym.some((e) => e.orm) ? `<section class="rec-pro" aria-label="1RM estimado con Cadencia PRO"><p>${I.crown}<span>Cadencia PRO incluye el cálculo de 1RM estimado en todos tus ejercicios.</span></p><button type="button" class="rec-pro-btn" data-act="rec-pro">Ver Cadencia PRO</button></section>` : '';
-  return `${aviso}${con.map(acordeon).join('')}
+  return `${mensual}${aviso}${con.map(acordeon).join('')}
     <p class="small muted rec-nota">En fuerza cuenta tu mejor serie (más peso para sus repeticiones). Las de calentamiento no cuentan. Toca un ejercicio de fuerza para ver su progresión.${pro ? ' El 1RM estimado usa la fórmula de Brzycki con series de 1 a 12 repeticiones.' : ''}</p>`;
 }
 
@@ -3087,5 +3088,5 @@ function recuperacionHTML() {
     ${esPro() ? cuerpo : muro}</section>`;
 }
 function cuerpoSheetHTML() { return C3.sheetHTML(st.cuerpo3d, sexoCuerpo(), datosCuerpo(), todayISO()); }
-  return { exViewHTML, progSheetHTML, finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, compartirSheetHTML: CP.sheetHTML, pintarCompartir: CP.pintar, limiteSheetHTML, calentarSheetHTML, discosSheetHTML, moverSheetHTML, rutNuevosSheetHTML, postEntSheetHTML, rutModSheetHTML, dia7SheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML };
+  return { exViewHTML, progSheetHTML, finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, modoSheetHTML, resumenSheetHTML, compartirSheetHTML: CP.sheetHTML, pintarCompartir: CP.pintar, limiteSheetHTML, calentarSheetHTML, discosSheetHTML, moverSheetHTML, rutNuevosSheetHTML, postEntSheetHTML, rutModSheetHTML, dia7SheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML };
 }

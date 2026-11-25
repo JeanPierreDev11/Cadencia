@@ -1143,7 +1143,6 @@ details.comp { border: 1px solid var(--bd); border-radius: 2px; }
 .flame.fire svg { filter: drop-shadow(0 0 10px rgba(255, 70, 20, .75)); }
 @media (prefers-reduced-motion: no-preference) { .flame.fire svg { animation: flick 1.4s ease-in-out infinite alternate; transform-origin: 50% 90%; } }
 @keyframes flick { from { transform: scale(1) rotate(-1.5deg); } to { transform: scale(1.06) rotate(1.5deg); } }
-.racha-home { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-bottom: 1px solid var(--line); cursor: pointer; }
 .racha-t { display: grid; gap: 2px; }
 .racha-t b { font-size: 18px; font-stretch: 115%; font-weight: 800; text-transform: uppercase; }
 .racha-card { display: grid; justify-items: center; gap: 10px; text-align: center; }
@@ -2642,6 +2641,57 @@ body:has(.imp-sheet) .ib { visibility: hidden; }
 .prog-lista span { color: var(--muted); }
 /* El aviso «Instala Cadencia» no debe tapar el pie de la hoja. */
 body:has(.prog-sheet) .ib { visibility: hidden; }
+
+/* ================================================================== */
+/* (78) Racha semanal en Inicio, aviso de cierre de mes y hoja «Resumen mensual».
+   Superficie y texto con variables del tema; verde de estado solo en los días hechos (el texto lo dice también)
+   y amarillo solo en el borde del aviso. */
+/* ================================================================== */
+.sem-racha { display: flex; align-items: center; gap: 14px; min-height: 44px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.sem-ico { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: var(--r-md); color: var(--ink); }
+.sem-ico svg { width: 24px; height: 24px; }
+.sem-t { flex: 1; min-width: 0; display: grid; gap: 6px; }
+.sem-t > b { font-size: 17px; font-stretch: 115%; font-weight: 800; text-transform: uppercase; line-height: 1.2; color: var(--ink); }
+.sem-d { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 2px 10px; font-size: 13px; color: var(--muted); }
+.sem-bar { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; }
+.sem-bar i { height: 8px; border-radius: var(--r-sm); background: var(--surface2); box-shadow: inset 0 0 0 1px var(--line); }
+.sem-bar i.on { background: var(--status-success); box-shadow: none; }
+
+.mes-aviso { display: flex; align-items: center; gap: 10px; margin: 12px 16px 0; padding: 10px 10px 10px 12px; border: 1px solid var(--brand-yellow); border-radius: var(--r-md); background: var(--surface); }
+.mes-aviso p { flex: 1; min-width: 0; margin: 0; font-size: 14px; font-weight: 700; color: var(--ink); line-height: 1.4; }
+.mes-aviso .btn { flex: none; width: auto; min-height: 44px; padding: 0 12px; border: 1px solid var(--muted); border-radius: var(--r-sm); background: transparent; color: var(--ink); font-size: 12px; }
+.mes-chip { display: flex; align-items: center; gap: 10px; min-height: 44px; margin: 0 16px 10px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: transparent; color: var(--ink); font: inherit; font-size: 14px; font-weight: 700; text-align: left; }
+.mes-chip span { flex: 1; }
+.mes-chip svg { flex: none; width: 18px; height: 18px; }
+.mes-chip:focus-visible, .mes-aviso .btn:focus-visible, .mes-nav .iconbtn:focus-visible { outline: 2px solid var(--brand-yellow); outline-offset: 2px; }
+.sem-racha:focus-visible { outline: 2px solid var(--brand-yellow); outline-offset: -2px; }
+
+.sheet.mes-sheet { display: flex; flex-direction: column; gap: 10px; }
+.sheet.mes-sheet .sheet-head .iconbtn, .mes-nav .iconbtn { width: 44px; height: 44px; flex: none; }
+.mes-nav { flex: none; display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: 8px; }
+.mes-nav h3 { margin: 0; text-align: center; font-size: 15px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ink); }
+.mes-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; display: flex; flex-direction: column; gap: 12px; padding: 3px; margin: 0 -3px; }
+.mes-body > * { flex: none; }
+.mes-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.mes-grid > div { display: grid; gap: 4px; align-content: start; min-width: 0; padding: 12px; border-radius: var(--r-md); background: var(--bg-surface-elevated); }
+.mes-grid span { font-size: 12px; color: var(--text-secondary); }
+.mes-grid b { font-size: 24px; font-weight: 800; line-height: 1.15; color: var(--text-primary); }
+.mes-datos { margin: 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.mes-musc { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.mes-musc li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 4px 8px; font-size: 14px; color: var(--ink); }
+.mes-barra { grid-column: 1 / -1; height: 6px; border-radius: var(--r-sm); background: var(--surface2); }
+.mes-barra i { display: block; height: 100%; border-radius: var(--r-sm); background: var(--muted); }
+.mes-body .prog-lista b { font-weight: 700; }
+:root[data-theme="light"] .mes-grid > div { background: var(--surface2); }
+:root[data-theme="light"] .mes-grid span { color: var(--muted); }
+:root[data-theme="light"] .mes-grid b { color: var(--ink); }
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] .mes-grid > div { background: var(--surface2); }
+  :root[data-theme="system"] .mes-grid span { color: var(--muted); }
+  :root[data-theme="system"] .mes-grid b { color: var(--ink); }
+}
+body:has(.mes-sheet) .ib { visibility: hidden; }
+@media (min-width: 1024px) { .main:has(> .rec-acc) > .mes-chip { grid-column: 1 / -1; } }
 
 @media (min-width: 1024px) {
   :root { --sb-w: 104px; --col: 800px; }
