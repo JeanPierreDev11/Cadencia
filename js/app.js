@@ -1,6 +1,6 @@
 import './br.js'; // Fórmulas de Bilbao Ride (globalThis.BR): debe cargarse antes que secciones.js
 import { createBackend, errorText, REF_MAX } from './data.js';
-import { APP_NAME, CICLISMO, APPLE_LOGIN } from './config.js';
+import { APP_NAME, CICLISMO, APPLE_LOGIN, APOYO_URL } from './config.js';
 import * as E from './entreno.js';
 import { crearSecciones, NOV_V } from './secciones.js';
 import { crearEntreno } from './entreno-ui.js';
@@ -93,7 +93,7 @@ const st = {
 function render() {
   const antesUI = UI.antes(root);
   if (st.view === 'auth') root.innerHTML = viewAuth();
-  else if (st.view === 'onboarding') { root.innerHTML = viewOnboarding() + (st.legal ? legalSheetHTML() : ''); obGuardarAnon(); }
+  else if (st.view === 'onboarding') { root.innerHTML = viewOnboarding() + (st.legal ? legalSheetHTML() : st.apoyo ? apoyoSheetHTML() : ''); obGuardarAnon(); }
   else if (st.view === 'paywall') root.innerHTML = viewPaywall();
   else if (st.view === 'main') root.innerHTML = viewMain();
   else if (st.view === 'error') root.innerHTML = viewError();
@@ -104,7 +104,7 @@ function render() {
   C3.enganchar(root);
   RG.pintarMapas(root);
   if (st.view === 'main' && st.compartir) pintarCompartir();
-  document.body.classList.toggle('noscroll', !!(st.limite || st.liveFin || st.rutNuevos || st.rmod || st.compartir || st.calentar || st.discos || st.moverSel || st.dia7 || st.pf || st.proInfo || st.codigo || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.exView || st.lib || st.food || st.checkin || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.resumen || st.postEnt || st.cuerpo3d || st.legal || st.del || st.pro || st.proWelcome || st.recAsk));
+  document.body.classList.toggle('noscroll', !!(st.limite || st.liveFin || st.rutNuevos || st.rmod || st.compartir || st.calentar || st.discos || st.moverSel || st.dia7 || st.pf || st.proInfo || st.codigo || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.exView || st.lib || st.food || st.checkin || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.resumen || st.postEnt || st.cuerpo3d || st.legal || st.apoyo || st.del || st.pro || st.proWelcome || st.recAsk));
 }
 
 /* ================================================================== */
@@ -126,7 +126,7 @@ const heroHTML = (tag = 'h1') => `<svg class="logo-mark" viewBox="0 0 64 64" ari
 const esPWA = () => { try { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; } };
 // Sin sesión: primero la bienvenida (el cuestionario empieza SIN cuenta); «Iniciar sesión» lleva al formulario de acceso.
 function viewAuth() {
-  if (st.authMode !== 'login') return OB.bienvenidaHTML(heroHTML('p'), (() => { const g = obAnonLeer(); return !!g && (g.step !== 'basicos' || !!(g.nombre || g.apellidos)); })(), { pwa: esPWA(), ref: !!refGuardado() }) + (st.legal ? legalSheetHTML() : '');
+  if (st.authMode !== 'login') return OB.bienvenidaHTML(heroHTML('p'), (() => { const g = obAnonLeer(); return !!g && (g.step !== 'basicos' || !!(g.nombre || g.apellidos)); })(), { pwa: esPWA(), ref: !!refGuardado() }) + (st.legal ? legalSheetHTML() : st.apoyo ? apoyoSheetHTML() : '');
   const m = st.authMsg;
   return `<div class="screen">
     <div class="auth-hero">${heroHTML()}</div>
@@ -149,10 +149,32 @@ function viewAuth() {
       <button type="button" class="link" data-act="auth-volver">${I.arrl} Volver</button>
       ${api.mode === 'local' ? `<p class="note"><span>●</span><span><b>Modo prueba.</b> Las cuentas y los datos se guardan solo en este dispositivo hasta que conectes Firebase.</span></p>` : ''}
     </div>
-  </div>${st.legal ? legalSheetHTML() : ''}`;
+  </div>${st.legal ? legalSheetHTML() : st.apoyo ? apoyoSheetHTML() : ''}`;
 }
 
 /* ---------- términos, privacidad y borrar la cuenta ---------- */
+// Apoyo voluntario (75): hoja informativa antes de salir a Ko-fi. NO es Cadencia PRO: no se pinta en la hoja de suscripción ni junto a la lista PRO.
+const apoyoHref = () => { const u = String(APOYO_URL || '').trim(); return !u ? '' : /^https?:\/\//i.test(u) ? u : 'https://' + u; };
+const apoyoBtnHTML = () => (apoyoHref() ? `<div class="apoyo-wrap"><button type="button" class="apoyo-btn" data-act="apoyo-open">${I.apoyo}<span>Apoyar el desarrollo de Cadencia</span></button></div>` : '');
+function apoyoSheetHTML() {
+  const url = apoyoHref();
+  if (!url) return '';
+  return `<div class="sheet-back" data-act="apoyo-close"></div>
+    <div class="sheet short apoyo-sheet" role="dialog" aria-modal="true" aria-label="Apoyar Cadencia">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><span style="width:44px"></span><h2>Apoyar Cadencia</h2><button type="button" class="iconbtn" data-act="apoyo-close" aria-label="Cerrar">${I.close}</button></div>
+      <div class="apoyo-body">
+        <p>Cadencia se desarrolla de forma independiente para que entrenes sin anuncios.</p>
+        <p>Durante la beta, cualquier aportación ayuda a cubrir los servidores y la IA.</p>
+        <p class="apoyo-clave"><b>La aportación es voluntaria: no incluye Cadencia PRO ni desbloquea funciones adicionales.</b></p>
+        <p class="apoyo-nota">El pago se hace en Ko-fi, fuera de la app. Cadencia no recibe tus datos bancarios ni vincula la aportación a tu cuenta.</p>
+      </div>
+      <div class="sheet-foot apoyo-foot">
+        <a class="btn block apoyo-go" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Continuar a Ko-fi</a>
+        <button type="button" class="btn block ghost apoyo-cerrar" data-act="apoyo-close">Cerrar</button>
+      </div>
+    </div>`;
+}
 function legalSheetHTML() {
   const cur = legalTab(st.legal);
   return `<div class="sheet-back" data-act="legal-close"></div>
@@ -657,7 +679,7 @@ let stravaRet = CICLISMO ? leerRetorno() : null; // si venimos de la pantalla de
 
 const gearHTML = () => `<button type="button" class="gear" data-act="cfg-open" aria-label="Configuración">${I.gear}</button>`;
 function viewMain() {
-  const sheet = st.dia7 ? dia7SheetHTML() : st.rutNuevos ? rutNuevosSheetHTML() : st.compartir ? compartirSheetHTML() : st.cuerpo3d ? cuerpoSheetHTML() : st.codigo ? codigoSheetHTML() : st.limite ? limiteSheetHTML() : st.proInfo ? proInfoHTML() : st.legal ? legalSheetHTML() : st.pf ? pfSheetHTML() : st.rmod ? rutModSheetHTML() : st.liveFin && st.live ? finSheetHTML() : st.calentar ? calentarSheetHTML() : st.discos ? discosSheetHTML() : st.moverSel ? moverSheetHTML() : st.rutShare ? rutShareSheetHTML() : st.modoSel ? modoSheetHTML() : st.resumen ? resumenSheetHTML() : st.postEnt ? postEntSheetHTML() : st.del ? delSheetHTML() : st.exView ? exViewHTML() : st.lib ? libSheetHTML() : st.rutDelAsk ? rutDelSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
+  const sheet = st.dia7 ? dia7SheetHTML() : st.rutNuevos ? rutNuevosSheetHTML() : st.compartir ? compartirSheetHTML() : st.cuerpo3d ? cuerpoSheetHTML() : st.codigo ? codigoSheetHTML() : st.limite ? limiteSheetHTML() : st.proInfo ? proInfoHTML() : st.legal ? legalSheetHTML() : st.apoyo ? apoyoSheetHTML() : st.pf ? pfSheetHTML() : st.rmod ? rutModSheetHTML() : st.liveFin && st.live ? finSheetHTML() : st.calentar ? calentarSheetHTML() : st.discos ? discosSheetHTML() : st.moverSel ? moverSheetHTML() : st.rutShare ? rutShareSheetHTML() : st.modoSel ? modoSheetHTML() : st.resumen ? resumenSheetHTML() : st.postEnt ? postEntSheetHTML() : st.del ? delSheetHTML() : st.exView ? exViewHTML() : st.lib ? libSheetHTML() : st.rutDelAsk ? rutDelSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
   if (st.rw) return viewRutWizard() + sheet;
   if (st.live && !st.liveMin) return viewLive() + sheet;
   if (st.wk) return viewWkForm();
@@ -1259,6 +1281,7 @@ function viewPerfil() {
     ])}
     <p class="small muted pf-foot">${api.mode === 'firebase' ? 'Tus datos se guardan en la nube y los verás en cualquier dispositivo.' : 'Modo prueba: tus datos se guardan solo en este dispositivo.'}</p>
     <div class="fb-wrap"><button type="button" class="fb-btn" data-act="pf-open" data-v="feedback">Enviar sugerencia o reportar fallo</button></div>
+    ${apoyoBtnHTML()}
     ${legalLinksHTML('pf-legal')}`;
 }
 
@@ -1598,7 +1621,7 @@ async function enter(u) {
   if (u && st.view === 'paywall' && st.vieneDeRegistro) return; // aviso de sesión repetido mientras se ve el paywall: no entrar en la app todavía
   st.user = u; st.busy = false;
   if (!u && M) M.pararPro();
-  if (!u) { pwQuitar(); st.vieneDeRegistro = false; const anon = st.ob && st.ob.anon && !st.ob.justRegistered ? st.ob : null; /* un cuestionario sin cuenta en marcha NO se pierde por un aviso «sin sesión» */ st.cfg = st.pwd = st.pf = st.proInfo = st.rutShare = st.codigo = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.view = anon && st.view === 'onboarding' ? 'onboarding' : 'auth'; st.ob = anon; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
+  if (!u) { pwQuitar(); st.vieneDeRegistro = false; const anon = st.ob && st.ob.anon && !st.ob.justRegistered ? st.ob : null; /* un cuestionario sin cuenta en marcha NO se pierde por un aviso «sin sesión» */ st.cfg = st.pwd = st.pf = st.proInfo = st.rutShare = st.codigo = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.apoyo = false; st.view = anon && st.view === 'onboarding' ? 'onboarding' : 'auth'; st.ob = anon; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
   try {
     // PUERTA OBLIGATORIA: antes de pintar la app (y antes de pedir entrenos, peso, racha…) se lee el perfil.
     // Sin `onboardingCompletado: true` solo se ve el cuestionario: nada de cabecera, barra inferior ni secciones.
@@ -1642,7 +1665,7 @@ async function entrarApp(u, { fade = false } = {}) {
 }
 
 UI.iniciarHojas(root);
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && st.rmod && !st.legal) { const b = root.querySelector('.sheet-back[data-act="rm-salir"]'); if (b) b.click(); return; } if (e.key === 'Escape' && st.legal) { const b = root.querySelector('.sheet-back[data-act="legal-close"]'); if (b) b.click(); } });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && st.rmod && !st.legal) { const b = root.querySelector('.sheet-back[data-act="rm-salir"]'); if (b) b.click(); return; } if (e.key === 'Escape' && st.apoyo && !st.legal) { const b = root.querySelector('.sheet-back[data-act="apoyo-close"]'); if (b) b.click(); return; } if (e.key === 'Escape' && st.legal) { const b = root.querySelector('.sheet-back[data-act="legal-close"]'); if (b) b.click(); } });
 root.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.tap')) { e.preventDefault(); e.target.click(); } });
 root.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-act]');
@@ -1667,6 +1690,8 @@ root.addEventListener('click', async (e) => {
   else if (act === 'pw-seguir') pwSeguir();
   else if (act === 'legal-open') { if (st.view === 'auth') { const f = root.querySelector('form'); st.authKeep = f && f.email ? { email: f.email.value, pass: f.pass.value } : null; } st.legal = legalTab(v); render(); if (st.authKeep) keepForm(st.authKeep); }
   else if (act === 'legal-tab') { st.legal = legalTab(v); render(); const t = root.querySelector('.legal-seg [aria-selected="true"]'); if (t) t.focus({ preventScroll: true }); }
+  else if (act === 'apoyo-open') { if (!apoyoHref()) return; st.apoyo = true; render(); }
+  else if (act === 'apoyo-close') { st.apoyo = false; render(); }
   else if (act === 'legal-close') { st.legal = false; render(); if (st.view === 'auth' && st.authKeep) { keepForm(st.authKeep); st.authKeep = null; } }
   else if (act === 'pf-open') { st.pf = { v, f: {}, busy: false }; st.editGoals = null; render(); if (v === 'referidos') refAbrir(); }
   else if (act === 'cod-open') { st.codigo = { val: refGuardado(), msg: '', busy: false }; render(); const i = root.querySelector('.cod-input'); if (i) i.focus(); }

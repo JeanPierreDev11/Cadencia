@@ -23,3 +23,7 @@ export const CICLISMO = false;
 // Interruptor del inicio de sesión con Apple (botón «Continuar con Apple» en el registro y en «Iniciar sesión»).
 // En false el botón queda oculto; `loginApple()` de data.js se conserva. Poner true para volver a enseñarlo (requiere Apple activado en Firebase Auth).
 export const APPLE_LOGIN = false;
+
+// Apoyo voluntario (75): enlace externo a Ko-fi en Perfil › Soporte y en el pie de la portada. Sin recompensas ni ventajas en la app.
+// Cadena vacía = no se pinta ningún acceso. Sin «https://» se añade al pintar el enlace (apoyoHref en app.js).
+export const APOYO_URL = 'ko-fi.com/cadenciafit';

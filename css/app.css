@@ -2500,6 +2500,32 @@ html:has(.lp), body:has(.lp) { background: var(--bg-primary); }
   .lp-grid, .lp-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+/* ================================================================== */
+/* 2026-11-25 · Apoyo voluntario (75): botón en Perfil › Soporte, enlace en el pie de la portada y hoja «Apoyar Cadencia».
+   Superficie y texto con variables del tema (claro y oscuro); acento, borde y radios con tokens de brand-ui.md.
+   Un solo foco amarillo: el botón «Continuar a Ko-fi». Nada de esto va en la hoja PRO. */
+/* ================================================================== */
+.apoyo-wrap { padding: 8px 16px 0; }
+.apoyo-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 46px; padding: 12px 14px; border: 1px solid var(--border-subtle); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 600; letter-spacing: .02em; text-align: center; }
+.apoyo-btn .ic { color: var(--muted); }
+.apoyo-btn:active { border-color: var(--brand-yellow); }
+:root[data-theme="light"] .apoyo-btn { border-color: var(--bd); }
+@media (prefers-color-scheme: light) { :root[data-theme="system"] .apoyo-btn { border-color: var(--bd); } }
+.apoyo-link { border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 600; padding: 10px 6px; min-height: 44px; text-decoration: underline; text-underline-offset: 3px; }
+.apoyo-link:active { color: var(--ink); }
+.lp-meta { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0 10px; }
+.lp-meta .apoyo-link { color: var(--text-secondary); }
+.apoyo-btn:focus-visible, .apoyo-link:focus-visible, .apoyo-go:focus-visible, .apoyo-cerrar:focus-visible { outline: 2px solid var(--brand-yellow); outline-offset: 2px; }
+.sheet.apoyo-sheet { display: flex; flex-direction: column; }
+.apoyo-body { display: grid; gap: 12px; padding: 4px 20px 8px; overflow-y: auto; min-height: 0; }
+.apoyo-body p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--ink); }
+.apoyo-body .apoyo-clave { padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface2); }
+.apoyo-body .apoyo-nota { font-size: 13px; color: var(--muted); }
+.apoyo-foot { display: grid; gap: 8px; }
+.apoyo-foot .btn { min-height: 48px; border-radius: var(--r-sm); text-decoration: none; }
+.apoyo-foot .apoyo-go { background: var(--brand-yellow); color: var(--text-on-brand); }
+.apoyo-foot .apoyo-cerrar { border-color: var(--muted); color: var(--ink); }
+
 @media (min-width: 1024px) {
   :root { --sb-w: 104px; --col: 800px; }
 

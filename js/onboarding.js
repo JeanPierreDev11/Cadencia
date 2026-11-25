@@ -7,7 +7,7 @@
 import { esc, nf, num, I } from './util.js';
 import { legalLinksHTML, legalCheckHTML } from './legal.js';
 import { betaTagHTML, BETA_AVISO_REGISTRO } from './pro.js';
-import { APPLE_LOGIN } from './config.js';
+import { APPLE_LOGIN, APOYO_URL } from './config.js';
 
 /* ---------- datos ---------- */
 // Los ids de «dónde» son los mismos que usa el asistente de rutinas (gym, casa, parque), así lo guardado le sirve de punto de partida.
@@ -249,6 +249,8 @@ export function expHTML(o) {
 // Primera pantalla de quien NO tiene sesión: el cuestionario empieza sin cuenta (los botones los gestiona app.js).
 // (74) Dos versiones: en la PWA instalada (`opts.pwa`) la bienvenida compacta de siempre; en el navegador, la portada pública (`portadaHTML`).
 // `opts.ref` = hay un código de invitación guardado (?ref=): se avisa de los 7 días de PRO.
+// Apoyo voluntario (75): enlace discreto del pie; abre la hoja informativa de app.js (no va a Ko-fi directo). Oculto si APOYO_URL está vacía.
+const apoyoLinkHTML = (cls = '') => (String(APOYO_URL || '').trim() ? `<button type="button" class="apoyo-link ${cls}" data-act="apoyo-open">Apoyar el proyecto</button>` : '');
 const REF_AVISO = '<p class="lp-ref" role="status"><b>Invitación aplicada</b> · Al registrarte tendrás 7 días de Cadencia PRO gratis.</p>';
 export function bienvenidaHTML(hero, hayAvance, opts = {}) {
   if (!opts.pwa) return portadaHTML(hayAvance, opts);
@@ -264,6 +266,7 @@ export function bienvenidaHTML(hero, hayAvance, opts = {}) {
       <button type="button" class="btn block" data-act="ob-empezar">${hayAvance ? 'SEGUIR DONDE LO DEJÉ' : 'EMPEZAR'}</button>
       <button type="button" class="link bv-in" data-act="auth-ingresar">¿Ya tienes cuenta? Iniciar sesión</button>
       ${legalLinksHTML()}
+      ${apoyoLinkHTML('bv-apoyo')}
     </div>
   </div>`;
 }
@@ -335,7 +338,7 @@ function portadaHTML(hayAvance, opts) {
     </main>
     <footer class="lp-foot"><div class="lp-in lp-foot-in">
       <span class="lp-brand sm">${LP_MARCA}<span>Cadencia</span></span>
-      <span class="lp-web">@cadenciafit.app</span>
+      <span class="lp-meta"><span class="lp-web">@cadenciafit.app</span>${apoyoLinkHTML('lp-apoyo')}</span>
       ${legalLinksHTML('lp-legal')}
     </div></footer>
   </div>`;
