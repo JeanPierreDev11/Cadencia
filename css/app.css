@@ -2367,6 +2367,23 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .cam.fail .cam-manual { background: var(--brand-yellow); border-color: var(--brand-yellow); color: var(--text-on-brand); justify-self: center; }
 .cam.fail .cam-err { top: 28%; }
 
+/* 2026-11-25 · Entreno en vivo: nota fija y descanso por ejercicio (70). Superficie y texto con variables del tema (claro y oscuro); acento y radios con tokens de brand-ui.md. */
+.lex-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.lex-tools .warm-btn { min-height: 44px; padding: 0 12px; color: var(--accent-text); }
+.lex-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; border: 1px solid var(--muted); border-radius: var(--r-sm); background: transparent; color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.lex-chip.on { border-color: var(--brand-yellow); }
+.lex-chip .ic, .lex-nota .ic { width: 18px; height: 18px; vertical-align: 0; }
+.lex-nota { display: flex; align-items: flex-start; gap: 8px; width: 100%; min-height: 44px; margin: 0; padding: 11px 12px; border: 0; border-left: 2px solid var(--brand-yellow); border-radius: var(--r-sm); background: var(--surface2); color: var(--ink); font: inherit; font-size: 14px; line-height: 1.4; text-align: left; }
+.lex-nota span { min-width: 0; overflow-wrap: anywhere; }
+.lex-nota .ic { flex: none; margin-top: 1px; color: var(--muted); }
+.lex-nota-ed { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.lex-nota-ed .input { min-height: 44px; font-size: 16px; }
+.lex-nota-ed .btn { min-height: 44px; }
+.lex-desc { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.lex-desc button { min-height: 44px; border: 1px solid var(--muted); border-radius: var(--r-sm); background: transparent; color: var(--ink); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.lex-desc button[aria-pressed="true"] { background: var(--brand-yellow); border-color: var(--brand-yellow); color: var(--text-on-brand); }
+.lex-chip:focus-visible, .lex-nota:focus-visible, .lex-desc button:focus-visible { outline: 2px solid var(--brand-yellow); outline-offset: 2px; }
+
 @media (min-width: 1024px) {
   :root { --sb-w: 104px; --col: 800px; }
 

@@ -40,6 +40,27 @@ const abrirSuscripcion = () => { st.limite = null; st.pf = { v: 'suscripcion', f
 const cargaGuardada = (n) => { const c = ((st.profile && st.profile.cargaEj) || {})[E.claveEj(n)]; return c === 'por_lado' || c === 'total' ? c : E.cargaDefecto(n); };
 const cargaLive = (e) => (e.carga === 'por_lado' || e.carga === 'total' ? e.carga : cargaGuardada(e.n));
 const cargaNota = (e) => (e.uni ? 'Peso de cada lado · Volumen = Izq. + Der.' : cargaLive(e) === 'por_lado' ? 'Peso por lado · Volumen ×2' : 'Peso total de la carga');
+// Nota fija y descanso por ejercicio (70): mapas del perfil `notasEj` {clave: texto} y `descansoEj` {clave: segundos; 0 = desactivado}, con clave E.claveEj(nombre).
+const NOTA_MAX = 180;
+const DESC_OPC = [0, 60, 90, 120, 150, 180, 240, 300];
+const notaDe = (n) => { const v = ((st.profile && st.profile.notasEj) || {})[E.claveEj(n)]; return typeof v === 'string' ? v : ''; };
+const descansoDe = (n) => { const v = ((st.profile && st.profile.descansoEj) || {})[E.claveEj(n)]; return typeof v === 'number' && v >= 0 && v <= 600 ? v : null; }; // null = sin elegir
+const descTxt = (sec) => (!sec ? 'Off' : sec < 120 ? `${sec} s` : mmss(sec));
+// Guarda el mapa completo (v null = quitar la clave). Va con `saveProfileMapa` para que Firestore borre las claves quitadas.
+function guardarMapaEj(campo, k, v) {
+  const m = { ...((st.profile && st.profile[campo]) || {}) };
+  if (v == null) delete m[k]; else m[k] = v;
+  st.profile = { ...st.profile, [campo]: m };
+  if (st.user) Promise.resolve(api.saveProfileMapa(st.user.uid, campo, m)).catch(() => toast('No se pudo guardar. Revisa la conexión e inténtalo de nuevo.'));
+}
+// Guarda la nota del campo en edición (sin render: lo hace quien llama). Nunca al editar un entreno pasado.
+function notaGuardar(el) {
+  const L = st.live, e = L && L.ex[Number(el.dataset.nota)];
+  st.notaEd = null; st.notaBorr = null;
+  if (!e || L.edit) return;
+  const txt = el.value.replace(/\s+/g, ' ').trim().slice(0, NOTA_MAX);
+  if (txt !== notaDe(e.n)) guardarMapaEj('notasEj', E.claveEj(e.n), txt || null);
+}
 const ormHTML = (ex) => { const v = E.mejor1RM(ex.s, num, ex.uni); return v == null ? '' : `${I.crown} 1RM estimado: ${kgTxt(v)} kg`; };
 const rutinaOf = () => { const r = st.profile && st.profile.rutina; return r && Array.isArray(r.dias) && r.dias.length && r.sesiones ? r : null; };
 // Todas tus rutinas guardadas; la activa es la que usa la semana, Inicio y el entrenamiento en directo.
@@ -1760,6 +1781,21 @@ function cardioBlockHTML(e, i, plano) {
       ${e.s.length > 1 ? `<button type="button" class="link" data-act="live-set-del" data-v="${i}">Quitar el último</button>` : ''}</div>
   </section>`;
 }
+// Debajo de la cabecera del ejercicio (fuera de `button.lex-view`): Calentar · Nota · Descanso, la nota guardada y el selector de descanso.
+function liveHerramientasHTML(e, i, L, plano, pro, conPeso) {
+  const nota = notaDe(e.n), ed = st.notaEd === i && !L.edit, ds = descansoDe(e.n), abierto = st.descSel === i && !plano;
+  const warm = !L.edit && conPeso ? `<button type="button" class="warm-btn ${pro ? '' : 'is-locked'}" data-act="live-warm" data-v="${i}" aria-label="Calentamiento para ${esc(e.n)}${pro ? '' : ' (Cadencia Pro)'}">${I.flame} Calentar${pro ? '' : ' <span class="protag">Pro</span>'}</button>` : '';
+  const notaBtn = !L.edit && !nota && !ed ? `<button type="button" class="lex-chip" data-act="live-nota" data-v="${i}" aria-label="Añadir una nota fija a ${esc(e.n)}">${I.note}Nota</button>` : '';
+  // Sin elegir: el descanso por defecto de siempre (se ve el tiempo). Elegido: borde amarillo; Off = no arranca solo.
+  const dAct = ds == null ? restDur() : ds;
+  const desc = plano ? '' : `<button type="button" class="lex-chip ${ds != null ? 'on' : ''}" data-act="live-desc" data-v="${i}" aria-expanded="${abierto}" aria-label="Descanso tras cada serie de ${esc(e.n)}: ${ds == null ? `${descTxt(dAct)} por defecto` : ds ? descTxt(ds) : 'desactivado'}. Tocar para cambiar">${I.timer}Descanso ${descTxt(dAct)}</button>`;
+  const fila = warm || notaBtn || desc ? `<div class="lex-tools">${warm}${notaBtn}${desc}</div>` : '';
+  const opc = abierto ? `<div class="lex-desc" role="group" aria-label="Descanso entre series de ${esc(e.n)}">${DESC_OPC.map((sec) => `<button type="button" data-act="live-desc-set" data-v="${i}" data-s="${sec}" aria-pressed="${ds === sec}">${descTxt(sec)}</button>`).join('')}</div>` : '';
+  const notaH = ed
+    ? `<div class="lex-nota-ed"><input class="input" data-nota="${i}" maxlength="${NOTA_MAX}" value="${esc(st.notaBorr != null ? st.notaBorr : nota)}" placeholder="Ajuste de máquina, agarre o recordatorio..." enterkeyhint="done" aria-label="Nota fija de ${esc(e.n)}"><button type="button" class="btn small" data-act="live-nota-ok" data-v="${i}">Guardar</button></div>`
+    : nota ? (L.edit ? `<p class="lex-nota">${I.note}<span>${esc(nota)}</span></p>` : `<button type="button" class="lex-nota" data-act="live-nota" data-v="${i}" aria-label="Nota de ${esc(e.n)}: ${esc(nota)}. Tocar para editar">${I.note}<span>${esc(nota)}</span></button>`) : '';
+  return fila + opc + notaH;
+}
 function viewLive() {
   const L = st.live, t = liveTotals(), today = liveIsToday(), plano = livePlano(L), pro = esPro();
   const fmtKg = (v) => (v ? String(v).replace('.', ',') : '');
@@ -1770,9 +1806,9 @@ function viewLive() {
       ${i > 0 && L.ex[i - 1].superset ? '<span class="ss-tag">Superserie</span>' : ''}
       <div class="lex-head"><button type="button" class="rx-view lex-view" data-act="ex-view" data-n="${esc(e.n)}" aria-label="Ver cómo se hace ${esc(e.n)}">${exThumb(x || { eq: 'corporal' })}
         <span class="lex-t"><b>${esc(e.n)}</b><span class="small muted">${x ? E.MUSCULOS[x.m] : ''}${e.obj ? ` · Objetivo ${esc(e.obj)}` : ''}</span>${esPro() ? `<span class="orm" data-orm="${i}" ${ormHTML(e) ? '' : 'hidden'}>${ormHTML(e)}</span>` : ''}</span></button>
-        ${!L.edit && conPeso ? `<button type="button" class="warm-btn ${pro ? '' : 'is-locked'}" data-act="live-warm" data-v="${i}" aria-label="Calentamiento para ${esc(e.n)}${pro ? '' : ' (Cadencia Pro)'}">${I.flame} Calentar${pro ? '' : ' <span class="protag">Pro</span>'}</button>` : ''}
         <button type="button" class="iconbtn" data-act="live-swap" data-v="${i}" aria-label="Cambiar ${esc(e.n)}">${I.swap}</button>
         <button type="button" class="iconbtn" data-act="live-del" data-v="${i}" aria-label="Quitar ${esc(e.n)}">${I.trash}</button></div>
+      ${liveHerramientasHTML(e, i, L, plano, pro, conPeso)}
       ${uniOk ? `<div class="seg mini" role="group" aria-label="Lados"><button type="button" data-act="live-uni" data-v="${i}" data-u="0" aria-pressed="${!e.uni}">Ambos lados</button><button type="button" data-act="live-uni" data-v="${i}" data-u="1" aria-pressed="${!!e.uni}">Unilateral</button></div>` : ''}
       ${conPeso || e.uni ? `<p class="lados-nota small muted">${cargaNota(e)}</p>` : ''}
       <div class="ltab ${plano ? 'simple' : ''}">
@@ -1831,9 +1867,9 @@ const liveBarHTML = () => `<button type="button" class="livebar" data-act="live-
 const REST_DEF = 90;
 const restDur = () => { const v = Number(lsGet('cadencia-rest')); return v >= 15 && v <= 600 ? v : REST_DEF; };
 let audioCtx = null;
-function restStart() {
-  const dur = restDur();
-  st.rest = { end: Date.now() + dur * 1000, dur, done: false };
+function restStart(sec) { // sec: descanso del ejercicio (70); sin él, el de por defecto
+  const dur = sec > 0 ? sec : restDur();
+  st.rest = { end: Date.now() + dur * 1000, dur, done: false, ej: sec > 0 };
   // El sonido tiene que prepararse durante un toque (si no, el iPhone no lo deja sonar luego).
   try { const AC = window.AudioContext || window.webkitAudioContext; if (AC && !audioCtx) audioCtx = new AC(); if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); } catch (e) { /* sin sonido */ }
 }
@@ -1841,7 +1877,7 @@ function restAjustar(sec) {
   const R = st.rest; if (!R) return;
   const left = Math.max(0, R.end - Date.now()) / 1000, nl = Math.max(0, left + sec);
   R.dur = Math.max(15, Math.min(600, Math.round((R.dur + sec) / 15) * 15));
-  lsSet('cadencia-rest', String(R.dur));
+  if (!R.ej) lsSet('cadencia-rest', String(R.dur)); // el ajuste solo cambia el de por defecto, no el elegido para el ejercicio
   R.end = Date.now() + nl * 1000;
   if (nl <= 0) restFin(); else restPaint();
 }
@@ -2506,8 +2542,8 @@ root.addEventListener('click', async (e) => {
     if (act === 'live-min') { st.liveMin = true; render(); return window.scrollTo(0, 0); }
     if (act === 'live-open') { st.liveMin = false; render(); return window.scrollTo(0, 0); }
     if (act === 'live-lib') return libOpen({ mode: 'add', ctx: 'live' });
-    if (act === 'live-swap') return libOpen({ mode: 'swap', ctx: 'live', i: Number(v) });
-    if (act === 'live-del') { Lv.ex.splice(Number(v), 1); liveSave(); return render(); }
+    if (act === 'live-swap') { st.notaEd = st.descSel = null; return libOpen({ mode: 'swap', ctx: 'live', i: Number(v) }); }
+    if (act === 'live-del') { Lv.ex.splice(Number(v), 1); st.notaEd = st.descSel = null; liveSave(); return render(); }
     if (act === 'live-set-add') {
       const ex = Lv.ex[Number(v)], last = ex.s[ex.s.length - 1] || { kg: '' };
       // Cinta: copia velocidad e inclinación del intervalo anterior (lo escrito o, si está vacío, su referencia en gris).
@@ -2523,8 +2559,17 @@ root.addEventListener('click', async (e) => {
       if (!on && car && !rellenarCardio(ex, j)) { toast(ex.cm === 'aire' ? 'Escribe el tiempo o la distancia' : 'Escribe los minutos'); return; }
       if (!on && !car && !rellenarSerie(ex, j)) { toast('Escribe las repeticiones de la serie'); return; }
       marcar(s, !on); Lv.msg = '';
-      if (!on && !car) restStart(); else if (on && st.rest) st.rest = null; // tras el cardio no hay descanso entre series
+      // Serie de trabajo hecha: descanso del ejercicio (Off = nada; sin elegir = el de por defecto). Tras calentamiento o cardio, no.
+      if (!on && !car && !s.w) { const ds = descansoDe(ex.n); if (ds !== 0) restStart(ds || 0); } else if (on && st.rest) st.rest = null;
       liveSave(); return render();
+    }
+    if (act === 'live-nota') { st.notaEd = Number(v); st.notaBorr = null; st.descSel = null; render(); const el = root.querySelector(`[data-nota="${v}"]`); if (el) { el.focus(); const n = el.value.length; try { el.setSelectionRange(n, n); } catch (err) { /* nada */ } } return; }
+    if (act === 'live-nota-ok') { const el = root.querySelector(`[data-nota="${v}"]`); if (el) notaGuardar(el); else st.notaEd = null; return render(); }
+    if (act === 'live-desc') { st.descSel = st.descSel === Number(v) ? null : Number(v); return render(); }
+    if (act === 'live-desc-set') {
+      const ex = Lv.ex[Number(v)], sec = Number(b.dataset.s); st.descSel = null;
+      if (ex && !Lv.edit && DESC_OPC.includes(sec)) { guardarMapaEj('descansoEj', E.claveEj(ex.n), sec); toast(sec ? `Descanso de ${ex.n}: ${descTxt(sec)}` : `Descanso automático desactivado en ${ex.n}`); }
+      return render();
     }
     if (act === 'live-lock') { toast('Función Pro'); return; }
     if (act === 'live-warm') {
@@ -2550,10 +2595,10 @@ root.addEventListener('click', async (e) => {
       return render();
     }
     if (act === 'live-uni') { Lv.ex[Number(v)].uni = b.dataset.u === '1'; liveSave(); return render(); }
-    if (act === 'live-fin') { st.rest = null; return liveAbrirFin(); }
+    if (act === 'live-fin') { st.rest = null; st.notaEd = st.descSel = null; return liveAbrirFin(); }
     if (act === 'live-discard') {
       if (!window.confirm(Lv.edit ? '¿Salir sin guardar los cambios?' : '¿Descartar este entrenamiento? Se perderán las series apuntadas.')) return;
-      st.live = null; st.liveMin = false; st.rest = null; liveSave(); render(); toast(Lv.edit ? 'Edición cancelada' : 'Entrenamiento descartado'); return;
+      st.live = null; st.liveMin = false; st.rest = null; st.notaEd = st.descSel = null; liveSave(); render(); toast(Lv.edit ? 'Edición cancelada' : 'Entrenamiento descartado'); return;
     }
   }
 
@@ -2670,6 +2715,7 @@ root.addEventListener('input', (e) => {
   if (st.calentar && t.dataset.calkg != null) { st.calentar.kg = t.value; return; }
   if (st.postEnt && t.dataset.pe) { if (!PE_PREG.some((q) => q[0] === t.dataset.pe)) return; t.value = t.value.slice(0, PE_MAX); st.postEnt.t[t.dataset.pe] = t.value; postEntBoton(); return; }
   if (st.liveFin && t.dataset.fin) { t.value = t.value.replace(/\D/g, '').slice(0, 2); st.liveFin[t.dataset.fin] = t.value; return; }
+  if (st.live && t.dataset.nota != null) { st.notaBorr = t.value; return; } // borrador de la nota: sin render
   if (st.live && t.dataset.livename != null) { st.live.nombre = t.value; st.live.custom = true; liveSave(); return; }
   if (st.live && t.dataset.lv) {
     const [i, j, k] = t.dataset.lv.split('.');
@@ -2710,6 +2756,19 @@ root.addEventListener('input', (e) => {
   if (kc) { const v = wkKcal(); kc.textContent = v ? '≈ ' + nf(v) + ' kcal' : '–'; }
 });
 
+// Nota fija (70): se guarda al salir del campo o con Intro; mientras se escribe no hay render (no se pierde el foco en el móvil).
+root.addEventListener('focusout', (e) => {
+  const t = e.target;
+  if (!(st.live && t.dataset && t.dataset.nota != null) || st.notaEd !== Number(t.dataset.nota)) return;
+  notaGuardar(t);
+  // Repinta un instante después: si el dedo iba a otro botón, su clic ya habrá repintado (y el campo ya no está).
+  setTimeout(() => { if (document.contains(t) && st.notaEd == null) render(); }, 250);
+});
+root.addEventListener('keydown', (e) => {
+  const t = e.target;
+  if (e.key !== 'Enter' || !(st.live && t.dataset && t.dataset.nota != null)) return;
+  e.preventDefault(); notaGuardar(t); render();
+});
 root.addEventListener('focusin', (e) => {
   const t = e.target;
   if (t.matches && t.matches('[data-re$=".series"], [data-re$=".reps"], [data-re$=".min"], [data-lv]')) setTimeout(() => { try { t.select(); } catch (err) { /* nada */ } }, 0);

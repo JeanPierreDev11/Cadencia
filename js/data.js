@@ -139,6 +139,10 @@ async function firebaseBackend(config) {
     async saveProfile(uid, data) {
       await F.setDoc(userRef(uid), { ...data, actualizado: F.serverTimestamp() }, { merge: true });
     },
+    // Sustituye un mapa entero del perfil (p. ej. `notasEj`): `setDoc` con merge mezclaría los mapas y no borraría las claves quitadas.
+    async saveProfileMapa(uid, campo, mapa) {
+      await F.updateDoc(userRef(uid), { [campo]: mapa, actualizado: F.serverTimestamp() });
+    },
     // Lista prioritaria de Cadencia PRO (beta, sin cobros): guarda el interés con fecha del SERVIDOR en users/{uid}.
     async interesPro(uid) {
       await F.setDoc(userRef(uid), { interesPro: true, fechaInteresPro: F.serverTimestamp(), actualizado: F.serverTimestamp() }, { merge: true });
@@ -302,6 +306,7 @@ function localBackend() {
       const s = read(); const u = byUid(s, uid); if (!u) return;
       u.profile = { ...u.profile, ...data, actualizado: Date.now() }; write(s);
     },
+    async saveProfileMapa(uid, campo, mapa) { const s = read(); const u = byUid(s, uid); if (!u) return; u.profile = { ...u.profile, [campo]: mapa, actualizado: Date.now() }; write(s); },
     async interesPro(uid) {
       const s = read(); const u = byUid(s, uid); if (!u) return;
       u.profile = { ...u.profile, interesPro: true, fechaInteresPro: Date.now(), actualizado: Date.now() }; write(s);
