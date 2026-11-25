@@ -1,8 +1,9 @@
-// Cuestionario inicial (rediseño 2026-11-15). Aquí viven los textos, los cálculos y el HTML de cada pantalla.
+// Cuestionario inicial (rediseño 2026-11-15; directo desde la Fase B paso 4, 2026-11-25 (73)). Aquí viven los textos, los cálculos y el HTML de cada pantalla.
 // No guarda estado: app.js tiene `st.ob` y llama a estas funciones. Pantallas (en orden):
-//   perfil → donde → material (siempre; con Gimnasio sale su lista pre-marcada) → dias → tiempo → peso (actual + qué quiere lograr) → meta (peso objetivo)
-//   → ritmo (con la fecha en vivo) → obstaculos → psicologia → historia → carga (sin menú ni botón, se salta sola) → plan → firma (con pausa dramática) → registro (solo si el cuestionario se hizo SIN cuenta: `o.anon`)
-// Desde la Fase 3 el cuestionario se hace ANTES de crear la cuenta; «Tus datos» se reparte en pantallas sueltas (nombre, sexo, edad, altura, exp), sin número de paso.
+//   basicos (nombre, apellidos y sexo) → medidas (edad y estatura) → exp → donde → material (siempre; con Gimnasio sale su lista pre-marcada) → dias → tiempo
+//   → peso (actual + qué quiere lograr) → meta (peso objetivo) → ritmo (con la fecha en vivo) → obstaculos → plan → registro (solo si el cuestionario se hizo SIN cuenta: `o.anon`)
+// Sin pantallas de relleno ni esperas artificiales: (73) retiró psicologia, historia, carga (4,5 s) y firma (pausa de 5,6 s + mantener pulsado 2 s).
+// Los pasos antiguos guardados en `cadencia-ob-anon` se recolocan con `pasoVigente`.
 import { esc, nf, num, I } from './util.js';
 import { legalLinksHTML, legalCheckHTML } from './legal.js';
 import { betaTagHTML, BETA_AVISO_REGISTRO } from './pro.js';
@@ -45,6 +46,15 @@ export const esGym = (id) => MATERIAL_GYM.some((m) => m.id === id);
 // «¿Cuánto dura tu sesión ideal?» (minutos por sesión; 90 = 90 o más).
 export const TIEMPOS = [[15, 'Relámpago'], [30, 'Directo al grano'], [45, 'Equilibrado'], [60, 'Entreno completo'], [90, 'Modo Bestia']];
 export const tiempoTxt = (m) => `${m}${m >= 90 ? '+' : ''} min`;
+// Chips compactos de minutos por sesión (15 · 30 · 45 · 60 · 90). Los usa el asistente de rutinas (`rw-min`) y Perfil › Detalles (`pf-min`).
+export function minutosSegHTML(sel, act, titulo, ayuda = '') {
+  const m = TIEMPOS.some(([x]) => x === Number(sel)) ? Number(sel) : 60;
+  return `<div class="min-blk" role="group" aria-label="${esc(titulo)}">
+    <span class="min-t">${esc(titulo)} · <b>${m}${m >= 90 ? '+' : ''} min</b></span>
+    <div class="min-seg">${TIEMPOS.map(([x]) => `<button type="button" data-act="${act}" data-v="${x}" aria-pressed="${m === x}" aria-label="${x}${x >= 90 ? ' o más' : ''} minutos">${x}${x >= 90 ? '+' : ''}</button>`).join('')}</div>
+    ${ayuda ? `<small class="muted">${esc(ayuda)}</small>` : ''}
+  </div>`;
+}
 // «¿Cuál es tu mayor enemigo al entrenar?» (selección única). Los ids son los que se guardan en `obstaculo` (no cambian: el servidor los lee).
 export const OBSTACULOS = [
   { id: 'tiempo', t: 'Falta de tiempo libre', ico: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>' },
@@ -53,7 +63,8 @@ export const OBSTACULOS = [
   { id: 'lesiones', t: 'Molestias articulares o lesiones', ico: '<path d="M8.5 15.5l7-7M5 12a3.5 3.5 0 0 1 0-5l2-2a3.5 3.5 0 0 1 5 0l7 7a3.5 3.5 0 0 1 0 5l-2 2a3.5 3.5 0 0 1-5 0z"/>' },
   { id: 'equipamiento', t: 'Poco material a mano', ico: '<path d="M4 10v4M7 7v10M17 7v10M20 10v4M7 12h10"/><path d="M3 3l18 18"/>' },
 ];
-// «¿Te suena alguna de estas situaciones?»: cuatro frases con Sí / No. Se guardan como booleanos en `psico` { [id]: true|false }.
+// «¿Te suena alguna de estas situaciones?» (pantalla retirada en (73)). Se conserva la lista para leer y respetar el `psico` de cuentas antiguas
+// (booleanos por frase; el Coach AI los sigue leyendo si existen). Las cuentas nuevas no lo rellenan.
 export const PSICO = [
   { id: 'constancia', t: 'Empiezo con motivación pero siempre acabo dejándolo.' },
   { id: 'eleccion', t: 'Llego a entrenar y no tengo claro qué ejercicios hacer.' },
@@ -67,9 +78,9 @@ export const EXPS = [
   { id: 'anios', t: 'Avanzado', s: 'Varios años' },
 ];
 export const FREQ = [[2, 'Para arrancar'], [3, 'Constante'], [4, 'Comprometido'], [5, 'Increíble'], [6, 'Sin excusas'], [7, 'Imparable']];
-// Número de paso que se enseña («Paso 2 de 10»); «perfil» es la pantalla previa con tus datos. Si cambias `flujo`, cambia esto a la vez.
-// `carga` NO tiene número (no enseña el menú superior).
-export const PASO = { donde: 1, material: 1, dias: 2, tiempo: 3, peso: 4, meta: 5, ritmo: 6, obstaculos: 7, psicologia: 8, historia: 9, plan: 10, firma: 11 };
+// Número de paso que se enseña («Paso 2 de 11»). Si cambias `flujo`, cambia esto a la vez. `donde` y `material` comparten número (es la misma pregunta en dos pantallas);
+// `registro` no tiene número («Último paso»).
+export const PASO = { basicos: 1, medidas: 2, exp: 3, donde: 4, material: 4, dias: 5, tiempo: 6, peso: 7, meta: 8, ritmo: 9, obstaculos: 10, plan: 11 };
 export const PASOS = 11;
 // Versión del cuestionario (se guarda en `onboardingVersion` al firmar). Quien lo firmó con una versión MENOR lo repite una vez (puerta en app.js: `onboardingHecho`).
 // Súbela SOLO cuando las preguntas nuevas importen de verdad: obliga a TODAS las cuentas a repetirlo. 1 = sin campo (15-11) · 2 = Fase 1 (16-11).
@@ -82,7 +93,6 @@ export const METAS = [
 ];
 // Ritmo de progreso (paso 6, después del peso meta: la fecha en vivo necesita los dos pesos): lo elige la persona, de 0,25 a 1 kg por semana.
 export const RITMO = { min: 0.25, max: 1, step: 0.05, def: 0.5 };
-export const FIRMA_MS = 2000;
 
 const svg = (p, s = 22, w = 2) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
 const tick = (on) => `<span class="tick">${on ? I.check : ''}</span>`;
@@ -90,21 +100,21 @@ const expDe = (id) => EXPS.find((e) => e.id === id);
 
 /* ---------- lógica ---------- */
 // `material` sale SIEMPRE (con solo Gimnasio también: lista de gimnasio pre-marcada). `meta` va ANTES de `ritmo` para poder calcular la fecha en vivo al deslizar.
-export const flujo = (o) => ['nombre', 'sexo', 'edad', 'altura', 'exp', 'donde', 'material', 'dias', 'tiempo', 'peso', 'meta', 'ritmo', 'obstaculos', 'psicologia', 'historia', 'carga', 'plan', 'firma', ...(o && o.anon ? ['registro'] : [])];
+export const flujo = (o) => ['basicos', 'medidas', 'exp', 'donde', 'material', 'dias', 'tiempo', 'peso', 'meta', 'ritmo', 'obstaculos', 'plan', ...(o && o.anon ? ['registro'] : [])];
+// Pasos de versiones anteriores (un avance a medias guardado en `cadencia-ob-anon`) → paso vigente más cercano. Lo desconocido vuelve al principio.
+const PASO_ANTIGUO = { nombre: 'basicos', sexo: 'basicos', edad: 'medidas', altura: 'medidas', psicologia: 'plan', historia: 'plan', carga: 'plan', firma: 'plan' };
+export const pasoVigente = (step, o) => { const f = flujo(o); return f.includes(step) ? step : PASO_ANTIGUO[step] || f[0]; };
 
 export function puedeSeguir(o) {
   switch (o.step) {
-    case 'nombre': return !!(o.nombre.trim() && o.apellidos.trim());
-    case 'sexo': return !!o.sexo;
-    case 'edad': return !!String(o.edad).trim();
-    case 'altura': return !!String(o.alturaCm).trim();
+    case 'basicos': return !!(o.nombre.trim() && o.apellidos.trim() && o.sexo);
+    case 'medidas': return !!(String(o.edad).trim() && String(o.alturaCm).trim());
     case 'exp': return !!o.exp;
     case 'donde': return o.donde.length > 0;
     case 'material': return o.material.length > 0;
     case 'dias': return o.freq >= 2 && o.freq <= 7;
     case 'tiempo': return TIEMPOS.some(([m]) => m === o.tiempo);
     case 'obstaculos': return OBSTACULOS.some((x) => x.id === o.obstaculo);
-    case 'psicologia': return PSICO.every((p) => typeof (o.psico || {})[p.id] === 'boolean');
     case 'peso': return !!(o.pesoKg && o.meta);
     case 'ritmo': return o.ritmo >= RITMO.min && o.ritmo <= RITMO.max;
     case 'meta': return !!o.pesoObjetivo;
@@ -210,28 +220,26 @@ const fechaLarga = (d) => d.toLocaleDateString('es-ES', { day: 'numeric', month:
 const fechaCorta = (d) => d.toLocaleDateString('es-ES', { month: 'short', year: 'numeric' }).replace('.', '');
 
 /* ---------- pantallas ---------- */
-// «Tus datos» en pantallas sueltas y rápidas (una pregunta por pantalla).
-export function nombreHTML(o) {
-  return `<h1 class="ob-title">¿Cómo te llamas?</h1>
-    <p class="ob-sub">Así personalizamos tu plan y tu compromiso.</p>
+// «Tus datos» en dos pantallas: nombre, apellidos y sexo (`basicos`); edad y estatura (`medidas`).
+export function basicosHTML(o) {
+  return `<h1 class="ob-title">Tus datos</h1>
+    <p class="ob-sub">Tu nombre personaliza el plan; el sexo sirve para calcular tu gasto de energía.</p>
     <label class="field"><span>Nombre</span><input class="input" data-ob="nombre" value="${esc(o.nombre)}" maxlength="40" autocomplete="given-name" required></label>
-    <label class="field"><span>Apellidos</span><input class="input" data-ob="apellidos" value="${esc(o.apellidos)}" maxlength="60" autocomplete="family-name" required></label>`;
-}
-export function sexoHTML(o) {
-  return `<h1 class="ob-title">¿Cuál es tu sexo?</h1>
-    <p class="ob-sub">Lo usamos para calcular cuánta energía gasta tu cuerpo.</p>
-    <div class="pair">
-      <button type="button" class="choice" data-act="sex" data-v="hombre" aria-pressed="${o.sexo === 'hombre'}"><span class="ico">${I.male}</span>Hombre</button>
-      <button type="button" class="choice" data-act="sex" data-v="mujer" aria-pressed="${o.sexo === 'mujer'}"><span class="ico">${I.female}</span>Mujer</button>
+    <label class="field"><span>Apellidos</span><input class="input" data-ob="apellidos" value="${esc(o.apellidos)}" maxlength="60" autocomplete="family-name" required></label>
+    <div class="field" role="group" aria-labelledby="ob-sexo-l"><span id="ob-sexo-l">Sexo</span>
+      <div class="pair">
+        <button type="button" class="choice" data-act="sex" data-v="hombre" aria-pressed="${o.sexo === 'hombre'}"><span class="ico">${I.male}</span>Hombre</button>
+        <button type="button" class="choice" data-act="sex" data-v="mujer" aria-pressed="${o.sexo === 'mujer'}"><span class="ico">${I.female}</span>Mujer</button>
+      </div>
     </div>`;
 }
-export function edadHTML(o) {
-  return `<h1 class="ob-title">¿Cuántos años tienes?</h1>
-    <label class="field"><span class="sr-only">Edad</span><div class="big-input"><input name="edad" inputmode="numeric" pattern="[0-9]*" maxlength="3" value="${esc(o.edad)}" placeholder="30" data-ob="edad" autofocus><em>años</em></div></label>`;
-}
-export function alturaHTML(o) {
-  return `<h1 class="ob-title">¿Cuánto mides?</h1>
-    <label class="field"><span class="sr-only">Estatura</span><div class="big-input"><input name="alturaCm" inputmode="decimal" maxlength="4" value="${esc(o.alturaCm)}" placeholder="175" data-ob="alturaCm" autofocus><em>cm</em></div></label>`;
+export function medidasHTML(o) {
+  return `<h1 class="ob-title">Edad y estatura</h1>
+    <p class="ob-sub">Con tu peso, las usamos para calcular tus calorías.</p>
+    <div class="ob-medidas">
+      <label class="field"><span>Edad</span><div class="big-input"><input name="edad" inputmode="numeric" pattern="[0-9]*" maxlength="3" value="${esc(o.edad)}" placeholder="30" data-ob="edad" autofocus><em>años</em></div></label>
+      <label class="field"><span>Estatura</span><div class="big-input"><input name="alturaCm" inputmode="decimal" maxlength="4" value="${esc(o.alturaCm)}" placeholder="175" data-ob="alturaCm"><em>cm</em></div></label>
+    </div>`;
 }
 export function expHTML(o) {
   return `<h1 class="ob-title">¿Cuánta experiencia tienes entrenando?</h1>
@@ -316,15 +324,6 @@ export function obstaculosHTML(o) {
       <span class="ico">${svg(x.ico)}</span><span class="t">${x.t}</span>${tick(o.obstaculo === x.id)}</button>`).join('')}</div>`;
 }
 
-// «¿Te suena alguna de estas situaciones?»: cuatro frases en lista con Sí / No (`data-act="ob-psico"`, `data-k` = id de la frase, `data-v` = 1 | 0). Hay que contestar las cuatro.
-export function psicologiaHTML(o) {
-  const ps = o.psico || {};
-  return `<h1 class="ob-title">¿Te suena alguna de estas situaciones?</h1>
-    <p class="ob-sub">Responde con sinceridad: así Cadencia IA te acompaña mejor.</p>
-    <div class="psico-list">${PSICO.map((p) => `<div class="psico-q" role="group" aria-label="${esc(p.t)}"><p>${esc(p.t)}</p>
-      <div class="psico-btns">${[[1, 'Sí'], [0, 'No']].map(([v, l]) => `<button type="button" class="choice" data-act="ob-psico" data-k="${p.id}" data-v="${v}" aria-pressed="${ps[p.id] === (v === 1)}">${l}</button>`).join('')}</div></div>`).join('')}</div>`;
-}
-
 // Cajita del termómetro (se repinta sola al escribir: ver `ob-term` en app.js).
 export function termometroHTML(actual, meta) {
   const t = termometro(actual, meta);
@@ -382,20 +381,15 @@ export function metaHTML(o) {
     <div class="term" id="ob-term" aria-live="polite">${termometroHTML(num(o.pesoKg), num(o.pesoObjetivo))}</div>`;
 }
 
+// Proyección: línea de tu peso de hoy a tu meta según el ritmo elegido. Sin comparaciones inventadas.
 function graficaHTML(actual, meta, est) {
   const x0 = 26, x1 = 294, top = 36, bot = 96, axis = 118, baja = meta < actual, igual = !est;
   const y0 = igual ? 66 : baja ? top : bot, y1 = igual ? 66 : baja ? bot : top, mx = (x0 + x1) / 2;
   const d = `M${x0} ${y0} C${mx} ${y0} ${mx} ${y1} ${x1} ${y1}`;
-  // «Sin Cadencia IA» (ilustración, no un dato): casi plana y con una ligera deriva hacia el lado equivocado (si quiere bajar, sube; si quiere subir, baja).
-  const yS = baja ? y0 - 9 : y0 + 9, dS = `M${x0} ${y0} C${x0 + 95} ${y0} ${x1 - 95} ${yS} ${x1} ${yS}`;
   const mes = (f) => `<line x1="${x0 + (x1 - x0) * f}" x2="${x0 + (x1 - x0) * f}" y1="${axis - 2}" y2="${axis + 2}" stroke="currentColor" opacity=".35"/>`;
-  const vs = igual ? '' : `<path class="sn" d="${dS}" stroke-dasharray="5,5"/>
-    <text class="tl tl-sin" x="${x1}" y="${baja ? yS + 16 : yS - 8}" text-anchor="end">Sin Cadencia IA</text>
-    <text class="tl tl-con" x="${x1}" y="${baja ? y1 + 17 : y1 - 28}" text-anchor="end">Con Cadencia IA</text>`;
-  return `<svg viewBox="0 0 320 150" role="img" aria-label="Comparación de tu peso con y sin Cadencia IA: con Cadencia, de ${nf(actual, 1)} kg hoy a ${nf(meta, 1)} kg${est ? ` hacia el ${fechaLarga(est.fecha)}` : ''}; sin Cadencia, la línea punteada se estanca">
+  return `<svg viewBox="0 0 320 150" role="img" aria-label="Proyección de tu peso: de ${nf(actual, 1)} kg hoy a ${nf(meta, 1)} kg${est ? ` hacia el ${fechaLarga(est.fecha)}` : ''}">
     <line x1="${x0}" x2="${x1}" y1="${axis}" y2="${axis}" stroke="currentColor" opacity=".25"/>${mes(0.25)}${mes(0.5)}${mes(0.75)}
     <path class="ar" d="${d} L${x1} ${axis} L${x0} ${axis} Z"/>
-    ${vs}
     <path class="ln" d="${d}" pathLength="1"/>
     <circle class="dot" cx="${x0}" cy="${y0}" r="5"/><circle class="dot fin" cx="${x1}" cy="${y1}" r="7"/>
     <text x="${x0}" y="${y0 - 11}" text-anchor="start" class="v">${nf(actual, 1)} kg</text>
@@ -407,9 +401,9 @@ function graficaHTML(actual, meta, est) {
 export function planHTML(o, p, hoyISO) {
   const est = estimarMeta(p.pesoKg, p.pesoObjetivo, hoyISO, o.ritmo), e = expDe(o.exp);
   const frase = est
-    ? `A un ritmo de <b>${fmtRitmo(o.ritmo)} kg por semana</b>, estimamos que lograrás tu objetivo para el <b class="proy-fecha">${fechaLarga(est.fecha)}</b>.`
-    : o.meta === 'recomp' ? 'Con Cadencia IA mantendrás tu peso mientras ganas músculo y pierdes grasa' : 'Con Cadencia IA mantendrás tu peso estable, con energía y constancia';
-  return `<h1 class="ob-title">¡Tu plan está listo!</h1>
+    ? `A <b>${fmtRitmo(o.ritmo)} kg por semana</b>, llegarías a tu meta hacia el <b class="proy-fecha">${fechaLarga(est.fecha)}</b>.`
+    : o.meta === 'recomp' ? 'Objetivo: mantener tu peso mientras ganas músculo y pierdes grasa.' : 'Objetivo: mantener tu peso.';
+  return `<h1 class="ob-title">Tu plan</h1>
     <div class="summary">
       <dl>
         <dt>Sexo</dt><dd>${p.sexo === 'mujer' ? 'Mujer' : 'Hombre'}</dd>
@@ -417,139 +411,14 @@ export function planHTML(o, p, hoyISO) {
         <dt>Peso actual</dt><dd>${nf(p.pesoKg, 1)} kg</dd>
         <dt>Peso meta</dt><dd>${nf(p.pesoObjetivo, 1)} kg</dd>
         <dt>Ritmo</dt><dd>${fmtRitmo(o.ritmo)} kg/semana</dd>
-        <dt>Sesión</dt><dd>${o.tiempo ? tiempoTxt(o.tiempo) : '–'}</dd>
+        <dt>Entreno</dt><dd>${o.freq ? `${o.freq} días · ` : ''}${o.tiempo ? tiempoTxt(o.tiempo) : '–'}</dd>
       </dl>
     </div>
     <section class="proy" aria-label="Proyección">
-      <span class="plan-chip">${svg(I_SPARK, 14, 2.4)}Proyección Cadencia IA</span>
+      <span class="plan-chip">${svg(I_SPARK, 14, 2.4)}Proyección</span>
       <div class="proy-graf">${graficaHTML(p.pesoKg, p.pesoObjetivo, est)}</div>
       <p class="proy-txt">${frase}</p>
-      ${est ? `<p class="small muted">Unas ${est.semanas} semanas. Es una estimación orientativa: cada cuerpo es distinto. La línea punteada es solo una ilustración.</p>` : ''}
+      ${est ? `<p class="small muted">Unas ${est.semanas} semanas al ritmo que has elegido. Es una estimación: el check-in semanal de Nutrición ajusta tus calorías con tus datos reales.</p>` : ''}
     </section>`;
 }
 const I_SPARK = '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/>';
-
-// «Es normal sentirse así»: pantalla de pausa entre el cuestionario y el plan. Botón del pie «Continuar» (lo pinta app.js).
-export function historiaHTML(o) {
-  return `<div class="historia">
-    <h1 class="ob-title historia-t">Es normal sentirse así. <span>El problema no es tu fuerza de voluntad.</span></h1>
-    <p class="historia-p">El problema es intentar avanzar sin un mapa. Quienes logran el físico que buscan simplemente siguen un sistema que elimina las excusas.</p>
-  </div>`;
-}
-
-// «Pantalla de carga» (efecto laboriosidad): es solo visual, no calcula nada. Sin menú ni botón; se llena en CARGA_MS y avanza sola (iniciarCarga).
-export const CARGA_MS = 4500;
-export const cargaTexto = (pct) => (pct < 30 ? 'Analizando tu perfil...' : pct < 70 ? 'Ajustando intensidad y volumen...' : 'Finalizando tu plan...');
-const cargaPct = (o) => Math.min(100, Math.max(0, Math.floor(((performance.now() - (o.cargaT0 || performance.now())) / CARGA_MS) * 100)));
-export function cargaHTML(o) {
-  const p = cargaPct(o); // si algo redibuja a mitad, sigue desde donde iba (el tiempo sale de `o.cargaT0`, no del DOM)
-  return `<div class="carga">
-    <div class="carga-pct" aria-hidden="true"><b id="ob-carga-n">${p}</b><span>%</span></div>
-    <div class="carga-bar" id="ob-carga-bar" role="progressbar" aria-label="Preparando tu plan" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${p}"><i style="width:${p}%"></i></div>
-    <p class="carga-txt" id="ob-carga-txt" aria-live="polite">${cargaTexto(p)}</p>
-  </div>`;
-}
-// Se llama justo después de pintar la pantalla `carga`. Anima tocando el DOM (nada de render() mientras corre) y al llegar al 100 % espera un instante y llama a `alTerminar` (obNext).
-// Si la pantalla desaparece (cerrar sesión…), se para sola.
-export function iniciarCarga(root, o, alTerminar) {
-  if (o.cargaRaf) return;
-  const tic = () => {
-    const bar = root.querySelector('#ob-carga-bar');
-    if (!bar) { o.cargaRaf = 0; return; }
-    const p = cargaPct(o), n = root.querySelector('#ob-carga-n'), tx = root.querySelector('#ob-carga-txt'), i = bar.firstElementChild;
-    if (n) n.textContent = p;
-    if (i) i.style.width = p + '%';
-    bar.setAttribute('aria-valuenow', p);
-    if (tx) { const t = cargaTexto(p); if (tx.textContent !== t) tx.textContent = t; }
-    if (p < 100) { o.cargaRaf = requestAnimationFrame(tic); return; }
-    o.cargaRaf = 0; o.cargaVista = true;
-    setTimeout(alTerminar, 350); // deja ver el 100 %
-  };
-  o.cargaRaf = requestAnimationFrame(tic);
-}
-
-// Pausa dramática antes de firmar: [texto, empieza (s), dura (s)]. Solo CSS (`.pausa-t`, `@keyframes pausaTxt`); app.js pone el temporizador (`pausaFirma`).
-export const PAUSA = [['La disciplina...', 0, 1.2], ['es elegir entre lo que quieres ahora...', 1.2, 2], ['y lo que quieres de verdad.', 3.2, 2.2]];
-export const PAUSA_MS = 5600; // = fin del último texto (3,2 + 2,2 s) + 0,2 s
-
-const HUELLA = '<path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/>';
-export const FIRMA_TXT = 'Mantén pulsado para firmar';
-
-export function firmaHTML(o, nombre) {
-  if (o.pausaT0 && !o.pausaFin) { // pausa dramática: el botón NO existe todavía. El retraso de cada texto resta el tiempo ya pasado (`--el`), así que si algo redibuja no se reinicia.
-    const el = Math.max(0, (performance.now() - o.pausaT0) / 1000);
-    return `<div class="pausa" style="--el:${el.toFixed(2)}s">
-      <p class="sr-only">La disciplina... es elegir entre lo que quieres ahora... y lo que quieres de verdad.</p>
-      ${PAUSA.map(([t, d, dur]) => `<p class="ob-title pausa-t" aria-hidden="true" style="--d:${d}s;--dur:${dur}s">${t}</p>`).join('')}
-    </div>`;
-  }
-  const hecho = !!o.firmado;
-  return `<h1 class="ob-title">Sella tu compromiso.</h1>
-    <p class="ob-sub">Firmarlo te ayuda a cumplirlo. Léelo y mantén pulsado.</p>
-    <blockquote class="pact">
-      <p>Prometo entrenar con Cadencia <b>${o.freq} veces a la semana</b>. Sin excusas.</p>
-      <footer>${esc(nombre)}</footer>
-    </blockquote>
-    <div class="sign">
-      <button type="button" class="sign-btn ${hecho ? 'done' : ''}" data-hold ${hecho ? 'disabled' : ''} aria-label="${FIRMA_TXT} durante 2 segundos">
-        <svg class="ring" viewBox="0 0 100 100" aria-hidden="true"><circle class="trk" cx="50" cy="50" r="46"/><circle class="bar" cx="50" cy="50" r="46" pathLength="100" style="stroke-dashoffset:${hecho ? 0 : 100}"/></svg>
-        <span class="sign-in">${hecho ? svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 64, 2.6) : svg(HUELLA, 64, 1.6)}<span class="sign-lbl" data-lbl="${FIRMA_TXT}">${hecho ? '¡Firmado!' : FIRMA_TXT}</span></span>
-      </button>
-      <p class="small muted">${hecho ? (o.anon ? 'Un último paso…' : 'Guardando tu plan…') : 'Mantén el dedo 2 segundos. Si lo sueltas antes, se reinicia.'}</p>
-    </div>`;
-}
-
-/* ---------- botón de firma: mantener pulsado 2 s ---------- */
-// Se llama una sola vez al arrancar la app. Todo va por eventos de puntero (ratón, dedo y lápiz) y por teclado (barra espaciadora / Intro).
-// El anillo se anima tocando el DOM directamente: si se llamara a render() a mitad se perdería el botón y la pulsación.
-export function iniciarFirma(root, alFirmar) {
-  let h = null; // pulsación en curso: { btn, t0, raf }
-  const pinta = (b, p) => { const bar = b.querySelector('.bar'); if (bar) bar.style.strokeDashoffset = String(100 - p * 100); };
-  const rotulo = (b, txt) => { const l = b.querySelector('.sign-lbl'); if (l) l.textContent = txt == null ? l.dataset.lbl : txt; };
-  const parar = () => {
-    if (!h) return;
-    cancelAnimationFrame(h.raf);
-    const b = h.btn; h = null;
-    if (b.isConnected) { b.classList.remove('holding'); pinta(b, 0); rotulo(b); }
-  };
-  const tic = () => {
-    if (!h) return;
-    if (!h.btn.isConnected) return parar();
-    const p = Math.min(1, (performance.now() - h.t0) / FIRMA_MS);
-    pinta(h.btn, p);
-    if (p < 1) { h.raf = requestAnimationFrame(tic); return; }
-    const b = h.btn; h = null;
-    b.classList.remove('holding'); b.classList.add('done'); rotulo(b, '¡Firmado!');
-    try { if (navigator.vibrate) navigator.vibrate(30); } catch (e) { /* sin vibración */ }
-    alFirmar();
-  };
-  const empezar = (b) => {
-    if (h || b.disabled || b.classList.contains('done')) return false;
-    h = { btn: b, t0: performance.now(), raf: 0 };
-    b.classList.add('holding'); rotulo(b, 'Sigue pulsando…');
-    h.raf = requestAnimationFrame(tic);
-    return true;
-  };
-  root.addEventListener('pointerdown', (e) => {
-    const b = e.target.closest && e.target.closest('[data-hold]');
-    if (!b || (e.pointerType === 'mouse' && e.button !== 0)) return;
-    e.preventDefault();
-    if (empezar(b)) { try { b.setPointerCapture(e.pointerId); } catch (x) { /* nada */ } }
-  });
-  root.addEventListener('contextmenu', (e) => { if (e.target.closest && e.target.closest('[data-hold]')) e.preventDefault(); });
-  root.addEventListener('keydown', (e) => {
-    const b = e.target.closest && e.target.closest('[data-hold]');
-    if (b && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); if (!e.repeat) empezar(b); }
-  });
-  root.addEventListener('keyup', (e) => { if (e.target.closest && e.target.closest('[data-hold]') && (e.key === ' ' || e.key === 'Enter')) parar(); });
-  window.addEventListener('pointerup', parar);
-  window.addEventListener('pointercancel', parar);
-  window.addEventListener('blur', parar);
-  document.addEventListener('visibilitychange', () => { if (document.hidden) parar(); });
-  // Si el dedo se sale del botón (más de 24 px), se cancela.
-  window.addEventListener('pointermove', (e) => {
-    if (!h) return;
-    const r = h.btn.getBoundingClientRect(), m = 24;
-    if (e.clientX < r.left - m || e.clientX > r.right + m || e.clientY < r.top - m || e.clientY > r.bottom + m) parar();
-  });
-}

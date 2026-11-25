@@ -1600,27 +1600,9 @@ html, body, main, .sheet-list, .sheet-scroll, .modal-body { overscroll-behavior-
   .proy .dot.fin { animation: none; opacity: 1; }
 }
 
-/* contrato y firma */
-.pact { margin: 0; padding: 20px; display: grid; gap: 14px; background: var(--surface); border: 1px solid var(--bd, var(--line)); border-left: 5px solid var(--accent); border-radius: 2px; }
-.pact p { margin: 0; font-size: 22px; line-height: 1.25; font-weight: 700; }
-.pact b { color: var(--accent-text); }
-.pact footer { color: var(--muted); font-size: 14px; border-top: 1px dashed var(--line); padding-top: 10px; }
-.sign { display: grid; justify-items: center; gap: 12px; margin-top: 4px; text-align: center; }
-.sign-btn { position: relative; width: 184px; height: 184px; padding: 0; border: 0; border-radius: 50%; background: var(--surface2); color: var(--accent-text); display: grid; place-items: center; cursor: pointer;
-  touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; transition: transform .15s, background .15s; }
-.sign-btn.holding { transform: scale(.96); background: var(--accent-soft); }
-.sign-btn:focus-visible { outline: 3px solid var(--accent-text); outline-offset: 4px; }
-.sign-btn .ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); pointer-events: none; }
+/* anillo de progreso (lo usa también Nutrición) */
 .ring .trk { fill: none; stroke: var(--line); stroke-width: 5; }
 .ring .bar { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: butt; stroke-dasharray: 100; transition: stroke-dashoffset .3s ease-out; }
-.sign-btn.holding .bar { transition: none; }
-.sign-in { position: relative; display: grid; justify-items: center; gap: 6px; padding: 0 22px; pointer-events: none; }
-.sign-lbl { font-size: 13px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--ink); line-height: 1.15; }
-.sign-btn.done { background: var(--accent); color: var(--accent-ink); }
-.sign-btn.done .sign-lbl { color: var(--accent-ink); }
-.sign-btn.done .trk { stroke: transparent; }
-.sign-btn.done .bar { stroke: var(--accent-ink); }
-@media (prefers-reduced-motion: reduce) { .sign-btn, .ring .bar { transition: none; } }
 
 /* ================================================================== */
 /* 2026-11-15 · Puerta del cuestionario inicial (onboardingCompletado) */
@@ -1675,45 +1657,7 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .choice.freq .t > span small { display: inline; font-size: 15px; }
 .ritmo-fecha { margin: 2px 0 0; text-align: center; font-size: 22px; line-height: 1.25; font-weight: 700; text-wrap: balance; }
 .ritmo-fecha b { display: block; color: var(--accent-text); font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.psico-list { display: grid; gap: 10px; }
-.psico-q { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--bd); background: var(--surface); border-radius: 2px; }
-.psico-q p { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.3; }
-.psico-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.psico-btns .choice { justify-content: center; padding: 11px 10px; min-height: 46px; background: var(--surface2); }
-.psico-btns .choice[aria-pressed="true"] { background: var(--accent); border-color: var(--accent-text); color: var(--accent-ink); }
 
-/* 2026-11-16 · Cuestionario Fase 2: historia (fondo oscuro), carga, gráfica con/sin Cadencia y pausa antes de firmar */
-.ob-dark { --bg: #0A0A0A; --surface: #161616; --surface2: #222; --ink: #fff; --muted: #A8A8A8; --line: #2A2A2A; --accent-text: var(--accent); background: var(--bg); color: var(--ink); box-shadow: 0 0 0 100vmax var(--bg); clip-path: inset(0 -100vmax); }
-.historia { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 22px; padding-bottom: 8vh; }
-.historia-t { font-size: clamp(28px, 8vw, 38px); hyphens: none; overflow-wrap: normal; }
-.historia-t span { display: block; margin-top: 10px; color: var(--accent); }
-.historia-p { margin: 0; font-size: 19px; line-height: 1.45; color: var(--muted); }
-@media (prefers-reduced-motion: no-preference) { .historia > * { animation: histIn .7s cubic-bezier(.2,.8,.2,1) both; } .historia > p { animation-delay: .35s; } }
-@keyframes histIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
-
-.ob-carga { justify-content: center; }
-.carga { display: grid; justify-items: center; gap: 22px; text-align: center; margin: auto 0; }
-.carga-pct { display: flex; align-items: baseline; gap: 4px; font-stretch: 125%; font-weight: 800; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
-.carga-pct b { font-size: clamp(88px, 30vw, 132px); font-weight: 800; min-width: 1ch; }
-.carga-pct span { font-size: clamp(32px, 10vw, 48px); color: var(--accent-text); }
-.carga-bar { width: 100%; height: 10px; background: var(--surface2); border-radius: 2px; overflow: hidden; }
-.carga-bar i { display: block; height: 100%; width: 0; background: var(--accent); }
-.carga-txt { margin: 0; min-height: 1.4em; font-size: 18px; font-weight: 600; color: var(--muted); }
-
-.proy .sn { fill: none; stroke: var(--muted); stroke-width: 2.5; stroke-linecap: round; opacity: .75; }
-.proy text.tl { font-size: 10.5px; font-weight: 700; letter-spacing: .02em; }
-.proy text.tl-con { fill: var(--accent-text); }
-.proy text.tl-sin { fill: var(--muted); }
-@media (prefers-reduced-motion: no-preference) {
-  .proy .sn { animation: proyIn .8s 1s both; }
-  .proy .tl-sin { animation: proyIn .5s 1.3s both; }
-  .proy .tl-con { animation: proyIn .5s 1.6s both; }
-}
-@keyframes proyIn { from { opacity: 0; } }
-
-.pausa { flex: 1; display: grid; place-items: center; text-align: center; min-height: 55dvh; }
-.pausa-t { grid-area: 1 / 1; opacity: 0; margin: 0; animation: pausaTxt var(--dur) linear calc(var(--d) - var(--el, 0s)) both; }
-@keyframes pausaTxt { 0% { opacity: 0; } 25% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
 
 /* 2026-11-16 · Cuestionario Fase 3: bienvenida sin cuenta, registro al final y paywall en cascada */
 .bv { justify-content: space-between; gap: 18px; }
@@ -2471,6 +2415,23 @@ body[data-view="onboarding"] .ib, body[data-view="onboarding"] .tabbar, body[dat
 .ci-foot { display: grid; gap: 8px; }
 .ci-sheet .ci-main { background: var(--brand-yellow); color: var(--text-on-brand); border-radius: var(--r-sm); }
 .ci-sheet .ci-foot .btn.ghost { border-radius: var(--r-sm); }
+
+/* ================================================================== */
+/* 2026-11-25 · Fase B paso 4 (73): cuestionario directo y duración de sesión */
+/* ================================================================== */
+/* Cuestionario: «Edad y estatura» en una pantalla (dos campos grandes, uno debajo de otro) */
+.ob-medidas { display: grid; gap: 22px; }
+/* Chips de minutos por sesión (asistente de rutinas y Perfil › Detalles). Superficie y texto con variables del tema (modo claro legible);
+   seleccionado = borde de acento (--accent-text: amarillo en oscuro, dorado oscuro en claro) + el valor escrito en el título. */
+.min-blk { display: grid; gap: 8px; margin-top: 18px; }
+.pf-min .min-blk { margin-top: 0; }
+.min-t { font-size: 14px; font-weight: 700; color: var(--muted); }
+.min-t b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.min-seg { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.min-seg button { min-height: 44px; padding: 0 4px; border: 1px solid var(--muted); border-radius: var(--r-sm); background: transparent; color: var(--ink); font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; cursor: pointer; }
+.min-seg button[aria-pressed="true"] { border: 2px solid var(--accent-text); background: var(--surface2); }
+.min-seg button:focus-visible { outline: 2px solid var(--brand-yellow); outline-offset: 2px; }
+.min-blk small { font-size: 13px; line-height: 1.4; }
 
 @media (min-width: 1024px) {
   :root { --sb-w: 104px; --col: 800px; }

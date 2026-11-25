@@ -6,6 +6,7 @@ import { CICLISMO } from './config.js';
 import { PAGOS_ACTIVOS } from './pro.js';
 import * as E from './entreno.js';
 import * as CAL from './calorias.js';
+import { minutosSegHTML } from './onboarding.js';
 import { analizarEntreno, diagnosticoCoach } from './coach.js';
 import * as C3 from './cuerpo.js';
 import { pautas } from './tecnica.js';
@@ -670,6 +671,9 @@ function catalogoParaIA(R) {
   for (const d of R.dias) { const s = R.sesiones[d]; if (s && s.t === 'fuerza') for (const e of s.ej) add(E.ejercicio(e.n)); }
   return out;
 }
+// Lo que se eligió al crear la rutina, para «ajustarRutina». `minutosSesion` (73): los de la rutina o, si no tiene, los del perfil (60 sin dato).
+// El servidor solo lee las claves que conoce (lista cerrada de `contextoRutina`); hoy ignora esta y usa `minutosSesion` del perfil.
+const contextoIA = (R) => ({ exp: R.exp || '', donde: dondeDe(R.donde), eq: R.eqSel || [], prio: R.prio || '', minutosSesion: E.minutosDe(R.minutos || (st.profile && st.profile.minutosSesion)) });
 // La rutina como la entiende la IA (sin guías de cardio ni intervalos: esos ejercicios se conservan aparte).
 function rutinaParaIA(R) {
   return { dias: [...R.dias].sort((a, b) => a - b).map((d) => {
@@ -749,7 +753,7 @@ async function rchEnviar() {
   if (txt.length < 3) return;
   c.busy = true; c.err = ''; c.msg = ''; c.avisos = []; c.resumen = ''; render();
   try {
-    const res = await api.ajustarRutina({ rutina: rutinaParaIA(re.draft), catalogo: catalogoParaIA(re.draft), contexto: { exp: re.draft.exp || '', donde: dondeDe(re.draft.donde), eq: re.draft.eqSel || [], prio: re.draft.prio || '' }, instruccion: txt });
+    const res = await api.ajustarRutina({ rutina: rutinaParaIA(re.draft), catalogo: catalogoParaIA(re.draft), contexto: contextoIA(re.draft), instruccion: txt });
     const { draft, avisos } = aplicarAjusteIA(re.draft, res);
     if (st.re !== re) return; // cerró el asistente mientras esperaba
     c.undo = { draft: re.draft, fold: re.fold || {} };
@@ -892,7 +896,7 @@ async function rmEnviar() {
   const dia = R.dia, instruccion = (dia >= 0 ? `Solo el ${E.DIAS_LARGO[dia].toLowerCase()} (${nombreCorto(cur.sesiones[dia]).slice(0, 20)}): ${txt}` : txt).slice(0, 300);
   R.busy = true; R.err = ''; render();
   try {
-    const res = await api.ajustarRutina({ rutina: rutinaParaIA(cur), catalogo: catalogoParaIA(cur), contexto: { exp: cur.exp || '', donde: dondeDe(cur.donde), eq: cur.eqSel || [], prio: cur.prio || '' }, instruccion });
+    const res = await api.ajustarRutina({ rutina: rutinaParaIA(cur), catalogo: catalogoParaIA(cur), contexto: contextoIA(cur), instruccion });
     if (st.rmod !== R) return; // cerró el panel mientras esperaba
     let draft, avisos;
     if (dia >= 0) { // con un día elegido solo cuenta ese día: los demás se conservan tal cual, diga lo que diga la IA
@@ -949,7 +953,7 @@ function rmClick(act, b) {
 function normRutina(R) {
   const used = [...new Set(R.dias.map((d) => R.sesiones[d].t))];
   const out = { tipos: used.length ? used : R.tipos, otro: String(R.otro || '').trim().slice(0, 30), dias: [...R.dias].sort((a, b) => a - b), modo: R.modo,
-    split: R.split || 'auto', exp: R.exp || '', equipo: R.equipo || null, eqSel: R.eqSel || [], donde: dondeDe(R.donde), flex: !!R.flex, deporte: R.deporte || '', prio: RW_PRIO.some(([k]) => k === R.prio) ? R.prio : '', sesiones: {} };
+    split: R.split || 'auto', exp: R.exp || '', equipo: R.equipo || null, eqSel: R.eqSel || [], donde: dondeDe(R.donde), flex: !!R.flex, deporte: R.deporte || '', prio: RW_PRIO.some(([k]) => k === R.prio) ? R.prio : '', minutos: E.minutosDe(R.minutos), sesiones: {} };
   for (const d of out.dias) {
     const s = R.sesiones[d];
     const o = { t: s.t, nombre: String(s.nombre || '').trim().slice(0, 40) || RT[s.t] };
@@ -1109,10 +1113,10 @@ const EQ_DEF = { gym: ['maquina', 'mancuernas', 'barra'], casa: ['ninguno'], par
 const dondeDe = (x) => (Array.isArray(x) ? x : x ? [x] : []).filter((k) => EQ_DEF[k]);
 // Material por defecto de los sitios elegidos; «ninguno» (peso corporal) solo si no hay nada más.
 const eqDeDonde = (ds) => { const eq = [...new Set(ds.flatMap((k) => EQ_DEF[k]))]; return eq.length > 1 ? eq.filter((x) => x !== 'ninguno') : eq; };
-// Lo que se contestó en el cuestionario inicial (experiencia, dónde, material y días por semana) precarga una rutina NUEVA; se puede cambiar paso a paso.
+// Lo que se contestó en el cuestionario inicial (experiencia, dónde, material, días por semana y minutos por sesión) precarga una rutina NUEVA; se puede cambiar paso a paso.
 function inicioDesdePerfil() {
   const p = st.profile || {};
-  return { exp: RW_EXP.some(([k]) => k === p.experiencia) ? p.experiencia : '', donde: dondeDe(p.donde), eq: Array.isArray(p.eqSel) ? [...p.eqSel] : [], n: p.diasSemana >= 1 && p.diasSemana <= 7 ? p.diasSemana : 0, prio: prioDePerfil(p) };
+  return { exp: RW_EXP.some(([k]) => k === p.experiencia) ? p.experiencia : '', donde: dondeDe(p.donde), eq: Array.isArray(p.eqSel) ? [...p.eqSel] : [], n: p.diasSemana >= 1 && p.diasSemana <= 7 ? p.diasSemana : 0, prio: prioDePerfil(p), minutos: E.minutosDe(p.minutosSesion) };
 }
 const rwSteps = (o) => {
   if (o.main === 'fuerza') return ['tipo', 'exp', 'donde', 'material', 'n', 'dias', 'modo', ...(o.modo === 'propia' ? ['division'] : ['prio']), 'editor'];
@@ -1126,9 +1130,9 @@ const expBars = (k) => `<span class="bars" aria-hidden="true">${[1, 2, 3, 4, 5].
 function rwStart(rid, nueva) {
   const r = nueva ? null : rutinasList().find((x) => x.id === rid) || rutinaOf();
   if (!r && sobreLimite('rutinas')) return avisoLimite('rutinas'); // crear una rutina nueva
-  const base = { step: 0, main: '', exp: '', donde: [], eq: [], n: 0, dias: [], flex: false, prio: prioDePerfil(st.profile), modo: '', division: '', deporte: '', otro: '', msg: '', anim: 'fwd' };
+  const base = { step: 0, main: '', exp: '', donde: [], eq: [], n: 0, dias: [], flex: false, prio: prioDePerfil(st.profile), minutos: E.minutosDe(st.profile && st.profile.minutosSesion), modo: '', division: '', deporte: '', otro: '', msg: '', anim: 'fwd' };
   st.rw = r
-    ? { ...base, rid: r.id, main: r.tipos[0] || '', otro: r.otro || '', n: r.dias.length, dias: [...r.dias], flex: !!r.flex, exp: r.exp || '', donde: dondeDe(r.donde), eq: r.eqSel ? [...r.eqSel] : [], deporte: r.deporte || '' }
+    ? { ...base, rid: r.id, main: r.tipos[0] || '', otro: r.otro || '', n: r.dias.length, dias: [...r.dias], flex: !!r.flex, exp: r.exp || '', donde: dondeDe(r.donde), eq: r.eqSel ? [...r.eqSel] : [], deporte: r.deporte || '', ...(r.minutos ? { minutos: E.minutosDe(r.minutos) } : {}) }
     : { ...base, nueva: true, ...inicioDesdePerfil() };
   st.re = null;
   render(); window.scrollTo(0, 0);
@@ -1181,7 +1185,8 @@ function viewRutWizard() {
     body = `<h1 class="ob-title">¿Qué días?</h1><p class="ob-sub">Elige ${o.n} ${o.n === 1 ? 'día' : 'días'}, o dinos que sueles variar.</p>
       <div class="choices daylist">${E.DIAS_LARGO.map((d, i) => ch('rw-dia', i, !o.flex && o.dias.includes(i), `<span class="t">${d}</span>${tick(!o.flex && o.dias.includes(i))}`)).join('')}
         ${ch('rw-flex', 'flex', o.flex, `<span class="t">Suelo variar<small>Pondremos días orientativos y tú decides cada semana</small></span>${tick(o.flex)}`, 'style="margin-top:6px"')}</div>
-      <p class="small ${o.flex || !diff ? '' : 'muted'}" role="status">${o.flex ? 'Sin días fijos: te sugerimos unos y cambias cuando quieras.' : diff === 0 ? `Perfecto: ${o.n} ${o.n === 1 ? 'día' : 'días'}.` : diff > 0 ? `Te ${diff === 1 ? 'falta' : 'faltan'} ${diff}.` : `Te ${-diff === 1 ? 'sobra' : 'sobran'} ${-diff}.`}</p>`;
+      <p class="small ${o.flex || !diff ? '' : 'muted'}" role="status">${o.flex ? 'Sin días fijos: te sugerimos unos y cambias cuando quieras.' : diff === 0 ? `Perfecto: ${o.n} ${o.n === 1 ? 'día' : 'días'}.` : diff > 0 ? `Te ${diff === 1 ? 'falta' : 'faltan'} ${diff}.` : `Te ${-diff === 1 ? 'sobra' : 'sobran'} ${-diff}.`}</p>
+      ${o.main === 'fuerza' ? minutosSegHTML(o.minutos, 'rw-min', 'Duración por sesión', 'Ajusta cuántos ejercicios y series lleva cada día.') : ''}`;
     if (o.main === 'otro') next = 'Crear rutina';
   } else if (s === 'prio') {
     const mujer = st.profile && st.profile.sexo === 'mujer';
@@ -1233,7 +1238,7 @@ function rwCfg(o) {
   const fuerza = o.main === 'fuerza';
   const gymCompleto = o.donde.includes('gym') && ['maquina', 'mancuernas', 'barra'].every((x) => o.eq.includes(x)) && !o.eq.includes('ninguno');
   return { tipos: [o.main], dias: o.flex ? [...E.DIAS_DEF[o.n]] : [...o.dias], otro: o.main === 'otro' ? o.otro.trim() : '',
-    split: 'auto', exp: o.exp, sexo: st.profile && st.profile.sexo, prio: fuerza ? o.prio : '', equipo: fuerza ? E.expandirEquipo(gymCompleto ? ['gym'] : o.eq) : null, run: o.main === 'cardio', escalar: o.main === 'bici' || o.main === 'cardio' };
+    split: 'auto', exp: o.exp, sexo: st.profile && st.profile.sexo, prio: fuerza ? o.prio : '', equipo: fuerza ? E.expandirEquipo(gymCompleto ? ['gym'] : o.eq) : null, run: o.main === 'cardio', escalar: o.main === 'bici' || o.main === 'cardio', minutos: E.minutosDe(o.minutos) };
 }
 // Rutina personalizada de fuerza: los días ya traen su enfoque (Push, Pierna…) pero sin ejercicios.
 function rwPersonalizada(o) {
@@ -1249,7 +1254,7 @@ function rwPersonalizada(o) {
   return R;
 }
 // Mismas respuestas del asistente = mismo borrador (así «Atrás» y «Siguiente» no pierden lo que ya programaste).
-const rwKey = (o) => JSON.stringify([o.main, o.exp, [...o.donde].sort(), [...o.eq].sort(), o.n, [...o.dias].sort(), o.flex, o.modo, o.division, o.deporte, o.otro.trim(), o.main === 'fuerza' ? o.prio : '']);
+const rwKey = (o) => JSON.stringify([o.main, o.exp, [...o.donde].sort(), [...o.eq].sort(), o.n, [...o.dias].sort(), o.flex, o.modo, o.division, o.deporte, o.otro.trim(), o.main === 'fuerza' ? o.prio : '', o.main === 'fuerza' ? E.minutosDe(o.minutos) : 60]);
 function rwGenerar() {
   const o = st.rw, key = rwKey(o), old = st.re && st.re.src === 'rw' ? st.re : null;
   if (old && old.genKey === key) { o.step = rwSteps(o).length - 1; o.maxStep = Math.max(o.maxStep || 0, o.step); o.anim = 'fwd'; render(); window.scrollTo(0, 0); rchEstado(); return; }
@@ -2544,6 +2549,7 @@ root.addEventListener('click', async (e) => {
   if (o && act === 'rw-dia') { const d = Number(v); o.flex = false; o.dias = o.dias.includes(d) ? o.dias.filter((x) => x !== d) : [...o.dias, d].sort((a, c) => a - c); return render(); }
   if (o && act === 'rw-flex') { o.flex = !o.flex; if (o.flex) o.dias = []; return render(); }
   if (o && act === 'rw-prio') { o.prio = v; return render(); }
+  if (o && act === 'rw-min') { o.minutos = E.minutosDe(v); return render(); }
   if (o && act === 'rw-modo') { o.modo = v; render(); return rwAuto(); }
   if (o && act === 'rw-div') { o.division = v; render(); if (v !== 'deporte') rwAuto(); return; }
   if (o && act === 'rw-dep') { o.deporte = v; return render(); }

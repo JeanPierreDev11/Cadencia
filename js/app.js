@@ -123,7 +123,7 @@ const heroHTML = (tag = 'h1') => `<svg class="logo-mark" viewBox="0 0 64 64" ari
 
 // Sin sesión: primero la bienvenida (el cuestionario empieza SIN cuenta); «Iniciar sesión» lleva al formulario de acceso.
 function viewAuth() {
-  if (st.authMode !== 'login') return OB.bienvenidaHTML(heroHTML('p'), (() => { const g = obAnonLeer(); return !!g && (g.step !== 'nombre' || !!(g.nombre || g.apellidos)); })()) + (st.legal ? legalSheetHTML() : '');
+  if (st.authMode !== 'login') return OB.bienvenidaHTML(heroHTML('p'), (() => { const g = obAnonLeer(); return !!g && (g.step !== 'basicos' || !!(g.nombre || g.apellidos)); })()) + (st.legal ? legalSheetHTML() : '');
   const m = st.authMsg;
   return `<div class="screen">
     <div class="auth-hero">${heroHTML()}</div>
@@ -259,7 +259,7 @@ function startOnboarding(ultimoKg = null, { anon = false } = {}) {
   if (anon) { const g = obAnonLeer(); if (g) { st.ob = g; st.view = 'onboarding'; return render(); } } // hay un avance guardado en este móvil: se sigue donde se dejó
   const p = st.profile || {}, [nom, ape] = nomApe(p, st.user && st.user.name);
   st.ob = {
-    step: 'nombre', uid: st.user && st.user.uid, anon,
+    step: 'basicos', uid: st.user && st.user.uid, anon,
     nombre: nom, apellidos: ape, usuario: p.usuario || '',
     sexo: p.sexo || '', edad: p.edad ? String(p.edad) : '', alturaCm: p.alturaCm ? String(p.alturaCm) : '',
     exp: OB.EXPS.some((e) => e.id === p.experiencia) ? p.experiencia : '',
@@ -271,7 +271,7 @@ function startOnboarding(ultimoKg = null, { anon = false } = {}) {
     psico: psicoOb(p.psico),
     pesoKg: ultimoKg || p.pesoKg ? nf(ultimoKg || p.pesoKg, 1) : '', ultimoKg, pesoObjetivo: p.pesoObjetivo ? nf(p.pesoObjetivo, 1) : '',
     meta: metaOb(p, ultimoKg), ritmo: p.ritmoKgSemana >= OB.RITMO.min && p.ritmoKgSemana <= OB.RITMO.max ? OB.ritmoDe(p.ritmoKgSemana) : OB.RITMO.def,
-    msg: '', saving: false, firmado: false,
+    msg: '', saving: false,
   };
   st.view = 'onboarding';
   render();
@@ -282,10 +282,8 @@ function viewOnboarding() {
   const pct = ((i + 1) / flow.length) * 100;
   let body = '', nextLabel = 'Siguiente';
 
-  if (s === 'nombre') body = OB.nombreHTML(o);                 // «Tus datos», una pregunta por pantalla
-  else if (s === 'sexo') body = OB.sexoHTML(o);
-  else if (s === 'edad') body = OB.edadHTML(o);
-  else if (s === 'altura') body = OB.alturaHTML(o);
+  if (s === 'basicos') body = OB.basicosHTML(o);               // nombre, apellidos y sexo
+  else if (s === 'medidas') body = OB.medidasHTML(o);          // edad y estatura
   else if (s === 'exp') body = OB.expHTML(o);
   else if (s === 'registro') body = OB.registroHTML(o);        // solo sin cuenta: crea la cuenta y guarda todo
   else if (s === 'donde') body = OB.dondeHTML(o);
@@ -296,24 +294,19 @@ function viewOnboarding() {
   else if (s === 'meta') body = OB.metaHTML(o);   // peso meta (sin recomendaciones de IMC)
   else if (s === 'ritmo') body = OB.ritmoHTML(o, todayISO()); // ritmo elegido (kg/semana) + fecha en vivo
   else if (s === 'obstaculos') body = OB.obstaculosHTML(o);   // mayor obstáculo
-  else if (s === 'psicologia') { body = OB.psicologiaHTML(o); nextLabel = 'Continuar'; } // 4 frases Sí / No
-  else if (s === 'historia') { body = OB.historiaHTML(o); nextLabel = 'Continuar'; } // «Es normal sentirse así» (fondo oscuro)
-  else if (s === 'carga') body = OB.cargaHTML(o);              // pantalla de carga: sin menú ni botón, avanza sola
-  else if (s === 'plan') { body = OB.planHTML(o, obProfile(), todayISO()); nextLabel = 'Aceptar mi plan'; }
-  else body = OB.firmaHTML(o, `${o.nombre.trim()} ${o.apellidos.trim()}`.replace(/\s+/g, ' '));
+  else { body = OB.planHTML(o, obProfile(), todayISO()); nextLabel = o.anon ? 'Continuar' : 'Guardar mi plan'; } // resumen final: sin cuenta pasa a `registro`; con cuenta guarda (obFirmado)
 
-  const paso = OB.PASO[s];
-  const sinMenu = s === 'carga';
-  return `<form class="screen${s === 'historia' ? ' ob-dark' : ''}${sinMenu ? ' ob-carga' : ''}" data-form="ob" novalidate>
-    ${sinMenu ? '' : `<div class="ob-top">
-      ${(i > 0 || o.anon) && !o.saving && s !== 'registro' ? `<button type="button" class="ob-back" data-act="ob-back" aria-label="Atrás">${I.back}</button>` : ''}
+  const paso = OB.PASO[s], ocupado = !!o.saving;
+  return `<form class="screen" data-form="ob" novalidate>
+    <div class="ob-top">
+      ${(i > 0 || o.anon) && !ocupado && s !== 'registro' ? `<button type="button" class="ob-back" data-act="ob-back" aria-label="Atrás">${I.back}</button>` : ''}
       <div class="ob-track" aria-hidden="true"><i style="width:${pct}%"></i></div>
-      <span class="ob-count">${paso ? `Paso ${paso} de ${OB.PASOS}` : s === 'registro' ? 'Último paso' : 'Tus datos'}</span>
-    </div>`}
+      <span class="ob-count">${paso ? `Paso ${paso} de ${OB.PASOS}` : 'Último paso'}</span>
+    </div>
     <div class="ob-body">${body}
       ${o.msg ? `<div class="msg" role="alert">${esc(o.msg)}</div>` : ''}
     </div>
-    ${s === 'firma' || s === 'registro' || sinMenu ? '' : `<div class="ob-foot"><button class="btn block" type="submit" data-next ${OB.puedeSeguir(o) ? '' : 'disabled'}>${nextLabel}</button></div>`}
+    ${s === 'registro' ? '' : `<div class="ob-foot"><button class="btn block" type="submit" data-next ${OB.puedeSeguir(o) && !ocupado ? '' : 'disabled'}>${ocupado ? '<span class="spinner"></span>' : nextLabel}</button></div>`}
   </form>`;
 }
 
@@ -326,19 +319,22 @@ function obProfile() {
     alturaCm: Math.round(num(o.alturaCm)), pesoKg: Math.round(act * 10) / 10,
     pesoObjetivo: isFinite(obj) ? Math.round(obj * 10) / 10 : null,
     experiencia: o.exp, donde: o.donde, material: o.material, eqSel: OB.eqDesde(o.donde, o.material), diasSemana: o.freq,
-    // Fase 1 (variables para el Coach AI): minutos por sesión, mayor obstáculo y respuestas Sí/No (booleanos por frase).
-    minutosSesion: o.tiempo, obstaculo: o.obstaculo, psico: { ...o.psico },
+    // Fase 1 (variables para el Coach AI): minutos por sesión y mayor obstáculo.
+    minutosSesion: o.tiempo, obstaculo: o.obstaculo,
+    // `psico` (pantalla retirada en (73)): solo se reescribe si la cuenta ya lo tenía (precargado en `startOnboarding`); si no, no se manda y `saveProfile` (merge) no toca nada.
+    ...(o.psico && Object.keys(o.psico).length ? { psico: { ...o.psico } } : {}),
   };
 }
 
 function obValidate() {
   const o = st.ob, s = o.step;
-  if (s === 'nombre') {
+  if (s === 'basicos') {
     if (!o.nombre.trim()) return 'Escribe tu nombre.';
     if (!o.apellidos.trim()) return 'Escribe tus apellidos.';
+    if (!o.sexo) return 'Elige tu sexo.';
   }
-  if (s === 'edad') { const e = num(o.edad); if (!(e >= 14 && e <= 100)) return 'Escribe una edad entre 14 y 100 años.'; }
-  if (s === 'altura') {
+  if (s === 'medidas') {
+    const e = num(o.edad); if (!(e >= 14 && e <= 100)) return 'Escribe una edad entre 14 y 100 años.';
     const h = num(o.alturaCm);
     if (h > 1 && h < 2.5) o.alturaCm = String(Math.round(h * 100)); // escribió metros
     else if (!(h >= 120 && h <= 230)) return 'Escribe tu estatura en centímetros, entre 120 y 230.';
@@ -361,74 +357,51 @@ function obValidate() {
 function obNext() {
   const o = st.ob;
   if (o.step === 'registro') return obRegistrar('email'); // el único botón con «submit» de esta pantalla es el de crear la cuenta con email
-  if (!OB.puedeSeguir(o)) return;
+  if (o.saving || !OB.puedeSeguir(o)) return;
   const err = obValidate();
   if (err) { o.msg = err; return render(); }
   o.msg = '';
   const flow = OB.flujo(o), nxt = flow[flow.indexOf(o.step) + 1];
-  if (!nxt) return;
+  if (!nxt) return o.step === 'plan' ? obFirmado() : undefined; // con cuenta, «Guardar mi plan» es el final: guarda directo (sin firma ni esperas)
   if (nxt === 'material') Object.assign(o, OB.materialInicial(o)); // con Gimnasio: lista pre-marcada (solo la primera vez); quita lo que ya no corresponde
   if (nxt === 'meta' && o.meta === 'recomp' && !o.pesoObjetivo.trim()) { const r = OB.recompDe(o); if (r) o.pesoObjetivo = nf(r.objetivo, 1); } // recomposición: propone el peso estimado
-  if (nxt === 'carga' && o.cargaVista) return obNextA(o, flow[flow.indexOf('carga') + 1]); // ya la vio (volvió atrás): no se repite
-  if (nxt === 'carga') { o.cargaT0 = performance.now(); o.cargaRaf = 0; }
-  if (nxt === 'firma' && !o.pausaVista && !matchMedia('(prefers-reduced-motion: reduce)').matches) { o.pausaT0 = performance.now(); o.pausaFin = false; pausaFirma(o); } // pausa dramática (una vez)
-  obNextA(o, nxt);
-}
-function obNextA(o, nxt) {
-  o.step = nxt; render(); window.scrollTo(0, 0);
-  if (nxt === 'carga') OB.iniciarCarga(root, o, () => { if (st.ob === o && o.step === 'carga') obNext(); }); // a mano: el botón no existe
-  else focusFirst();
-}
-// Pausa antes de la firma: pasados OB.PAUSA_MS enseña la promesa y el botón de golpe. Se marca como vista aunque el usuario haya vuelto atrás.
-function pausaFirma(o) {
-  setTimeout(() => { o.pausaFin = true; o.pausaVista = true; if (st.ob === o && o.step === 'firma') render(); }, OB.PAUSA_MS);
+  o.step = nxt; render(); window.scrollTo(0, 0); focusFirst();
 }
 
 function obBack() {
   const o = st.ob, flow = OB.flujo(o), i = flow.indexOf(o.step);
   if (o.saving) return;
   if (i <= 0) { if (o.anon) { obGuardarAnon(); st.view = 'auth'; st.authMode = 'welcome'; render(); } return; } // sin cuenta: vuelve a la bienvenida (lo respondido se conserva)
-  const prev = flow[i - 1] === 'carga' ? flow[i - 2] : flow[i - 1]; // la pantalla de carga nunca se vuelve a visitar hacia atrás
-  o.step = prev; o.msg = ''; render(); window.scrollTo(0, 0);
+  o.step = flow[i - 1]; o.msg = ''; render(); window.scrollTo(0, 0);
 }
 
-// Se llama al completar la firma (mantener pulsado 2 s). Guarda TODO el perfil y, solo si la escritura sale bien,
-// marca `onboardingCompletado: true`, quita el cuestionario y enseña la app con un fundido.
+// Final del cuestionario CON cuenta («Guardar mi plan» en `plan`). Guarda TODO el perfil y, solo si la escritura sale bien,
+// marca `onboardingCompletado: true`, quita el cuestionario y enseña la app con un fundido. `firmaFecha` se sigue guardando (= fecha de cierre) por compatibilidad.
 async function obFirmado() {
   const o = st.ob;
-  if (!o || o.saving) return;
-  if (o.anon) { // sin cuenta todavía: no se guarda nada; tras el ✓ pasa a crear la cuenta (`registro`)
-    if (o.firmado) return;
-    o.firmado = true; render();
-    setTimeout(() => { if (st.ob !== o || o.step !== 'firma') return; o.step = 'registro'; render(); window.scrollTo(0, 0); }, 900);
-    return;
+  if (!o || o.saving || o.anon) return; // sin cuenta, `plan` avanza a `registro` (obRegistrar guarda)
+  o.saving = true; o.msg = ''; render();
+  try {
+    const p = obProfile(), uid = st.user.uid, hoy = todayISO();
+    const ant = st.profile || {}; // cuenta antigua: conserva su punto de partida y los objetivos que el cuestionario no pregunta
+    const extra = (Array.isArray(ant.objetivos) ? ant.objetivos : []).filter((g) => !['perder', 'musculo', 'mantener'].includes(g));
+    const data = { ...p, objetivos: [...p.objetivos, ...extra], firmaFecha: hoy, pesoInicial: ant.pesoInicial || p.pesoKg, fechaInicio: ant.fechaInicio || hoy, onboarded: true, onboardingCompletado: true, onboardingVersion: OB.VERSION, novVista: NOV_V };
+    data.calorias = CAL.resumen({ ...ant, ...data }, p.pesoKg);
+    if (o.ultimoKg !== p.pesoKg) await api.addWeight(uid, hoy, p.pesoKg); // primero el peso (solo si cambió respecto al último)…
+    await api.saveProfile(uid, data);        // …y el perfil con la marca al final: si algo falla antes, la marca NO queda puesta
+    st.profile = { ...(st.profile || {}), ...data };
+    toast('Plan guardado.');
+  } catch (e) {
+    o.saving = false; o.msg = errorText(e); render(); return;
   }
-  o.firmado = true; o.saving = true; o.msg = '';
-  setTimeout(async () => { // deja ver el ✓ un instante antes de redibujar
-    if (st.ob !== o) return;
-    render();
-    try {
-      const p = obProfile(), uid = st.user.uid, hoy = todayISO();
-      const ant = st.profile || {}; // cuenta antigua: conserva su punto de partida y los objetivos que el cuestionario no pregunta
-      const extra = (Array.isArray(ant.objetivos) ? ant.objetivos : []).filter((g) => !['perder', 'musculo', 'mantener'].includes(g));
-      const data = { ...p, objetivos: [...p.objetivos, ...extra], firmaFecha: hoy, pesoInicial: ant.pesoInicial || p.pesoKg, fechaInicio: ant.fechaInicio || hoy, onboarded: true, onboardingCompletado: true, onboardingVersion: OB.VERSION, novVista: NOV_V };
-      data.calorias = CAL.resumen({ ...ant, ...data }, p.pesoKg);
-      if (o.ultimoKg !== p.pesoKg) await api.addWeight(uid, hoy, p.pesoKg); // primero el peso (solo si cambió respecto al último)…
-      await api.saveProfile(uid, data);        // …y el perfil con la marca al final: si algo falla antes, la marca NO queda puesta
-      st.profile = { ...(st.profile || {}), ...data };
-      toast('¡Compromiso firmado!');
-    } catch (e) {
-      o.saving = false; o.firmado = false; o.msg = errorText(e); render(); return;
-    }
-    try { await entrarApp(st.user, { fade: true }); } // carga normal: peso, entrenos, racha…
-    catch (e) { st.errText = errorText(e); st.view = 'error'; render(); } // el perfil ya está guardado: «Reintentar» entra directo
-  }, 450);
+  try { await entrarApp(st.user, { fade: true }); } // carga normal: peso, entrenos, racha…
+  catch (e) { st.errText = errorText(e); st.view = 'error'; render(); } // el perfil ya está guardado: «Reintentar» entra directo
 }
 
 /* ---------- cuestionario SIN cuenta: avance guardado en este móvil, usuario automático y alta final ---------- */
-// El estado del cuestionario vive en `st.ob`; además se copia a localStorage (sin contraseña ni datos de la pantalla de carga/pausa) por si se recarga la página o el navegador cierra la pestaña.
+// El estado del cuestionario vive en `st.ob`; además se copia a localStorage (sin contraseña ni estado temporal) por si se recarga la página o el navegador cierra la pestaña.
 // Se borra al guardarlo en la cuenta. Es una copia local en el propio móvil de la persona; no se envía a ningún servidor.
-const OB_ANON_KEY = 'cadencia-ob-anon', OB_NO_GUARDAR = ['regPass', 'regEmailV', 'regEmail', 'msg', 'saving', 'cuenta', 'justRegistered', 'cargaT0', 'cargaRaf', 'cargaVista', 'pausaT0', 'pausaFin', 'pausaVista'];
+const OB_ANON_KEY = 'cadencia-ob-anon', OB_NO_GUARDAR = ['regPass', 'regEmailV', 'regEmail', 'msg', 'saving', 'cuenta', 'justRegistered'];
 function obGuardarAnon() {
   const o = st.ob;
   if (!o || !o.anon || o.justRegistered) return;
@@ -437,9 +410,12 @@ function obGuardarAnon() {
 function obAnonLeer() {
   try {
     const c = JSON.parse(lsGet(OB_ANON_KEY) || 'null');
-    if (!c || typeof c !== 'object' || !c.anon || !OB.flujo(c).includes(c.step)) return null;
-    if (c.step === 'carga') c.step = 'historia'; // la carga es solo un efecto: no se retoma a medias
-    return { ...c, msg: '', saving: false };
+    if (!c || typeof c !== 'object' || !c.anon) return null;
+    // Avance guardado con una versión anterior: los pasos retirados (nombre, sexo, edad, altura, psicologia, historia, carga, firma) se recolocan en el vigente más cercano.
+    const step = OB.pasoVigente(c.step, c);
+    // Restos de la firma/carga/pausa antiguas: fuera (no se usan y no deben bloquear nada).
+    ['firmado', 'cargaT0', 'cargaRaf', 'cargaVista', 'pausaT0', 'pausaFin', 'pausaVista'].forEach((k) => { delete c[k]; });
+    return { nombre: '', apellidos: '', usuario: '', sexo: '', edad: '', alturaCm: '', exp: '', donde: [], material: [], freq: 0, tiempo: 0, obstaculo: '', psico: {}, pesoKg: '', pesoObjetivo: '', meta: '', ritmo: OB.RITMO.def, ...c, step, msg: '', saving: false };
   } catch (e) { return null; }
 }
 function obAnonBorrar() { try { lsSet(OB_ANON_KEY, null); } catch (e) { /* nada */ } }
@@ -1306,7 +1282,9 @@ function pfCuerpo(v) {
   }
   if (v === 'detalles') {
     const goals = st.editGoals || p.objetivos || [], sexo = pfV('sexo', p.sexo === 'mujer' ? 'mujer' : 'hombre'), kg = currentKg();
-    st.pf.ini = { alturaCm: String(p.alturaCm || ''), pesoKg: kg ? nf(kg, 1) : '', fechaNac: p.fechaNac || '', sexo: p.sexo === 'mujer' ? 'mujer' : 'hombre', pesoObjetivo: p.pesoObjetivo ? nf(p.pesoObjetivo, 1) : '', ritmoKgSemana: String(OB.ritmoDe(CAL.ritmoDePerfil(p) || OB.RITMO.def)) };
+    st.pf.ini = { alturaCm: String(p.alturaCm || ''), pesoKg: kg ? nf(kg, 1) : '', fechaNac: p.fechaNac || '', sexo: p.sexo === 'mujer' ? 'mujer' : 'hombre', pesoObjetivo: p.pesoObjetivo ? nf(p.pesoObjetivo, 1) : '', ritmoKgSemana: String(OB.ritmoDe(CAL.ritmoDePerfil(p) || OB.RITMO.def)),
+      minutosSesion: OB.TIEMPOS.some(([m]) => m === p.minutosSesion) ? String(p.minutosSesion) : '', obstaculo: OB.OBSTACULOS.some((x) => x.id === p.obstaculo) ? p.obstaculo : '' };
+    const minSel = pfV('minutosSesion', st.pf.ini.minutosSesion), obsSel = pfV('obstaculo', st.pf.ini.obstaculo);
     return `<form class="sheet-list form-grid" data-form="pf-det" novalidate>
       <div class="two">
         <label class="field"><span>Estatura (cm)</span><input class="input" name="alturaCm" inputmode="numeric" value="${esc(pfV('alturaCm', p.alturaCm || ''))}"></label>
@@ -1324,6 +1302,11 @@ function pfCuerpo(v) {
         <span class="ico">${goalIcon(g)}</span><span class="t">${g.t}</span><span class="tick">${goals.includes(g.id) ? I.check : ''}</span></button>`).join('')}</div></div>
       <div id="pf-guia">${pfGuiaHTML()}</div>
       <div id="pf-ritmo">${pfRitmoHTML()}</div>
+      <div class="field pf-min">${OB.minutosSegHTML(minSel, 'pf-min', 'Duración ideal de sesión', minSel ? 'Las rutinas nuevas ajustan ejercicios y series a este tiempo.' : 'Sin elegir: las rutinas usan 60 min.')}<input type="hidden" name="minutosSesion" value="${esc(minSel)}"></div>
+      <label class="field"><span>Mayor obstáculo</span><select class="input" name="obstaculo">
+        <option value="" ${obsSel ? '' : 'selected'}>Ninguno en especial</option>
+        ${OB.OBSTACULOS.map((x) => `<option value="${x.id}" ${obsSel === x.id ? 'selected' : ''}>${esc(x.t)}</option>`).join('')}
+      </select><small>El Coach AI lo tiene en cuenta en sus consejos.</small></label>
       ${pfGuardarBtn()}</form>`;
   }
   if (v === 'prefs') {
@@ -1479,6 +1462,9 @@ async function pfGuardar(kind, f) {
     data = { sexo: f.sexo.value, edad: Math.round(edad), alturaCm: Math.round(alt), pesoObjetivo: obj == null ? null : Math.round(obj * 10) / 10, objetivos: goals };
     if (fn) data.fechaNac = fn;
     if (f.ritmoKgSemana) data.ritmoKgSemana = OB.ritmoDe(f.ritmoKgSemana.value); // el slider solo existe con «Perder grasa» o «Ganar músculo»
+    // (73) Duración ideal de sesión y mayor obstáculo: solo valores de las listas del cuestionario; sin elegir no se escribe nada.
+    const ms = Number(f.minutosSesion.value); if (OB.TIEMPOS.some(([m]) => m === ms)) data.minutosSesion = ms;
+    const ob = f.obstaculo.value; if ((ob === '' || OB.OBSTACULOS.some((x) => x.id === ob)) && ob !== (st.profile.obstaculo || '')) data.obstaculo = ob;
     const k1 = Math.round(kg * 10) / 10;
     try {
       if (k1 !== currentKg()) { await api.addWeight(uid, todayISO(), k1); st.weights = await api.listWeights(uid); data.pesoKg = k1; }
@@ -1653,7 +1639,6 @@ async function entrarApp(u, { fade = false } = {}) {
 }
 
 UI.iniciarHojas(root);
-OB.iniciarFirma(root, obFirmado);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && st.rmod && !st.legal) { const b = root.querySelector('.sheet-back[data-act="rm-salir"]'); if (b) b.click(); return; } if (e.key === 'Escape' && st.legal) { const b = root.querySelector('.sheet-back[data-act="legal-close"]'); if (b) b.click(); } });
 root.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.tap')) { e.preventDefault(); e.target.click(); } });
 root.addEventListener('click', async (e) => {
@@ -1700,7 +1685,6 @@ root.addEventListener('click', async (e) => {
   else if (act === 'ob-dias') { st.ob.freq = Number(v); render(); }
   else if (act === 'ob-tiempo') { st.ob.tiempo = Number(v); render(); }
   else if (act === 'ob-obst') { st.ob.obstaculo = v; render(); }
-  else if (act === 'ob-psico') { st.ob.psico = { ...st.ob.psico, [b.dataset.k]: v === '1' }; render(); }
   else if (act === 'ob-exp') { st.ob.exp = v; render(); }
   else if (act === 'ob-meta') { st.ob.meta = v; render(); }
   else if (act === 'ob-recomp-usar') { st.ob.pesoObjetivo = nf(Number(v), 1); st.ob.msg = ''; render(); }
@@ -1722,6 +1706,13 @@ root.addEventListener('click', async (e) => {
   else if (act === 'comp-ver') { st.pesoComp = v; st.pesoModo = 'kg'; render(); scrollTo(0, 0); }
   else if (act === 'comp-close') { st.pesoComp = null; render(); }
   else if (act === 'comp-modo') { st.pesoModo = v; render(); }
+  else if (act === 'pf-min') { // chips de minutos de Perfil › Detalles: sin render() (el formulario conserva lo escrito)
+    const f = b.closest('form'); if (f && f.minutosSesion) f.minutosSesion.value = v;
+    if (st.pf) { st.pf.f.minutosSesion = v; pfBtn(); }
+    b.parentElement.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    const blk = b.closest('.min-blk'), t = blk && blk.querySelector('.min-t b'), h = blk && blk.querySelector('small');
+    if (t) t.textContent = OB.tiempoTxt(Number(v)); if (h) h.textContent = 'Las rutinas nuevas ajustan ejercicios y series a este tiempo.';
+  }
   else if (act === 'psex') { const f = b.closest('form'); f.sexo.value = v; if (st.pf) { st.pf.f.sexo = v; pfBtn(); refrescarGuia(); refrescarRitmoTxt(); } b.parentElement.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); }
   else if (act === 'pgoal') {
     const g = st.editGoals || [...(st.profile.objetivos || [])];

@@ -835,20 +835,42 @@ function elegir(slot, usados, equipo, evitar = [], eqPrevio = null, simple = fal
   }
   return (eqPrevio && base.find((x) => x.eq !== eqPrevio)) || base[0];
 }
-// cfg: { exp, equipo (ya expandido) }
+/* ---------- duración de la sesión (Fase B paso 4, (73)) ---------- */
+// Minutos por sesión (los mismos de `minutosSesion` del cuestionario; 90 = 90 o más). Sin dato o con un valor raro: 60 (comportamiento de siempre).
+export const MINUTOS = [15, 30, 45, 60, 90];
+export const minutosDe = (m) => (MINUTOS.includes(Number(m)) ? Number(m) : 60);
+// Volumen por duración. `n` = ejercicios de fuerza por sesión; `max` = tope de series (null = las de siempre: 3-4 principales y 2-3 accesorios por nivel);
+// `acc` = series de los accesorios. A 60 min manda el nivel (como antes: principiante 4, unos meses 5, intermedio/avanzado 6, compite 7);
+// por debajo nunca pasa de lo que tendría a 60 (un principiante no hace más ejercicios en 45 min que en 60). A 90: 8 (7 si empieza).
+export function volumenSesion(minutos, exp) {
+  const m = minutosDe(minutos), base = { nuevo: 4, meses: 5, compite: 7 }[exp] || 6;
+  if (m === 15) return { minutos: m, n: Math.min(3, base), max: 3, acc: 2, basicos: true };
+  if (m === 30) return { minutos: m, n: Math.min(4, base), max: 3, acc: null, basicos: true };
+  if (m === 45) return { minutos: m, n: Math.min(5, base), max: 3, acc: null, basicos: false };
+  if (m === 90) return { minutos: m, n: exp === 'nuevo' || exp === 'meses' ? 7 : 8, max: null, acc: null, basicos: false };
+  return { minutos: m, n: base, max: null, acc: null, basicos: false };
+}
+const esAccesorio = (slot) => ACCESORIOS.has(String(slot).split(':')[0]);
+// cfg: { exp, equipo (ya expandido), minutos }
 // evitar: ejercicios de una sesión anterior con el mismo enfoque, para que los días repetidos tengan variantes.
+// Con 15-30 min se eligen primero los básicos del día (patrones multiarticulares) y después los accesorios; con 90 min, si los huecos del día
+// no llegan, se da una segunda vuelta a los mismos patrones con otras variantes (nunca el mismo ejercicio dos veces en la sesión).
 export function sesionFuerza(key, kind, cfg = {}, evitar = [], repite = evitar.length > 0) {
   const def = SES_FUERZA[key];
-  const max = { nuevo: 4, meses: 5, compite: 7 }[cfg.exp] || 6;
+  const vol = volumenSesion(cfg.minutos, cfg.exp), max = vol.n;
   const simple = cfg.exp === 'nuevo' || cfg.exp === 'meses';
+  const orden = vol.basicos ? [...def.p.filter((x) => !esAccesorio(x)), ...def.p.filter(esAccesorio)] : [...def.p];
+  const slots = vol.minutos === 90 && max > orden.length ? [...orden, ...orden] : orden; // a 60 min o menos, los huecos de siempre
   const usados = [], ej = [], eqPorPatron = {};
-  for (const slot of def.p) {
+  for (const slot of slots) {
     if (ej.length >= max) break;
     const p = String(slot).split(':')[0];
     const x = elegir(slot, usados, cfg.equipo, evitar, eqPorPatron[p], simple);
     if (!x) continue;
     usados.push(x.n); eqPorPatron[p] = x.eq;
-    ej.push(nuevoEjercicio(x.n, kind, cfg.exp));
+    const e = nuevoEjercicio(x.n, kind, cfg.exp);
+    if (vol.max) e.series = Math.min(e.series, ACCESORIOS.has(x.p) && vol.acc ? vol.acc : vol.max);
+    ej.push(e);
   }
   return { t: 'fuerza', nombre: repite && !/ [ABC]$/.test(def.n) ? def.n + ' B' : def.n, foco: key, ej };
 }
@@ -1078,11 +1100,12 @@ export function sesionPorDefecto(t, kind, otro, cfg = {}) {
   return sesionVacia('otro', otro);
 }
 
-// cfg = { tipos: ['fuerza','bici',...], dias: [0,2,4], otro: 'Pádel', split, exp, equipo, sexo, prio }
+// cfg = { tipos: ['fuerza','bici',...], dias: [0,2,4], otro: 'Pádel', split, exp, equipo, sexo, prio, minutos (15|30|45|60|90; 60 por defecto) }
 // Lee el perfil: sexo y prioridad deciden el enfoque (glúteo/pierna, torso o equilibrado) y por tanto cuántos días de pierna y de torso;
 // el nivel decide ejercicios, series y complejidad; los objetivos, el tipo de plan y el cardio.
 export function proponerRutina(cfg, goals) {
-  const kind = planKind(goals);
+  const kind = planKind(goals), minutos = minutosDe(cfg.minutos);
+  cfg = { ...cfg, minutos };
   const dias = [...cfg.dias].sort((a, b) => a - b);
   const seq = repartir(cfg.tipos, dias.length, kind);
   const nB = seq.filter((t) => t === 'bici').length;
@@ -1114,17 +1137,18 @@ export function proponerRutina(cfg, goals) {
   });
   // Rutina solo de fuerza: añade cardio al final de algunas sesiones (con máquina, tiempo, velocidad y pendiente) si el objetivo es perder grasa
   // o si empiezas (1 sesión). Primero las sesiones que no son de pierna, para no cargar las piernas antes de entrenarlas.
-  if (cfg.tipos.length === 1 && cfg.tipos[0] === 'fuerza' && dFuerza.length) {
+  // Con 15 o 30 min por sesión no hay tiempo para el cardio final: no se añade (73).
+  if (cfg.tipos.length === 1 && cfg.tipos[0] === 'fuerza' && dFuerza.length && minutos > 30) {
     const nCardio = Math.min(dFuerza.length, kind === 'grasa' ? (dFuerza.length >= 5 ? 3 : 2) : cfg.exp === 'nuevo' && kind !== 'rend' ? 1 : 0);
     const orden = [...dFuerza.filter((d) => !SESION_INFERIOR.has(sesiones[d].foco)), ...dFuerza.filter((d) => SESION_INFERIOR.has(sesiones[d].foco)).reverse()];
     orden.slice(0, nCardio).forEach((d) => sesiones[d].ej.push(cardioFinal(kind, cfg)));
   }
-  return { tipos: cfg.tipos, otro: cfg.otro || '', dias, modo: 'propuesta', split: cfg.split || 'auto', exp: cfg.exp || '', equipo: cfg.equipo || null, prio: cfg.prio || '', sesiones };
+  return { tipos: cfg.tipos, otro: cfg.otro || '', dias, modo: 'propuesta', split: cfg.split || 'auto', exp: cfg.exp || '', equipo: cfg.equipo || null, prio: cfg.prio || '', minutos, sesiones };
 }
 export function rutinaVacia(cfg, goals) {
   const dias = [...cfg.dias].sort((a, b) => a - b);
   const seq = repartir(cfg.tipos, dias.length, planKind(goals));
   const sesiones = {};
   dias.forEach((d, i) => { sesiones[d] = sesionVacia(seq[i], cfg.otro); });
-  return { tipos: cfg.tipos, otro: cfg.otro || '', dias, modo: 'propia', split: cfg.split || 'auto', exp: cfg.exp || '', equipo: cfg.equipo || null, sesiones };
+  return { tipos: cfg.tipos, otro: cfg.otro || '', dias, modo: 'propia', split: cfg.split || 'auto', exp: cfg.exp || '', equipo: cfg.equipo || null, minutos: minutosDe(cfg.minutos), sesiones };
 }
