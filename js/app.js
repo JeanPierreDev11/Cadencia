@@ -1,5 +1,5 @@
 import './br.js'; // Fórmulas de Bilbao Ride (globalThis.BR): debe cargarse antes que secciones.js
-import { createBackend, errorText, REF_MAX } from './data.js';
+import { createBackend, errorText, REF_MAX, copiaSeguridad } from './data.js';
 import { APP_NAME, CICLISMO, APPLE_LOGIN, APOYO_URL } from './config.js';
 import * as E from './entreno.js';
 import { crearSecciones, NOV_V } from './secciones.js';
@@ -104,7 +104,7 @@ function render() {
   C3.enganchar(root);
   RG.pintarMapas(root);
   if (st.view === 'main' && st.compartir) pintarCompartir();
-  document.body.classList.toggle('noscroll', !!(st.limite || st.liveFin || st.rutNuevos || st.rmod || st.compartir || st.calentar || st.discos || st.moverSel || st.dia7 || st.pf || st.proInfo || st.codigo || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.exView || st.lib || st.food || st.checkin || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.resumen || st.postEnt || st.cuerpo3d || st.legal || st.apoyo || st.del || st.pro || st.proWelcome || st.recAsk));
+  document.body.classList.toggle('noscroll', !!(st.limite || st.liveFin || st.rutNuevos || st.rmod || st.compartir || st.calentar || st.discos || st.moverSel || st.dia7 || st.pf || st.proInfo || st.codigo || st.rutShare || st.mealDet != null || st.rutDelAsk || st.wkHist || st.wkDel || st.novModal || st.exView || st.lib || st.food || st.checkin || st.tl || st.pesoSheet || st.pesoHist || st.pesoDel || st.cfg || st.pwd || st.meta || st.regPick || st.modoSel || st.resumen || st.postEnt || st.cuerpo3d || st.legal || st.apoyo || st.importar || st.del || st.pro || st.proWelcome || st.recAsk));
 }
 
 /* ================================================================== */
@@ -173,6 +173,122 @@ function apoyoSheetHTML() {
         <a class="btn block apoyo-go" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Continuar a Ko-fi</a>
         <button type="button" class="btn block ghost apoyo-cerrar" data-act="apoyo-close">Cerrar</button>
       </div>
+    </div>`;
+}
+
+/* ---------- (76) Tus datos: exportar (CSV/JSON) e importar entrenos desde CSV ---------- */
+const hoyArchivo = () => todayISO();
+// Descarga un archivo generado en el navegador (sin servidor). El BOM hace que Excel lea bien las tildes del CSV.
+function descargar(nombre, contenido, tipo) {
+  const blob = new Blob([contenido], { type: tipo }), url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = nombre; a.rel = 'noopener'; a.style.display = 'none';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+async function exportarDatos(tipo) {
+  if (st.exportando) return;
+  st.exportando = tipo; render();
+  try {
+    const d = await api.exportarDatos(st.user.uid);
+    if (tipo === 'csv') {
+      if (!d.entrenos.length) { toast('No hay entrenos que exportar todavía.'); return; }
+      descargar(`cadencia-entrenos-${hoyArchivo()}.csv`, '﻿' + E.entrenosACSV(d.entrenos), 'text/csv;charset=utf-8');
+      toast(`Exportados ${nf(d.entrenos.length)} entrenos en CSV`);
+    } else {
+      descargar(`cadencia-backup-${hoyArchivo()}.json`, JSON.stringify(copiaSeguridad(d), null, 2), 'application/json;charset=utf-8');
+      toast('Copia de seguridad descargada');
+    }
+  } catch (e) { toast(`No se pudo exportar: ${errorText(e)}`); }
+  finally { st.exportando = null; render(); }
+}
+const datosBtn = (act, ic, t, sub) => {
+  const ocupado = st.exportando === (act === 'datos-csv' ? 'csv' : act === 'datos-json' ? 'json' : '');
+  return `<button type="button" class="datos-btn" data-act="${act}" ${st.exportando ? 'disabled' : ''} ${ocupado ? 'aria-busy="true"' : ''}>${ocupado ? '<span class="spinner"></span>' : ic}<span class="datos-txt"><b>${t}</b><small>${sub}</small></span></button>`;
+};
+const tusDatosHTML = () => `<section class="pf-group tus-datos"><h3 class="pf-title">Tus datos</h3><div class="datos-list">
+    ${datosBtn('datos-csv', I.exportar, 'Exportar historial de entrenos (CSV)', 'Una fila por serie. Se abre en Excel o Google Sheets.')}
+    ${datosBtn('datos-json', I.respaldo, 'Copia de seguridad completa (JSON)', 'Perfil, rutinas, entrenos y pesos.')}
+    ${datosBtn('imp-open', I.importar, 'Importar entrenos (CSV)', 'Desde Hevy, Strong o Cadencia.')}
+  </div></section>`;
+
+const FORMATO_NOMBRE = { hevy: 'Hevy', strong: 'Strong', cadencia: 'Cadencia' };
+async function importarLeer(f) {
+  const S = st.importar;
+  if (!S || !f) return;
+  if (f.size > 15 * 1024 * 1024) { S.msg = 'El archivo pesa más de 15 MB. Exporta un periodo más corto.'; return render(); }
+  S.fase = 'leyendo'; S.nombre = f.name || 'archivo.csv'; S.msg = ''; S.res = null; render();
+  try {
+    const texto = await f.text();
+    const existentes = await api.listWorkouts(st.user.uid, 10000).catch(() => st.workouts); // todo el historial: los duplicados antiguos también cuentan
+    if (st.importar !== S) return;
+    S.res = E.parsearCSVEntrenos(texto, existentes, { kg: currentKg() });
+    S.fase = 'vista';
+  } catch (e) { S.fase = 'elegir'; S.msg = 'No se pudo leer el archivo. Comprueba que es un .csv y vuelve a elegirlo.'; }
+  render();
+}
+async function importarGuardar() {
+  const S = st.importar;
+  if (!S || S.fase !== 'vista' || !S.res || !S.res.entrenos.length) return;
+  const ws = S.res.entrenos;
+  S.fase = 'guardando'; S.hechos = 0; S.total = ws.length; S.msg = ''; render();
+  try {
+    await api.guardarEntrenosLote(st.user.uid, ws, (hechos, total) => {
+      S.hechos = hechos; S.total = total;
+      const b = root.querySelector('.imp-barra i'), t = root.querySelector('#imp-prog');
+      if (b) b.style.width = `${Math.round((hechos / total) * 100)}%`;
+      if (t) t.textContent = `Guardando ${nf(hechos)} de ${nf(total)} entrenos…`;
+    });
+    st.workouts = await api.listWorkouts(st.user.uid);
+    S.fase = 'hecho'; // la propia hoja dice cuántos se guardaron (un aviso flotante taparía «Ver historial»)
+  } catch (e) {
+    try { st.workouts = await api.listWorkouts(st.user.uid); } catch (e2) { /* sin red */ }
+    S.fase = 'vista'; S.msg = `Se guardaron ${nf(S.hechos)} de ${nf(S.total)}. ${errorText(e)} Vuelve a pulsar «Importar»: los ya guardados no se duplican.`;
+    const ya = new Set(st.workouts.map((w) => w.id)); S.res = { ...S.res, entrenos: S.res.entrenos.filter((w) => !ya.has(w.id)) };
+  }
+  render();
+}
+function importarSheetHTML() {
+  const S = st.importar, R = S.res, ocupado = S.fase === 'guardando' || S.fase === 'leyendo';
+  const fecha = (iso) => fmtDate(iso, { day: 'numeric', month: 'short', year: 'numeric' });
+  const rango = (a, b) => (a === b ? fecha(a) : a.slice(0, 4) === b.slice(0, 4) ? `${fmtDate(a)} – ${fecha(b)}` : `${fecha(a)} – ${fecha(b)}`);
+  const dato = (v, t, cls = '') => `<div class="imp-dato ${cls}"><b class="num">${v}</b><span>${t}</span></div>`;
+  let cuerpo = '', pie = '';
+  const selector = `<label class="imp-file"><input type="file" accept=".csv,text/csv" data-imp-file>${I.importar}<span><b>${S.nombre ? 'Elegir otro archivo' : 'Elegir archivo .csv'}</b><small>${S.nombre ? esc(S.nombre) : 'Desde el móvil o el ordenador'}</small></span></label>`;
+  if (S.fase === 'elegir' || S.fase === 'leyendo') {
+    cuerpo = `<p>Sube el CSV que exportas desde <b>Hevy</b>, <b>Strong</b> o <b>Cadencia</b>. Antes de guardar verás cuántos entrenos y series se van a añadir.</p>
+      ${S.fase === 'leyendo' ? `<p class="imp-estado" role="status"><span class="spinner"></span> Leyendo ${esc(S.nombre)}…</p>` : selector}
+      <p class="imp-nota">En Hevy y Strong, la exportación a CSV está en los ajustes de la app. Los nombres en inglés se pasan al catálogo de Cadencia cuando hay equivalencia; el resto se guarda con su nombre original.</p>`;
+    pie = `<button type="button" class="btn block ghost imp-cerrar" data-act="imp-close">Cerrar</button>`;
+  } else if (S.fase === 'vista' && R && R.error) {
+    cuerpo = `<p class="imp-error" role="alert">${I.warn} <span>${esc(R.error)}</span></p>${selector}`;
+    pie = `<button type="button" class="btn block ghost imp-cerrar" data-act="imp-close">Cerrar</button>`;
+  } else if (S.fase === 'vista' || S.fase === 'guardando') {
+    const n = R.entrenos.length;
+    cuerpo = `<p class="imp-archivo">${esc(S.nombre)} · formato ${FORMATO_NOMBRE[R.formato] || R.formato}</p>
+      <div class="imp-datos">
+        ${dato(nf(n), n === 1 ? 'entreno nuevo' : 'entrenos nuevos')}
+        ${dato(nf(R.series), 'series totales')}
+        ${dato(nf(R.duplicados), R.duplicados === 1 ? 'duplicado omitido' : 'duplicados omitidos')}
+        ${dato(n ? rango(R.desde, R.hasta) : '–', 'rango de fechas', 'fechas')}
+      </div>
+      ${R.omitidas ? `<p class="imp-nota">${nf(R.omitidas)} ${R.omitidas === 1 ? 'fila no se importa' : 'filas no se importan'} (sin repeticiones, sin fecha o fuera de rango).</p>` : ''}
+      ${!n ? `<p class="imp-nota">Todos los entrenos de este archivo ya están en tu historial.</p>` : ''}
+      ${S.fase === 'guardando' ? `<div class="imp-barra" role="progressbar" aria-valuemin="0" aria-valuemax="${S.total}" aria-valuenow="${S.hechos}"><i style="width:${S.total ? Math.round((S.hechos / S.total) * 100) : 0}%"></i></div><p class="imp-estado" id="imp-prog" role="status">Guardando ${nf(S.hechos)} de ${nf(S.total)} entrenos…</p>` : ''}
+      ${S.msg ? `<p class="imp-error" role="alert">${I.warn} <span>${esc(S.msg)}</span></p>` : ''}`;
+    pie = n ? `<button type="button" class="btn block imp-go" data-act="imp-go" ${S.fase === 'guardando' ? 'disabled' : ''}>${S.fase === 'guardando' ? '<span class="spinner"></span>' : `Importar ${nf(n)} ${n === 1 ? 'entreno' : 'entrenos'}`}</button>` : '';
+    pie += S.fase === 'guardando' ? '' : `<button type="button" class="btn block ghost imp-cerrar" data-act="${n ? 'imp-otro' : 'imp-close'}">${n ? 'Elegir otro archivo' : 'Cerrar'}</button>`;
+  } else if (S.fase === 'hecho') {
+    const n = R.entrenos.length;
+    cuerpo = `<p class="imp-ok" role="status">${I.check} <span>${nf(n)} ${n === 1 ? 'entreno importado' : 'entrenos importados'} · ${nf(R.series)} series.</span></p>
+      <p>Ya están en tu historial, tus récords y tu volumen semanal.</p>`;
+    pie = `<button type="button" class="btn block imp-go" data-act="imp-ver">Ver historial</button><button type="button" class="btn block ghost imp-cerrar" data-act="imp-close">Cerrar</button>`;
+  }
+  return `<div class="sheet-back" data-act="imp-close"></div>
+    <div class="sheet short imp-sheet" role="dialog" aria-modal="true" aria-label="Importar entrenos">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><span style="width:44px"></span><h2>Importar entrenos</h2><button type="button" class="iconbtn" data-act="imp-close" aria-label="Cerrar" ${ocupado ? 'disabled' : ''}>${I.close}</button></div>
+      <div class="imp-body">${cuerpo}</div>
+      ${pie ? `<div class="sheet-foot imp-foot">${pie}</div>` : ''}
     </div>`;
 }
 function legalSheetHTML() {
@@ -679,7 +795,7 @@ let stravaRet = CICLISMO ? leerRetorno() : null; // si venimos de la pantalla de
 
 const gearHTML = () => `<button type="button" class="gear" data-act="cfg-open" aria-label="Configuración">${I.gear}</button>`;
 function viewMain() {
-  const sheet = st.dia7 ? dia7SheetHTML() : st.rutNuevos ? rutNuevosSheetHTML() : st.compartir ? compartirSheetHTML() : st.cuerpo3d ? cuerpoSheetHTML() : st.codigo ? codigoSheetHTML() : st.limite ? limiteSheetHTML() : st.proInfo ? proInfoHTML() : st.legal ? legalSheetHTML() : st.apoyo ? apoyoSheetHTML() : st.pf ? pfSheetHTML() : st.rmod ? rutModSheetHTML() : st.liveFin && st.live ? finSheetHTML() : st.calentar ? calentarSheetHTML() : st.discos ? discosSheetHTML() : st.moverSel ? moverSheetHTML() : st.rutShare ? rutShareSheetHTML() : st.modoSel ? modoSheetHTML() : st.resumen ? resumenSheetHTML() : st.postEnt ? postEntSheetHTML() : st.del ? delSheetHTML() : st.exView ? exViewHTML() : st.lib ? libSheetHTML() : st.rutDelAsk ? rutDelSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
+  const sheet = st.dia7 ? dia7SheetHTML() : st.rutNuevos ? rutNuevosSheetHTML() : st.compartir ? compartirSheetHTML() : st.cuerpo3d ? cuerpoSheetHTML() : st.codigo ? codigoSheetHTML() : st.limite ? limiteSheetHTML() : st.proInfo ? proInfoHTML() : st.legal ? legalSheetHTML() : st.apoyo ? apoyoSheetHTML() : st.importar ? importarSheetHTML() : st.pf ? pfSheetHTML() : st.rmod ? rutModSheetHTML() : st.liveFin && st.live ? finSheetHTML() : st.calentar ? calentarSheetHTML() : st.discos ? discosSheetHTML() : st.moverSel ? moverSheetHTML() : st.rutShare ? rutShareSheetHTML() : st.modoSel ? modoSheetHTML() : st.resumen ? resumenSheetHTML() : st.postEnt ? postEntSheetHTML() : st.del ? delSheetHTML() : st.exView ? exViewHTML() : st.lib ? libSheetHTML() : st.rutDelAsk ? rutDelSheetHTML() : st.wkDel ? wkDelSheetHTML() : st.wkHist ? wkHistSheetHTML() : st.regPick ? regSheetHTML() : st.pesoDel ? pesoDelSheetHTML() : st.pesoSheet ? pesoSheetHTML() : st.pesoHist ? pesoHistSheetHTML() : st.recAsk ? R.askHTML() : st.pwd ? pwdSheetHTML() : st.cfg ? cfgSheetHTML() : M.sheet();
   if (st.rw) return viewRutWizard() + sheet;
   if (st.live && !st.liveMin) return viewLive() + sheet;
   if (st.wk) return viewWkForm();
@@ -1271,6 +1387,7 @@ function viewPerfil() {
       tienePass() ? pfRow('key', 'Modificar contraseña', { act: 'pwd-open' }) : '',
       tieneGoogle() ? pfRow('link', 'Cuenta de Google', { tag: '<span class="tag ok">Vinculada</span>' }) : pfRow('link', 'Vincular cuenta de Google', { act: 'google-link' }),
     ])}
+    ${tusDatosHTML()}
     ${pfGrupo('Soporte', [
       pfRow('mail', 'Correo de soporte', { href: `mailto:${CONTACTO}?subject=${encodeURIComponent('Soporte Cadencia')}` }),
       pfRow('help', 'FAQ', { act: 'pf-open', v: 'faq' }),
@@ -1621,7 +1738,7 @@ async function enter(u) {
   if (u && st.view === 'paywall' && st.vieneDeRegistro) return; // aviso de sesión repetido mientras se ve el paywall: no entrar en la app todavía
   st.user = u; st.busy = false;
   if (!u && M) M.pararPro();
-  if (!u) { pwQuitar(); st.vieneDeRegistro = false; const anon = st.ob && st.ob.anon && !st.ob.justRegistered ? st.ob : null; /* un cuestionario sin cuenta en marcha NO se pierde por un aviso «sin sesión» */ st.cfg = st.pwd = st.pf = st.proInfo = st.rutShare = st.codigo = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.apoyo = false; st.view = anon && st.view === 'onboarding' ? 'onboarding' : 'auth'; st.ob = anon; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
+  if (!u) { pwQuitar(); st.vieneDeRegistro = false; const anon = st.ob && st.ob.anon && !st.ob.justRegistered ? st.ob : null; /* un cuestionario sin cuenta en marcha NO se pierde por un aviso «sin sesión» */ st.cfg = st.pwd = st.pf = st.proInfo = st.rutShare = st.codigo = null; st.pesoHist = st.pesoComp = st.pesoDel = st.pesoSheet = st.pesoEdit = null; st.recAsk = null; st.del = null; st.legal = false; st.apoyo = false; st.importar = null; st.exportando = null; st.view = anon && st.view === 'onboarding' ? 'onboarding' : 'auth'; st.ob = anon; st.profile = null; st.weights = []; st.workouts = []; st.wk = null; st.rw = null; st.re = null; st.live = null; st.lib = null; st.food = null; st.tl = null; st.dias = {}; st.nDate = null; return render(); }
   try {
     // PUERTA OBLIGATORIA: antes de pintar la app (y antes de pedir entrenos, peso, racha…) se lee el perfil.
     // Sin `onboardingCompletado: true` solo se ve el cuestionario: nada de cabecera, barra inferior ni secciones.
@@ -1665,7 +1782,7 @@ async function entrarApp(u, { fade = false } = {}) {
 }
 
 UI.iniciarHojas(root);
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && st.rmod && !st.legal) { const b = root.querySelector('.sheet-back[data-act="rm-salir"]'); if (b) b.click(); return; } if (e.key === 'Escape' && st.apoyo && !st.legal) { const b = root.querySelector('.sheet-back[data-act="apoyo-close"]'); if (b) b.click(); return; } if (e.key === 'Escape' && st.legal) { const b = root.querySelector('.sheet-back[data-act="legal-close"]'); if (b) b.click(); } });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && st.rmod && !st.legal) { const b = root.querySelector('.sheet-back[data-act="rm-salir"]'); if (b) b.click(); return; } if (e.key === 'Escape' && st.importar && !st.legal) { const b = root.querySelector('.sheet-back[data-act="imp-close"]'); if (b) b.click(); return; } if (e.key === 'Escape' && st.apoyo && !st.legal) { const b = root.querySelector('.sheet-back[data-act="apoyo-close"]'); if (b) b.click(); return; } if (e.key === 'Escape' && st.legal) { const b = root.querySelector('.sheet-back[data-act="legal-close"]'); if (b) b.click(); } });
 root.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.tap')) { e.preventDefault(); e.target.click(); } });
 root.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-act]');
@@ -1692,6 +1809,12 @@ root.addEventListener('click', async (e) => {
   else if (act === 'legal-tab') { st.legal = legalTab(v); render(); const t = root.querySelector('.legal-seg [aria-selected="true"]'); if (t) t.focus({ preventScroll: true }); }
   else if (act === 'apoyo-open') { if (!apoyoHref()) return; st.apoyo = true; render(); }
   else if (act === 'apoyo-close') { st.apoyo = false; render(); }
+  else if (act === 'datos-csv' || act === 'datos-json') exportarDatos(act === 'datos-csv' ? 'csv' : 'json');
+  else if (act === 'imp-open') { st.importar = { fase: 'elegir', nombre: '', res: null, hechos: 0, total: 0, msg: '' }; render(); }
+  else if (act === 'imp-close') { if (st.importar && st.importar.fase === 'guardando') return; st.importar = null; render(); }
+  else if (act === 'imp-otro') { st.importar = { fase: 'elegir', nombre: '', res: null, hechos: 0, total: 0, msg: '' }; render(); const i = root.querySelector('input[data-imp-file]'); if (i) i.click(); }
+  else if (act === 'imp-go') importarGuardar();
+  else if (act === 'imp-ver') { st.importar = null; st.tab = 'entreno'; lsSet('cadencia-tab', 'entreno'); st.wkHist = true; render(); }
   else if (act === 'legal-close') { st.legal = false; render(); if (st.view === 'auth' && st.authKeep) { keepForm(st.authKeep); st.authKeep = null; } }
   else if (act === 'pf-open') { st.pf = { v, f: {}, busy: false }; st.editGoals = null; render(); if (v === 'referidos') refAbrir(); }
   else if (act === 'cod-open') { st.codigo = { val: refGuardado(), msg: '', busy: false }; render(); const i = root.querySelector('.cod-input'); if (i) i.focus(); }
@@ -1821,7 +1944,7 @@ root.addEventListener('input', (e) => {
   if (o.step === 'meta') { const t = document.getElementById('ob-term'); if (t) t.innerHTML = OB.termometroHTML(num(o.pesoKg), num(o.pesoObjetivo)); } // termómetro en vivo, sin perder el teclado
 });
 
-root.addEventListener('change', async (e) => { if (st.view === 'main') { if (e.target.matches && e.target.matches('select[data-comp-sel]')) { st.pesoComp = e.target.value; st.pesoModo = 'kg'; render(); return; }  if (e.target.matches && e.target.matches('input[data-foto]')) { const f = e.target.files && e.target.files[0]; e.target.value = ''; return subirFoto(f); } if (R.change(e.target)) return; await M.change(e.target); } });
+root.addEventListener('change', async (e) => { if (st.view === 'main') { if (e.target.matches && e.target.matches('input[data-imp-file]')) { const f = e.target.files && e.target.files[0]; e.target.value = ''; return importarLeer(f); } if (e.target.matches && e.target.matches('select[data-comp-sel]')) { st.pesoComp = e.target.value; st.pesoModo = 'kg'; render(); return; }  if (e.target.matches && e.target.matches('input[data-foto]')) { const f = e.target.files && e.target.files[0]; e.target.value = ''; return subirFoto(f); } if (R.change(e.target)) return; await M.change(e.target); } });
 
 root.addEventListener('submit', async (e) => {
   e.preventDefault();

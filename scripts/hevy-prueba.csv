@@ -1,0 +1,13 @@
+"title","start_time","end_time","description","exercise_title","superset_id","exercise_notes","set_index","set_type","weight_kg","reps","distance_km","duration_seconds","rpe"
+"Push, día A","26 Nov 2024, 18:30","26 Nov 2024, 19:42","","Bench Press (Barbell)","","Agarre medio","0","warmup","40","10","","",""
+"Push, día A","26 Nov 2024, 18:30","26 Nov 2024, 19:42","","Bench Press (Barbell)","","","1","normal","80","8","","","8"
+"Push, día A","26 Nov 2024, 18:30","26 Nov 2024, 19:42","","Bench Press (Barbell)","","","2","normal","80","7","","","9.5"
+"Push, día A","26 Nov 2024, 18:30","26 Nov 2024, 19:42","","Bench Press (Barbell)","","","3","dropset","60","10","","",""
+"Push, día A","26 Nov 2024, 18:30","26 Nov 2024, 19:42","","Lateral Raise (Dumbbell)","","","0","normal","10","15","","","7"
+"Push, día A","26 Nov 2024, 18:30","26 Nov 2024, 19:42","","Lateral Raise (Dumbbell)","","","1","failure","10","12","","",""
+"Push, día A","26 Nov 2024, 18:30","26 Nov 2024, 19:42","","Cable Crunch ""Kneeling""","","","0","normal","35,5","12","","",""
+"Push, día A","26 Nov 2024, 18:30","26 Nov 2024, 19:42","","Plank","","","0","normal","","","","60",""
+"Pierna","28 Nov 2024, 07:05","28 Nov 2024, 08:10","Notas
+en dos líneas","Squat (Barbell)","","","0","normal","100","5","","","8"
+"Pierna","28 Nov 2024, 07:05","28 Nov 2024, 08:10","","Romanian Deadlift (Barbell)","","","0","normal","90","8","","",""
+"Pierna","28 Nov 2024, 07:05","28 Nov 2024, 08:10","","Treadmill","","","0","normal","","","2","900",""

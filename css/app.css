@@ -2526,6 +2526,54 @@ html:has(.lp), body:has(.lp) { background: var(--bg-primary); }
 .apoyo-foot .apoyo-go { background: var(--brand-yellow); color: var(--text-on-brand); }
 .apoyo-foot .apoyo-cerrar { border-color: var(--muted); color: var(--ink); }
 
+/* ================================================================== */
+/* 2026-11-25 · Tus datos (76): exportar CSV/JSON e importar entrenos desde CSV (Perfil + hoja «Importar entrenos»).
+   Superficie y texto con variables del tema (claro y oscuro); borde, acento y radios con tokens de brand-ui.md.
+   Un solo foco amarillo: el botón «Importar N entrenos» de la hoja. */
+/* ================================================================== */
+.datos-list { display: grid; gap: 8px; }
+.datos-btn { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 10px 14px; border: 1px solid var(--border-subtle); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); font: inherit; text-align: left; }
+.datos-btn > .ic { flex: none; font-size: 22px; color: var(--muted); }
+.datos-btn > .spinner { flex: none; }
+.datos-txt { display: grid; gap: 2px; min-width: 0; }
+.datos-txt b { font-size: 14px; font-weight: 700; color: var(--ink); }
+.datos-txt small { font-size: 12.5px; color: var(--muted); line-height: 1.35; }
+.datos-btn:active { border-color: var(--brand-yellow); }
+.datos-btn[disabled] { opacity: 1; color: var(--muted); }
+.datos-btn:focus-visible, .imp-file:focus-within, .imp-go:focus-visible, .imp-cerrar:focus-visible { outline: 2px solid var(--brand-yellow); outline-offset: 2px; }
+:root[data-theme="light"] .datos-btn, :root[data-theme="light"] .imp-file { border-color: var(--bd); }
+@media (prefers-color-scheme: light) { :root[data-theme="system"] .datos-btn, :root[data-theme="system"] .imp-file { border-color: var(--bd); } }
+.sheet.imp-sheet { display: flex; flex-direction: column; }
+.imp-body { display: grid; gap: 12px; padding: 4px 20px 8px; overflow-y: auto; min-height: 0; }
+.imp-body p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--ink); }
+.imp-body .imp-nota, .imp-body .imp-archivo { font-size: 13px; color: var(--muted); }
+.imp-file { position: relative; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 10px 14px; border: 1px dashed var(--border-subtle); border-radius: var(--r-md); background: var(--surface2); color: var(--ink); cursor: pointer; }
+.imp-file input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.imp-file > .ic { flex: none; font-size: 22px; color: var(--muted); }
+.imp-file span { display: grid; gap: 2px; min-width: 0; }
+.imp-file b { font-size: 14px; }
+.imp-file small { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-datos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.imp-dato { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface2); min-width: 0; }
+.imp-dato b { font-size: 20px; font-weight: 800; color: var(--ink); line-height: 1.15; overflow-wrap: anywhere; }
+.imp-dato span { font-size: 12px; color: var(--muted); }
+.imp-barra { height: 6px; border-radius: var(--r-sm); background: var(--surface2); overflow: hidden; }
+.imp-barra i { display: block; height: 100%; background: var(--brand-yellow); transition: width .25s ease; }
+.imp-body .imp-estado { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--muted); }
+.imp-body .imp-error, .imp-body .imp-ok { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid currentColor; font-size: 14px; }
+.imp-body .imp-error { color: var(--status-error); }
+.imp-body .imp-ok { color: var(--status-success); }
+.imp-error span, .imp-ok span { color: var(--ink); }
+.imp-ok svg { flex: none; margin-top: 3px; }
+.imp-foot { display: grid; gap: 8px; }
+.imp-foot .btn { min-height: 48px; border-radius: var(--r-sm); }
+.imp-foot .imp-go { background: var(--brand-yellow); color: var(--text-on-brand); }
+.imp-foot .imp-go[disabled] { background: var(--brand-yellow-muted); color: var(--text-on-brand); }
+.imp-foot .imp-cerrar { border-color: var(--muted); color: var(--ink); }
+.imp-dato.fechas b { font-size: 16px; }
+/* El aviso «Instala Cadencia» (fixed, z-index 50) tapaba el pie de esta hoja: se oculta mientras está abierta. */
+body:has(.imp-sheet) .ib { visibility: hidden; }
+
 @media (min-width: 1024px) {
   :root { --sb-w: 104px; --col: 800px; }
 

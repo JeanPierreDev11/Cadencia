@@ -21,6 +21,26 @@ const refCodigoLimpio = (c) => String(c || '').trim().toUpperCase().replace(/[\s
 // Código corto para compartir rutinas: 6 caracteres sin letras que se confunden (I, O) ni 0/1.
 const nuevoCodigo = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]).join('');
 
+// (76) Entrenos importados por lote de Firestore (máx. 500 operaciones por lote; 50 deja ver el progreso y no satura).
+export const LOTE_IMPORTAR = 50;
+// Campos internos del perfil que NO van en la copia de seguridad (pagos, tokens de avisos y de Strava, contadores del servidor).
+const PERFIL_INTERNO = ['fcmTokens', 'stripeCustomerId', 'stripeSubscriptionId', 'strava', 'ultimoEscaneo', 'proActualizado', 'proRenueva', 'proCancela', 'proCaduca', 'codigoUsado', 'recompensas', 'referidos', 'refCode', 'onboardingVersion', 'novVista', 'rutinas', 'rutina'];
+// Timestamps de Firestore (o fechas) → texto ISO, en todo el árbol.
+const aJSON = (v) => (v == null ? v : typeof v.toDate === 'function' ? v.toDate().toISOString() : v instanceof Date ? v.toISOString() : Array.isArray(v) ? v.map(aJSON) : typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, aJSON(x)])) : v);
+// Copia de seguridad completa (JSON): perfil sin campos internos, rutinas, entrenos y pesos, ordenados por fecha.
+export function copiaSeguridad({ perfil = {}, entrenos = [], pesos = [] } = {}, ahora = new Date()) {
+  const p = aJSON(perfil) || {};
+  const limpio = Object.fromEntries(Object.entries(p).filter(([k]) => !PERFIL_INTERNO.includes(k)));
+  const porFecha = (a, b) => String(a.fecha || '').localeCompare(String(b.fecha || ''));
+  return {
+    app: 'Cadencia', formato: 'cadencia-backup', version: 1, exportado: ahora.toISOString(),
+    perfil: limpio,
+    rutinas: aJSON(Array.isArray(p.rutinas) ? p.rutinas : []),
+    rutinaActiva: p.rutina && p.rutina.id ? p.rutina.id : null,
+    entrenos: aJSON([...entrenos]).sort(porFecha),
+    pesos: aJSON([...pesos]).sort(porFecha),
+  };
+}
 /* ------------------------------------------------------------------ */
 /* Firebase                                                           */
 /* ------------------------------------------------------------------ */
@@ -225,6 +245,19 @@ async function firebaseBackend(config) {
       const s = await F.getDocs(q);
       return sinBici(s.docs.map((d) => d.data()));
     },
+    // (76) Tus datos: lectura COMPLETA para exportar (sin límite) y guardado de entrenos importados en lotes.
+    async exportarDatos(uid) {
+      const [p, e, w] = await Promise.all([F.getDoc(userRef(uid)), F.getDocs(F.collection(db, 'users', uid, 'entrenos')), F.getDocs(F.collection(db, 'users', uid, 'pesos'))]);
+      return { perfil: p.exists() ? p.data() : {}, entrenos: e.docs.map((d) => d.data()), pesos: w.docs.map((d) => d.data()) };
+    },
+    async guardarEntrenosLote(uid, ws, alAvanzar) {
+      for (let i = 0; i < ws.length; i += LOTE_IMPORTAR) {
+        const b = F.writeBatch(db);
+        for (const w of ws.slice(i, i + LOTE_IMPORTAR)) b.set(F.doc(db, 'users', uid, 'entrenos', w.id), w);
+        await b.commit();
+        if (alAvanzar) alAvanzar(Math.min(ws.length, i + LOTE_IMPORTAR), ws.length);
+      }
+    },
   };
 }
 
@@ -319,6 +352,17 @@ function localBackend() {
       return Object.values(u.pesos).sort((a, b) => a.fecha.localeCompare(b.fecha)).slice(-n);
     },
     async saveWorkout(uid, w) { const s = read(); const u = byUid(s, uid); if (!u) return; (u.entrenos = u.entrenos || {})[w.id] = w; write(s); },
+    async exportarDatos(uid) { const u = byUid(read(), uid); return u ? { perfil: u.profile || {}, entrenos: Object.values(u.entrenos || {}), pesos: Object.values(u.pesos || {}) } : { perfil: {}, entrenos: [], pesos: [] }; },
+    async guardarEntrenosLote(uid, ws, alAvanzar) {
+      for (let i = 0; i < ws.length; i += LOTE_IMPORTAR) {
+        const s = read(); const u = byUid(s, uid); if (!u) return;
+        u.entrenos = u.entrenos || {};
+        for (const w of ws.slice(i, i + LOTE_IMPORTAR)) u.entrenos[w.id] = w;
+        write(s);
+        if (alAvanzar) alAvanzar(Math.min(ws.length, i + LOTE_IMPORTAR), ws.length);
+        await new Promise((r) => setTimeout(r, 120)); // en modo prueba, para que se vea el progreso igual que con Firestore
+      }
+    },
     async deleteWorkout(uid, id) { const s = read(); const u = byUid(s, uid); if (!u || !u.entrenos) return; delete u.entrenos[id]; write(s); },
     async saveDia(uid, fecha, data) { const s = read(); const u = byUid(s, uid); if (!u) return; (u.comidas = u.comidas || {})[fecha] = { ...data, fecha }; write(s); },
     async saveRuta(uid, r) { const s = read(); const u = byUid(s, uid); if (!u) return; (u.rutas = u.rutas || {})[r.id] = r; write(s); },

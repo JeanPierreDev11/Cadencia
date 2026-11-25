@@ -1152,3 +1152,341 @@ export function rutinaVacia(cfg, goals) {
   dias.forEach((d, i) => { sesiones[d] = sesionVacia(seq[i], cfg.otro); });
   return { tipos: cfg.tipos, otro: cfg.otro || '', dias, modo: 'propia', split: cfg.split || 'auto', exp: cfg.exp || '', equipo: cfg.equipo || null, minutos: minutosDe(cfg.minutos), sesiones };
 }
+
+/* ================================================================== */
+/* (76) Exportar e importar entrenos en CSV (Hevy, Strong y Cadencia) */
+/* Todo puro: sin pantalla, sin Firebase. Lo prueban las pruebas de Node. */
+/* ================================================================== */
+export const CSV_COLUMNAS = ['fecha', 'rutina', 'ejercicio', 'serie', 'tipo', 'kg', 'reps', 'rir', 'carga', 'notas'];
+const LB_KG = 0.45359237;
+
+// Lector CSV (RFC 4180): comillas dobles, comillas escapadas (""), comas y saltos de línea dentro de comillas, BOM y CRLF.
+// El separador se elige mirando la primera línea (coma, punto y coma o tabulador).
+export function leerCSV(texto) {
+  let t = String(texto == null ? '' : texto);
+  if (t.charCodeAt(0) === 0xfeff) t = t.slice(1);
+  const linea1 = t.slice(0, Math.max(0, t.indexOf('\n')) || t.length);
+  const cuenta = (c) => linea1.split(c).length - 1;
+  const sep = [',', ';', '\t'].reduce((a, c) => (cuenta(c) > cuenta(a) ? c : a), ',');
+  const filas = [];
+  let fila = [], campo = '', q = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (q) {
+      if (c === '"') { if (t[i + 1] === '"') { campo += '"'; i++; } else q = false; }
+      else campo += c;
+    } else if (c === '"' && campo === '') q = true;
+    else if (c === sep) { fila.push(campo); campo = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && t[i + 1] === '\n') i++;
+      fila.push(campo); campo = '';
+      if (fila.some((x) => x.trim() !== '')) filas.push(fila);
+      fila = [];
+    } else campo += c;
+  }
+  fila.push(campo);
+  if (fila.some((x) => x.trim() !== '')) filas.push(fila);
+  return filas;
+}
+
+// Un campo de CSV: entre comillas solo si hace falta.
+const csvCampo = (v) => { const s = v == null ? '' : String(v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+const numCSV = (v) => (v == null || v === '' || !isFinite(Number(v)) ? '' : String(Math.round(Number(v) * 100) / 100));
+
+// Historial → CSV de Cadencia (una fila por serie; números con punto, que es lo que leen Hevy, Strong y las hojas de cálculo en cualquier idioma).
+// Unilateral: dos filas por serie con carga «izquierda» y «derecha». Cardio: tipo «cardio» y sus datos en notas («min=30; km=5»).
+// Los entrenos que no son de fuerza (bici, cardio, otro) salen en una fila con ejercicio vacío y tipo = su tipo.
+export function entrenosACSV(entrenos) {
+  const out = [CSV_COLUMNAS.join(',')];
+  const fila = (...c) => out.push(c.map(csvCampo).join(','));
+  const ws = [...(entrenos || [])].filter((w) => w && w.fecha).sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+  for (const w of ws) {
+    const nombre = w.nombre || TIPOS[w.tipo] || '';
+    if (w.tipo !== 'gym') {
+      const d = ['min', 'km', 'elev', 'pulso'].filter((k) => Number(w[k]) > 0).map((k) => `${k}=${numCSV(w[k])}`).join('; ');
+      fila(w.fecha, nombre, '', '', w.tipo || 'otro', '', '', '', '', d);
+      continue;
+    }
+    if (Number(w.min) > 0 && !(w.ejercicios || []).length) { fila(w.fecha, nombre, '', '', 'gym', '', '', '', '', `min=${numCSV(w.min)}`); continue; }
+    for (const e of w.ejercicios || []) {
+      const series = e.series || [];
+      if (exCardio(e)) {
+        series.forEach((s, j) => {
+          const d = Object.keys(s || {}).filter((k) => k !== 'completada' && s[k] != null && s[k] !== '').map((k) => `${k}=${typeof s[k] === 'number' ? numCSV(s[k]) : String(s[k]).replace(/[;=]/g, ' ')}`).join('; ');
+          fila(w.fecha, nombre, e.n, j + 1, 'cardio', '', '', '', '', d);
+        });
+        continue;
+      }
+      let n = 0;
+      for (const s of series) {
+        if (!s) continue;
+        const tipo = s.w ? 'calentamiento' : s.isDropSet ? 'drop' : 'normal';
+        const num = s.w ? '' : ++n;
+        const rir = !s.w && s.rir != null && s.rir !== '' ? numCSV(s.rir) : '';
+        const notas = s.isSuperset ? 'superserie' : '';
+        if (e.uni && !s.w) {
+          const [I, D] = ladosSerie(s);
+          fila(w.fecha, nombre, e.n, num, tipo, numCSV(I.kg), numCSV(I.reps), rir, 'izquierda', notas);
+          fila(w.fecha, nombre, e.n, num, tipo, numCSV((D || I).kg), numCSV((D || I).reps), rir, 'derecha', notas);
+        } else fila(w.fecha, nombre, e.n, num, tipo, numCSV(s.kg), numCSV(s.reps), rir, s.w ? '' : cargaDe(e), notas);
+      }
+    }
+  }
+  return out.join('\r\n') + '\r\n';
+}
+
+// ---- Nombres en inglés (Hevy / Strong) → catálogo de Cadencia ----
+// Clave = nombre en minúsculas sin tildes; «|equipo» = lo que va entre paréntesis («Bench Press (Barbell)» → «bench press|barbell»).
+// Se busca primero con equipo y luego sin él. El destino tiene que existir en el catálogo (si no, se deja el nombre original).
+const EQ_EN = { barbell: 'barbell', dumbbell: 'dumbbell', dumbbells: 'dumbbell', cable: 'cable', machine: 'machine', 'smith machine': 'smith', bodyweight: 'bodyweight', kettlebell: 'kettlebell', band: 'band', 'ez bar': 'ez' };
+const NOMBRES_EN = {
+  'bench press|barbell': 'Press banca', 'bench press': 'Press banca', 'bench press|dumbbell': 'Press con mancuernas', 'dumbbell bench press': 'Press con mancuernas',
+  'bench press|smith': 'Press banca en multipower', 'chest press|machine': 'Press de pecho en máquina', 'chest press': 'Press de pecho en máquina',
+  'incline bench press|barbell': 'Press inclinado con barra', 'incline bench press': 'Press inclinado con barra', 'incline bench press|dumbbell': 'Press inclinado con mancuernas', 'incline dumbbell press': 'Press inclinado con mancuernas',
+  'decline bench press|barbell': 'Press declinado', 'decline bench press': 'Press declinado',
+  'chest fly|dumbbell': 'Aperturas con mancuernas', 'dumbbell fly': 'Aperturas con mancuernas', 'chest fly': 'Aperturas con mancuernas', 'cable crossover': 'Cruce de poleas', 'cable fly crossovers': 'Cruce de poleas', 'cable fly': 'Cruce de poleas',
+  'butterfly|pec deck': 'Contractora (pec deck)', 'pec deck': 'Contractora (pec deck)', 'chest fly|machine': 'Contractora (pec deck)',
+  'push up': 'Flexiones', 'push-up': 'Flexiones', 'push ups': 'Flexiones', 'chest dip': 'Fondos en paralelas', 'triceps dip': 'Fondos en paralelas', 'dips': 'Fondos en paralelas', 'dip': 'Fondos en paralelas',
+  'squat|barbell': 'Sentadilla con barra', 'squat': 'Sentadilla con barra', 'back squat': 'Sentadilla con barra', 'full squat': 'Sentadilla con barra', 'front squat|barbell': 'Sentadilla frontal', 'front squat': 'Sentadilla frontal',
+  'goblet squat': 'Sentadilla goblet', 'hack squat|machine': 'Hack squat', 'hack squat': 'Hack squat', 'bulgarian split squat': 'Sentadilla búlgara', 'lunge|dumbbell': 'Zancadas', 'lunge': 'Zancadas', 'walking lunge': 'Zancadas',
+  'leg press|machine': 'Prensa de piernas', 'leg press': 'Prensa de piernas', 'leg extension|machine': 'Extensión de cuádriceps', 'leg extension': 'Extensión de cuádriceps',
+  'lying leg curl|machine': 'Curl femoral tumbado', 'lying leg curl': 'Curl femoral tumbado', 'leg curl': 'Curl femoral tumbado', 'seated leg curl|machine': 'Curl femoral sentado', 'seated leg curl': 'Curl femoral sentado',
+  'deadlift|barbell': 'Peso muerto convencional', 'deadlift': 'Peso muerto convencional', 'conventional deadlift': 'Peso muerto convencional', 'sumo deadlift': 'Peso muerto sumo', 'sumo deadlift|barbell': 'Peso muerto sumo',
+  'romanian deadlift|barbell': 'Peso muerto rumano', 'romanian deadlift': 'Peso muerto rumano', 'deadlift|dumbbell': 'Peso muerto con mancuernas', 'good morning|barbell': 'Buenos días', 'good morning': 'Buenos días',
+  'hip thrust|barbell': 'Hip thrust', 'hip thrust': 'Hip thrust', 'glute bridge': 'Puente de glúteo', 'hip abduction|machine': 'Abducción en máquina', 'hip abduction': 'Abducción en máquina',
+  'standing calf raise': 'Elevación de gemelos de pie', 'calf raise': 'Elevación de gemelos de pie', 'standing calf raise|machine': 'Elevación de gemelos de pie', 'seated calf raise': 'Elevación de gemelos sentado',
+  'overhead press|barbell': 'Press militar', 'overhead press': 'Press militar', 'strict military press': 'Press militar', 'military press': 'Press militar', 'shoulder press|dumbbell': 'Press de hombros con mancuernas',
+  'overhead press|dumbbell': 'Press de hombros con mancuernas', 'seated shoulder press|dumbbell': 'Press de hombros con mancuernas', 'shoulder press|machine': 'Press de hombro en máquina', 'arnold press|dumbbell': 'Press Arnold', 'arnold press': 'Press Arnold',
+  'lateral raise|dumbbell': 'Elevaciones laterales', 'lateral raise': 'Elevaciones laterales', 'lateral raise|cable': 'Elevaciones laterales en polea', 'lateral raise|machine': 'Elevaciones laterales en máquina',
+  'front raise|dumbbell': 'Elevaciones frontales', 'front raise': 'Elevaciones frontales', 'rear delt reverse fly|dumbbell': 'Pájaros con mancuernas', 'reverse fly|dumbbell': 'Pájaros con mancuernas', 'face pull': 'Face pull', 'face pull|cable': 'Face pull',
+  'shrug|dumbbell': 'Encogimientos con mancuernas', 'dumbbell shrug': 'Encogimientos con mancuernas',
+  'lat pulldown|cable': 'Jalón al pecho', 'lat pulldown': 'Jalón al pecho', 'lat pulldown|machine': 'Jalón al pecho', 'pull up': 'Dominadas', 'pull-up': 'Dominadas', 'pull ups': 'Dominadas', 'chin up': 'Dominadas supinas', 'chin-up': 'Dominadas supinas',
+  'bent over row|barbell': 'Remo con barra', 'barbell row': 'Remo con barra', 'bent over row': 'Remo con barra', 'pendlay row|barbell': 'Remo Pendlay', 'pendlay row': 'Remo Pendlay', 't bar row': 'Remo T', 't-bar row': 'Remo T',
+  'dumbbell row': 'Remo con mancuerna', 'bent over one arm row|dumbbell': 'Remo con mancuerna', 'single arm row|dumbbell': 'Remo con mancuerna', 'seated cable row': 'Remo en polea baja', 'seated row|cable': 'Remo en polea baja', 'seated cable row - v grip|cable': 'Remo en polea baja',
+  'inverted row': 'Remo invertido', 'straight arm pulldown|cable': 'Jalón con brazos rectos con cuerda',
+  'bicep curl|barbell': 'Curl con barra', 'barbell curl': 'Curl con barra', 'bicep curl|dumbbell': 'Curl de bíceps con mancuernas', 'dumbbell curl': 'Curl de bíceps con mancuernas', 'bicep curl|cable': 'Curl en polea',
+  'hammer curl|dumbbell': 'Curl martillo', 'hammer curl': 'Curl martillo', 'preacher curl|barbell': 'Curl predicador', 'preacher curl': 'Curl predicador', 'concentration curl': 'Curl concentrado',
+  'triceps pushdown': 'Extensión de tríceps en polea', 'triceps pushdown|cable': 'Extensión de tríceps en polea', 'tricep pushdown': 'Extensión de tríceps en polea', 'triceps rope pushdown': 'Extensión de tríceps en polea',
+  'skullcrusher|barbell': 'Press francés', 'skullcrusher': 'Press francés', 'lying triceps extension': 'Press francés', 'triceps kickback|dumbbell': 'Patada de tríceps', 'triceps kickback': 'Patada de tríceps',
+  'plank': 'Plancha', 'crunch': 'Crunch abdominal', 'hanging leg raise': 'Elevación de piernas colgado', 'russian twist': 'Russian twist', 'ab wheel': 'Rueda abdominal', 'kettlebell swing': 'Swing con kettlebell',
+  'treadmill': CINTA, 'running (treadmill)': CINTA, 'running|treadmill': CINTA, 'running': 'Correr al aire libre', 'outdoor run': 'Correr al aire libre', 'cycling (indoor)': 'Bicicleta estática', 'cycling|indoor': 'Bicicleta estática', 'stationary bike': 'Bicicleta estática', 'spinning': 'Bicicleta estática',
+};
+// Nombre importado → nombre del catálogo si hay equivalencia clara; si no, el original tal cual (recortado a 80 caracteres).
+export function nombreCatalogo(n) {
+  const orig = String(n || '').trim().replace(/\s+/g, ' ').slice(0, 80);
+  if (!orig) return '';
+  const propio = ejercicio(orig);
+  if (propio) return propio.n;
+  const k = normTxt(orig).replace(/\s+/g, ' ');
+  const m = k.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+  const base = m ? m[1].trim() : k, eq = m ? (EQ_EN[m[2].trim()] || m[2].trim()) : '';
+  for (const clave of [eq ? base + '|' + eq : '', k, base]) {
+    const destino = clave && NOMBRES_EN[clave];
+    const x = destino && ejercicio(destino);
+    if (x) return x.n;
+  }
+  return orig;
+}
+
+// ---- Fechas y números de los distintos formatos ----
+const MESES = { jan: 1, ene: 1, feb: 2, mar: 3, apr: 4, abr: 4, may: 5, jun: 6, jul: 7, aug: 8, ago: 8, sep: 9, sept: 9, set: 9, oct: 10, nov: 11, dec: 12, dic: 12 };
+const fechaOK = (y, m, d) => { const f = new Date(Date.UTC(y, m - 1, d)); return y >= 1990 && y <= 2100 && f.getUTCMonth() === m - 1 && f.getUTCDate() === d; };
+// Devuelve { fecha: 'YYYY-MM-DD', ms } (ms = minutos del día × 60000, para calcular duraciones) o null. La hora se toma tal cual viene (sin zonas horarias).
+export function leerFechaCSV(v) {
+  const s = String(v || '').trim();
+  let y, mo, d, hh = 0, mi = 0, ss = 0, r;
+  if ((r = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/))) [, y, mo, d, hh = 0, mi = 0, ss = 0] = r;
+  else if ((r = s.match(/^(\d{1,2})\s+([A-Za-zé.]{3,5})\.?\s+(\d{4})(?:,?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/))) { [, d, mo, y, hh = 0, mi = 0, ss = 0] = r; mo = MESES[normTxt(mo).replace('.', '')]; }
+  else if ((r = s.match(/^([A-Za-z]{3,5})\.?\s+(\d{1,2}),?\s+(\d{4})(?:,?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/))) { [, mo, d, y, hh = 0, mi = 0, ss = 0] = r; mo = MESES[normTxt(mo)]; }
+  else if ((r = s.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})(?:,?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/))) [, d, mo, y, hh = 0, mi = 0, ss = 0] = r;
+  else return null;
+  y = Number(y); mo = Number(mo); d = Number(d);
+  if (!mo || !fechaOK(y, mo, d)) return null;
+  return { fecha: `${y}-${pad(mo)}-${pad(d)}`, ms: Date.UTC(y, mo - 1, d, Number(hh), Number(mi), Number(ss)) };
+}
+// Número con punto o coma decimal («82,5», «82.5»); vacío o basura = NaN.
+const numero = (v) => { const s = String(v == null ? '' : v).trim().replace(/\s/g, ''); if (!s) return NaN; const t = /,\d{1,3}$/.test(s) && !/\.\d/.test(s) ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, ''); const n = Number(t); return isFinite(n) ? n : NaN; };
+// Duración de Strong: «1h 5m», «45m», «30s» o segundos sueltos.
+const duracionMin = (v) => {
+  const s = String(v || '').trim().toLowerCase();
+  if (!s) return NaN;
+  if (/^\d+(\.\d+)?$/.test(s)) return Number(s) / 60;
+  const h = s.match(/(\d+)\s*h/), m = s.match(/(\d+)\s*m(?!s)/), sg = s.match(/(\d+)\s*s/);
+  return h || m || sg ? (h ? +h[1] * 60 : 0) + (m ? +m[1] : 0) + (sg ? +sg[1] / 60 : 0) : NaN;
+};
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+// Huella corta y estable (FNV-1a) para que el id de un entreno importado sea siempre el mismo: importar dos veces sobrescribe en lugar de duplicar.
+const huella = (s) => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36); };
+// Clave de duplicado: fecha + nombre de la rutina + número de ejercicios.
+export const claveDuplicado = (w) => `${w.fecha}|${normTxt(w.nombre || '')}|${(w.ejercicios || []).length}`;
+
+// ---- Detección del formato por la cabecera ----
+const cab = (h) => normTxt(h).replace(/["']/g, '').trim();
+function detectarFormato(cabs) {
+  const tiene = (...ks) => ks.every((k) => cabs.includes(k));
+  if (tiene('fecha', 'rutina', 'ejercicio', 'kg', 'reps')) return 'cadencia';
+  if (tiene('title', 'start_time', 'exercise_title', 'set_index') && (cabs.includes('weight_kg') || cabs.includes('weight_lbs'))) return 'hevy';
+  if (tiene('date', 'workout name', 'exercise name', 'set order', 'reps') && cabs.some((c) => /^weight\b/.test(c))) return 'strong';
+  return null;
+}
+
+// Serie de fuerza normalizada al esquema de la app ({kg, reps, rir?, isDropSet?, w?}), o null si no vale (sin reps, fuera de rango).
+function serieFuerza(kg, reps, { w = false, drop = false, rpe = NaN, rir = NaN, fallo = false } = {}) {
+  const r = Math.round(reps), k = isFinite(kg) ? kg : 0;
+  if (!(r >= 1 && r <= 200) || !(k >= 0 && k <= 600)) return null;
+  const s = { kg: Math.round(k * 10) / 10, reps: r };
+  if (w) { s.w = true; return s; }
+  if (isFinite(rir)) s.rir = clamp(Math.round(rir), 0, 5);
+  else if (isFinite(rpe) && rpe > 0) s.rir = clamp(Math.round(10 - rpe), 0, 5);
+  else if (fallo) s.rir = 0;
+  if (drop) s.isDropSet = true;
+  return s;
+}
+// Bloque de cardio con los campos del modo del ejercicio (cinta: tiempo/velocidad; aire: km/min; estática: min).
+function serieCardio(nombre, min, km) {
+  const cm = modoCardio(nombre), m = isFinite(min) && min > 0 ? Math.round(clamp(min, 0.5, 600) * 10) / 10 : 0, d = isFinite(km) && km > 0 ? Math.round(clamp(km, 0.1, 200) * 10) / 10 : 0;
+  if (!m && !d) return null;
+  if (cm === 'cinta') { if (!m) return null; const s = { tiempo: m, completada: true }; if (d) s.velocidad = Math.round(clamp(d / (m / 60), 0.5, 30) * 10) / 10; return s; }
+  if (cm === 'estatica') return m ? { min: m } : null;
+  const s = {}; if (d) s.km = d; if (m) s.min = m; return s;
+}
+
+/**
+ * Lee un CSV de Hevy, Strong o Cadencia y devuelve los entrenos NUEVOS listos para guardar (esquema de users/{uid}/entrenos).
+ * @param {string} textoCSV contenido del archivo
+ * @param {Array} entrenosExistentes entrenos que ya tiene la cuenta (para no duplicar)
+ * @param {{lbs?: boolean, kg?: number}} opciones lbs = el Weight de Strong viene en libras; kg = peso de la persona (kcal estimadas)
+ * @returns {{formato, entrenos, duplicados, series, desde, hasta, omitidas, error}}
+ */
+export function parsearCSVEntrenos(textoCSV, entrenosExistentes = [], opciones = {}) {
+  const vacio = (error) => ({ formato: null, entrenos: [], duplicados: 0, series: 0, desde: '', hasta: '', omitidas: 0, error });
+  const filas = leerCSV(textoCSV);
+  if (!filas.length) return vacio('El archivo está vacío.');
+  const cabs = filas[0].map(cab), formato = detectarFormato(cabs);
+  if (!formato) return vacio('No reconocemos el formato. Usa un CSV exportado de Hevy, Strong o Cadencia.');
+  const col = (...ks) => { for (const k of ks) { const i = cabs.indexOf(k); if (i >= 0) return i; } return -1; };
+  const val = (f, i) => (i >= 0 && f[i] != null ? String(f[i]).trim() : '');
+  const datos = filas.slice(1);
+  if (!datos.length) return vacio('El archivo solo tiene la cabecera: no hay entrenos que importar.');
+
+  const grupos = new Map(); // clave de sesión → { fecha, nombre, ms0, ms1, min, ejs: [{n, filas: []}] }
+  let omitidas = 0;
+  const grupo = (clave, fecha, nombre) => {
+    if (!grupos.has(clave)) grupos.set(clave, { fecha, nombre, ms0: NaN, ms1: NaN, min: NaN, ejs: [] });
+    return grupos.get(clave);
+  };
+  const ejDe = (g, n) => { const u = g.ejs[g.ejs.length - 1]; if (u && u.orig === n) return u; const e = { orig: n, filas: [] }; g.ejs.push(e); return e; };
+
+  if (formato === 'hevy') {
+    const c = { t: col('title'), ini: col('start_time'), fin: col('end_time'), ej: col('exercise_title'), tipo: col('set_type'), kg: col('weight_kg'), lb: col('weight_lbs'), reps: col('reps'), rpe: col('rpe'), km: col('distance_km'), mi: col('distance_miles'), seg: col('duration_seconds') };
+    for (const f of datos) {
+      const ini = leerFechaCSV(val(f, c.ini)), n = val(f, c.ej);
+      if (!ini || !n) { omitidas++; continue; }
+      const g = grupo(val(f, c.t) + '|' + val(f, c.ini), ini.fecha, val(f, c.t) || 'Entrenamiento');
+      g.ms0 = ini.ms; const fin = leerFechaCSV(val(f, c.fin)); if (fin) g.ms1 = fin.ms;
+      const kgLb = numero(val(f, c.lb)), kg = c.kg >= 0 ? numero(val(f, c.kg)) : kgLb * LB_KG;
+      const tipo = normTxt(val(f, c.tipo));
+      ejDe(g, n).filas.push({ kg, reps: numero(val(f, c.reps)), rpe: numero(val(f, c.rpe)), w: tipo === 'warmup', drop: tipo === 'dropset', fallo: tipo === 'failure',
+        km: c.km >= 0 ? numero(val(f, c.km)) : numero(val(f, c.mi)) * 1.609344, min: numero(val(f, c.seg)) / 60 });
+    }
+  } else if (formato === 'strong') {
+    const iPeso = cabs.findIndex((h) => /^weight\b/.test(h)), iUnidad = col('weight unit', 'unit');
+    const lbsCab = iPeso >= 0 && /lb/.test(cabs[iPeso]);
+    const c = { fecha: col('date'), nom: col('workout name'), dur: col('duration', 'duration (sec)', 'workout duration'), ej: col('exercise name'), ord: col('set order'), reps: col('reps'), rpe: col('rpe'), km: col('distance', 'distance (km)'), seg: col('seconds', 'duration (sec)') };
+    for (const f of datos) {
+      const fe = leerFechaCSV(val(f, c.fecha)), n = val(f, c.ej);
+      if (!fe || !n) { omitidas++; continue; }
+      const g = grupo(val(f, c.fecha) + '|' + val(f, c.nom), fe.fecha, val(f, c.nom) || 'Entrenamiento');
+      if (!isFinite(g.min)) g.min = duracionMin(val(f, c.dur));
+      const enLb = lbsCab || /lb/i.test(val(f, iUnidad)) || (opciones.lbs === true && !/kg/i.test(val(f, iUnidad)));
+      const ord = val(f, c.ord).toUpperCase();
+      ejDe(g, n).filas.push({ kg: numero(val(f, iPeso)) * (enLb ? LB_KG : 1), reps: numero(val(f, c.reps)), rpe: numero(val(f, c.rpe)), w: ord === 'W', drop: ord === 'D', fallo: ord === 'F',
+        km: numero(val(f, c.km)), min: numero(val(f, c.seg)) / 60 });
+    }
+  } else {
+    const c = { fecha: col('fecha'), rut: col('rutina'), ej: col('ejercicio'), serie: col('serie'), tipo: col('tipo'), kg: col('kg'), reps: col('reps'), rir: col('rir'), carga: col('carga'), notas: col('notas') };
+    for (const f of datos) {
+      const fe = leerFechaCSV(val(f, c.fecha));
+      if (!fe) { omitidas++; continue; }
+      const tipo = normTxt(val(f, c.tipo)), n = val(f, c.ej), notas = val(f, c.notas);
+      const g = grupo(fe.fecha + '|' + val(f, c.rut), fe.fecha, val(f, c.rut) || 'Entrenamiento');
+      const kv = Object.fromEntries(notas.split(';').map((p) => p.split('=').map((x) => x.trim())).filter((p) => p.length === 2 && p[0]));
+      if (!n) { // entreno sin ejercicios (bici, cardio, otro o fuerza sin series): sus datos van en notas
+        g.tipo = ['bici', 'cardio', 'otro', 'gym'].includes(tipo) ? tipo : 'otro';
+        for (const k of ['min', 'km', 'elev', 'pulso']) { const v = numero(kv[k]); if (v > 0) g[k] = v; }
+        continue;
+      }
+      ejDe(g, n).filas.push({ kg: numero(val(f, c.kg)), reps: numero(val(f, c.reps)), rir: numero(val(f, c.rir)), w: tipo === 'calentamiento', drop: tipo === 'drop', cardio: tipo === 'cardio',
+        kv, serie: val(f, c.serie), lado: normTxt(val(f, c.carga)), carga: normTxt(val(f, c.carga)), super: /superserie/i.test(notas) });
+    }
+  }
+
+  // Grupos → entrenos con el esquema de la app
+  const nuevos = [], vistos = new Set((entrenosExistentes || []).filter((w) => w && w.fecha).map(claveDuplicado));
+  let duplicados = 0, series = 0;
+  for (const g of grupos.values()) {
+    const ejercicios = [];
+    for (const e of g.ejs) {
+      const n = nombreCatalogo(e.orig), cardio = e.filas.some((x) => x.cardio) || exCardio({ n }) || (e.filas.length > 0 && e.filas.every((x) => !(x.reps > 0)) && e.filas.some((x) => x.km > 0));
+      if (cardio) {
+        const ss = [];
+        for (const x of e.filas) {
+          let s = null;
+          if (x.kv) { s = {}; for (const [k, v] of Object.entries(x.kv)) { const nv = numero(v); if (k === 'int') s.int = v; else if (isFinite(nv) && nv > 0) s[k] = Math.round(nv * 10) / 10; } if (modoCardio(n) === 'cinta' && cv(s, 'tiempo') > 0) s.completada = true; if (!Object.keys(s).length) s = null; }
+          else s = serieCardio(n, x.min, x.km);
+          if (s) ss.push(s); else omitidas++;
+        }
+        if (ss.length) ejercicios.push({ n, tipo: 'cardio', series: ss });
+        continue;
+      }
+      const uni = e.filas.some((x) => x.lado === 'izquierda' || x.lado === 'derecha');
+      const ss = [];
+      if (uni) { // Cadencia unilateral: filas «izquierda»/«derecha» con el mismo número de serie
+        const porSerie = new Map();
+        for (const x of e.filas) {
+          if (x.w) { const s = serieFuerza(x.kg, x.reps, { w: true }); if (s) ss.push(s); else omitidas++; continue; }
+          const k = x.serie || String(porSerie.size + 1);
+          if (!porSerie.has(k)) porSerie.set(k, {});
+          porSerie.get(k)[x.lado === 'derecha' ? 'D' : 'I'] = x;
+        }
+        for (const { I, D } of porSerie.values()) {
+          const a = I || D, s = serieFuerza(a.kg, a.reps, { drop: a.drop, rir: a.rir });
+          if (!s) { omitidas++; continue; }
+          const d = D && serieFuerza(D.kg, D.reps);
+          s.kgD = d ? d.kg : s.kg; s.repsD = d ? d.reps : s.reps;
+          if (a.super) s.isSuperset = true;
+          ss.push(s);
+        }
+      } else {
+        for (const x of e.filas) {
+          const s = serieFuerza(x.kg, x.reps, x);
+          if (!s) { omitidas++; continue; }
+          if (x.super && !s.w) s.isSuperset = true;
+          ss.push(s);
+        }
+      }
+      if (!ss.length) continue;
+      const cargaCSV = e.filas.map((x) => x.carga).find((v) => v === 'total' || v === 'por_lado');
+      ejercicios.push(uni ? { n, carga: cargaCSV || cargaDefecto(n), uni: true, series: ss } : { n, carga: cargaCSV || cargaDefecto(n), series: ss });
+    }
+    const tipo = g.tipo && g.tipo !== 'gym' && !ejercicios.length ? g.tipo : 'gym';
+    if (tipo === 'gym' && !ejercicios.length && !(g.min > 0)) continue; // sesión sin ninguna serie válida
+    const nSeries = ejercicios.reduce((a, e) => a + e.series.length, 0);
+    let min = isFinite(g.ms0) && isFinite(g.ms1) && g.ms1 > g.ms0 ? (g.ms1 - g.ms0) / 60000 : g.min;
+    if (!(min >= 1)) min = clamp(Math.round(nSeries * 2.5), 10, 180); // sin duración en el archivo: estimada por el número de series
+    const w = { id: '', fecha: g.fecha, tipo, nombre: String(g.nombre || 'Entrenamiento').trim().slice(0, 60) || 'Entrenamiento', min: Math.round(clamp(min, 1, 600)), esf: 2, importado: formato };
+    if (tipo === 'gym') w.ejercicios = ejercicios;
+    else for (const k of ['km', 'elev', 'pulso']) if (g[k] > 0) w[k] = Math.round(g[k] * 10) / 10;
+    const clave = claveDuplicado(w);
+    if (vistos.has(clave)) { duplicados++; continue; }
+    vistos.add(clave);
+    w.id = 'wi' + huella(formato + '|' + clave);
+    const kc = estimateKcal(w, Number(opciones.kg) || 0);
+    if (kc > 0) w.kcal = kc;
+    series += nSeries;
+    nuevos.push(w);
+  }
+  nuevos.sort((a, b) => a.fecha.localeCompare(b.fecha));
+  if (!nuevos.length && !duplicados) return { ...vacio('No hemos encontrado series válidas en el archivo (cada serie necesita repeticiones).'), formato, omitidas };
+  return { formato, entrenos: nuevos, duplicados, series, desde: nuevos.length ? nuevos[0].fecha : '', hasta: nuevos.length ? nuevos[nuevos.length - 1].fecha : '', omitidas, error: null };
+}
