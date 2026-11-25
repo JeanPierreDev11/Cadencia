@@ -61,6 +61,7 @@ try { matchMedia('(prefers-color-scheme: light)').addEventListener('change', () 
 /* ---------- enlace de invitación: https://cadenciafit.app/?ref=CÓDIGO ---------- */
 // Al abrir la app se lee `ref`, se guarda en localStorage (`cadencia-ref`, para que sobreviva al cuestionario) y se quita de la barra de direcciones.
 // Solo se quita `ref`: el resto de parámetros (`ir` de los avisos, `code` de Strava…) los siguen leyendo `push.js` y `strava.js`, por eso esto va ANTES de ellos.
+const TITULO_WEB = document.title || APP_NAME; // (74) título SEO de index.html, antes de que render() lo toque
 const REF_URL = 'https://cadenciafit.app/';
 const REF_TEXTO = 'Únete a Cadencia, la app de entrenamiento con IA. Usa mi enlace y llévate 1 semana PRO gratis.';
 const REF_CLAVE = 'cadencia-ref';
@@ -98,7 +99,7 @@ function render() {
   else if (st.view === 'error') root.innerHTML = viewError();
   UI.despues(root, antesUI);
   document.body.dataset.view = st.view;
-  document.title = APP_NAME;
+  document.title = st.view === 'auth' ? TITULO_WEB : APP_NAME; // (74) sin sesión se conserva el título SEO de index.html
   if (M) M.afterRender();
   C3.enganchar(root);
   RG.pintarMapas(root);
@@ -121,9 +122,11 @@ const heroHTML = (tag = 'h1') => `<svg class="logo-mark" viewBox="0 0 64 64" ari
       <${tag} class="wordmark">${esc(APP_NAME)}</${tag}>${tag === 'h1' ? `<p class="tagline">${CICLISMO ? 'Tu peso, tus objetivos y tu bici, en un mismo sitio.' : 'Tu peso, tus objetivos y tus entrenos, en un mismo sitio.'}</p>` : ''}
       ${heroProfile()}`;
 
+// (74) PWA instalada → bienvenida compacta; navegador → portada pública (SEO y conversión).
+const esPWA = () => { try { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; } };
 // Sin sesión: primero la bienvenida (el cuestionario empieza SIN cuenta); «Iniciar sesión» lleva al formulario de acceso.
 function viewAuth() {
-  if (st.authMode !== 'login') return OB.bienvenidaHTML(heroHTML('p'), (() => { const g = obAnonLeer(); return !!g && (g.step !== 'basicos' || !!(g.nombre || g.apellidos)); })()) + (st.legal ? legalSheetHTML() : '');
+  if (st.authMode !== 'login') return OB.bienvenidaHTML(heroHTML('p'), (() => { const g = obAnonLeer(); return !!g && (g.step !== 'basicos' || !!(g.nombre || g.apellidos)); })(), { pwa: esPWA(), ref: !!refGuardado() }) + (st.legal ? legalSheetHTML() : '');
   const m = st.authMsg;
   return `<div class="screen">
     <div class="auth-hero">${heroHTML()}</div>

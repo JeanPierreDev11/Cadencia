@@ -247,11 +247,16 @@ export function expHTML(o) {
 }
 
 // Primera pantalla de quien NO tiene sesión: el cuestionario empieza sin cuenta (los botones los gestiona app.js).
-export function bienvenidaHTML(hero, hayAvance) {
+// (74) Dos versiones: en la PWA instalada (`opts.pwa`) la bienvenida compacta de siempre; en el navegador, la portada pública (`portadaHTML`).
+// `opts.ref` = hay un código de invitación guardado (?ref=): se avisa de los 7 días de PRO.
+const REF_AVISO = '<p class="lp-ref" role="status"><b>Invitación aplicada</b> · Al registrarte tendrás 7 días de Cadencia PRO gratis.</p>';
+export function bienvenidaHTML(hero, hayAvance, opts = {}) {
+  if (!opts.pwa) return portadaHTML(hayAvance, opts);
   return `<div class="screen bv">
     <div class="auth-hero">${hero}</div>
     <div class="bv-body">
       ${betaTagHTML()}
+      ${opts.ref ? REF_AVISO : ''}
       <h1 class="ob-title">Construye tu mejor versión</h1>
       <p class="ob-sub">Responde unas preguntas y te preparamos un plan hecho para ti.</p>
     </div>
@@ -260,6 +265,79 @@ export function bienvenidaHTML(hero, hayAvance) {
       <button type="button" class="link bv-in" data-act="auth-ingresar">¿Ya tienes cuenta? Iniciar sesión</button>
       ${legalLinksHTML()}
     </div>
+  </div>`;
+}
+
+/* ---------- portada pública (cadenciafit.app sin sesión, en el navegador) (74) ---------- */
+// Oscura a propósito también en modo claro (como .exview/.rnv): `.lp` redefine las variables del tema por dentro.
+// Textos honestos: beta gratuita sin pagos (PAGOS_ACTIVOS = false), sin cifras ni testimonios, sin Apple ni ciclismo.
+const LP_MARCA = '<svg class="lp-mark" viewBox="0 0 64 64" aria-hidden="true" fill="currentColor"><path d="M12 8H56V22H28V42H56V56H12Z" transform="translate(6.8 0) skewX(-12)"/></svg>';
+const LP_FUNCIONES = [
+  ['plates', 'Registro sin fricción', 'Peso total o por lado con mancuernas, series unilaterales I/D, RIR, notas fijas por ejercicio, descanso automático y calculadora de discos.'],
+  ['barcode', 'Nutrición y escáner gratis', 'Escáner de códigos de barras siempre gratis, análisis de platos con foto e IA, hidratación y un check-in semanal que ajusta tus calorías con tu peso real.'],
+  ['body', 'Mapa de fatiga en 3D', 'Un cuerpo interactivo calcula la recuperación de cada grupo muscular a partir de tus series, tu carga y tu RIR.'],
+  ['brain', 'Coach AI y ajuste de rutinas', 'Cambia tu rutina escribiendo lo que quieres y revisa la propuesta antes de guardarla. El Coach AI analiza cada entreno con tus métricas reales.'],
+  ['share', 'Compartir sin ruido', 'Tarjetas limpias para Stories, también con fondo transparente. Y cero anuncios.'],
+];
+const LP_GRATIS = [
+  'Registro de entrenos completo, con descanso automático y calculadora de discos',
+  'Hasta 3 rutinas y 3 ejercicios propios',
+  '3 ajustes de rutina con IA al día',
+  'Escáner de códigos de barras sin límite',
+  '1 análisis de plato con foto al día',
+  'Hidratación, check-in semanal y tarjetas para compartir',
+];
+const LP_PRO = [
+  'Coach AI: análisis de cada entreno',
+  'Mapa de fatiga completo',
+  'RIR y drop sets en el entreno en vivo',
+  '10 ajustes de rutina con IA al día',
+  'Rutinas y ejercicios propios sin límite, y más análisis de platos',
+];
+const lpLista = (l) => `<ul class="lp-list">${l.map((t) => `<li>${I.check}<span>${t}</span></li>`).join('')}</ul>`;
+function portadaHTML(hayAvance, opts) {
+  const cta = hayAvance ? 'Seguir donde lo dejé' : 'Empezar gratis';
+  return `<div class="lp">
+    <header class="lp-top"><div class="lp-in lp-bar">
+      <span class="lp-brand">${LP_MARCA}<span>Cadencia</span></span>
+      <button type="button" class="lp-login" data-act="auth-ingresar">Iniciar sesión</button>
+    </div></header>
+    <main class="lp-in">
+      <section class="lp-hero" aria-labelledby="lp-h1">
+        ${betaTagHTML('lp-beta')}
+        ${opts.ref ? REF_AVISO : ''}
+        <h1 class="lp-h1" id="lp-h1">Entreno, nutrición y datos reales. Sin ruido.</h1>
+        <p class="lp-sub">Registra tu fuerza en segundos, escanea códigos de barras gratis, ajusta tu nutrición con tus datos y sigue tu recuperación con el mapa de fatiga en 3D y el Coach AI.</p>
+        <div class="lp-cta">
+          <button type="button" class="btn block lp-btn" data-act="ob-empezar">${cta}</button>
+          <p class="lp-nota">Sin anuncios · Gratis en iPhone, Android y ordenador</p>
+        </div>
+      </section>
+      <section class="lp-sec" aria-labelledby="lp-f">
+        <h2 class="lp-h2" id="lp-f">Diseñada para entrenar de verdad</h2>
+        <ul class="lp-grid">${LP_FUNCIONES.map(([ico, t, d]) => `<li class="lp-card"><span class="lp-ico">${I[ico]}</span><h3>${t}</h3><p>${d}</p></li>`).join('')}</ul>
+      </section>
+      <section class="lp-sec lp-betab" aria-labelledby="lp-b">
+        <h2 class="lp-h2" id="lp-b">Beta abierta</h2>
+        <p class="lp-txt">Cadencia está en beta abierta: no hay pagos ni datos de tarjeta. Esto es lo que tienes hoy y lo que forma parte de Cadencia PRO.</p>
+        <div class="lp-cols">
+          <div class="lp-col"><h3>Gratis hoy</h3>${lpLista(LP_GRATIS)}</div>
+          <div class="lp-col lp-col-pro"><h3><span class="lp-pro">Pro</span> Cadencia PRO</h3>${lpLista(LP_PRO)}
+            <p class="lp-txt">Hoy PRO no se vende. Puedes probarlo 7 días con el código de invitación de un amigo o apuntarte a la lista prioritaria desde tu perfil.</p></div>
+        </div>
+      </section>
+      <section class="lp-end" aria-labelledby="lp-e">
+        <h2 class="lp-h2" id="lp-e">Tu plan, en unos minutos</h2>
+        <p class="lp-txt">Responde 11 preguntas sobre tu nivel, tu material y tu objetivo. Calculamos tus calorías y la fecha estimada para llegar a tu meta.</p>
+        <button type="button" class="btn block lp-btn" data-act="ob-empezar">${hayAvance ? 'Seguir donde lo dejé' : 'Crear mi plan gratis'}</button>
+        <button type="button" class="link lp-in-link" data-act="auth-ingresar">¿Ya tienes cuenta? Iniciar sesión</button>
+      </section>
+    </main>
+    <footer class="lp-foot"><div class="lp-in lp-foot-in">
+      <span class="lp-brand sm">${LP_MARCA}<span>Cadencia</span></span>
+      <span class="lp-web">@cadenciafit.app</span>
+      ${legalLinksHTML('lp-legal')}
+    </div></footer>
   </div>`;
 }
 
