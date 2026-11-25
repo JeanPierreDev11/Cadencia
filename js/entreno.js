@@ -1490,3 +1490,101 @@ export function parsearCSVEntrenos(textoCSV, entrenosExistentes = [], opciones =
   if (!nuevos.length && !duplicados) return { ...vacio('No hemos encontrado series válidas en el archivo (cada serie necesita repeticiones).'), formato, omitidas };
   return { formato, entrenos: nuevos, duplicados, series, desde: nuevos.length ? nuevos[0].fecha : '', hasta: nuevos.length ? nuevos[nuevos.length - 1].fecha : '', omitidas, error: null };
 }
+
+/* ---------- volumen semanal por músculo y progresión por ejercicio (77) ---------- */
+// Series de trabajo realmente hechas: sin calentamiento y sin las marcadas como no completadas.
+const seriesHechas = (e) => trabajo(e.series).filter((s) => s && s.done !== false);
+
+// Series efectivas por músculo (las mismas claves que la fatiga y el cuerpo 3D, MUSC_DET): principal 1, secundario 0,5.
+// modo 'semana' = lunes a domingo en curso frente a la semana anterior completa; '7d' = últimos 7 días frente a los 7 previos.
+export function seriesSemanalesPorMusculo(entrenos, hoyISO, modo = 'semana') {
+  const desde = modo === '7d' ? addDays(hoyISO, -6) : mondayOf(hoyISO), hasta = modo === '7d' ? hoyISO : addDays(desde, 6);
+  const antes = addDays(desde, -7), act = {}, ant = {};
+  for (const w of entrenos || []) {
+    const o = w.fecha >= desde && w.fecha <= hasta ? act : w.fecha >= antes && w.fecha < desde ? ant : null;
+    if (!o) continue;
+    for (const e of w.ejercicios || []) {
+      if (exCardio(e)) continue;
+      const x = ejercicio(e.n), n = seriesHechas(e).length;
+      if (!x || !n) continue;
+      let { p, s } = musculosDet(x);
+      if (!p.length && GRUPO_DET[x.m]) p = [GRUPO_DET[x.m]];
+      for (const k of p) o[k] = (o[k] || 0) + n;
+      for (const k of s) if (!p.includes(k)) o[k] = (o[k] || 0) + n / 2;
+    }
+  }
+  return Object.keys(MUSC_DET).filter((k) => act[k] || ant[k])
+    .map((k) => ({ musculo: k, etiqueta: MUSC_DET[k], series: act[k] || 0, seriesAnt: ant[k] || 0, delta: (act[k] || 0) - (ant[k] || 0) }))
+    .sort((a, b) => b.series - a.series || b.seriesAnt - a.seriesAnt || a.etiqueta.localeCompare(b.etiqueta, 'es'));
+}
+
+export const RANGOS_PROG = { '1m': 30, '3m': 91, '6m': 182, todo: 0 }; // días que abarca cada rango (hoy incluido)
+export const METRICAS_PROG = { orm1: 'orm1', peso: 'pesoMax', volumen: 'volumen' }; // métrica → campo del punto
+const MES_CORTO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const r1 = (v) => Math.round(v * 10) / 10;
+const coma = (v) => String(r1(v)).replace('.', ',');
+// «80 kg × 8, 8, 7 · 85 kg × 5» (agrupa las series seguidas con el mismo peso). Sin peso: «10, 8 reps».
+function textoSeries(series, sufijo) {
+  const g = [];
+  for (const s of series) { const u = g[g.length - 1]; if (u && u.kg === s.kg) u.reps.push(s.reps); else g.push({ kg: s.kg, reps: [s.reps] }); }
+  return g.map((x) => (x.kg > 0 ? `${coma(x.kg)} kg${sufijo} × ${x.reps.join(', ')}` : `${x.reps.join(', ')} reps`)).join(' · ');
+}
+
+// Un punto por sesión (de la más antigua a la más reciente) y el resumen del rango para la métrica elegida.
+// Peso y 1RM: el kg tal como se apuntó (por lado si la carga es por lado); en unilateral, el mayor de los dos lados.
+// Volumen: volumenSerie (×2 con carga por lado; Izquierda + Derecha en unilateral).
+export function progresionEjercicio(entrenos, nombreEjercicio, rango = 'todo', { hoy = toISO(new Date()), metrica = 'orm1' } = {}) {
+  const clave = claveEj(nombreEjercicio), dias = RANGOS_PROG[rango] || 0, desde = dias ? addDays(hoy, 1 - dias) : '';
+  const todos = [];
+  for (const w of [...(entrenos || [])].reverse().sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)))) {
+    const filas = []; // { e, s, lados: [I] o [I, D] }
+    for (const e of w.ejercicios || []) {
+      if (exCardio(e) || claveEj(e.n) !== clave) continue;
+      for (const s of seriesHechas(e)) {
+        const lados = e.uni ? ladosSerie(s) : [{ kg: Number(s.kg) || 0, reps: Number(s.reps) || 0 }];
+        if (lados.some((l) => l.reps > 0)) filas.push({ e, s, lados });
+      }
+    }
+    if (!filas.length) continue;
+    const uni = filas.some((f) => f.e.uni), porLado = uni || filas.some((f) => cargaDe(f.e) === 'por_lado');
+    const sufijo = !uni && porLado ? ' c/u' : '';
+    let orm = null, pesoMax = 0, volumen = 0, mejor = null;
+    for (const f of filas) {
+      volumen += volumenSerie(f.s, f.e);
+      for (const l of f.lados) {
+        if (!(l.reps > 0)) continue;
+        pesoMax = Math.max(pesoMax, l.kg);
+        const v = orm1(l.kg, l.reps);
+        if (v != null && (orm == null || v > orm)) orm = v;
+        const score = l.kg > 0 ? l.kg * (1 + l.reps / 30) : l.reps; // misma «mejor serie» que Récords
+        if (!mejor || score > mejor.score) mejor = { ...l, score };
+      }
+    }
+    const lado = (i) => textoSeries(filas.map((f) => f.lados[i] || f.lados[0]).filter((l) => l.reps > 0), '');
+    let detalle = textoSeries(filas.map((f) => f.lados[0]), sufijo);
+    if (uni) { const I = lado(0), D = lado(1); detalle = I === D ? `${I} (cada lado)` : `Izq. ${I} / Der. ${D}`; }
+    const [anio, mes, dia] = w.fecha.split('-').map(Number);
+    todos.push({
+      fecha: w.fecha, fechaCorta: `${dia} ${MES_CORTO[mes - 1]}${anio === Number(hoy.slice(0, 4)) ? '' : ` ${anio}`}`,
+      orm1: orm == null ? null : r1(orm), pesoMax: r1(pesoMax), volumen: r1(volumen),
+      mejorSerieTexto: mejor.kg > 0 ? `${coma(mejor.kg)} kg${uni ? ' por lado' : sufijo} × ${mejor.reps}` : `${mejor.reps} reps`,
+      detalleSeries: detalle, uni, porLado,
+    });
+  }
+  const puntos = todos.filter((p) => p.fecha >= desde);
+  const campo = METRICAS_PROG[metrica] || 'orm1';
+  const conValor = puntos.filter((p) => p[campo] > 0);
+  const max = (k) => puntos.reduce((a, p) => (p[k] > 0 && (a == null || p[k] > a) ? p[k] : a), null);
+  const ini = conValor[0], fin = conValor[conValor.length - 1];
+  const deltaAbs = conValor.length > 1 ? r1(fin[campo] - ini[campo]) : null;
+  return {
+    puntos, total: todos.length,
+    porLado: todos.some((p) => p.porLado), cargaMixta: todos.some((p) => p.porLado) && todos.some((p) => !p.porLado),
+    conDatos: Object.keys(METRICAS_PROG).filter((m) => todos.some((p) => p[METRICAS_PROG[m]] > 0)),
+    resumen: {
+      mejorOrm1: max('orm1'), mejorPeso: max('pesoMax'), mejorVolumen: max('volumen'),
+      ultimoValor: fin ? fin[campo] : null, ultimaFecha: fin ? fin.fecha : null,
+      deltaAbs, deltaPct: deltaAbs == null ? null : r1((deltaAbs / ini[campo]) * 100),
+    },
+  };
+}

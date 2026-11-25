@@ -305,8 +305,153 @@ function wkSemana() {
     </div>
     <section class="card racha-card"><h2>Racha</h2>${fuegoHTML(streak, true)}
       <p class="small muted">Los descansos no la rompen. Vuelve a 0 si faltas a un día con entreno.</p></section>
+    ${volMusculoHTML()}
     <section class="card"><h2>Horas por semana</h2>${barsChart(E.weeksSeries(ws, mon, 8))}</section>`;
 }
+
+// (77) Series efectivas por músculo: «Esta semana» o «Últimos 7 días», cada una frente al periodo anterior.
+// Las marcas en 10 y 20 series son solo una referencia: sin colores de alerta.
+function volMusculoHTML() {
+  const modo = st.volModo === '7d' ? '7d' : 'semana';
+  const filas = E.seriesSemanalesPorMusculo(st.workouts, todayISO(), modo);
+  const max = Math.max(22, ...filas.map((f) => f.series)), pct = (v) => `${Math.round((v / max) * 1000) / 10}%`;
+  const antes = modo === '7d' ? 'los 7 días anteriores' : 'la semana anterior';
+  const fila = (f) => {
+    const d = f.delta, txt = d > 0 ? `+${ormTxt(d)}` : d < 0 ? `−${ormTxt(-d)}` : '=';
+    const voz = d ? `${ormTxt(Math.abs(d))} ${d > 0 ? 'más' : 'menos'} que ${antes}` : `igual que ${antes}`;
+    return `<li class="vol-row"><span class="vol-n">${esc(f.etiqueta)}</span>
+      <span class="vol-bar" aria-hidden="true"><i style="width:${pct(f.series)}"></i><s style="left:${pct(10)}"></s><s style="left:${pct(20)}"></s></span>
+      <b class="vol-v num">${ormTxt(f.series)} ${f.series === 1 ? 'serie' : 'series'}</b><span class="vol-d num" aria-label="${voz}">${txt}</span></li>`;
+  };
+  return `<section class="card vol-card"><h2>Series por músculo</h2>
+    <div class="opc-fila" role="group" aria-label="Periodo de las series">
+      ${[['semana', 'Esta semana'], ['7d', 'Últimos 7 días']].map(([v, t]) => `<button type="button" data-act="vol-modo" data-v="${v}" aria-pressed="${modo === v}">${t}</button>`).join('')}
+    </div>
+    ${filas.length ? `<ul class="vol-list">${filas.map(fila).join('')}</ul>
+    <p class="small muted">Músculo principal: 1 serie. Secundario: 0,5. Sin calentamiento. Las marcas señalan 10 y 20 series. El cambio compara con ${antes}${modo === 'semana' ? ' completa' : ''}.</p>`
+    : `<p class="small muted">Sin series de fuerza en ${modo === '7d' ? 'los últimos 14 días' : 'esta semana ni en la anterior'}.</p>`}
+  </section>`;
+}
+
+// (77) Hoja de progresión de un ejercicio: st.progEj = { n, m: métrica, r: rango, i: punto elegido }.
+const PROG_MET = [['orm1', '1RM est.'], ['peso', 'Peso máx.'], ['volumen', 'Volumen']];
+const PROG_RANGOS = [['1m', '1M'], ['3m', '3M'], ['6m', '6M'], ['todo', 'Todo']];
+const PG = { W: 340, H: 180, l: 40, r: 10, t: 12, b: 24 };
+function progAbrir(n) {
+  const p = E.progresionEjercicio(st.workouts, n);
+  st.exView = null;
+  st.progEj = { n, m: p.conDatos[0] || 'orm1', r: 'todo', i: null };
+  render();
+}
+function progDatos() {
+  const P = st.progEj, p = E.progresionEjercicio(st.workouts, P.n, P.r, { hoy: todayISO(), metrica: P.m });
+  const campo = E.METRICAS_PROG[P.m], pts = p.puntos.filter((x) => x[campo] > 0);
+  const i = P.i == null || P.i >= pts.length ? pts.length - 1 : P.i;
+  return { P, p, campo, pts, i };
+}
+const progFecha = (f) => fmtDate(f, { day: 'numeric', month: 'short', year: 'numeric' });
+function progKg(v, p, m, uniPto) {
+  if (v == null) return '–';
+  const lado = m !== 'volumen' && p.porLado && !p.cargaMixta ? (uniPto ? ' por lado' : ' c/u') : '';
+  return `${m === 'volumen' ? nf(Math.round(v)) : ormTxt(v)} kg${lado}`;
+}
+// Posición de cada punto: x proporcional a la fecha, y con un margen sobre el mínimo y el máximo.
+function progEscala(pts, campo) {
+  const dia = (f) => Date.parse(f) / 86400000, d0 = dia(pts[0].fecha), dd = dia(pts[pts.length - 1].fecha) - d0;
+  const vs = pts.map((x) => x[campo]), lo0 = Math.min(...vs), hi0 = Math.max(...vs), m = (hi0 - lo0) * 0.15 || Math.max(1, hi0 * 0.1);
+  const lo = Math.max(0, lo0 - m), hi = hi0 + m;
+  const x = (p, i) => PG.l + (dd ? (dia(p.fecha) - d0) / dd : i / (pts.length - 1)) * (PG.W - PG.l - PG.r);
+  const y = (v) => PG.t + (1 - (v - lo) / (hi - lo)) * (PG.H - PG.t - PG.b);
+  return { lo, hi, y, xy: pts.map((p, i) => [x(p, i), y(p[campo])]) };
+}
+function progDetalleHTML({ P, p, campo, pts, i }) {
+  const x = pts[i];
+  return `<b>${esc(progFecha(x.fecha))}</b><span class="num">${PROG_MET.find(([m]) => m === P.m)[1]}: ${progKg(x[campo], p, P.m, x.uni)}</span><span class="num">${esc(x.detalleSeries)}</span>`;
+}
+function progGraficaHTML(d) {
+  const { P, p, campo, pts, i } = d;
+  const vacio = (t, s) => `<div class="prog-vacio"><b>${t}</b><span>${s}</span></div>`;
+  if (!p.total) return vacio('Sin sesiones', 'Guarda un entreno con este ejercicio y aparecerá aquí.');
+  if (!p.conDatos.includes(P.m)) return vacio('Sin datos para esta métrica', P.m === 'orm1' ? 'El 1RM estimado necesita una serie con kilos de 1 a 12 repeticiones.' : 'No has apuntado kilos en este ejercicio.');
+  if (p.total === 1) return vacio('1 sesión registrada', 'Tras la 2.ª sesión aparecerá la curva.');
+  if (pts.length < 2) return vacio(pts.length ? '1 sesión en este periodo' : 'Sin sesiones en este periodo', 'Elige un periodo más largo para ver la curva.');
+  const E0 = progEscala(pts, campo), xy = E0.xy, base = PG.H - PG.b, f = (v) => v.toFixed(1);
+  const linea = xy.map(([x, y], k) => `${k ? 'L' : 'M'}${f(x)} ${f(y)}`).join('');
+  const rejilla = [E0.lo, (E0.lo + E0.hi) / 2, E0.hi].map((v) => `<line class="prog-gl" x1="${PG.l}" x2="${PG.W - PG.r}" y1="${f(E0.y(v))}" y2="${f(E0.y(v))}"/><text x="${PG.l - 6}" y="${f(E0.y(v) + 4)}" text-anchor="end">${nf(Math.round(v))}</text>`).join('');
+  const r = pts.length > 30 ? 2 : 3.5;
+  return `<div class="prog-graf" data-act="prog-punto" tabindex="0" role="group" aria-label="Curva de ${PROG_MET.find(([m]) => m === P.m)[1]}: toca un punto o usa las flechas">
+      <svg class="prog-svg" viewBox="0 0 ${PG.W} ${PG.H}" aria-hidden="true">
+        <defs><linearGradient id="prog-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-opacity=".2"/><stop offset="1" stop-opacity="0"/></linearGradient></defs>
+        ${rejilla}<line class="prog-gl" x1="${PG.l}" x2="${PG.l}" y1="${PG.t}" y2="${base}"/>
+        <path d="${linea}L${f(xy[xy.length - 1][0])} ${base}L${f(xy[0][0])} ${base}Z" fill="url(#prog-grad)"/>
+        <line class="prog-guia" x1="${f(xy[i][0])}" x2="${f(xy[i][0])}" y1="${PG.t}" y2="${base}"/>
+        <path class="prog-ln" d="${linea}"/>
+        ${xy.map(([x, y], k) => `<circle class="prog-pt${k === i ? ' on' : ''}" data-r="${r}" cx="${f(x)}" cy="${f(y)}" r="${k === i ? 5.5 : r}"/>`).join('')}
+        <text x="${PG.l}" y="${PG.H - 6}">${esc(pts[0].fechaCorta)}</text><text x="${PG.W - PG.r}" y="${PG.H - 6}" text-anchor="end">${esc(pts[pts.length - 1].fechaCorta)}</text>
+      </svg></div>
+    <div class="prog-det" aria-live="polite">${progDetalleHTML(d)}</div>`;
+}
+function progBodyHTML() {
+  const d = progDatos(), { P, p } = d, R = p.resumen;
+  const mejor = { orm1: R.mejorOrm1, peso: R.mejorPeso, volumen: R.mejorVolumen }[P.m];
+  const signo = (v, t) => (v > 0 ? `+${t(v)}` : v < 0 ? `−${t(-v)}` : '=');
+  const celda = (t, v, s = '') => `<div><span>${t}</span><b class="num">${v}</b>${s ? `<small class="num">${s}</small>` : ''}</div>`;
+  const chips = (act, lista, activo, nombre) => `<div class="opc-fila" role="group" aria-label="${nombre}">${lista.map(([v, t]) => `<button type="button" data-act="${act}" data-v="${v}" aria-pressed="${activo === v}">${t}</button>`).join('')}</div>`;
+  const nota = p.cargaMixta ? 'Hay sesiones apuntadas por lado y otras con el peso total: compara con cuidado.'
+    : p.porLado ? `Peso y 1RM son por lado${p.puntos.some((x) => x.uni) ? ' (el mayor de los dos)' : ''}. El volumen suma ambos lados.` : '';
+  const lista = [...p.puntos].reverse();
+  return `${chips('prog-met', PROG_MET, P.m, 'Métrica')}
+    ${chips('prog-rango', PROG_RANGOS, P.r, 'Periodo')}
+    <div class="prog-stats">
+      ${celda('Mejor marca', progKg(mejor || null, p, P.m, p.puntos.some((x) => x.uni)))}
+      ${celda('Última sesión', progKg(R.ultimoValor, p, P.m, p.puntos.some((x) => x.uni)), R.ultimaFecha ? esc(progFecha(R.ultimaFecha)) : '')}
+      ${celda('Progreso en el periodo', R.deltaAbs == null ? '–' : `${signo(R.deltaAbs, (v) => (P.m === 'volumen' ? nf(Math.round(v)) : ormTxt(v)))} kg`, R.deltaPct == null ? '' : `${signo(R.deltaPct, ormTxt)} %`)}
+    </div>
+    ${nota ? `<p class="small muted prog-nota">${nota}</p>` : ''}
+    ${progGraficaHTML(d)}
+    ${lista.length ? `<h3 class="prog-h3">Sesiones</h3>
+    <ul class="prog-lista">${lista.slice(0, 20).map((x) => `<li><b>${esc(progFecha(x.fecha))}</b><span class="num">${esc(x.detalleSeries)}</span></li>`).join('')}</ul>
+    ${lista.length > 20 ? `<p class="small muted">Se muestran las 20 últimas de ${lista.length}.</p>` : ''}` : ''}`;
+}
+function progSheetHTML() {
+  if (!st.progEj) return '';
+  const nombre = cap(st.progEj.n);
+  return `<div class="sheet-back" data-act="prog-close"></div>
+    <div class="sheet prog-sheet" role="dialog" aria-modal="true" aria-label="Progresión: ${esc(nombre)}">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><h2>${esc(nombre)}</h2><button type="button" class="iconbtn" data-act="prog-close" aria-label="Cerrar">${I.close}</button></div>
+      <div class="prog-body">${progBodyHTML()}</div>
+    </div>`;
+}
+// Cambiar de métrica, periodo o punto solo toca el interior de la hoja (no pierde el scroll ni el foco).
+function progRefrescar(foco) {
+  const body = root.querySelector('.prog-body');
+  if (!body) return render();
+  body.innerHTML = progBodyHTML();
+  const el = foco && body.querySelector(foco);
+  if (el) el.focus({ preventScroll: true });
+}
+function progElegir(i) {
+  st.progEj.i = i;
+  const d = progDatos(), pts = root.querySelectorAll('.prog-pt'), guia = root.querySelector('.prog-guia'), det = root.querySelector('.prog-det');
+  pts.forEach((c, k) => { c.classList.toggle('on', k === d.i); c.setAttribute('r', k === d.i ? 5.5 : c.dataset.r); });
+  if (pts[d.i] && guia) { guia.setAttribute('x1', pts[d.i].getAttribute('cx')); guia.setAttribute('x2', pts[d.i].getAttribute('cx')); }
+  if (det) det.innerHTML = progDetalleHTML(d);
+}
+// El punto más cercano al dedo (primero en horizontal): así toda la gráfica es zona táctil.
+function progTocar(e, caja) {
+  const rect = caja.querySelector('svg').getBoundingClientRect(), x = ((e.clientX - rect.left) / rect.width) * PG.W, y = ((e.clientY - rect.top) / rect.height) * PG.H;
+  const d = progDatos(), { xy } = progEscala(d.pts, d.campo);
+  let mejor = 0, dist = Infinity;
+  xy.forEach(([px, py], k) => { const v = Math.abs(px - x) + Math.abs(py - y) / 100; if (v < dist) { dist = v; mejor = k; } });
+  progElegir(mejor);
+}
+root.addEventListener('keydown', (e) => {
+  if (!st.progEj || !e.target.classList || !e.target.classList.contains('prog-graf') || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+  e.preventDefault();
+  const d = progDatos();
+  progElegir(Math.max(0, Math.min(d.pts.length - 1, d.i + (e.key === 'ArrowLeft' ? -1 : 1))));
+});
 
 // Tarjeta del día elegido en la tira: lo registrado (con Coach AI), lo previsto, «Registrar sesión» y «Mover entreno».
 function diaHTML(sel, today) {
@@ -461,7 +606,7 @@ function wkRecords() {
   for (const [id, t] of REC_GRUPOS) grupos.set(id, { t, filas: [] });
   grupos.set('otros', { t: 'Otros', filas: [] });
   for (const e of r.gym) {
-    grupos.get(grupoRecord(e.n)).filas.push(fila(cap(e.n), e.best.kg > 0 ? `${nf(e.best.kg, 1)} kg × ${e.best.reps}` : `${e.best.reps} reps`, e.best.fecha, ` · ${e.veces} ${e.veces === 1 ? 'sesión' : 'sesiones'}`, ormSub(e)));
+    grupos.get(grupoRecord(e.n)).filas.push(`<button type="button" class="row rec-row rec-prog" data-act="prog-open" data-n="${esc(e.n)}"><span class="rec-t">${esc(cap(e.n))}<br><span class="muted small">${fecha(e.best.fecha)} · ${e.veces} ${e.veces === 1 ? 'sesión' : 'sesiones'}</span></span><span class="rec-v"><b class="nowrap num">${esc(e.best.kg > 0 ? `${nf(e.best.kg, 1)} kg × ${e.best.reps}` : `${e.best.reps} reps`)}</b>${ormSub(e)}</span><span class="rec-ir" aria-hidden="true">${I.chev}</span></button>`);
   }
   const cardio = (r.cardio || []).map((c) => {
     const p = [];
@@ -491,7 +636,7 @@ function wkRecords() {
   // Sin Pro: un solo aviso arriba (no un candado en cada fila), solo si hay algún ejercicio con 1RM calculable.
   const aviso = !pro && r.gym.some((e) => e.orm) ? `<section class="rec-pro" aria-label="1RM estimado con Cadencia PRO"><p>${I.crown}<span>Cadencia PRO incluye el cálculo de 1RM estimado en todos tus ejercicios.</span></p><button type="button" class="rec-pro-btn" data-act="rec-pro">Ver Cadencia PRO</button></section>` : '';
   return `${aviso}${con.map(acordeon).join('')}
-    <p class="small muted rec-nota">En fuerza cuenta tu mejor serie (más peso para sus repeticiones). Las de calentamiento no cuentan.${pro ? ' El 1RM estimado usa la fórmula de Brzycki con series de 1 a 12 repeticiones.' : ''}</p>`;
+    <p class="small muted rec-nota">En fuerza cuenta tu mejor serie (más peso para sus repeticiones). Las de calentamiento no cuentan. Toca un ejercicio de fuerza para ver su progresión.${pro ? ' El 1RM estimado usa la fórmula de Brzycki con series de 1 a 12 repeticiones.' : ''}</p>`;
 }
 
 function wkHistSheetHTML() {
@@ -1503,6 +1648,7 @@ function exViewHTML() {
       <div class="sheet-head"><h2 class="det-title">${esc(x.n)}</h2><button type="button" class="iconbtn" data-act="ex-close" aria-label="Cerrar">${I.close}</button></div>
       <div class="sheet-list exv">
         <div class="exv-hero ${cardio ? 'lc-cardio' : ''}">${i3 ? `<img class="exdb" src="${esc(i3)}" alt="${esc(x.n)}">` : cardio ? I.heart : anatomia(x)}</div>
+        ${!cardio && E.progresionEjercicio(st.workouts, n).total ? `<button type="button" class="exv-prog" data-act="prog-open" data-n="${esc(n)}">${I.trend}<span>Ver progresión</span>${I.chev}</button>` : ''}
         <section class="exv-sec">
           <h3>Músculos implicados</h3>
           <div class="exv-mus">
@@ -2441,6 +2587,14 @@ root.addEventListener('click', async (e) => {
   if (act === 'ex-view') { st.exView = { n: b.dataset.n }; return render(); }
   if (act === 'ex-close') { st.exView = null; return render(); }
 
+  // series por músculo y progresión por ejercicio (77)
+  if (act === 'vol-modo') { st.volModo = v; render(); const n = root.querySelector(`[data-act="vol-modo"][data-v="${v}"]`); if (n) n.focus({ preventScroll: true }); return; }
+  if (act === 'prog-open') return progAbrir(b.dataset.n);
+  if (st.progEj && act === 'prog-close') { st.progEj = null; return render(); }
+  if (st.progEj && act === 'prog-met') { st.progEj.m = v; st.progEj.i = null; return progRefrescar(`[data-act="prog-met"][data-v="${v}"]`); }
+  if (st.progEj && act === 'prog-rango') { st.progEj.r = v; st.progEj.i = null; return progRefrescar(`[data-act="prog-rango"][data-v="${v}"]`); }
+  if (st.progEj && act === 'prog-punto') return progTocar(e, b);
+
   // panel de ejercicios
   if (L && act.startsWith('lib-')) {
     if (act === 'lib-close') { st.lib = null; return render(); }
@@ -2933,5 +3087,5 @@ function recuperacionHTML() {
     ${esPro() ? cuerpo : muro}</section>`;
 }
 function cuerpoSheetHTML() { return C3.sheetHTML(st.cuerpo3d, sexoCuerpo(), datosCuerpo(), todayISO()); }
-  return { exViewHTML, finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, compartirSheetHTML: CP.sheetHTML, pintarCompartir: CP.pintar, limiteSheetHTML, calentarSheetHTML, discosSheetHTML, moverSheetHTML, rutNuevosSheetHTML, postEntSheetHTML, rutModSheetHTML, dia7SheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML };
+  return { exViewHTML, progSheetHTML, finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, rachaActual, fuegoHTML, modoSheetHTML, resumenSheetHTML, compartirSheetHTML: CP.sheetHTML, pintarCompartir: CP.pintar, limiteSheetHTML, calentarSheetHTML, discosSheetHTML, moverSheetHTML, rutNuevosSheetHTML, postEntSheetHTML, rutModSheetHTML, dia7SheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML };
 }
