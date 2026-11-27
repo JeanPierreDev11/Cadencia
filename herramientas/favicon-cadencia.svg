@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<!-- Fuente de public/favicon*.png, favicon.ico y apple-touch-icon.png. Isotipo #F2C116 sobre #000000.
+     El contorno inclinado cabe en un círculo de radio 25,3 (79 % del diámetro): no se corta al recortar en círculo. -->
+<rect width="64" height="64" fill="#000000"/>
+<g transform="translate(32 32) scale(0.7) translate(-34 -32)" fill="#F2C116"><path d="M12 8H56V22H28V42H56V56H12Z" transform="translate(6.8 0) skewX(-12)"/></g>
+</svg>
