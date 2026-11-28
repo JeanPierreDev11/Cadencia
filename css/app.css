@@ -2719,6 +2719,27 @@ body:has(.mes-sheet) .ib { visibility: hidden; }
 .cp-sheet .sheet-head .iconbtn { width: 44px; height: 44px; }
 .rec-share:focus-visible, .sum-pr button:focus-visible, .cp-prs button:focus-visible, .cp-sheet .opc-fila button:focus-visible { outline: 2px solid var(--brand-yellow); outline-offset: 2px; }
 
+/* (80) Ciclo semanal de rutinas: acceso en «Mis rutinas», badge sobre la semana y modal. Superficie y texto con variables del tema (modo claro); acento con tokens de marca. */
+.ciclo-acc { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; margin-top: 10px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.ciclo-acc b { font-size: 14px; text-transform: uppercase; letter-spacing: .04em; }
+.ciclo-acc small { margin-left: auto; color: var(--muted); font-size: 13px; }
+.ciclo-acc .ciclo-ico { font-size: 18px; line-height: 1; color: var(--muted); }
+.ciclo-acc.on { border-color: var(--brand-yellow); }
+.ciclo-acc.on .ciclo-ico, .ciclo-acc.on small { color: var(--accent-text); }
+.ciclo-acc:focus-visible, .ciclo-swap:focus-visible { outline: 2px solid var(--brand-yellow); outline-offset: 2px; }
+.ciclo-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 2px; }
+.ciclo-badge { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border-left: 2px solid var(--brand-yellow); padding: 2px 0 2px 8px; font-variant-numeric: tabular-nums; }
+.ciclo-swap { min-width: 44px; min-height: 36px; border: 1px solid var(--line); border-radius: var(--r-sm); background: transparent; color: var(--ink); font: inherit; font-size: 18px; line-height: 1; cursor: pointer; }
+.ciclo-swap:active { border-color: var(--brand-yellow); }
+.ciclo-sw { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ciclo-sw span { display: grid; gap: 2px; }
+.ciclo-sw small { font-size: 13px; }
+.ciclo-sw .switch[aria-checked="true"] { background: var(--brand-yellow); border-color: var(--brand-yellow); }
+.ciclo-sw .switch[aria-checked="true"] i { background: var(--text-on-brand); }
+.ciclo-fila { display: flex; align-items: flex-end; gap: 8px; }
+.ciclo-fila .field { flex: 1; min-width: 0; }
+.ciclo-add { justify-self: start; }
+
 @media (min-width: 1024px) {
   :root { --sb-w: 104px; --col: 800px; }
 

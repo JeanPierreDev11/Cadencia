@@ -11,6 +11,7 @@ import { analizarEntreno, diagnosticoCoach } from './coach.js';
 import * as C3 from './cuerpo.js';
 import { pautas } from './tecnica.js';
 import { crearCompartir, PLANTILLAS, tarjetasPR } from './compartir.js';
+import * as ROT from './rotacion.js';
 
 export function crearEntreno(ctx) {
   const { st, root } = ctx;
@@ -127,6 +128,21 @@ function rutinasList() {
   return list;
 }
 const nidR = () => 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+// Ciclo semanal (perfil `rotation`, ver rotacion.js): qué rutina toca esta semana y, si no es la activa, la pone como `rutina`.
+const rotacion = () => (st.profile && st.profile.rotation) || null;
+const cicloInfo = () => ROT.getActiveRoutineFromRotation(rotacion(), rutinasList());
+const CICLO_MAX = 4;
+let rotPend = null;
+async function aplicarRotacion() {
+  if (!st.user || !st.profile || st.view !== 'main' || rotPend) return false;
+  const c = cicloInfo(), act = rutinaOf();
+  if (!c || (act && act.id === c.routine.id)) return false;
+  const data = { rutina: c.routine };
+  recalc(data);
+  rotPend = api.saveProfile(st.user.uid, data);
+  try { await rotPend; st.profile = { ...st.profile, ...data }; return true; } finally { rotPend = null; }
+}
+const rotarYPintar = () => aplicarRotacion().then((c) => { if (c) render(); }).catch(() => { /* sin conexión: se reintenta al volver */ });
 // dayPlanBase: lo que dice la rutina. dayPlan: además aplica los entrenos movidos a otro día (Pro, «Mover entreno»): el día original pasa a descanso y el día destino hereda su sesión.
 const dayPlanBase = (iso) => { const r = rutinaOf(); if (!r) return null; const d = E.weekdayIdx(iso); const x = r.dias.includes(d) ? r.sesiones[d] || null : null; return x && !CICLISMO && x.t === 'bici' ? null : x; };
 const dayPlan = (iso) => {
@@ -294,8 +310,10 @@ function wkSemana() {
   const caja3 = soloFuerza
     ? `<section class="stat"><span class="label">Volumen total</span><span class="val num">${nf(hoy.vol)}<em>kg</em></span></section>`
     : `<section class="stat"><span class="label">${CICLISMO ? 'Distancia en bici' : 'Distancia'}</span><span class="val num">${nf(stt.km, 1)}<em>km</em></span>${stt.elev ? `<span class="hint">+${nf(stt.elev)} m de desnivel</span>` : ''}</section>`;
+  const ci = cicloInfo();
+  const cicloTop = ci ? `<div class="ciclo-top"><span class="ciclo-badge">Semana ${ci.weekIndex + 1} de ${ci.totalWeeks} · Ciclo</span><button type="button" class="ciclo-swap" data-act="ciclo-swap" aria-label="Pasar a la semana ${(ci.weekIndex + 1) % ci.totalWeeks + 1} del ciclo esta semana">⇄</button></div>` : '';
   return `${semNavHTML(mon, curMon)}
-    <section class="card"><h2>Tu semana</h2><div class="weekstrip">${cells}</div></section>
+    <section class="card">${cicloTop}<h2>${ci ? esc(ci.routine.nombre || 'Rutina') : 'Tu semana'}</h2><div class="weekstrip">${cells}</div></section>
     ${diaHTML(sel, today)}
     <div class="stats" aria-label="Métricas del ${esc(sel === today ? 'día de hoy' : fmtDate(sel, { weekday: 'long', day: 'numeric' }))}">
       <section class="stat"><span class="label">Tiempo</span><span class="val num nowrap">${fmtDur(hoy.min).replace(' min', '')}${hoy.min % 60 ? '<em>min</em>' : ''}</span></section>
@@ -1146,7 +1164,7 @@ async function saveRutina(R, rid) {
   if (!prev && sobreLimite('rutinas')) { st.limite = { tipo: 'rutinas' }; return `Límite gratuito alcanzado (${LIM_FREE}/${LIM_FREE}). Desbloquea rutinas ilimitadas con Cadencia PRO`; }
   const rut = { ...res.rutina, id, nombre: (prev && prev.nombre) || (list.length ? `Rutina ${list.length + 1}` : 'Mi rutina'), ...(prev && prev.shareCode ? { shareCode: prev.shareCode } : {}) };
   const data = { rutinas: prev ? list.map((x) => (x.id === id ? rut : x)) : [...list, rut] };
-  if (!act || !rid || act.id === id) data.rutina = rut;
+  if (!act || act.id === id || (!rid && !cicloInfo())) data.rutina = rut; // con el ciclo activo, una rutina nueva no pasa a ser la activa
   if (rut.tipos.includes('bici') && st.profile.ciclismo !== true) data.ciclismo = true;
   recalc(data);
   await api.saveProfile(st.user.uid, data);
@@ -1163,7 +1181,7 @@ async function saveRutinas(list, activa) {
 
 /* ---------- sección Rutina ---------- */
 function wkRutina() {
-  const list = rutinasList(), act = rutinaOf(), mod = !!st.rutMod;
+  const list = rutinasList(), act = rutinaOf(), mod = !!st.rutMod, ciclo = cicloInfo();
   const abierta = list.find((x) => x.id === st.rutSel) || null;
   if (abierta && (!st.re || st.re.src !== 'tab' || st.re.rid !== abierta.id)) { st.re = reNew(clone(abierta), 'tab'); st.re.rid = abierta.id; }
   if (!abierta && st.re && st.re.src === 'tab') st.re = null;
@@ -1175,7 +1193,7 @@ function wkRutina() {
       <label class="field"><span>Nombre de la rutina</span><input class="input" data-rutname maxlength="30" value="${esc(r.nombre || '')}"></label>
       <p><b>${r.dias.map((d) => E.DIAS[d]).join(', ')}</b> · ${r.tipos.filter((t) => CICLISMO || t !== 'bici').map((t) => (t === 'otro' && r.otro ? r.otro : RT[t])).join(', ')}${esc(split)}</p>
       <p class="small muted">${r.modo === 'propuesta' ? 'Propuesta de la app según tus objetivos.' : 'Rutina creada por ti.'} Toca «Cambiar» en un ejercicio o sesión para ver alternativas.</p>
-      ${esActiva ? '' : `<button class="btn block" data-act="rut-use">Usar esta rutina</button>`}
+      ${esActiva ? '' : ciclo ? '<p class="small muted">Con el ciclo semanal activo, la rutina en uso cambia sola cada lunes.</p>' : `<button class="btn block" data-act="rut-use">Usar esta rutina</button>`}
       <div class="rut-acts">
         <button class="btn small rut-mod-ia" data-act="rm-open" data-rid="${esc(r.id)}">${I.brain} Modificar</button>
         <button class="btn ghost small" data-act="rw-start" data-rid="${esc(r.id)}">Cambiar días o tipos</button>
@@ -1190,6 +1208,7 @@ function wkRutina() {
       <div class="card-head"><h2>Mis rutinas</h2><span class="head-acts">
         <button type="button" class="iconbtn ${mod ? 'on' : ''}" data-act="rut-mod" aria-pressed="${mod}" aria-label="${mod ? 'Terminar de editar rutinas' : 'Editar o borrar rutinas'}">${mod ? I.check : I.pencil}</button>
         <button class="chip chipbtn" data-act="rut-imp">Importar</button><button class="chip chipbtn" data-act="rut-new">${I.plus} Nueva</button></span></div>
+      <button type="button" class="ciclo-acc ${ciclo ? 'on' : ''}" data-act="ciclo-open" aria-label="Ciclo semanal: ${ciclo ? `activo, ${ciclo.totalWeeks} semanas` : 'desactivado'}"><span class="ciclo-ico" aria-hidden="true">↻</span><b>Ciclo semanal</b><small>${ciclo ? `Activo · ${ciclo.totalWeeks} semanas` : 'Desactivado'}</small></button>
       <div class="rutacc">${list.map((x) => {
         const open = abierta && abierta.id === x.id;
         return `<div class="rutitem ${open ? 'open' : ''}">
@@ -1222,6 +1241,27 @@ function rutShareSheetHTML() {
         <button type="button" class="btn block" data-act="rut-copy" data-v="${esc(S.code)}">Copiar código</button>
         <p class="small muted">Si cambias la rutina, vuelve a pulsar Compartir para actualizar lo que verán.</p>`
       : '<p><span class="spinner"></span> Generando código…</p>'}</div>
+    </div>`;
+}
+// Modal «Ciclo semanal»: activar/desactivar y elegir qué rutina va en cada semana. st.ciclo = { on, ids, msg, busy }.
+function cicloSheetHTML() {
+  const C = st.ciclo, list = rutinasList(), pocas = list.length < 2;
+  const opts = (sel) => list.map((r) => `<option value="${esc(r.id)}" ${r.id === sel ? 'selected' : ''}>${esc(r.nombre || 'Rutina')}</option>`).join('');
+  const fila = (id, i) => `<div class="ciclo-fila"><label class="field"><span>Semana ${i + 1}</span><select class="input" data-ciclo="${i}">${opts(id)}</select></label>${i >= 2 ? `<button type="button" class="iconbtn" data-act="ciclo-quitar" data-v="${i}" aria-label="Quitar semana ${i + 1}">✕</button>` : ''}</div>`;
+  return `<div class="sheet-back" data-act="ciclo-close"></div>
+    <div class="sheet short ciclo-sheet" role="dialog" aria-modal="true" aria-label="Ciclo semanal">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><button type="button" class="iconbtn" data-act="ciclo-close" aria-label="Cerrar">${I.back}</button><h2>Ciclo semanal</h2><span style="width:36px"></span></div>
+      <div class="sheet-list form-grid">
+        <div class="ciclo-sw"><span><b>Alternar rutinas cada semana</b><small class="muted">Cada lunes pasa a la rutina de la semana siguiente.</small></span>
+          <button type="button" class="switch" role="switch" data-act="ciclo-on" aria-checked="${C.on}" aria-label="Alternar rutinas cada semana" ${pocas ? 'disabled' : ''}><i></i></button></div>
+        ${pocas ? '<p class="small muted">Necesitas al menos 2 rutinas. Crea o importa otra en «Nueva».</p>' : C.on ? `
+        ${C.ids.map(fila).join('')}
+        ${C.ids.length < CICLO_MAX ? `<button type="button" class="btn ghost small ciclo-add" data-act="ciclo-add">+ Añadir semana</button>` : ''}
+        <p class="small muted">Al guardar, esta semana pasa a ser la Semana 1.</p>` : ''}
+        ${C.msg ? `<div class="msg" role="alert">${esc(C.msg)}</div>` : ''}
+        <button type="button" class="btn block" data-act="ciclo-save" ${C.busy || pocas ? 'disabled' : ''}>${C.busy ? '<span class="spinner"></span>' : 'Guardar'}</button>
+      </div>
     </div>`;
 }
 function rutDelSheetHTML() {
@@ -2161,6 +2201,8 @@ const alVolver = () => {
   const R = st.rest; if (R && !R.done) { if (Date.now() >= R.end) restFin(); else restPaint(); }
 };
 document.addEventListener('visibilitychange', alVolver);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') rotarYPintar(); });
+setInterval(rotarYPintar, 600000); // por si la app sigue abierta al pasar al lunes
 window.addEventListener('pageshow', alVolver);
 
 // Peso de trabajo: la última serie con kilos de hoy; si no hay, la última serie de la última vez (historial).
@@ -2670,6 +2712,41 @@ root.addEventListener('click', async (e) => {
     } catch (err) { return fail(errorText(err)); }
     return render();
   }
+  // ciclo semanal
+  if (act === 'ciclo-open') {
+    const list = rutinasList(), rot = rotacion(), act0 = rutinaOf();
+    let ids = ROT.idsValidos(rot, list);
+    if (ids.length < 2) ids = [act0 && act0.id, ...list.map((x) => x.id).filter((x) => !act0 || x !== act0.id)].filter(Boolean).slice(0, 2);
+    st.ciclo = { on: !!(rot && rot.enabled && ROT.idsValidos(rot, list).length >= 2), ids, msg: '', busy: false };
+    return render();
+  }
+  if (act === 'ciclo-close') { st.ciclo = null; return render(); }
+  if (act === 'ciclo-on') { st.ciclo.on = !st.ciclo.on; st.ciclo.msg = ''; return render(); }
+  if (act === 'ciclo-add') { const C = st.ciclo, list = rutinasList(); if (C.ids.length < CICLO_MAX) C.ids.push(list[C.ids.length % list.length].id); return render(); }
+  if (act === 'ciclo-quitar') { st.ciclo.ids.splice(Number(v), 1); return render(); }
+  if (act === 'ciclo-save') {
+    const C = st.ciclo, list = rutinasList(), ids = ROT.idsValidos({ routineIds: C.ids }, list);
+    if (C.on && (ids.length < 2 || new Set(ids).size < 2)) { C.msg = 'Elige al menos 2 rutinas distintas.'; return render(); }
+    const prev = rotacion();
+    const rotation = C.on ? { enabled: true, routineIds: ids, anchorMonday: ROT.lunesLocal() } : { enabled: false, routineIds: (prev && prev.routineIds) || ids, anchorMonday: (prev && prev.anchorMonday) || ROT.lunesLocal() };
+    C.busy = true; render();
+    try {
+      await api.saveProfile(st.user.uid, { rotation }); st.profile = { ...st.profile, rotation };
+      await aplicarRotacion();
+      st.ciclo = null; toast(C.on ? `Ciclo activado. Esta semana: ${(rutinaOf() || {}).nombre || 'Semana 1'}` : 'Ciclo semanal desactivado');
+    } catch (err) { C.busy = false; C.msg = errorText(err); }
+    return render();
+  }
+  if (act === 'ciclo-swap') {
+    const rot = rotacion(); if (!rot) return;
+    const rotation = { ...rot, anchorMonday: ROT.sumarDias(rot.anchorMonday, -7) };
+    try {
+      await api.saveProfile(st.user.uid, { rotation }); st.profile = { ...st.profile, rotation };
+      await aplicarRotacion();
+      const c = cicloInfo(); if (c) toast(`Esta semana: ${c.routine.nombre || 'Rutina'} (semana ${c.weekIndex + 1} de ${c.totalWeeks})`);
+    } catch (err) { toast(errorText(err)); }
+    return render();
+  }
   if (act === 'rut-sel') { st.rutSel = st.rutSel === v ? null : v; st.re = null; return render(); }
   if (act === 'rut-mod') { st.rutMod = !st.rutMod; return render(); }
   if (act === 'rut-edit') { st.rutSel = v; st.re = null; render(); const el = document.getElementById('rut-' + v); if (el) el.scrollIntoView({ block: 'start' }); return; }
@@ -2681,7 +2758,9 @@ root.addEventListener('click', async (e) => {
       const list = rutinasList(), rest = list.filter((x) => x.id !== id), act0 = rutinaOf();
       const data = { rutinas: rest };
       if (act0 && act0.id === id) data.rutina = rest[0] || null;
+      if (rotacion() && (rotacion().routineIds || []).includes(id)) data.rotation = ROT.quitarDeRotacion(rotacion(), id); // fuera del ciclo; con menos de 2, ciclo apagado
       await api.saveProfile(st.user.uid, data); st.profile = { ...st.profile, ...data };
+      await aplicarRotacion().catch(() => {});
       if (st.rutSel === id) st.rutSel = null;
       if (!rest.length) st.rutMod = false;
       st.re = null; toast('Rutina borrada');
@@ -3021,6 +3100,7 @@ root.addEventListener('focusin', (e) => {
 
 root.addEventListener('change', async (e) => {
   const t = e.target;
+  if (t.dataset.ciclo != null && st.ciclo) { st.ciclo.ids[Number(t.dataset.ciclo)] = t.value; st.ciclo.msg = ''; return; }
   if (t.dataset.rutname != null) {
     const list = rutinasList(), r = list.find((x) => x.id === st.rutSel) || rutinaOf(), n = t.value.trim().slice(0, 30);
     if (!n) { toast('Ponle un nombre a la rutina'); return render(); }
@@ -3096,5 +3176,5 @@ function recuperacionHTML() {
     ${esPro() ? cuerpo : muro}</section>`;
 }
 function cuerpoSheetHTML() { return C3.sheetHTML(st.cuerpo3d, sexoCuerpo(), datosCuerpo(), todayISO()); }
-  return { exViewHTML, progSheetHTML, finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, modoSheetHTML, resumenSheetHTML, compartirSheetHTML: CP.sheetHTML, pintarCompartir: CP.pintar, limiteSheetHTML, calentarSheetHTML, discosSheetHTML, moverSheetHTML, rutNuevosSheetHTML, postEntSheetHTML, rutModSheetHTML, dia7SheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML };
+  return { exViewHTML, progSheetHTML, finSheetHTML, regSheetHTML, rutinaOf, rutinasList, dayPlan, homeTraining, viewEntreno, viewRutWizard, viewLive, liveBarHTML, viewWkForm, libSheetHTML, wkSave, rwNext, openRegistro, wkHistSheetHTML, wkDelSheetHTML, rutDelSheetHTML, modoSheetHTML, resumenSheetHTML, compartirSheetHTML: CP.sheetHTML, pintarCompartir: CP.pintar, limiteSheetHTML, calentarSheetHTML, discosSheetHTML, moverSheetHTML, rutNuevosSheetHTML, postEntSheetHTML, rutModSheetHTML, dia7SheetHTML, recuperacionHTML, cuerpoSheetHTML, rutShareSheetHTML, cicloSheetHTML, aplicarRotacion };
 }
